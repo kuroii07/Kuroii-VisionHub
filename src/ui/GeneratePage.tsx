@@ -160,7 +160,7 @@ export function ModernGeneratePage(props: {
   onCountChange: (count: number) => void;
   onSizeChange: (size: string) => void;
   onQualityChange: (quality: string) => void;
-  onGenerate: (options?: { mode?: GenerationMode; references?: ReferenceImage[] }) => void;
+  onGenerate: (options?: { mode?: GenerationMode; references?: ReferenceImage[]; metadata?: Record<string, unknown> }) => void;
   onPreview: (imageUrl: string) => void;
   referenceImages: ReferenceImage[];
   onReferenceImagesChange: (references: ReferenceImage[]) => void;
@@ -169,6 +169,9 @@ export function ModernGeneratePage(props: {
   const [outputFormat, setOutputFormat] = useState<OutputFormat>(props.defaultOutputFormat);
   const [compression, setCompression] = useState('');
   const [reviewMode, setReviewMode] = useState<ReviewMode>(props.defaultReviewMode);
+  const [referenceStrength, setReferenceStrength] = useState('auto');
+  const [preserveComposition, setPreserveComposition] = useState(true);
+  const [styleTransfer, setStyleTransfer] = useState(false);
   const [customWidth, setCustomWidth] = useState(() => parseSize(props.size)[0]);
   const [customHeight, setCustomHeight] = useState(() => parseSize(props.size)[1]);
   const [assistMode, setAssistMode] = useState<PromptAssistMode | null>(null);
@@ -190,6 +193,9 @@ export function ModernGeneratePage(props: {
   const latestImage = sessionResults.find((result) => result.imageUrls[0]);
   const failedLatest = sessionResults.find((result) => result.status === 'failed');
   const imageToImageStatus = props.selectedProvider.capabilities.imageToImage;
+  const multiReferenceStatus = props.selectedProvider.capabilities.multiReferenceImage;
+  const advancedImageTuningEnabled = ['supported', 'partial'].includes(imageToImageStatus);
+  const multiReferenceAllowed = ['supported', 'partial'].includes(multiReferenceStatus);
   const canAttemptImageToImage = !['unsupported', 'unknown'].includes(imageToImageStatus);
   const promptLength = props.prompt.trim().length;
   const promptWidthState =
@@ -301,7 +307,19 @@ export function ModernGeneratePage(props: {
 
   function runGenerate() {
     if (mode === 'image') {
-      props.onGenerate({ mode: 'image-to-image', references: props.referenceImages });
+      props.onGenerate({
+        mode: 'image-to-image',
+        references: props.referenceImages,
+        metadata: {
+          imageToImageTuning: {
+            referenceStrength,
+            preserveComposition,
+            styleTransfer,
+            capabilityStatus: imageToImageStatus,
+            multiReferenceStatus
+          }
+        }
+      });
       return;
     }
     props.onGenerate({ mode: 'text-to-image', references: [] });
@@ -603,6 +621,50 @@ export function ModernGeneratePage(props: {
           </div>
         </section>
 
+        {mode === 'image' ? (
+          <section className="railCard imageTuningCard">
+            <div className="railTitle">
+              <SlidersHorizontal size={15} /> 图生图参数
+            </div>
+            <div className={`capabilityNotice ${advancedImageTuningEnabled ? 'ready' : 'blocked'}`}>
+              <strong>{advancedImageTuningEnabled ? '当前 Provider 可尝试图生图参数' : '当前 Provider 未声明图生图参数能力'}</strong>
+              <span>图生图：{statusLabel(imageToImageStatus)} ? 多参考：{statusLabel(multiReferenceStatus)}</span>
+            </div>
+            <label>
+              参考强度
+              <StudioSelect
+                value={referenceStrength}
+                onChange={setReferenceStrength}
+                options={[
+                  { value: 'auto', label: '自动' },
+                  { value: 'low', label: '低：只借鉴少量特征' },
+                  { value: 'medium', label: '中：平衡参考与改写' },
+                  { value: 'high', label: '高：更贴近参考图' }
+                ]}
+              />
+            </label>
+            <label className="tuningCheck">
+              <input
+                type="checkbox"
+                checked={preserveComposition}
+                disabled={!advancedImageTuningEnabled}
+                onChange={(event) => setPreserveComposition(event.target.checked)}
+              />
+              <span>尽量保留构图</span>
+            </label>
+            <label className="tuningCheck">
+              <input
+                type="checkbox"
+                checked={styleTransfer}
+                disabled={!advancedImageTuningEnabled}
+                onChange={(event) => setStyleTransfer(event.target.checked)}
+              />
+              <span>偏向风格迁移</span>
+            </label>
+            <small>{multiReferenceAllowed ? '会随生成请求记录为 Provider 参数偏好；真实生效取决于当前接口协议。' : '该 Provider 未声明多参考能力，建议只放 1 张参考图。'}</small>
+          </section>
+        ) : null}
+
         <section className="railCard collapsedRail">
           <div>
             <ChevronDown size={16} /> 高级参数
@@ -623,6 +685,18 @@ export function ModernGeneratePage(props: {
       ) : null}
     </div>
   );
+}
+
+
+function statusLabel(status: ReturnType<typeof listProviders>[number]['capabilities']['imageToImage']) {
+  const labels: Record<string, string> = {
+    supported: '支持',
+    partial: '部分支持',
+    planned: '规划中',
+    unknown: '待确认',
+    unsupported: '不支持'
+  };
+  return labels[status] ?? status;
 }
 
 function fileToReferenceImage(file: File, source: Extract<ReferenceImage['source'], 'upload' | 'clipboard' | 'drag-drop'> = 'upload'): Promise<ReferenceImage> {

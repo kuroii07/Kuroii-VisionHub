@@ -24,7 +24,7 @@ interface StudioState {
   setQuality: (quality: string) => void;
   setSelectedModel: (modelId: string) => void;
   loadHistory: () => Promise<void>;
-  generate: (options?: { mode?: GenerationMode; references?: ReferenceImage[] }) => Promise<void>;
+  generate: (options?: { mode?: GenerationMode; references?: ReferenceImage[]; metadata?: ImageGenerationRequest['metadata'] }) => Promise<void>;
 }
 
 const providers = listProviders();
@@ -102,6 +102,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
     const generationMode = options?.mode ?? 'text-to-image';
     const references = options?.references ?? [];
+    const metadata = options?.metadata;
 
     set({ isGenerating: true });
     try {
@@ -114,6 +115,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         quality: state.quality,
         generationMode,
         references,
+        metadata,
         baseUrl: useOpenAICompatibleConfig ? providerConfig.baseUrl : undefined,
         protocol: useOpenAICompatibleConfig ? providerConfig.protocol : undefined,
         endpointPath: useOpenAICompatibleConfig ? providerConfig.endpointPath : undefined,
