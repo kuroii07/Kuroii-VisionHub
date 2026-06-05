@@ -30,7 +30,7 @@
   ZoomIn,
   ZoomOut
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 import type { GenerationRecord, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
 import { listProviders } from '../providers/registry';
 import {
@@ -119,6 +119,71 @@ const statusLabel: Record<ProviderCapabilityStatus, string> = {
   unsupported: '不支持'
 };
 
+
+const GITHUB_REPOSITORY_URL = 'https://github.com/BlueSummer2333/VisionHub-Studio';
+const GITHUB_RELEASES_URL = `${GITHUB_REPOSITORY_URL}/releases`;
+
+type UtilityModal = 'system-info' | 'shortcuts' | null;
+type GenerateShortcutName = 'submit' | 'focus-prompt' | 'add-reference' | 'clear-references' | 'mode-image' | 'mode-text';
+
+const generateShortcutEventName: Record<GenerateShortcutName, string> = {
+  submit: 'visionhub:generate-submit',
+  'focus-prompt': 'visionhub:generate-focus-prompt',
+  'add-reference': 'visionhub:generate-add-reference',
+  'clear-references': 'visionhub:generate-clear-references',
+  'mode-image': 'visionhub:generate-mode-image',
+  'mode-text': 'visionhub:generate-mode-text'
+};
+
+const libraryFocusSearchEvent = 'visionhub:library-focus-search';
+
+const shortcutGroups: Array<{ title: string; items: Array<{ keys: string[]; action: string }> }> = [
+  {
+    title: '全局',
+    items: [
+      { keys: ['Ctrl', '/'], action: '打开快捷键说明' },
+      { keys: ['Ctrl', 'B'], action: '展开 / 收起侧边栏' },
+      { keys: ['Ctrl', ','], action: '打开平台接入' },
+      { keys: ['Ctrl', '1'], action: '打开 AI 创作' },
+      { keys: ['Ctrl', '2'], action: '打开免费平台' },
+      { keys: ['Ctrl', '3'], action: '打开作品画廊' },
+      { keys: ['Ctrl', '4'], action: '打开提示词库' },
+      { keys: ['Ctrl', '5'], action: '打开平台接入' },
+      { keys: ['Ctrl', '6'], action: '打开偏好设置' },
+      { keys: ['Esc'], action: '关闭浮窗 / 关闭图片预览' }
+    ]
+  },
+  {
+    title: 'AI 创作',
+    items: [
+      { keys: ['Ctrl', 'Enter'], action: '提交当前生成任务' },
+      { keys: ['Ctrl', 'K'], action: '聚焦 Prompt 输入框' },
+      { keys: ['Ctrl', 'Shift', 'R'], action: '添加参考图' },
+      { keys: ['Ctrl', 'Shift', 'C'], action: '清空参考图' },
+      { keys: ['Ctrl', 'Shift', 'I'], action: '切换到图生图' },
+      { keys: ['Ctrl', 'Shift', 'T'], action: '切换到文生图' }
+    ]
+  },
+  {
+    title: '作品画廊 / 数据',
+    items: [
+      { keys: ['Ctrl', 'F'], action: '聚焦作品画廊搜索框' },
+      { keys: ['Ctrl', 'O'], action: '打开作品画廊目录' },
+      { keys: ['Ctrl', 'E'], action: '导出设置备份' }
+    ]
+  },
+  {
+    title: '图片预览',
+    items: [
+      { keys: ['+'], action: '放大预览图' },
+      { keys: ['-'], action: '缩小预览图' },
+      { keys: ['0'], action: '重置缩放和位置' },
+      { keys: ['Space'], action: '重置缩放和位置' },
+      { keys: ['Esc'], action: '关闭预览' }
+    ]
+  }
+];
+
 export function App() {
   const providers = useMemo(() => listProviders(), []);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => loadAppSettings());
@@ -131,6 +196,7 @@ export function App() {
   );
   const [configMessage, setConfigMessage] = useState('');
   const [settingsMessage, setSettingsMessage] = useState('');
+  const [activeUtilityModal, setActiveUtilityModal] = useState<UtilityModal>(null);
   const [freePlatformMessage, setFreePlatformMessage] = useState('');
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
   const [isRunningDiagnostics, setIsRunningDiagnostics] = useState(false);
@@ -222,6 +288,151 @@ export function App() {
     setPage(nextPage);
   }
 
+  function dispatchGenerateShortcut(shortcut: GenerateShortcutName) {
+    const eventName = generateShortcutEventName[shortcut];
+    if (page !== 'generate') {
+      navigateTo('generate');
+      window.setTimeout(() => window.dispatchEvent(new Event(eventName)), 0);
+      return;
+    }
+    window.dispatchEvent(new Event(eventName));
+  }
+
+  function focusLibrarySearch() {
+    if (page !== 'library') {
+      navigateTo('library');
+      window.setTimeout(() => window.dispatchEvent(new Event(libraryFocusSearchEvent)), 0);
+      return;
+    }
+    window.dispatchEvent(new Event(libraryFocusSearchEvent));
+  }
+
+  async function checkForUpdates() {
+    try {
+      await openExternalUrl(GITHUB_RELEASES_URL);
+      setSettingsMessage('\u5df2\u6253\u5f00 GitHub Releases\u3002');
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function isEditableShortcutTarget(target: EventTarget | null) {
+    if (!(target instanceof HTMLElement)) return false;
+    const tagName = target.tagName.toLowerCase();
+    return tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable;
+  }
+
+  function handleGlobalShortcut(event: KeyboardEvent) {
+    const key = event.key.toLowerCase();
+    const primaryModifier = event.ctrlKey || event.metaKey;
+    const isEditableTarget = isEditableShortcutTarget(event.target);
+
+    if (activeUtilityModal) {
+      if (key === 'escape') {
+        event.preventDefault();
+        setActiveUtilityModal(null);
+      }
+      return;
+    }
+
+    if (key === 'escape' && (generatePreviewUrl || libraryPreviewUrl)) {
+      event.preventDefault();
+      setGeneratePreviewUrl(null);
+      setLibraryPreviewUrl(null);
+      return;
+    }
+
+    if (!primaryModifier || event.altKey) return;
+
+    if (key === '/' || key === '?') {
+      event.preventDefault();
+      setActiveUtilityModal('shortcuts');
+      return;
+    }
+
+    if (key === 'enter') {
+      event.preventDefault();
+      dispatchGenerateShortcut('submit');
+      return;
+    }
+
+    if (key === 'k') {
+      event.preventDefault();
+      dispatchGenerateShortcut('focus-prompt');
+      return;
+    }
+
+    if (event.shiftKey && key === 'r') {
+      event.preventDefault();
+      dispatchGenerateShortcut('add-reference');
+      return;
+    }
+
+    if (event.shiftKey && key === 'c') {
+      event.preventDefault();
+      dispatchGenerateShortcut('clear-references');
+      return;
+    }
+
+    if (event.shiftKey && key === 'i') {
+      event.preventDefault();
+      dispatchGenerateShortcut('mode-image');
+      return;
+    }
+
+    if (event.shiftKey && key === 't') {
+      event.preventDefault();
+      dispatchGenerateShortcut('mode-text');
+      return;
+    }
+
+    if (isEditableTarget) return;
+
+    if (key === 'b') {
+      event.preventDefault();
+      updateSidebarCollapsed(!isSidebarCollapsed);
+      return;
+    }
+
+    if (key === ',') {
+      event.preventDefault();
+      navigateTo('providers');
+      return;
+    }
+
+    const pageShortcuts: Record<string, Page> = {
+      '1': 'generate',
+      '2': 'free',
+      '3': 'library',
+      '4': 'templates',
+      '5': 'providers',
+      '6': 'settings'
+    };
+    const shortcutPage = pageShortcuts[key];
+    if (shortcutPage) {
+      event.preventDefault();
+      navigateTo(shortcutPage);
+      return;
+    }
+
+    if (key === 'f') {
+      event.preventDefault();
+      focusLibrarySearch();
+      return;
+    }
+
+    if (key === 'o') {
+      event.preventDefault();
+      void openLibraryDirectory();
+      return;
+    }
+
+    if (key === 'e') {
+      event.preventDefault();
+      void exportCurrentSettingsBackup();
+    }
+  }
+
   function generationRecordToReference(record: GenerationRecord): ReferenceImage | null {
     const imageUrl = record.imageUrls[0];
     if (!imageUrl) return null;
@@ -268,6 +479,12 @@ export function App() {
     setIsSidebarCollapsed(nextCollapsed);
     updateAppSettings({ sidebarCollapsed: nextCollapsed });
   }
+
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleGlobalShortcut);
+    return () => window.removeEventListener('keydown', handleGlobalShortcut);
+  }, [activeUtilityModal, page, generatePreviewUrl, libraryPreviewUrl, isSidebarCollapsed, desktopRuntime, appSettings]);
 
   async function openLibraryDirectory() {
     if (!desktopRuntime) {
@@ -854,6 +1071,9 @@ export function App() {
             onOpenLibraryDirectory={openLibraryDirectory}
             onOpenAppDataDirectory={openAppDataDirectory}
             onExportSettingsBackup={exportCurrentSettingsBackup}
+            onOpenSystemInfo={() => setActiveUtilityModal('system-info')}
+            onOpenShortcuts={() => setActiveUtilityModal('shortcuts')}
+            onCheckUpdates={checkForUpdates}
           />
         ) : page === 'library' ? (
           <>
@@ -881,6 +1101,18 @@ export function App() {
           />
         )}
       </main>
+
+      {activeUtilityModal === 'shortcuts' ? (
+        <ShortcutsModal onClose={() => setActiveUtilityModal(null)} />
+      ) : null}
+      {activeUtilityModal === 'system-info' ? (
+        <SystemInfoModal
+          desktopRuntime={desktopRuntime}
+          storageSettings={storageSettings}
+          settingsMessage={settingsMessage}
+          onClose={() => setActiveUtilityModal(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1415,6 +1647,9 @@ function SettingsPage(props: {
   onOpenLibraryDirectory: () => void;
   onOpenAppDataDirectory: () => void;
   onExportSettingsBackup: () => void;
+  onOpenSystemInfo: () => void;
+  onOpenShortcuts: () => void;
+  onCheckUpdates: () => void;
 }) {
   const settings = props.appSettings;
   const generationDefaults = settings.generationDefaults;
@@ -1469,13 +1704,13 @@ function SettingsPage(props: {
           <h1>偏好设置</h1>
         </div>
         <div className="settingsHeaderActions">
-          <button type="button" title="消息中心" disabled>
+          <button type="button" title="系统信息" aria-label="系统信息" onClick={props.onOpenSystemInfo}>
             <Info size={16} />
           </button>
-          <button type="button" title="快捷键" disabled>
+          <button type="button" title="快捷键" aria-label="快捷键" onClick={props.onOpenShortcuts}>
             <Keyboard size={16} />
           </button>
-          <button type="button" title="更新" disabled>
+          <button type="button" title="检查更新" aria-label="检查更新" onClick={props.onCheckUpdates}>
             <RefreshCcw size={16} />
           </button>
         </div>
@@ -1855,31 +2090,6 @@ function SettingsPage(props: {
         {props.settingsMessage ? <p className="settingsActionMessage">{props.settingsMessage}</p> : null}
       </article>
 
-      <div className="settingsSectionLabel">快捷键</div>
-      <article className="settingsGroupCard">
-        <div className="settingsListRow">
-          <div className="settingsRowMain">
-            <strong>启动生成</strong>
-            <small>在 AI 创作中快速提交当前 Prompt。</small>
-          </div>
-          <div className="shortcutKeys"><kbd>Ctrl</kbd><kbd>Enter</kbd></div>
-        </div>
-        <div className="settingsListRow">
-          <div className="settingsRowMain">
-            <strong>打开平台接入</strong>
-            <small>快速进入模型、Base URL 和 API Key 管理。</small>
-          </div>
-          <div className="shortcutKeys"><kbd>Ctrl</kbd><kbd>,</kbd></div>
-        </div>
-        <div className="settingsListRow">
-          <div className="settingsRowMain">
-            <strong>侧边栏折叠</strong>
-            <small>隐藏或展开左侧导航，提高画布空间。</small>
-          </div>
-          <div className="shortcutKeys"><kbd>Ctrl</kbd><kbd>B</kbd></div>
-        </div>
-      </article>
-
       <div className="settingsSectionLabel">关于与软件升级</div>
       <article className="settingsGroupCard">
         <div className="settingsListRow">
@@ -1893,8 +2103,8 @@ function SettingsPage(props: {
             <strong>软件升级</strong>
             <small>后续可接入 Tauri updater、GitHub Release 或自定义更新源。</small>
           </div>
-          <button className="rowActionButton" disabled>
-            <RefreshCcw size={15} /> {'\u5373\u5c06\u652f\u6301'}
+          <button className="rowActionButton" type="button" onClick={props.onCheckUpdates}>
+            <RefreshCcw size={15} /> 检查更新
           </button>
         </div>
         <div className="settingsListRow">
@@ -2001,6 +2211,7 @@ function LibraryPage(props: {
   const [modeFilter, setModeFilter] = useState<'all' | 'text-to-image' | 'image-to-image' | 'with-references'>('all');
   const [timeFilter, setTimeFilter] = useState<LibraryTimeFilter>('all');
   const [copyMessage, setCopyMessage] = useState('');
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const providerNameMap = new Map(props.providers.map((provider) => [provider.id, provider.name]));
   const libraryItems = props.results.filter((result) => result.imageUrls.length > 0 || result.status === 'failed');
   const successCount = libraryItems.filter((result) => result.status === 'succeeded').length;
@@ -2067,6 +2278,15 @@ function LibraryPage(props: {
     return matchesProvider && matchesStatus && matchesMode && matchesTime && matchesQuery;
   });
 
+  useEffect(() => {
+    function focusSearch() {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }
+    window.addEventListener(libraryFocusSearchEvent, focusSearch);
+    return () => window.removeEventListener(libraryFocusSearchEvent, focusSearch);
+  }, []);
+
   async function copyText(label: string, value?: string) {
     if (!value) return;
     try {
@@ -2106,6 +2326,7 @@ function LibraryPage(props: {
         <label className="librarySearchBox">
           <span>{'\u641c\u7d22 Prompt / \u6a21\u578b / Provider'}</span>
           <input
+            ref={searchInputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search local generations"
@@ -2306,6 +2527,86 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
   );
 }
 
+
+function UtilityModalShell(props: { title: string; eyebrow?: string; onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') props.onClose();
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [props.onClose]);
+
+  return (
+    <div className="modalBackdrop utilityModalBackdrop" onClick={props.onClose}>
+      <section className="utilityModal" role="dialog" aria-modal="true" aria-label={props.title} onClick={(event) => event.stopPropagation()}>
+        <header className="utilityModalHeader">
+          <div>
+            {props.eyebrow ? <p className="eyebrow">{props.eyebrow}</p> : null}
+            <h2>{props.title}</h2>
+          </div>
+          <button type="button" title="关闭" aria-label="关闭" onClick={props.onClose}>
+            <X size={18} />
+          </button>
+        </header>
+        {props.children}
+      </section>
+    </div>
+  );
+}
+
+function ShortcutsModal(props: { onClose: () => void }) {
+  return (
+    <UtilityModalShell title="快捷键" eyebrow="Keyboard Shortcuts" onClose={props.onClose}>
+      <div className="shortcutModalContent">
+        {shortcutGroups.map((group) => (
+          <section className="shortcutGroup" key={group.title}>
+            <h3>{group.title}</h3>
+            <div className="shortcutList">
+              {group.items.map((item) => (
+                <div className="shortcutRow" key={`${group.title}-${item.action}`}>
+                  <div className="shortcutKeys">
+                    {item.keys.map((key) => <kbd key={key}>{key}</kbd>)}
+                  </div>
+                  <span>{item.action}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </UtilityModalShell>
+  );
+}
+
+function SystemInfoModal(props: {
+  desktopRuntime: boolean;
+  storageSettings: StorageSettings | null;
+  settingsMessage: string;
+  onClose: () => void;
+}) {
+  const rows = [
+    { label: '版本', value: '0.1.0-dev' },
+    { label: '运行环境', value: props.desktopRuntime ? 'Tauri 桌面端' : 'Web 预览模式' },
+    { label: '作品画廊目录', value: props.storageSettings?.resolved_library_dir ?? (props.desktopRuntime ? '正在读取…' : '桌面端可用') },
+    { label: '默认图库目录', value: props.storageSettings?.default_library_dir ?? '—' },
+    { label: '最近操作', value: props.settingsMessage || '暂无新的设置操作' }
+  ];
+
+  return (
+    <UtilityModalShell title="系统信息" eyebrow="System" onClose={props.onClose}>
+      <div className="systemInfoList">
+        {rows.map((row) => (
+          <div className="systemInfoRow" key={row.label}>
+            <span>{row.label}</span>
+            <strong>{row.value}</strong>
+          </div>
+        ))}
+      </div>
+    </UtilityModalShell>
+  );
+}
+
 function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -2313,12 +2614,14 @@ function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const pointerDownPoint = useRef({ x: 0, y: 0 });
   const didDrag = useRef(false);
+  const modalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setScale(1);
     setOffset({ x: 0, y: 0 });
     setIsDragging(false);
     didDrag.current = false;
+    window.setTimeout(() => modalRef.current?.focus(), 0);
   }, [props.imageUrl]);
 
   function clampScale(value: number) {
@@ -2383,8 +2686,30 @@ function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
     if (event.target === event.currentTarget) props.onClose();
   }
 
+  function handlePreviewKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      props.onClose();
+      return;
+    }
+    if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      zoomBy(0.2);
+      return;
+    }
+    if (event.key === '-') {
+      event.preventDefault();
+      zoomBy(-0.2);
+      return;
+    }
+    if (event.key === '0' || event.key === ' ') {
+      event.preventDefault();
+      resetView();
+    }
+  }
+
   return (
-    <div className="modalBackdrop" onClick={props.onClose}>
+    <div ref={modalRef} className="modalBackdrop" onClick={props.onClose} onKeyDown={handlePreviewKeyDown} tabIndex={-1}>
       <div className="previewModal">
         <div className="previewToolbar" onClick={(event) => event.stopPropagation()}>
           <button type="button" title="缩小" onClick={() => zoomBy(-0.2)}>

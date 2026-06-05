@@ -177,6 +177,7 @@ export function ModernGeneratePage(props: {
   const [assistMode, setAssistMode] = useState<PromptAssistMode | null>(null);
   const [isReferenceDragActive, setIsReferenceDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
   const modelOptions = props.supportsOpenAICompatible
     ? props.providerConfig.modelOptions.length > 0
       ? props.providerConfig.modelOptions
@@ -304,6 +305,45 @@ export function ModernGeneratePage(props: {
     updateReferences([nextReference, ...props.referenceImages.filter((reference) => reference.sourceGenerationId !== latestImage.id)]);
     setMode('image');
   }
+
+  useEffect(() => {
+    function focusPrompt() {
+      promptInputRef.current?.focus();
+      promptInputRef.current?.select();
+    }
+    function addReference() {
+      if (props.isGenerating || props.referenceImages.length >= 4) return;
+      setMode('image');
+      window.setTimeout(() => fileInputRef.current?.click(), 0);
+    }
+    function clearReferenceShortcut() {
+      if (props.isGenerating) return;
+      clearReferences();
+    }
+    function switchToImageMode() {
+      setMode('image');
+    }
+    function switchToTextMode() {
+      setMode('text');
+    }
+    window.addEventListener('visionhub:generate-focus-prompt', focusPrompt);
+    window.addEventListener('visionhub:generate-add-reference', addReference);
+    window.addEventListener('visionhub:generate-clear-references', clearReferenceShortcut);
+    window.addEventListener('visionhub:generate-mode-image', switchToImageMode);
+    window.addEventListener('visionhub:generate-mode-text', switchToTextMode);
+    return () => {
+      window.removeEventListener('visionhub:generate-focus-prompt', focusPrompt);
+      window.removeEventListener('visionhub:generate-add-reference', addReference);
+      window.removeEventListener('visionhub:generate-clear-references', clearReferenceShortcut);
+      window.removeEventListener('visionhub:generate-mode-image', switchToImageMode);
+      window.removeEventListener('visionhub:generate-mode-text', switchToTextMode);
+    };
+  }, [props.referenceImages, props.isGenerating]);
+
+  useEffect(() => {
+    window.addEventListener('visionhub:generate-submit', runGenerate);
+    return () => window.removeEventListener('visionhub:generate-submit', runGenerate);
+  });
 
   function runGenerate() {
     if (mode === 'image') {
@@ -474,6 +514,7 @@ export function ModernGeneratePage(props: {
           </div>
           <div className="promptInputRow">
             <textarea
+              ref={promptInputRef}
               className="bottomPromptInput"
               value={props.prompt}
               onChange={(event) => props.onPromptChange(event.target.value)}
