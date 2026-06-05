@@ -1,6 +1,6 @@
 import { readStorageValue, writeStorageValue } from './safeStorage';
 
-export type AppPage = 'generate' | 'free' | 'library' | 'templates' | 'providers' | 'settings';
+export type AppPage = 'generate' | 'free' | 'library' | 'inspiration' | 'templates' | 'providers' | 'settings';
 export type ThemeMode = 'dark' | 'light';
 export type DefaultGenerationMode = 'text' | 'image';
 export type OutputFormat = 'PNG' | 'JPEG' | 'WebP';
@@ -104,6 +104,7 @@ export const STARTUP_PAGE_OPTIONS: Array<{ value: AppPage; label: string }> = [
   { value: 'generate', label: 'AI 创作' },
   { value: 'free', label: '免费平台' },
   { value: 'library', label: '作品画廊' },
+  { value: 'inspiration', label: '灵感中心' },
   { value: 'templates', label: '提示词库' },
   { value: 'providers', label: '平台接入' },
   { value: 'settings', label: '偏好设置' }

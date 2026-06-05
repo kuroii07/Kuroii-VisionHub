@@ -6450,3 +6450,251 @@ body {
   .shortcutModalContent { grid-template-columns: 1fr; }
   .systemInfoRow { grid-template-columns: 1fr; gap: 5px; }
 }
+
+/* Inspiration Center MVP */
+.inspirationPage { display: grid; gap: 18px; }
+.inspirationTopbar { align-items: flex-start; }
+.inspirationTabs {
+  width: fit-content;
+  display: inline-flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--app-line);
+  border-radius: 16px;
+  background: var(--app-surface);
+}
+.inspirationTabs button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--app-text-2);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 850;
+}
+.inspirationTabs button.active,
+.inspirationTabs button:hover {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 28%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+}
+.inspirationToolbar {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(150px, 190px) minmax(150px, 190px);
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--app-line);
+  border-radius: 24px;
+  color: var(--app-text);
+  background: var(--app-surface);
+}
+.inspirationToolbar label,
+.inspirationPanel label {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 850;
+}
+.inspirationToolbar label > span,
+.inspirationPanel label > span { color: var(--app-muted); }
+.inspirationToolbar input,
+.inspirationPanel input,
+.inspirationPanel textarea {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--app-line);
+  border-radius: 14px;
+  padding: 0 14px;
+  color: var(--app-text);
+  background: var(--app-surface-2);
+  outline: none;
+}
+.inspirationPanel textarea {
+  min-height: 86px;
+  padding: 12px 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.inspirationToolbar input:focus,
+.inspirationPanel input:focus,
+.inspirationPanel textarea:focus {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 42%, var(--app-line));
+}
+.inspirationLayout {
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.inspirationPanel,
+.inspirationCard {
+  min-width: 0;
+  border: 1px solid var(--app-line);
+  border-radius: 24px;
+  color: var(--app-text);
+  background: var(--app-surface);
+}
+.inspirationPanel {
+  position: sticky;
+  top: 18px;
+  display: grid;
+  gap: 13px;
+  padding: 16px;
+}
+.panelTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.panelTitleRow strong { color: var(--app-text); font-size: 15px; }
+.inspirationFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.inspirationCheck {
+  display: flex !important;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 9px !important;
+  color: var(--app-text-2);
+}
+.inspirationCheck input {
+  width: 15px;
+  min-height: 15px;
+  height: 15px;
+  accent-color: var(--app-accent-strong);
+}
+.inspirationPanel .primaryAction {
+  justify-content: center;
+  background: var(--app-accent-strong);
+  box-shadow: none;
+}
+.inspirationPanel .primaryAction:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--app-accent-strong) 88%, #ffffff 12%);
+}
+.inspirationGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.sourceGrid .emptyState,
+.assetGrid .emptyState { grid-column: 1 / -1; }
+.inspirationCard { overflow: hidden; }
+.sourceCard {
+  min-height: 220px;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+}
+.sourceCardHeader {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sourceCardHeader strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sourceCardHeader span {
+  flex: 0 0 auto;
+  max-width: 45%;
+  overflow: hidden;
+  padding: 4px 8px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-muted);
+  background: var(--app-surface-2);
+  font-size: 11px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sourceCard p,
+.sourceCard small,
+.assetCardBody p {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--app-text-2);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+.sourceCard p { -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.sourceCard small { color: var(--app-muted); -webkit-line-clamp: 3; }
+.inspirationActions {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.inspirationActions .dangerText { color: #ef4444; }
+.assetImportPanel { top: 18px; }
+.inspirationDropZone {
+  min-height: 132px;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 18px;
+  border: 1px dashed color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-line));
+  border-radius: 18px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-accent-strong) 6%, var(--app-surface-2));
+  text-align: center;
+}
+.inspirationDropZone strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspirationDropZone span {
+  max-width: 260px;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.inspirationDropZone.hasFile { border-style: solid; }
+.assetCard {
+  min-height: 430px;
+  display: grid;
+  grid-template-rows: 196px minmax(0, 1fr);
+}
+.inspirationAssetThumb { height: 196px; }
+.assetCardBody {
+  min-height: 0;
+  display: grid;
+  gap: 11px;
+  padding: 14px;
+}
+.assetCardBody p { -webkit-line-clamp: 3; }
+.inspirationNotice { margin-bottom: 0; }
+
+@media (max-width: 1180px) {
+  .inspirationLayout { grid-template-columns: 1fr; }
+  .inspirationPanel { position: static; }
+}
+
+@media (max-width: 760px) {
+  .inspirationToolbar,
+  .inspirationFormGrid { grid-template-columns: 1fr; }
+  .inspirationTabs { width: 100%; }
+  .inspirationTabs button { flex: 1 1 0; justify-content: center; }
+}

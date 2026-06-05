@@ -79,7 +79,7 @@ export interface ReferenceImage {
   dataUrl?: string;
   localPath?: string;
   previewUrl?: string;
-  source: 'upload' | 'generated-result' | 'clipboard' | 'drag-drop';
+  source: 'upload' | 'generated-result' | 'clipboard' | 'drag-drop' | 'inspiration';
   sourceGenerationId?: string;
 }
 

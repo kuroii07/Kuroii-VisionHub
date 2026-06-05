@@ -128,6 +128,70 @@ struct DeleteGenerationRecordResult {
     deleted: bool,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct InspirationSource {
+    id: String,
+    name: String,
+    url: String,
+    category: String,
+    region: String,
+    #[serde(default)]
+    tags: Vec<String>,
+    note: Option<String>,
+    requires_login: Option<bool>,
+    commercial_reference: String,
+    created_at: String,
+    updated_at: String,
+    last_opened_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct InspirationAsset {
+    id: String,
+    title: String,
+    image_path: Option<String>,
+    image_url: Option<String>,
+    thumbnail_path: Option<String>,
+    source_url: Option<String>,
+    source_platform: Option<String>,
+    author: Option<String>,
+    original_prompt: Option<String>,
+    inferred_prompt: Option<String>,
+    #[serde(default)]
+    tags: Vec<String>,
+    note: Option<String>,
+    license_status: String,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize)]
+struct InspirationLibrary {
+    sources: Vec<InspirationSource>,
+    assets: Vec<InspirationAsset>,
+}
+
+#[derive(Debug, Deserialize)]
+struct InspirationAssetImportRequest {
+    title: String,
+    data_url: String,
+    file_name: Option<String>,
+    source_url: Option<String>,
+    source_platform: Option<String>,
+    author: Option<String>,
+    original_prompt: Option<String>,
+    #[serde(default)]
+    tags: Vec<String>,
+    note: Option<String>,
+    license_status: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct DeleteInspirationResult {
+    id: String,
+    deleted: bool,
+}
+
 #[derive(Debug, Serialize)]
 struct ImageGenerationResult {
     id: String,
@@ -547,6 +611,174 @@ fn delete_generation_record(
 
     Ok(DeleteGenerationRecordResult { id: record_id, deleted })
 }
+
+#[tauri::command]
+fn load_inspirations(app: tauri::AppHandle) -> Result<InspirationLibrary, String> {
+    let sources = read_inspiration_sources(&app)?;
+    let mut assets = read_inspiration_assets(&app)?;
+    for asset in &mut assets {
+        hydrate_inspiration_asset_image_url(&app, asset);
+    }
+    Ok(InspirationLibrary { sources, assets })
+}
+
+#[tauri::command]
+fn save_inspiration_source(
+    app: tauri::AppHandle,
+    mut source: InspirationSource,
+) -> Result<InspirationSource, String> {
+    let now = chrono_like_timestamp();
+    if source.id.trim().is_empty() {
+        source.id = format!("source-{now}");
+    }
+    if source.created_at.trim().is_empty() {
+        source.created_at = now.clone();
+    }
+    source.updated_at = now;
+    source.tags = clean_string_list(source.tags);
+
+    let mut sources = read_inspiration_sources(&app)?;
+    sources.retain(|item| item.id != source.id);
+    sources.insert(0, source.clone());
+    write_inspiration_sources(&app, &sources)?;
+    Ok(source)
+}
+
+#[tauri::command]
+fn delete_inspiration_source(
+    app: tauri::AppHandle,
+    source_id: String,
+) -> Result<DeleteInspirationResult, String> {
+    let source_id = source_id.trim().to_string();
+    if source_id.is_empty() {
+        return Err("Inspiration source id cannot be empty.".to_string());
+    }
+
+    let mut sources = read_inspiration_sources(&app)?;
+    let before_len = sources.len();
+    sources.retain(|item| item.id != source_id);
+    let deleted = sources.len() != before_len;
+    if deleted {
+        write_inspiration_sources(&app, &sources)?;
+    }
+    Ok(DeleteInspirationResult { id: source_id, deleted })
+}
+
+#[tauri::command]
+fn import_inspiration_asset(
+    app: tauri::AppHandle,
+    request: InspirationAssetImportRequest,
+) -> Result<InspirationAsset, String> {
+    let title = request.title.trim();
+    if title.is_empty() {
+        return Err("灵感图片标题不能为空。".to_string());
+    }
+    if !request.data_url.starts_with("data:image/") {
+        return Err("Only data URL images can be imported as inspiration assets.".to_string());
+    }
+
+    let (bytes, extension) = decode_data_url_image(&request.data_url)?;
+    let dir = inspiration_images_dir(&app)?;
+    let now = chrono_like_timestamp();
+    let file_stem = request
+        .file_name
+        .as_deref()
+        .map(sanitize_filename)
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            let sanitized = sanitize_filename(title);
+            if sanitized.is_empty() { None } else { Some(sanitized) }
+        })
+        .unwrap_or_else(|| "inspiration".to_string());
+    let filename = format!("{now}-{file_stem}.{extension}");
+    let path = dir.join(filename);
+    std::fs::write(&path, bytes)
+        .map_err(|error| format!("Cannot save inspiration image: {error}"))?;
+
+    let asset = InspirationAsset {
+        id: format!("asset-{now}"),
+        title: title.to_string(),
+        image_path: Some(path_to_user_string(&path)),
+        image_url: None,
+        thumbnail_path: None,
+        source_url: optional_trimmed_string(request.source_url),
+        source_platform: optional_trimmed_string(request.source_platform),
+        author: optional_trimmed_string(request.author),
+        original_prompt: optional_trimmed_string(request.original_prompt),
+        inferred_prompt: None,
+        tags: clean_string_list(request.tags),
+        note: optional_trimmed_string(request.note),
+        license_status: request
+            .license_status
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "reference-only".to_string()),
+        created_at: now.clone(),
+        updated_at: now,
+    };
+
+    let mut assets = read_inspiration_assets(&app)?;
+    assets.insert(0, asset.clone());
+    assets.truncate(1000);
+    write_inspiration_assets(&app, &assets)?;
+
+    let mut display_asset = asset;
+    hydrate_inspiration_asset_image_url(&app, &mut display_asset);
+    Ok(display_asset)
+}
+
+#[tauri::command]
+fn save_inspiration_asset(
+    app: tauri::AppHandle,
+    mut asset: InspirationAsset,
+) -> Result<InspirationAsset, String> {
+    let now = chrono_like_timestamp();
+    if asset.id.trim().is_empty() {
+        asset.id = format!("asset-{now}");
+    }
+    if asset.created_at.trim().is_empty() {
+        asset.created_at = now.clone();
+    }
+    asset.updated_at = now;
+    asset.tags = clean_string_list(asset.tags);
+    asset.source_url = optional_trimmed_string(asset.source_url);
+    asset.source_platform = optional_trimmed_string(asset.source_platform);
+    asset.author = optional_trimmed_string(asset.author);
+    asset.original_prompt = optional_trimmed_string(asset.original_prompt);
+    asset.inferred_prompt = optional_trimmed_string(asset.inferred_prompt);
+    asset.note = optional_trimmed_string(asset.note);
+    if asset.image_path.is_some() || asset.image_url.as_deref().is_some_and(|url| url.starts_with("data:image/")) {
+        asset.image_url = None;
+    }
+
+    let mut assets = read_inspiration_assets(&app)?;
+    assets.retain(|item| item.id != asset.id);
+    assets.insert(0, asset.clone());
+    write_inspiration_assets(&app, &assets)?;
+
+    hydrate_inspiration_asset_image_url(&app, &mut asset);
+    Ok(asset)
+}
+
+#[tauri::command]
+fn delete_inspiration_asset(
+    app: tauri::AppHandle,
+    asset_id: String,
+) -> Result<DeleteInspirationResult, String> {
+    let asset_id = asset_id.trim().to_string();
+    if asset_id.is_empty() {
+        return Err("Inspiration asset id cannot be empty.".to_string());
+    }
+
+    let mut assets = read_inspiration_assets(&app)?;
+    let before_len = assets.len();
+    assets.retain(|item| item.id != asset_id);
+    let deleted = assets.len() != before_len;
+    if deleted {
+        write_inspiration_assets(&app, &assets)?;
+    }
+    Ok(DeleteInspirationResult { id: asset_id, deleted })
+}
+
 #[tauri::command]
 fn reveal_generation_file(path: String) -> Result<(), String> {
     let target = PathBuf::from(path);
@@ -876,6 +1108,28 @@ fn history_file_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir(app)?.join("generation-history.json"))
 }
 
+fn inspirations_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app_data_dir(app)?.join("inspirations");
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("Cannot create inspirations directory: {error}"))?;
+    Ok(dir)
+}
+
+fn inspiration_images_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = inspirations_dir(app)?.join("images");
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("Cannot create inspiration images directory: {error}"))?;
+    Ok(dir)
+}
+
+fn inspiration_sources_file_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(inspirations_dir(app)?.join("inspiration-sources.json"))
+}
+
+fn inspiration_assets_file_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(inspirations_dir(app)?.join("inspiration-assets.json"))
+}
+
 fn storage_settings_file_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir(app)?.join("storage-settings.json"))
 }
@@ -1119,6 +1373,125 @@ fn write_generation_history(
     std::fs::rename(&tmp_path, &path)
         .map_err(|error| format!("Cannot replace generation history: {error}"))?;
     Ok(())
+}
+
+fn read_inspiration_sources(app: &tauri::AppHandle) -> Result<Vec<InspirationSource>, String> {
+    let path = inspiration_sources_file_path(app)?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(&path)
+        .map_err(|error| format!("Cannot read inspiration sources: {error}"))?;
+    if text.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut sources: Vec<InspirationSource> = serde_json::from_str(&text)
+        .map_err(|error| format!("Cannot parse inspiration sources: {error}"))?;
+    sources.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    Ok(sources)
+}
+
+fn write_inspiration_sources(
+    app: &tauri::AppHandle,
+    sources: &[InspirationSource],
+) -> Result<(), String> {
+    let path = inspiration_sources_file_path(app)?;
+    let tmp_path = path.with_extension("json.tmp");
+    let text = serde_json::to_string_pretty(sources)
+        .map_err(|error| format!("Cannot serialize inspiration sources: {error}"))?;
+    std::fs::write(&tmp_path, text)
+        .map_err(|error| format!("Cannot write inspiration sources: {error}"))?;
+    std::fs::rename(&tmp_path, &path)
+        .map_err(|error| format!("Cannot replace inspiration sources: {error}"))?;
+    Ok(())
+}
+
+fn read_inspiration_assets(app: &tauri::AppHandle) -> Result<Vec<InspirationAsset>, String> {
+    let path = inspiration_assets_file_path(app)?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(&path)
+        .map_err(|error| format!("Cannot read inspiration assets: {error}"))?;
+    if text.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut assets: Vec<InspirationAsset> = serde_json::from_str(&text)
+        .map_err(|error| format!("Cannot parse inspiration assets: {error}"))?;
+    assets.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    Ok(assets)
+}
+
+fn write_inspiration_assets(
+    app: &tauri::AppHandle,
+    assets: &[InspirationAsset],
+) -> Result<(), String> {
+    let path = inspiration_assets_file_path(app)?;
+    let tmp_path = path.with_extension("json.tmp");
+    let mut persisted = assets.to_vec();
+    for asset in &mut persisted {
+        if asset.image_path.is_some() && asset.image_url.as_deref().is_some_and(|url| url.starts_with("data:image/")) {
+            asset.image_url = None;
+        }
+    }
+    let text = serde_json::to_string_pretty(&persisted)
+        .map_err(|error| format!("Cannot serialize inspiration assets: {error}"))?;
+    std::fs::write(&tmp_path, text)
+        .map_err(|error| format!("Cannot write inspiration assets: {error}"))?;
+    std::fs::rename(&tmp_path, &path)
+        .map_err(|error| format!("Cannot replace inspiration assets: {error}"))?;
+    Ok(())
+}
+
+fn hydrate_inspiration_asset_image_url(app: &tauri::AppHandle, asset: &mut InspirationAsset) {
+    let Some(path) = asset.image_path.as_deref() else {
+        return;
+    };
+    if let Ok(image_url) = inspiration_image_path_to_data_url(app, path) {
+        asset.image_url = Some(image_url);
+    }
+}
+
+fn inspiration_image_path_to_data_url(app: &tauri::AppHandle, path: &str) -> Result<String, String> {
+    let file_path = PathBuf::from(path);
+    if !is_allowed_inspiration_image_path(app, &file_path)? {
+        return Err("Image path is outside the current VisionHub inspiration scope.".to_string());
+    }
+    let bytes = std::fs::read(&file_path)
+        .map_err(|error| format!("Cannot read inspiration image: {error}"))?;
+    let mime = image_mime_from_path(&file_path);
+    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    Ok(format!("data:{mime};base64,{encoded}"))
+}
+
+fn is_allowed_inspiration_image_path(app: &tauri::AppHandle, path: &Path) -> Result<bool, String> {
+    let file = path
+        .canonicalize()
+        .map_err(|error| format!("Cannot resolve inspiration image path: {error}"))?;
+    if !file.is_file() {
+        return Ok(false);
+    }
+    let root = inspiration_images_dir(app)?
+        .canonicalize()
+        .map_err(|error| format!("Cannot resolve inspiration image directory: {error}"))?;
+    Ok(file.starts_with(root))
+}
+
+fn optional_trimmed_string(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn clean_string_list(values: Vec<String>) -> Vec<String> {
+    let mut cleaned = Vec::new();
+    for value in values {
+        let value = value.trim().to_string();
+        if !value.is_empty() && !cleaned.contains(&value) {
+            cleaned.push(value);
+        }
+    }
+    cleaned
 }
 
 fn hydrate_record_image_urls(app: &tauri::AppHandle, record: &mut GenerationRecord) {
@@ -1598,6 +1971,12 @@ pub fn run() {
             load_generation_history,
             save_generation_record,
             delete_generation_record,
+            load_inspirations,
+            save_inspiration_source,
+            delete_inspiration_source,
+            import_inspiration_asset,
+            save_inspiration_asset,
+            delete_inspiration_asset,
             reveal_generation_file,
             get_app_paths,
             reveal_app_data_dir,

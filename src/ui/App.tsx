@@ -21,6 +21,7 @@
   ShieldCheck,
   Sidebar,
   Sparkles,
+  Bookmark,
   Sun,
   Moon,
   Trash2,
@@ -31,6 +32,7 @@
   ZoomOut
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import type { InspirationAsset } from '../domain/inspirationTypes';
 import type { GenerationRecord, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
 import { listProviders } from '../providers/registry';
 import {
@@ -94,11 +96,13 @@ import { POLISH_MODES } from '../services/promptAssist';
 import {
   PROMPT_TEMPLATE_CATEGORIES,
   loadPromptTemplates,
+  savePromptTemplates,
   type PromptTemplate
 } from '../services/promptTemplates';
 import { FREE_PLATFORMS, type FreePlatform } from '../services/freePlatforms';
 import { useStudioStore } from '../store/useStudioStore';
 import { ModernGeneratePage } from './GeneratePage';
+import { InspirationPage } from './InspirationPage';
 import { StudioSelect } from './StudioSelect';
 
 type Page = AppPage;
@@ -147,9 +151,10 @@ const shortcutGroups: Array<{ title: string; items: Array<{ keys: string[]; acti
       { keys: ['Ctrl', '1'], action: '打开 AI 创作' },
       { keys: ['Ctrl', '2'], action: '打开免费平台' },
       { keys: ['Ctrl', '3'], action: '打开作品画廊' },
-      { keys: ['Ctrl', '4'], action: '打开提示词库' },
-      { keys: ['Ctrl', '5'], action: '打开平台接入' },
-      { keys: ['Ctrl', '6'], action: '打开偏好设置' },
+      { keys: ['Ctrl', '4'], action: '打开灵感中心' },
+      { keys: ['Ctrl', '5'], action: '打开提示词库' },
+      { keys: ['Ctrl', '6'], action: '打开平台接入' },
+      { keys: ['Ctrl', '7'], action: '打开偏好设置' },
       { keys: ['Esc'], action: '关闭浮窗 / 关闭图片预览' }
     ]
   },
@@ -204,6 +209,7 @@ export function App() {
   const [providerDiagnostics, setProviderDiagnostics] = useState<ProviderDiagnosticItem[]>([]);
   const [generatePreviewUrl, setGeneratePreviewUrl] = useState<string | null>(null);
   const [libraryPreviewUrl, setLibraryPreviewUrl] = useState<string | null>(null);
+  const [inspirationPreviewUrl, setInspirationPreviewUrl] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => appSettings.sidebarCollapsed);
   const [storageSettings, setStorageSettings] = useState<StorageSettings | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
@@ -285,6 +291,7 @@ export function App() {
   function navigateTo(nextPage: Page) {
     setGeneratePreviewUrl(null);
     setLibraryPreviewUrl(null);
+    setInspirationPreviewUrl(null);
     setPage(nextPage);
   }
 
@@ -335,10 +342,11 @@ export function App() {
       return;
     }
 
-    if (key === 'escape' && (generatePreviewUrl || libraryPreviewUrl)) {
+    if (key === 'escape' && (generatePreviewUrl || libraryPreviewUrl || inspirationPreviewUrl)) {
       event.preventDefault();
       setGeneratePreviewUrl(null);
       setLibraryPreviewUrl(null);
+      setInspirationPreviewUrl(null);
       return;
     }
 
@@ -404,9 +412,10 @@ export function App() {
       '1': 'generate',
       '2': 'free',
       '3': 'library',
-      '4': 'templates',
-      '5': 'providers',
-      '6': 'settings'
+      '4': 'inspiration',
+      '5': 'templates',
+      '6': 'providers',
+      '7': 'settings'
     };
     const shortcutPage = pageShortcuts[key];
     if (shortcutPage) {
@@ -457,7 +466,52 @@ export function App() {
     ].slice(0, 4));
     setGeneratePreviewUrl(null);
     setLibraryPreviewUrl(null);
+    setInspirationPreviewUrl(null);
     navigateTo('generate');
+  }
+
+  function useInspirationAssetAsReference(asset: InspirationAsset) {
+    if (!asset.imageUrl) return;
+    const reference: ReferenceImage = {
+      id: `inspiration-${asset.id}-${Date.now()}`,
+      name: asset.title || '灵感收藏',
+      mimeType: asset.imageUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : asset.imageUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/png',
+      dataUrl: asset.imageUrl.startsWith('data:image/') ? asset.imageUrl : undefined,
+      localPath: asset.imagePath,
+      previewUrl: asset.imageUrl,
+      source: 'inspiration'
+    };
+    setReferenceImages((current) => [
+      reference,
+      ...current.filter((item) => item.id !== reference.id)
+    ].slice(0, 4));
+    setPrompt(asset.originalPrompt || asset.inferredPrompt || prompt);
+    setGeneratePreviewUrl(null);
+    setLibraryPreviewUrl(null);
+    setInspirationPreviewUrl(null);
+    navigateTo('generate');
+  }
+
+  function useInspirationPrompt(promptText: string) {
+    if (!promptText.trim()) return;
+    setPrompt(promptText);
+    navigateTo('generate');
+  }
+
+  function createPromptTemplateFromInspiration(title: string, promptText: string, tags: string[]) {
+    const trimmedPrompt = promptText.trim();
+    if (!trimmedPrompt) return '没有可用 Prompt。';
+    const templates = loadPromptTemplates();
+    const template: PromptTemplate = {
+      id: `inspiration-${Date.now()}`,
+      title: title.trim() || '灵感模板',
+      category: 'style',
+      tone: '来自灵感中心收藏',
+      prompt: trimmedPrompt,
+      tags: tags.length ? tags : ['灵感中心']
+    };
+    savePromptTemplates([template, ...templates.filter((item) => item.prompt !== trimmedPrompt)].slice(0, 200));
+    return '已转入提示词库。';
   }
 
   function updateAppSettings(patch: Partial<AppSettings>) {
@@ -484,7 +538,7 @@ export function App() {
   useEffect(() => {
     window.addEventListener('keydown', handleGlobalShortcut);
     return () => window.removeEventListener('keydown', handleGlobalShortcut);
-  }, [activeUtilityModal, page, generatePreviewUrl, libraryPreviewUrl, isSidebarCollapsed, desktopRuntime, appSettings]);
+  }, [activeUtilityModal, page, generatePreviewUrl, libraryPreviewUrl, inspirationPreviewUrl, isSidebarCollapsed, desktopRuntime, appSettings]);
 
   async function openLibraryDirectory() {
     if (!desktopRuntime) {
@@ -895,6 +949,7 @@ export function App() {
     { page: 'generate', label: 'AI 创作', icon: <Wand2 size={18} /> },
     { page: 'free', label: '免费平台', icon: <Gift size={18} /> },
     { page: 'library', label: '作品画廊', icon: <Image size={18} /> },
+    { page: 'inspiration', label: '灵感中心', icon: <Bookmark size={18} /> },
     { page: 'templates', label: '提示词库', icon: <Layers size={18} /> },
     { page: 'providers', label: '平台接入', icon: <Database size={18} /> },
     { page: 'settings', label: '偏好设置', icon: <Settings size={18} /> }
@@ -1090,6 +1145,18 @@ export function App() {
             />
             {libraryPreviewUrl ? (
               <ImagePreviewModal imageUrl={libraryPreviewUrl} onClose={() => setLibraryPreviewUrl(null)} />
+            ) : null}
+          </>
+        ) : page === 'inspiration' ? (
+          <>
+            <InspirationPage
+              onPreview={setInspirationPreviewUrl}
+              onUseAsReference={useInspirationAssetAsReference}
+              onUsePrompt={useInspirationPrompt}
+              onCreateTemplate={createPromptTemplateFromInspiration}
+            />
+            {inspirationPreviewUrl ? (
+              <ImagePreviewModal imageUrl={inspirationPreviewUrl} onClose={() => setInspirationPreviewUrl(null)} />
             ) : null}
           </>
         ) : (
@@ -2782,7 +2849,8 @@ function summarizeReferenceSources(references?: ReferenceImage[]) {
     upload: '\u672c\u5730',
     'generated-result': '\u4f5c\u54c1',
     clipboard: '\u526a\u8d34\u677f',
-    'drag-drop': '\u62d6\u62fd'
+    'drag-drop': '\u62d6\u62fd',
+    inspiration: '\u7075\u611f'
   };
   const counts = new Map<string, number>();
   for (const reference of references) {
