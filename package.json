@@ -1,0 +1,30 @@
+{
+  "name": "visionhub-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Desktop-first multi-provider AI image generation workspace.",
+  "scripts": {
+    "dev": "vite",
+    "tauri:dev": "tauri dev",
+    "build": "tsc && vite build",
+    "tauri:build": "tauri build",
+    "smoke": "python scripts/smoke_check.py",
+    "verify": "python scripts/smoke_check.py && tsc --noEmit"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "lucide-react": "^0.560.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.9.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "vite": "^6.3.7"
+  }
+}

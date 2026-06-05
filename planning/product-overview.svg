@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#0b1020"/>
+      <stop offset=".55" stop-color="#101633"/>
+      <stop offset="1" stop-color="#05070d"/>
+    </linearGradient>
+    <linearGradient id="a" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#7c5cff"/>
+      <stop offset="1" stop-color="#29d6c8"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="28" stdDeviation="30" flood-color="#000" flood-opacity=".45"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#bg)"/>
+  <circle cx="240" cy="120" r="240" fill="#7c5cff" opacity=".25"/>
+  <circle cx="1380" cy="260" r="260" fill="#29d6c8" opacity=".16"/>
+  <text x="90" y="96" fill="#fff" font-family="Inter,Arial" font-size="54" font-weight="800">VisionHub Studio</text>
+  <text x="92" y="144" fill="#b9c4d6" font-family="Inter,Arial" font-size="24">多平台在线 AI 生图工作台 · GPT Image / Nano Banana / Grok / 豆包 / 即梦 / 可灵</text>
+  <rect x="90" y="205" width="1030" height="650" rx="36" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.16)" filter="url(#shadow)"/>
+  <rect x="120" y="240" width="220" height="590" rx="24" fill="rgba(5,8,16,.72)"/>
+  <text x="145" y="285" fill="#fff" font-size="22" font-family="Inter,Arial" font-weight="700">Provider Hub</text>
+  <g font-family="Inter,Arial" font-size="18" fill="#dbe7ff">
+    <rect x="145" y="320" width="170" height="44" rx="14" fill="url(#a)" opacity=".85"/><text x="164" y="349">GPT Image</text>
+    <rect x="145" y="380" width="170" height="44" rx="14" fill="rgba(255,255,255,.09)"/><text x="164" y="409">Nano Banana</text>
+    <rect x="145" y="440" width="170" height="44" rx="14" fill="rgba(255,255,255,.09)"/><text x="164" y="469">Grok Image</text>
+    <rect x="145" y="500" width="170" height="44" rx="14" fill="rgba(255,255,255,.09)"/><text x="164" y="529">Seedream</text>
+    <rect x="145" y="560" width="170" height="44" rx="14" fill="rgba(255,255,255,.09)"/><text x="164" y="589">即梦 / 可灵</text>
+    <rect x="145" y="620" width="170" height="44" rx="14" fill="rgba(255,255,255,.09)"/><text x="164" y="649">ComfyUI</text>
+  </g>
+  <rect x="370" y="240" width="460" height="590" rx="26" fill="rgba(255,255,255,.06)"/>
+  <text x="400" y="285" fill="#fff" font-size="24" font-family="Inter,Arial" font-weight="800">生成瀑布流</text>
+  <rect x="400" y="320" width="180" height="210" rx="20" fill="#7c5cff" opacity=".85"/>
+  <rect x="600" y="320" width="180" height="150" rx="20" fill="#29d6c8" opacity=".78"/>
+  <rect x="400" y="550" width="180" height="160" rx="20" fill="#ff637e" opacity=".76"/>
+  <rect x="600" y="490" width="180" height="230" rx="20" fill="#ffd86b" opacity=".72"/>
+  <rect x="855" y="240" width="260" height="590" rx="26" fill="rgba(5,8,16,.62)"/>
+  <text x="885" y="285" fill="#fff" font-size="23" font-family="Inter,Arial" font-weight="800">参数面板</text>
+  <g fill="rgba(255,255,255,.1)">
+    <rect x="885" y="320" width="200" height="46" rx="14"/>
+    <rect x="885" y="388" width="200" height="46" rx="14"/>
+    <rect x="885" y="456" width="200" height="46" rx="14"/>
+    <rect x="885" y="524" width="200" height="120" rx="18"/>
+  </g>
+  <rect x="885" y="685" width="200" height="58" rx="20" fill="url(#a)"/>
+  <text x="943" y="722" fill="#08111d" font-size="20" font-family="Inter,Arial" font-weight="800">生成</text>
+  <rect x="1185" y="240" width="325" height="590" rx="36" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.14)" filter="url(#shadow)"/>
+  <text x="1228" y="300" fill="#fff" font-size="28" font-family="Inter,Arial" font-weight="800">Roadmap</text>
+  <g font-family="Inter,Arial" font-size="22">
+    <text x="1228" y="365" fill="#dbe7ff">v0.1 GPT Image MVP</text>
+    <text x="1228" y="430" fill="#dbe7ff">v0.2 Nano Banana / Grok</text>
+    <text x="1228" y="495" fill="#dbe7ff">v0.3 豆包 / 即梦 / 可灵</text>
+    <text x="1228" y="560" fill="#dbe7ff">v0.4 多模型横评 / 批量</text>
+    <text x="1228" y="625" fill="#dbe7ff">v1.0 Web / Mobile</text>
+    <text x="1228" y="690" fill="#dbe7ff">Future ComfyUI / Local</text>
+  </g>
+</svg>
