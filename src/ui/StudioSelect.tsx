@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 export type StudioSelectOption = {
   value: string;
   label: string;
+  description?: string;
 };
 
 export function StudioSelect(props: {
@@ -18,6 +19,7 @@ export function StudioSelect(props: {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const selected = useMemo(() => props.options.find((option) => option.value === props.value), [props.options, props.value]);
   const label = selected?.label ?? props.placeholder ?? props.value;
+  const description = selected?.description;
 
   useEffect(() => {
     if (!open) return;
@@ -42,7 +44,10 @@ export function StudioSelect(props: {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
-        <span>{label}</span>
+        <span className="studioSelectValue">
+          <span>{label}</span>
+          {description ? <small>{description}</small> : null}
+        </span>
         <ChevronDown size={15} />
       </button>
       {open ? (
@@ -61,7 +66,10 @@ export function StudioSelect(props: {
                   setOpen(false);
                 }}
               >
-                <span>{option.label}</span>
+                <span className="studioSelectOptionText">
+                  <span>{option.label}</span>
+                  {option.description ? <small>{option.description}</small> : null}
+                </span>
                 {active ? <Check size={14} /> : null}
               </button>
             );

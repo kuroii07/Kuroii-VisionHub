@@ -411,9 +411,10 @@ export function InspirationPage(props: {
   return (
     <div className="inspirationPage" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop} onPaste={handlePaste}>
       <header className="topbar inspirationTopbar">
-        <div>
+        <div className="pageTitleBlock">
           <p className="eyebrow">Inspiration Center</p>
-          <h1>灵感中心：管理提示词网站和优秀 AI 图片收藏。</h1>
+          <h1>灵感中心</h1>
+          <p>管理提示词网站、参考来源和优秀 AI 图片收藏。</p>
         </div>
         <div className="statusPills">
           <span><Link2 size={15} /> {sources.length} 个网站</span>
@@ -462,7 +463,7 @@ export function InspirationPage(props: {
           <article className="inspirationPanel">
             <div className="panelTitleRow">
               <strong>{sourceDraft.id ? '编辑灵感网站' : '添加灵感网站'}</strong>
-              {sourceDraft.id ? <button className="iconMiniButton" onClick={resetSourceDraft}><X size={13} /></button> : null}
+              {sourceDraft.id ? <button className="iconMiniButton" title="取消编辑来源" aria-label="取消编辑来源" onClick={resetSourceDraft}><X size={13} /></button> : null}
             </div>
             <label><span>名称</span><input value={sourceDraft.name} onChange={(event) => setSourceDraft({ ...sourceDraft, name: event.target.value })} placeholder="例如：自用提示词收藏站" /></label>
             <label><span>URL</span><input value={sourceDraft.url} onChange={(event) => setSourceDraft({ ...sourceDraft, url: event.target.value })} placeholder="https://..." /></label>
@@ -506,7 +507,7 @@ export function InspirationPage(props: {
           <article className="inspirationPanel assetImportPanel">
             <div className="panelTitleRow">
               <strong>{editingAssetId ? '编辑图片收藏' : '导入图片收藏'}</strong>
-              {editingAssetId ? <button className="iconMiniButton" onClick={cancelAssetEdit}><X size={13} /></button> : null}
+              {editingAssetId ? <button className="iconMiniButton" title="取消编辑灵感素材" aria-label="取消编辑灵感素材" onClick={cancelAssetEdit}><X size={13} /></button> : null}
             </div>
             {!editingAssetId ? (
               <button className={`inspirationDropZone ${assetFile ? 'hasFile' : ''}`} onClick={() => fileInputRef.current?.click()} type="button">

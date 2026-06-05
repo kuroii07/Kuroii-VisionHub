@@ -176,7 +176,7 @@ for term in [
     "mapProviderErrorMessage",
     "Provider 诊断助手",
     "onRunDiagnostics",
-    "onApplyPreset",
+    "onRunProfileConnectionTest",
     "onCopyConfig",
     "onImportConfig",
     "onPinModel",
@@ -189,6 +189,7 @@ for term in [
     "provider-hub-test-generation",
     "diagnostics",
     "diagnosticsSummary",
+    "providerAccessLayout",
 ]:
     assert term in app_src, f"Provider diagnostics v1 missing: {term}"
 brand_block = app_src.split('<div className="brand">', 1)[1].split('<nav className="navGroup">', 1)[0]
@@ -278,7 +279,6 @@ for selector in [
     ".diagnosticsActions",
     ".rowActionButton.primaryAction",
     ".diagnosticsItem",
-    ".providerPresetGrid",
     ".providerConfigActions",
     ".diagnosticsSummary",
     ".freeToolbar",

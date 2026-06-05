@@ -98,6 +98,7 @@ export interface ImageGenerationRequest {
   protocol?: 'images' | 'responses' | 'chat-completions' | 'custom-images';
   endpointPath?: string;
   extraHeaders?: Record<string, string>;
+  secretId?: string;
   metadata?: Record<string, unknown>;
 }
 

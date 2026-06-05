@@ -1,7 +1,7 @@
 import { readStorageValue, writeStorageValue } from './safeStorage';
 
 export type AppPage = 'generate' | 'free' | 'library' | 'inspiration' | 'templates' | 'providers' | 'settings';
-export type ThemeMode = 'dark' | 'light';
+export type ThemeMode = 'dark' | 'light' | 'system';
 export type DefaultGenerationMode = 'text' | 'image';
 export type OutputFormat = 'PNG' | 'JPEG' | 'WebP';
 export type ReviewMode = 'auto' | 'strict' | 'relaxed';
@@ -219,7 +219,7 @@ function isAppPage(value: unknown): value is AppPage {
 }
 
 function isThemeMode(value: unknown): value is ThemeMode {
-  return value === 'dark' || value === 'light';
+  return value === 'dark' || value === 'light' || value === 'system';
 }
 
 function pickColor(value: unknown, options: ColorOption[], fallback: string) {

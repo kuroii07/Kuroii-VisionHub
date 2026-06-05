@@ -6,6 +6,7 @@ export interface FreePlatform {
   name: string;
   vendor: string;
   logoText: string;
+  logoUrl: string;
   brandColor: string;
   region: FreePlatformRegion;
   kind: FreePlatformKind;
@@ -21,6 +22,7 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: '豆包',
     vendor: 'ByteDance',
     logoText: '豆',
+    logoUrl: 'https://www.doubao.com/favicon.ico',
     brandColor: '#2563eb',
     region: 'china',
     kind: 'chat-image',
@@ -34,6 +36,7 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: '即梦',
     vendor: 'ByteDance / Jianying',
     logoText: '即',
+    logoUrl: 'https://www.jimeng.com/favicon.ico',
     brandColor: '#ec4899',
     region: 'china',
     kind: 'image-video',
@@ -47,6 +50,7 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: '可灵',
     vendor: 'Kuaishou',
     logoText: '可',
+    logoUrl: 'https://klingai.com/favicon.ico',
     brandColor: '#7c3aed',
     region: 'china',
     kind: 'image-video',
@@ -60,6 +64,7 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: '元宝',
     vendor: 'Tencent',
     logoText: '元',
+    logoUrl: 'https://yuanbao.tencent.cn/favicon.ico',
     brandColor: '#16a34a',
     region: 'china',
     kind: 'chat-image',
@@ -73,6 +78,7 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: '千问 / Qwen',
     vendor: 'Alibaba',
     logoText: '千',
+    logoUrl: 'https://chat.qwen.ai/favicon.ico',
     brandColor: '#0ea5e9',
     region: 'global',
     kind: 'chat-image',
@@ -86,6 +92,7 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: 'ChatGPT',
     vendor: 'OpenAI',
     logoText: 'G',
+    logoUrl: 'https://chatgpt.com/favicon.ico',
     brandColor: '#10a37f',
     region: 'global',
     kind: 'chat-image',
@@ -99,6 +106,7 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: 'Grok',
     vendor: 'xAI',
     logoText: 'X',
+    logoUrl: 'https://grok.com/favicon.ico',
     brandColor: '#111827',
     region: 'global',
     kind: 'chat-image',
@@ -112,6 +120,7 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: 'Gemini / Nano Banana',
     vendor: 'Google',
     logoText: 'N',
+    logoUrl: 'https://gemini.google.com/favicon.ico',
     brandColor: '#f59e0b',
     region: 'global',
     kind: 'chat-image',

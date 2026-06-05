@@ -182,6 +182,7 @@ export async function generateOpenAIImage(request: ImageGenerationRequest) {
       protocol: request.protocol,
       endpoint_path: request.endpointPath,
       extra_headers: request.extraHeaders,
+      secret_id: request.secretId,
       generation_mode: request.generationMode,
       reference_images: request.references?.map(mapReferenceToBackend)
     }
@@ -193,13 +194,15 @@ export async function generateOpenAIImage(request: ImageGenerationRequest) {
 export async function listOpenAICompatibleModels(
   providerId: string,
   baseUrl: string,
-  extraHeaders?: Record<string, string>
+  extraHeaders?: Record<string, string>,
+  secretId?: string
 ) {
   const models = await invoke<BackendModelInfo[]>('list_openai_compatible_models', {
     request: {
       provider_id: providerId,
       base_url: baseUrl,
-      extra_headers: extraHeaders
+      extra_headers: extraHeaders,
+      secret_id: secretId
     }
   });
   return models;

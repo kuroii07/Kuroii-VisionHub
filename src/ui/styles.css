@@ -37,7 +37,7 @@ button {
 
 .appShell {
   display: grid;
-  grid-template-columns: 312px 1fr;
+  grid-template-columns: 272px 1fr;
   min-height: 100vh;
 }
 
@@ -185,6 +185,25 @@ small,
   gap: 28px;
   align-items: flex-start;
   margin-bottom: 24px;
+}
+
+.pageTitleBlock {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.pageTitleBlock h1 {
+  margin: 0;
+  max-width: 820px;
+}
+
+.pageTitleBlock p:not(.eyebrow) {
+  max-width: 720px;
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .eyebrow {
@@ -427,48 +446,202 @@ label {
   justify-content: center;
 }
 
+.relaySaveGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 10px;
+}
+
 .relayTip {
   margin: 0;
   font-size: 12px;
   line-height: 1.6;
 }
 
-.providerPresetGrid,
 .providerConfigActions {
   display: grid;
   gap: 8px;
 }
 
-.providerPresetGrid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.providerPresetButton {
-  min-height: 76px;
-  display: grid;
-  gap: 5px;
-  align-content: start;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: 14px;
-  padding: 10px;
-  color: var(--app-text);
-  text-align: left;
-  background: rgba(255, 255, 255, 0.055);
-}
-
-.providerPresetButton span {
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.providerPresetButton small {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
 .providerConfigActions {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.providerPickerLabel {
+  margin-bottom: 14px;
+}
+
+.providerPickerSelect .studioSelectButton {
+  min-height: 64px;
+  border-color: rgba(104, 193, 255, 0.42);
+}
+
+.profileListHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.profileListHeader div,
+.profileTitleRow {
+  min-width: 0;
+}
+
+.profileListHeader strong {
+  display: block;
+  color: var(--app-text);
+  font-size: 14px;
+}
+
+.profileListHeader small {
+  color: var(--muted);
+}
+
+.profileList {
+  display: grid;
+  gap: 10px;
+  max-height: 640px;
+  overflow: auto;
+  padding-top: 12px;
+  padding-right: 2px;
+}
+
+.profileCard {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 12px;
+  color: var(--app-text);
+  background: rgba(255, 255, 255, 0.045);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.profileCard:hover,
+.profileCard.selected {
+  transform: translateY(-1px);
+  border-color: rgba(104, 193, 255, 0.5);
+  background: rgba(104, 193, 255, 0.12);
+}
+
+.profileAvatar {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #fff;
+  font-weight: 950;
+  background: linear-gradient(135deg, #ff7a1a, #ff4f8a);
+}
+
+.profileMain {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.profileTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.profileTitleRow strong,
+.profileMain small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profileMain small {
+  color: var(--muted);
+}
+
+.profileMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.profileMeta span,
+.profileStatus {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 8px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.profileMeta .enabled,
+.profileStatus.passed {
+  color: #8dffc9;
+  background: rgba(66, 255, 169, 0.14);
+}
+
+.profileStatus.warning {
+  color: #ffe08a;
+  background: rgba(255, 210, 86, 0.16);
+}
+
+.profileStatus.failed {
+  color: #ff98aa;
+  background: rgba(255, 99, 126, 0.16);
+}
+
+.profileActions {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  align-items: center;
+  gap: 8px;
+}
+
+.profileSwitch {
+  width: 48px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.profileSwitch span {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.75);
+  transition: transform 0.16s ease, background 0.16s ease;
+}
+
+.profileSwitch.on {
+  background: linear-gradient(135deg, #ff7a1a, #ff9b1a);
+}
+
+.profileSwitch.on span {
+  transform: translateX(20px);
+  background: #07101c;
+}
+
+.profileEmpty {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .providerDiagnostics {
@@ -771,12 +944,12 @@ label {
 }
 
 .sidebar {
-  width: 286px;
+  width: 272px;
   padding: 22px 18px;
 }
 
 .appShell {
-  grid-template-columns: 286px 1fr;
+  grid-template-columns: 272px 1fr;
 }
 
 .workspace {
@@ -950,7 +1123,7 @@ textarea {
 
 .modalBackdrop {
   position: fixed;
-  inset: 0 0 0 286px;
+  inset: 0 0 0 272px;
   z-index: 120;
   display: grid;
   place-items: stretch;
@@ -2664,11 +2837,30 @@ select option {
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 
-.studioSelectButton span {
+.studioSelectValue,
+.studioSelectOptionText {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.studioSelectValue > span,
+.studioSelectOptionText > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.studioSelectValue small,
+.studioSelectOptionText small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .studioSelectButton svg {
@@ -2718,7 +2910,7 @@ select option {
 
 .studioSelectMenu button {
   width: 100%;
-  min-height: 34px;
+  min-height: 42px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 16px;
   align-items: center;
@@ -2733,13 +2925,6 @@ select option {
   text-align: left;
 }
 
-.studioSelectMenu button span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .studioSelectMenu button svg {
   color: var(--studio-accent, #aefaf0);
 }
@@ -2752,6 +2937,10 @@ select option {
 .studioSelectMenu button.active {
   color: #06101c;
   background: linear-gradient(135deg, #ffffff, var(--studio-accent, #aefaf0));
+}
+
+.studioSelectMenu button.active small {
+  color: rgba(6, 16, 28, 0.68);
 }
 
 .promptControlRow .studioSelectButton {
@@ -2914,6 +3103,9 @@ select option {
   --app-accent: #aefaf0;
   --app-accent-strong: #29d6c8;
   --app-purple: #9f8cff;
+  --app-scrollbar-track: rgba(255, 255, 255, 0.035);
+  --app-scrollbar-thumb: rgba(148, 163, 184, 0.3);
+  --app-scrollbar-thumb-hover: rgba(45, 212, 191, 0.44);
   color: var(--app-text);
   background:
     radial-gradient(circle at 20% 0%, rgba(124, 92, 255, 0.24), transparent 32%),
@@ -2937,6 +3129,9 @@ select option {
   --app-accent: #0f766e;
   --app-accent-strong: #14b8a6;
   --app-purple: #6366f1;
+  --app-scrollbar-track: rgba(15, 23, 42, 0.04);
+  --app-scrollbar-thumb: rgba(100, 116, 139, 0.26);
+  --app-scrollbar-thumb-hover: rgba(20, 184, 166, 0.42);
   color: var(--app-text);
   background:
     radial-gradient(circle at 14% 0%, rgba(59, 130, 246, 0.12), transparent 32%),
@@ -2947,6 +3142,38 @@ select option {
 .appShell {
   color: var(--app-text);
   transition: grid-template-columns 0.22s ease, background 0.22s ease, color 0.22s ease;
+}
+
+.appShell,
+.appShell .workspace,
+.appShell .sidebarDock,
+.appShell .settingsPanel,
+.appShell .providerAccessLayout .profileList,
+.appShell .providerAccessLayout .diagnosticsList,
+.appShell .workspaceGenerate .parameterRail {
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-scrollbar-thumb) var(--app-scrollbar-track);
+}
+
+.appShell *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.appShell *::-webkit-scrollbar-track {
+  background: var(--app-scrollbar-track);
+}
+
+.appShell *::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--app-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+.appShell *::-webkit-scrollbar-thumb:hover {
+  background: var(--app-scrollbar-thumb-hover);
+  background-clip: content-box;
 }
 
 .appShell.theme-dark {
@@ -3413,16 +3640,14 @@ kbd {
   color: var(--app-text);
 }
 .systemSettingsHeader {
-  min-height: 72px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 16px;
-  padding: 0 4px 14px;
-  border-bottom: 1px solid var(--app-line);
+  margin-bottom: 26px;
+  padding: 0 2px;
 }
-.systemSettingsHeader h1 { margin-top: 4px; font-size: 22px; line-height: 1.2; color: var(--app-text); }
+.systemSettingsHeader h1 { margin: 6px 0 0; font-size: 34px; line-height: 1.12; color: var(--app-text); }
 .settingsHeaderActions { display: flex; gap: 10px; }
 .settingsHeaderActions button {
   width: 34px;
@@ -3736,7 +3961,6 @@ kbd {
 }
 
 .providerCard,
-.providerPresetButton,
 .ghostButton,
 .iconButton,
 .rowActionButton,
@@ -3748,7 +3972,6 @@ kbd {
 }
 
 .providerCard:hover,
-.providerPresetButton:hover,
 .ghostButton:hover,
 .iconButton:hover,
 .rowActionButton:hover {
@@ -4013,7 +4236,6 @@ kbd {
 }
 
 .appShell.theme-light .providerCard,
-.appShell.theme-light .providerPresetButton,
 .appShell.theme-light .ghostButton,
 .appShell.theme-light .iconButton,
 .appShell.theme-light .rowActionButton,
@@ -4051,7 +4273,6 @@ kbd {
 .appShell.theme-light .workspace:not(.workspaceGenerate) .settingsSectionLabel,
 .appShell.theme-light .workspace:not(.workspaceGenerate) .settingsRowMain small,
 .appShell.theme-light .workspace:not(.workspaceGenerate) .relayTip,
-.appShell.theme-light .workspace:not(.workspaceGenerate) .providerPresetButton small,
 .appShell.theme-light .workspace:not(.workspaceGenerate) .diagnosticsHint,
 .appShell.theme-light .workspace:not(.workspaceGenerate) .diagnosticsHeader small,
 .appShell.theme-light .workspace:not(.workspaceGenerate) .diagnosticsItem small,
@@ -4186,7 +4407,7 @@ kbd {
 
 .appShell .brandText span {
   display: block;
-  max-width: 190px;
+  max-width: 176px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4194,16 +4415,17 @@ kbd {
 
 .appShell .sidebarFooter {
   display: grid;
+  justify-items: center;
   gap: 10px;
 }
 
 .appShell .sidebarFooter .themeToggle,
 .appShell .sidebarFooter .sidebarCollapseButton {
-  width: 100%;
-  min-height: 44px;
-  height: 44px;
+  width: calc(100% - 18px);
+  min-height: 40px;
+  height: 40px;
   margin: 0;
-  padding: 0 14px;
+  padding: 0 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4247,9 +4469,9 @@ kbd {
 .appShell.sidebarCollapsed .sidebarFooter .sidebarCollapseButton {
   position: relative;
   inset: auto;
-  width: 50px;
-  min-height: 50px;
-  height: 50px;
+  width: 46px;
+  min-height: 46px;
+  height: 46px;
   padding: 0;
   border-radius: 17px;
 }
@@ -6271,6 +6493,214 @@ body {
   background: var(--app-surface-2);
 }
 
+.appShell .topbar:not(.generatorTopbar) {
+  align-items: center;
+}
+
+.appShell .topbar:not(.generatorTopbar) .statusPills {
+  align-self: center;
+  margin-top: 22px;
+}
+
+.settingsInlineHint {
+  justify-self: end;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.freePlatformLogo {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--app-surface) 72%, transparent) !important;
+}
+
+.freePlatformLogo img {
+  width: 34px;
+  height: 34px;
+  display: block;
+  object-fit: contain;
+  border-radius: 9px;
+  z-index: 1;
+}
+
+.freePlatformLogo span {
+  display: none;
+}
+
+.freePlatformLogo img[src=''],
+.freePlatformLogo img:not([src]) {
+  display: none;
+}
+
+.freePlatformLogo img[src=''] + span,
+.freePlatformLogo img:not([src]) + span {
+  display: block;
+}
+
+.libraryToolbar {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.libraryFilterRow {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(148px, 180px) minmax(124px, 152px) minmax(124px, 152px) minmax(124px, 152px);
+  gap: 14px;
+}
+
+.libraryToolbar .libraryInsightGrid.compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 2px 0 0;
+}
+
+.libraryToolbar .libraryInsightCard {
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.libraryToolbar .libraryInsightCard strong {
+  font-size: 16px;
+}
+
+.libraryToolbar .libraryInsightCard small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceGenerate .referenceInfo {
+  color: #075f5b;
+}
+
+.workspaceGenerate .referenceInfo strong {
+  color: #064f4c;
+}
+
+.workspaceGenerate .referenceInfo span {
+  color: #075f5b;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.workspaceGenerate .referenceDock p {
+  color: #3f566f;
+  font-weight: 750;
+}
+
+.workspaceGenerate .referenceRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+.workspaceGenerate .referenceRemove svg {
+  display: block;
+}
+
+.workspaceGenerate .referenceOrderControls {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  display: flex;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.workspaceGenerate .referenceOrderControls button {
+  width: 19px;
+  height: 19px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.56);
+  padding: 0;
+}
+
+.workspaceGenerate .referenceOrderControls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.workspaceGenerate .referenceRoleSelect {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  min-width: 0;
+  height: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 999px;
+  padding: 0 6px;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(8px);
+  font-size: 10px;
+  font-weight: 850;
+  opacity: 0;
+  outline: none;
+  transition: opacity 0.16s ease, background 0.16s ease;
+}
+
+.workspaceGenerate .referenceTile:hover .referenceOrderControls,
+.workspaceGenerate .referenceTile:focus-within .referenceOrderControls,
+.workspaceGenerate .referenceTile:hover .referenceRoleSelect,
+.workspaceGenerate .referenceTile:focus-within .referenceRoleSelect {
+  opacity: 1;
+}
+
+.workspaceGenerate .referenceRoleSelect:focus {
+  background: rgba(15, 23, 42, 0.86);
+}
+
+.appShell.theme-dark .workspaceGenerate .referenceInfo,
+.appShell.theme-dark .workspaceGenerate .referenceInfo strong,
+.appShell.theme-dark .workspaceGenerate .referenceInfo span {
+  color: #ecfffb;
+}
+
+.appShell.theme-dark .workspaceGenerate .referenceInfo span {
+  background: rgba(6, 78, 72, 0.74);
+}
+
+.appShell.theme-dark .workspaceGenerate .referenceDock p {
+  color: #d5fbf5;
+}
+
+@media (max-width: 1280px) {
+  .libraryFilterRow {
+    grid-template-columns: 1fr;
+  }
+
+  .libraryToolbar .libraryInsightGrid.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .appShell .topbar:not(.generatorTopbar) {
+    align-items: flex-start;
+  }
+
+  .appShell .topbar:not(.generatorTopbar) .statusPills {
+    align-self: flex-start;
+    margin-top: 0;
+  }
+
+  .libraryToolbar .libraryInsightGrid.compact {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 
 /* Provider-scoped image-to-image tuning controls. */
@@ -6697,4 +7127,707 @@ body {
   .inspirationFormGrid { grid-template-columns: 1fr; }
   .inspirationTabs { width: 100%; }
   .inspirationTabs button { flex: 1 1 0; justify-content: center; }
+}
+
+/* Platform access: management layout, profile cards, and theme-safe controls. */
+.providerAccessLayout {
+  width: 100%;
+  max-width: none;
+  grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
+  align-items: stretch;
+  min-height: calc(100vh - 156px);
+}
+
+.providerAccessLayout .providerDirectory,
+.providerAccessLayout .settingsPanel {
+  min-width: 0;
+  min-height: 0;
+  height: calc(100vh - 156px);
+  border-radius: 24px;
+}
+
+.providerAccessLayout .providerDirectory {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.providerAccessLayout .settingsPanel {
+  overflow-y: auto;
+}
+
+.providerAccessLayout .studioSelectButton,
+.providerAccessLayout .studioSelectButton:hover,
+.providerAccessLayout .studioSelect.open .studioSelectButton {
+  transform: none;
+  box-shadow: none;
+}
+
+.providerAccessLayout .studioSelectButton {
+  border-color: var(--app-line-strong);
+  background: var(--app-surface);
+}
+
+.providerAccessLayout .studioSelectButton:hover,
+.providerAccessLayout .studioSelect.open .studioSelectButton {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-line-strong));
+  background: color-mix(in srgb, var(--app-accent-strong) 5%, var(--app-surface));
+}
+
+.providerAccessLayout .profileList {
+  min-height: 0;
+  max-height: none;
+  align-content: start;
+  grid-auto-rows: max-content;
+  overflow-y: auto;
+  padding-bottom: 2px;
+}
+
+.providerAccessLayout .matrix.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.providerAccessLayout .matrixRow {
+  min-height: 34px;
+  padding: 7px 8px;
+  border-radius: 12px;
+  gap: 8px;
+}
+
+.providerAccessLayout .matrixRow span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.providerAccessLayout .matrixRow strong {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.providerAccessLayout .relayBox.standalone {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 18px;
+}
+
+.providerAccessLayout .profileCard {
+  height: auto;
+  min-height: 88px;
+  align-self: start;
+  border-color: var(--app-line);
+  background: color-mix(in srgb, var(--app-surface-2) 86%, transparent);
+  box-shadow: none;
+}
+
+.providerAccessLayout .profileCard:hover,
+.providerAccessLayout .profileCard.selected {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 42%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 11%, var(--app-surface-2));
+}
+
+.providerAccessLayout .profileTitleRow strong {
+  color: var(--app-text);
+}
+
+.providerAccessLayout .profileMain small,
+.providerAccessLayout .profileMeta span {
+  color: var(--app-muted);
+}
+
+.providerAccessLayout .profileActions {
+  grid-template-columns: repeat(4, auto);
+  gap: 7px;
+}
+
+.providerAccessLayout .profileAddButton {
+  width: auto;
+  min-width: 104px;
+  min-height: 34px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: 14px;
+  line-height: 1;
+}
+
+.providerAccessLayout .profileAddButton svg {
+  flex: 0 0 auto;
+  color: currentColor;
+  stroke: currentColor;
+}
+
+.providerAccessLayout .profileSwitch {
+  border: 1px solid var(--app-line);
+  background: color-mix(in srgb, var(--app-muted) 16%, var(--app-surface-2));
+}
+
+.providerAccessLayout .profileSwitch span {
+  background: color-mix(in srgb, var(--app-text) 74%, var(--app-surface));
+}
+
+.providerAccessLayout .profileSwitch.on {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 46%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 76%, var(--app-primary));
+}
+
+.providerAccessLayout .profileSwitch.on span {
+  background: #ffffff;
+}
+
+.providerAccessLayout .iconMiniButton {
+  color: var(--app-text-2);
+  border-color: var(--app-line);
+  background: var(--app-surface);
+}
+
+.providerAccessLayout .iconMiniButton:hover {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 38%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface));
+}
+
+.providerAccessLayout .providerDiagnostics {
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--app-surface-2);
+}
+
+.providerAccessLayout .diagnosticsHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 122px;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.providerAccessLayout .diagnosticsHeader strong {
+  color: var(--app-text);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.providerAccessLayout .diagnosticsHeader small {
+  max-width: 420px;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.providerAccessLayout .diagnosticsActions {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.providerAccessLayout .rowActionButton {
+  width: 100%;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-radius: 14px;
+  color: var(--app-text-2);
+  border-color: var(--app-line);
+  background: var(--app-surface);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.providerAccessLayout .rowActionButton:hover:not(:disabled) {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 38%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface));
+}
+
+.providerAccessLayout .rowActionButton:disabled {
+  color: var(--app-text-2);
+  opacity: 0.78;
+}
+
+.providerAccessLayout .rowActionButton svg {
+  flex: 0 0 auto;
+  color: currentColor;
+  stroke: currentColor;
+}
+
+.providerAccessLayout .rowActionButton.primaryAction {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 40%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
+  box-shadow: none;
+}
+
+.providerAccessLayout .diagnosticsSummary {
+  gap: 6px;
+}
+
+.providerAccessLayout .diagnosticsSummary span {
+  min-height: 28px;
+  border: 1px solid var(--app-line);
+  font-size: 11px;
+  font-weight: 850;
+  background: var(--app-surface);
+}
+
+.providerAccessLayout .diagnosticsSummary .pass,
+.providerAccessLayout .diagnosticsItem.pass > span {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.providerAccessLayout .diagnosticsSummary .warn,
+.providerAccessLayout .diagnosticsItem.warn > span {
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.providerAccessLayout .diagnosticsSummary .fail,
+.providerAccessLayout .diagnosticsItem.fail > span {
+  color: #be123c;
+  background: rgba(244, 63, 94, 0.13);
+}
+
+.providerAccessLayout .diagnosticsSummary .info,
+.providerAccessLayout .diagnosticsItem.info > span {
+  color: #2563eb;
+  background: rgba(59, 130, 246, 0.13);
+}
+
+.providerAccessLayout .diagnosticsList {
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.providerAccessLayout .diagnosticsItem {
+  padding: 8px;
+  grid-template-columns: 42px minmax(0, 1fr);
+}
+
+.providerAccessLayout .diagnosticsItem strong {
+  color: var(--app-text);
+}
+
+.providerAccessLayout .diagnosticsItem small {
+  color: var(--app-muted);
+}
+
+.providerAccessLayout .modelPicker {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.providerAccessLayout .relaySaveGrid,
+.providerAccessLayout .providerConfigActions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.providerAccessLayout .relaySaveGrid .ghostButton,
+.providerAccessLayout .providerConfigActions .ghostButton {
+  width: 100%;
+  min-height: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  line-height: 1;
+  text-align: center;
+}
+
+.providerAccessLayout .providerConfigActions .ghostButton svg {
+  flex: 0 0 auto;
+}
+
+.providerAccessLayout .secretMessage {
+  margin: 0;
+}
+
+.studioSelectValue small,
+.studioSelectOptionText small {
+  font-weight: 500;
+}
+
+.appShell.theme-light .providerAccessLayout .profileCard,
+.theme-light .providerAccessLayout .profileCard {
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.appShell.theme-light .providerAccessLayout .profileCard:hover,
+.appShell.theme-light .providerAccessLayout .profileCard.selected,
+.theme-light .providerAccessLayout .profileCard:hover,
+.theme-light .providerAccessLayout .profileCard.selected {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 38%, rgba(15, 23, 42, 0.14));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, #ffffff);
+}
+
+.appShell.theme-light .providerAccessLayout .profileTitleRow strong,
+.theme-light .providerAccessLayout .profileTitleRow strong {
+  color: #0f172a;
+}
+
+.appShell.theme-light .providerAccessLayout .profileMain small,
+.appShell.theme-light .providerAccessLayout .profileMeta span,
+.theme-light .providerAccessLayout .profileMain small,
+.theme-light .providerAccessLayout .profileMeta span {
+  color: #475569;
+}
+
+.appShell.theme-light .providerAccessLayout .profileMeta span,
+.appShell.theme-light .providerAccessLayout .profileStatus,
+.theme-light .providerAccessLayout .profileMeta span,
+.theme-light .providerAccessLayout .profileStatus {
+  background: rgba(15, 23, 42, 0.055);
+}
+
+.appShell.theme-light .providerAccessLayout .profileMeta .enabled,
+.appShell.theme-light .providerAccessLayout .profileStatus.passed,
+.theme-light .providerAccessLayout .profileMeta .enabled,
+.theme-light .providerAccessLayout .profileStatus.passed {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.appShell.theme-light .providerAccessLayout .profileStatus.warning,
+.theme-light .providerAccessLayout .profileStatus.warning {
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.appShell.theme-light .providerAccessLayout .profileStatus.failed,
+.theme-light .providerAccessLayout .profileStatus.failed {
+  color: #be123c;
+  background: rgba(244, 63, 94, 0.12);
+}
+
+.appShell.theme-light .providerAccessLayout .iconMiniButton,
+.theme-light .providerAccessLayout .iconMiniButton {
+  color: #334155;
+  border-color: rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+}
+
+.appShell.theme-light .providerAccessLayout .providerDiagnostics,
+.theme-light .providerAccessLayout .providerDiagnostics {
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.appShell.theme-light .providerAccessLayout .studioSelectButton,
+.appShell.theme-light .providerAccessLayout .studioSelectButton:hover,
+.appShell.theme-light .providerAccessLayout .studioSelect.open .studioSelectButton,
+.theme-light .providerAccessLayout .studioSelectButton,
+.theme-light .providerAccessLayout .studioSelectButton:hover,
+.theme-light .providerAccessLayout .studioSelect.open .studioSelectButton {
+  transform: none;
+  box-shadow: none;
+  background-image: none;
+}
+
+.appShell.theme-light .providerAccessLayout .studioSelectButton,
+.theme-light .providerAccessLayout .studioSelectButton {
+  border-color: rgba(15, 23, 42, 0.14);
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.appShell.theme-light .providerAccessLayout .studioSelectButton:hover,
+.appShell.theme-light .providerAccessLayout .studioSelect.open .studioSelectButton,
+.theme-light .providerAccessLayout .studioSelectButton:hover,
+.theme-light .providerAccessLayout .studioSelect.open .studioSelectButton {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 34%, rgba(15, 23, 42, 0.14));
+  background-color: rgba(255, 255, 255, 0.96);
+}
+
+.appShell.theme-light .providerAccessLayout .rowActionButton,
+.theme-light .providerAccessLayout .rowActionButton {
+  color: #334155;
+  border-color: rgba(15, 23, 42, 0.14);
+  background: #ffffff;
+}
+
+.appShell.theme-light .providerAccessLayout .rowActionButton:hover:not(:disabled),
+.theme-light .providerAccessLayout .rowActionButton:hover:not(:disabled) {
+  color: #0f172a;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 38%, rgba(15, 23, 42, 0.14));
+  background: color-mix(in srgb, var(--app-accent-strong) 9%, #ffffff);
+}
+
+.appShell.theme-light .providerAccessLayout .rowActionButton:disabled,
+.theme-light .providerAccessLayout .rowActionButton:disabled {
+  color: #475569;
+  border-color: rgba(15, 23, 42, 0.12);
+  background: #f8fafc;
+  opacity: 1;
+}
+
+.appShell.theme-light .providerAccessLayout .rowActionButton.primaryAction,
+.theme-light .providerAccessLayout .rowActionButton.primaryAction {
+  color: #0f172a;
+  border-color: rgba(20, 184, 166, 0.34);
+  background: rgba(20, 184, 166, 0.12);
+}
+
+.appShell.theme-light .providerAccessLayout .profileSwitch,
+.theme-light .providerAccessLayout .profileSwitch {
+  border-color: rgba(100, 116, 139, 0.34);
+  background: #cbd5e1;
+}
+
+.appShell.theme-light .providerAccessLayout .profileSwitch span,
+.theme-light .providerAccessLayout .profileSwitch span {
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+}
+
+.appShell.theme-light .providerAccessLayout .profileSwitch.on,
+.theme-light .providerAccessLayout .profileSwitch.on {
+  border-color: rgba(20, 184, 166, 0.58);
+  background: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.14);
+}
+
+.appShell.theme-light .providerAccessLayout .profileSwitch.on span,
+.theme-light .providerAccessLayout .profileSwitch.on span {
+  background: #ffffff;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.28);
+}
+
+.appShell.theme-dark .providerAccessLayout .profileCard,
+.theme-dark .providerAccessLayout .profileCard {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.appShell.theme-dark .providerAccessLayout .studioSelectButton,
+.appShell.theme-dark .providerAccessLayout .studioSelectButton:hover,
+.appShell.theme-dark .providerAccessLayout .studioSelect.open .studioSelectButton,
+.theme-dark .providerAccessLayout .studioSelectButton,
+.theme-dark .providerAccessLayout .studioSelectButton:hover,
+.theme-dark .providerAccessLayout .studioSelect.open .studioSelectButton {
+  transform: none;
+  box-shadow: none;
+  background-image: none;
+}
+
+.appShell.theme-dark .providerAccessLayout .studioSelectButton,
+.theme-dark .providerAccessLayout .studioSelectButton {
+  border-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(255, 255, 255, 0.055);
+}
+
+.appShell.theme-dark .providerAccessLayout .studioSelectButton:hover,
+.appShell.theme-dark .providerAccessLayout .studioSelect.open .studioSelectButton,
+.theme-dark .providerAccessLayout .studioSelectButton:hover,
+.theme-dark .providerAccessLayout .studioSelect.open .studioSelectButton {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, rgba(255, 255, 255, 0.12));
+  background-color: rgba(255, 255, 255, 0.075);
+}
+
+.appShell.theme-dark .providerAccessLayout .rowActionButton,
+.theme-dark .providerAccessLayout .rowActionButton {
+  color: #dbeafe;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.appShell.theme-dark .providerAccessLayout .rowActionButton:disabled,
+.theme-dark .providerAccessLayout .rowActionButton:disabled {
+  color: #cbd5e1;
+  opacity: 0.88;
+}
+
+.appShell.theme-dark .providerAccessLayout .rowActionButton.primaryAction,
+.theme-dark .providerAccessLayout .rowActionButton.primaryAction {
+  color: #ecfeff;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 46%, rgba(255, 255, 255, 0.12));
+  background: color-mix(in srgb, var(--app-accent-strong) 18%, rgba(255, 255, 255, 0.06));
+}
+
+.appShell.theme-dark .providerAccessLayout .diagnosticsSummary .pass,
+.appShell.theme-dark .providerAccessLayout .diagnosticsItem.pass > span,
+.theme-dark .providerAccessLayout .diagnosticsSummary .pass,
+.theme-dark .providerAccessLayout .diagnosticsItem.pass > span {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.appShell.theme-dark .providerAccessLayout .diagnosticsSummary .warn,
+.appShell.theme-dark .providerAccessLayout .diagnosticsItem.warn > span,
+.theme-dark .providerAccessLayout .diagnosticsSummary .warn,
+.theme-dark .providerAccessLayout .diagnosticsItem.warn > span {
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.appShell.theme-dark .providerAccessLayout .diagnosticsSummary .fail,
+.appShell.theme-dark .providerAccessLayout .diagnosticsItem.fail > span,
+.theme-dark .providerAccessLayout .diagnosticsSummary .fail,
+.theme-dark .providerAccessLayout .diagnosticsItem.fail > span {
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.18);
+}
+
+.appShell.theme-dark .providerAccessLayout .diagnosticsSummary .info,
+.appShell.theme-dark .providerAccessLayout .diagnosticsItem.info > span,
+.theme-dark .providerAccessLayout .diagnosticsSummary .info,
+.theme-dark .providerAccessLayout .diagnosticsItem.info > span {
+  color: #bfdbfe;
+  background: rgba(59, 130, 246, 0.17);
+}
+
+.appShell.theme-dark .providerAccessLayout .profileSwitch span,
+.theme-dark .providerAccessLayout .profileSwitch span {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.appShell.theme-dark .providerAccessLayout .profileSwitch.on span,
+.theme-dark .providerAccessLayout .profileSwitch.on span {
+  background: #07101c;
+}
+
+@media (max-width: 1180px) {
+  .providerAccessLayout {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .providerAccessLayout .providerDirectory,
+  .providerAccessLayout .settingsPanel {
+    height: auto;
+    max-height: none;
+  }
+
+  .providerAccessLayout .profileList {
+    max-height: 420px;
+  }
+}
+
+@media (max-width: 720px) {
+  .providerAccessLayout .matrix.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .providerAccessLayout .profileCard {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .providerAccessLayout .profileActions {
+    grid-column: 1 / -1;
+    justify-content: end;
+  }
+
+  .providerAccessLayout .diagnosticsHeader,
+  .providerAccessLayout .modelPicker,
+  .providerAccessLayout .relaySaveGrid,
+  .providerConfigActions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Final interaction pass: flat controls, consistent hover, no persistent shadows. */
+.appShell button,
+.appShell .studioSelectButton,
+.appShell .ghostButton,
+.appShell .generateButton,
+.appShell .primaryGenerate,
+.appShell .rowActionButton,
+.appShell .miniButton,
+.appShell .themeToggle,
+.appShell .sidebarCollapseButton,
+.appShell .segmentedControl button,
+.appShell .settingsBooleanGrid button,
+.appShell .settingsTogglePill,
+.appShell .ratioGrid button,
+.appShell .resolutionList button,
+.appShell .customSizeBox button,
+.appShell .referenceAdd,
+.appShell .modeToggle,
+.appShell .chipButton,
+.appShell .assistTemplateList button,
+.appShell .assistActionRow button,
+.appShell .polishEngineBar button,
+.appShell .inspirationTabs button {
+  box-shadow: none !important;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.appShell .profileSwitch span {
+  box-shadow: none !important;
+}
+
+.appShell button:hover:not(:disabled),
+.appShell .studioSelectButton:hover,
+.appShell .studioSelect.open .studioSelectButton,
+.appShell .ghostButton:hover:not(:disabled),
+.appShell .generateButton:hover:not(:disabled),
+.appShell .primaryGenerate:hover:not(:disabled),
+.appShell .rowActionButton:hover:not(:disabled),
+.appShell .miniButton:hover:not(:disabled),
+.appShell .themeToggle:hover,
+.appShell .sidebarCollapseButton:hover,
+.appShell .segmentedControl button:hover:not(:disabled),
+.appShell .settingsBooleanGrid button:hover:not(:disabled),
+.appShell .settingsTogglePill:hover,
+.appShell .ratioGrid button:hover,
+.appShell .resolutionList button:hover,
+.appShell .customSizeBox button:hover,
+.appShell .referenceAdd:hover,
+.appShell .modeToggle:hover,
+.appShell .chipButton:hover,
+.appShell .assistTemplateList button:hover,
+.appShell .assistActionRow button:hover:not(:disabled),
+.appShell .polishEngineBar button:hover:not(:disabled),
+.appShell .inspirationTabs button:hover {
+  transform: translateY(-1px);
+}
+
+.appShell button:active:not(:disabled),
+.appShell .studioSelectButton:active,
+.appShell .ghostButton:active:not(:disabled),
+.appShell .generateButton:active:not(:disabled),
+.appShell .primaryGenerate:active:not(:disabled),
+.appShell .rowActionButton:active:not(:disabled),
+.appShell .miniButton:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.appShell button:focus-visible,
+.appShell .studioSelectButton:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--app-accent-strong) 58%, transparent);
+  outline-offset: 2px;
+}
+
+.appShell .workspaceGenerate .resolutionList {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.appShell .workspaceGenerate .resolutionList::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }

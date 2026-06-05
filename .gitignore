@@ -1,5 +1,6 @@
 ﻿# Dependencies
 node_modules/
+.npm-cache/
 
 # Frontend build output
 dist/

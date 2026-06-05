@@ -4,6 +4,8 @@
   ImagePlus,
   Maximize2,
   PanelRight,
+  ArrowLeft,
+  ArrowRight,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -133,6 +135,17 @@ function generationTimeMs(createdAt: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function isPotentialBackgroundCompletion(error?: string) {
+  const message = (error ?? '').toLowerCase();
+  return (
+    message.includes('524') ||
+    message.includes('同步连接超时') ||
+    message.includes('后台可能') ||
+    message.includes('background task') ||
+    message.includes('轮询')
+  );
+}
+
 export function ModernGeneratePage(props: {
   providers: ReturnType<typeof listProviders>;
   selectedProvider: ReturnType<typeof listProviders>[number];
@@ -170,6 +183,7 @@ export function ModernGeneratePage(props: {
   const [compression, setCompression] = useState('');
   const [reviewMode, setReviewMode] = useState<ReviewMode>(props.defaultReviewMode);
   const [referenceStrength, setReferenceStrength] = useState('auto');
+  const [referenceRoles, setReferenceRoles] = useState<Record<string, string>>({});
   const [preserveComposition, setPreserveComposition] = useState(true);
   const [styleTransfer, setStyleTransfer] = useState(false);
   const [customWidth, setCustomWidth] = useState(() => parseSize(props.size)[0]);
@@ -193,6 +207,7 @@ export function ModernGeneratePage(props: {
   );
   const latestImage = sessionResults.find((result) => result.imageUrls[0]);
   const failedLatest = sessionResults.find((result) => result.status === 'failed');
+  const failedLatestNeedsCheck = isPotentialBackgroundCompletion(failedLatest?.error);
   const imageToImageStatus = props.selectedProvider.capabilities.imageToImage;
   const multiReferenceStatus = props.selectedProvider.capabilities.multiReferenceImage;
   const advancedImageTuningEnabled = ['supported', 'partial'].includes(imageToImageStatus);
@@ -254,10 +269,30 @@ export function ModernGeneratePage(props: {
 
   function removeReference(referenceId: string) {
     updateReferences(props.referenceImages.filter((reference) => reference.id !== referenceId));
+    setReferenceRoles((current) => {
+      const next = { ...current };
+      delete next[referenceId];
+      return next;
+    });
   }
 
   function clearReferences() {
     updateReferences([]);
+    setReferenceRoles({});
+  }
+
+  function moveReference(referenceId: string, direction: -1 | 1) {
+    const index = props.referenceImages.findIndex((reference) => reference.id === referenceId);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= props.referenceImages.length) return;
+    const nextReferences = [...props.referenceImages];
+    const [item] = nextReferences.splice(index, 1);
+    nextReferences.splice(nextIndex, 0, item);
+    updateReferences(nextReferences);
+  }
+
+  function setReferenceRole(referenceId: string, role: string) {
+    setReferenceRoles((current) => ({ ...current, [referenceId]: role }));
   }
 
   function hasImageTransfer(dataTransfer: DataTransfer) {
@@ -356,7 +391,8 @@ export function ModernGeneratePage(props: {
             preserveComposition,
             styleTransfer,
             capabilityStatus: imageToImageStatus,
-            multiReferenceStatus
+            multiReferenceStatus,
+            referenceRoles
           }
         }
       });
@@ -422,7 +458,11 @@ export function ModernGeneratePage(props: {
               ) : null}
             </div>
           )}
-          {failedLatest && !latestImage ? <div className="previewError">上一轮失败：{failedLatest.error}</div> : null}
+          {failedLatest && !latestImage ? (
+            <div className={`previewError ${failedLatestNeedsCheck ? 'pendingRecovery' : ''}`}>
+              {failedLatestNeedsCheck ? '上一轮待核查：同步连接先超时，中转后台可能仍在继续生成。稍后可重载历史或查看中转后台。' : `上一轮失败：${failedLatest.error}`}
+            </div>
+          ) : null}
           {props.isGenerating && latestImage?.imageUrls[0] ? (
             <div className="generationOverlay">
               <span>
@@ -476,11 +516,33 @@ export function ModernGeneratePage(props: {
                   <XCircle size={15} /> 清空
                 </button>
                 <div className="referenceStrip">
-                  {props.referenceImages.map((reference) => (
+                  {props.referenceImages.map((reference, index) => (
                     <article className="referenceTile" key={reference.id}>
                       <button type="button" className="referenceThumb" onClick={() => reference.previewUrl && props.onPreview(reference.previewUrl)}>
                         {reference.previewUrl ? <img src={reference.previewUrl} alt={reference.name ?? '参考图'} /> : <ImagePlus size={18} />}
                       </button>
+                      <div className="referenceOrderControls">
+                        <button type="button" title="左移参考图" aria-label="左移参考图" disabled={props.isGenerating || index === 0} onClick={() => moveReference(reference.id, -1)}>
+                          <ArrowLeft size={11} />
+                        </button>
+                        <button type="button" title="右移参考图" aria-label="右移参考图" disabled={props.isGenerating || index === props.referenceImages.length - 1} onClick={() => moveReference(reference.id, 1)}>
+                          <ArrowRight size={11} />
+                        </button>
+                      </div>
+                      <select
+                        className="referenceRoleSelect"
+                        value={referenceRoles[reference.id] ?? 'auto'}
+                        title="参考用途"
+                        aria-label="参考用途"
+                        disabled={props.isGenerating}
+                        onChange={(event) => setReferenceRole(reference.id, event.target.value)}
+                      >
+                        <option value="auto">自动</option>
+                        <option value="composition">构图</option>
+                        <option value="style">风格</option>
+                        <option value="character">角色</option>
+                        <option value="color">颜色</option>
+                      </select>
                       <button className="referenceRemove" type="button" title="移除参考图" disabled={props.isGenerating} onClick={() => removeReference(reference.id)}>
                         <Trash2 size={13} />
                       </button>

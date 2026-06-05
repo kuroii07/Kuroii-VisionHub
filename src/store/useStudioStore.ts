@@ -4,6 +4,11 @@ import { createProviderAdapter, listProviders } from '../providers/registry';
 import { loadAppSettings } from '../services/appSettings';
 import { deleteGenerationRecord, isTauriRuntime, loadGenerationHistory, saveGenerationRecord } from '../services/desktopApi';
 import { loadProviderConfig, parseExtraHeaders } from '../services/providerConfig';
+import {
+  getActiveProviderProfile,
+  profileToProviderConfig,
+  providerProfileSecretId
+} from '../services/providerProfiles';
 
 interface StudioState {
   selectedProviderId: string;
@@ -96,7 +101,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   generate: async (options) => {
     const state = get();
     const adapter = createProviderAdapter(state.selectedProviderId);
-    const providerConfig = loadProviderConfig(state.selectedProviderId);
+    const activeProfile = getActiveProviderProfile(state.selectedProviderId);
+    const providerConfig = activeProfile
+      ? profileToProviderConfig(activeProfile)
+      : loadProviderConfig(state.selectedProviderId);
     const useOpenAICompatibleConfig =
       state.selectedProviderId === 'openai-gpt-image' || state.selectedProviderId === 'custom-http-provider';
 
@@ -121,7 +129,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         endpointPath: useOpenAICompatibleConfig ? providerConfig.endpointPath : undefined,
         extraHeaders: useOpenAICompatibleConfig
           ? parseExtraHeaders(providerConfig.extraHeadersJson)
-          : undefined
+          : undefined,
+        secretId: activeProfile ? providerProfileSecretId(activeProfile.id) : undefined
       };
 
       validateGenerationRequest(request, useOpenAICompatibleConfig);

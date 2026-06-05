@@ -24,8 +24,7 @@ export default defineConfig({
   },
   cacheDir: '.vite-cache',
   optimizeDeps: {
-    noDiscovery: true,
-    include: []
+    include: ['react', 'react-dom/client', 'react/jsx-dev-runtime']
   },
   build: {
     outDir: 'dist',

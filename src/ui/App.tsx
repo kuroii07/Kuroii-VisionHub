@@ -16,6 +16,8 @@
   Layers,
   Maximize2,
   Monitor,
+  Pencil,
+  Plus,
   RefreshCcw,
   Settings,
   ShieldCheck,
@@ -57,16 +59,26 @@ import {
   defaultEndpointForProtocol,
   defaultOpenAICompatibleConfig,
   exportProviderConfigMap,
-  applyProviderConfigPreset,
   loadProviderConfig,
   normalizeProviderConfig,
   parseProviderConfigImport,
   parseExtraHeaders,
   saveProviderConfig,
   serializeProviderConfig,
-  PROVIDER_CONFIG_PRESETS,
   type OpenAICompatibleConfig
 } from '../services/providerConfig';
+import {
+  createProviderProfile,
+  deleteProviderProfile,
+  getProfilesForProvider,
+  profileToProviderConfig,
+  providerProfileSecretId,
+  saveProviderProfiles,
+  setProviderProfileEnabled,
+  upsertProviderProfile,
+  loadProviderProfiles,
+  type ProviderConnectionProfile
+} from '../services/providerProfiles';
 import {
   DEFAULT_COUNT_OPTIONS,
   DEFAULT_QUALITY_OPTIONS,
@@ -114,6 +126,41 @@ type ProviderDiagnosticItem = {
   detail: string;
   level: ProviderDiagnosticLevel;
 };
+
+function isPotentialBackgroundCompletion(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
+  if (record.status !== 'failed') return false;
+  const message = `${record.error ?? ''} ${JSON.stringify(record.raw ?? {})}`.toLowerCase();
+  return (
+    message.includes('524') ||
+    message.includes('同步连接超时') ||
+    message.includes('后台可能') ||
+    message.includes('background task') ||
+    message.includes('poll_error') ||
+    message.includes('poll_url') ||
+    message.includes('轮询')
+  );
+}
+
+function generationStatusLabel(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
+  if (record.status === 'succeeded') return '成功';
+  if (isPotentialBackgroundCompletion(record)) return '待核查';
+  if (record.status === 'running') return '生成中';
+  if (record.status === 'queued') return '排队中';
+  if (record.status === 'cancelled') return '已取消';
+  return '失败';
+}
+
+function generationStatusClass(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
+  return isPotentialBackgroundCompletion(record) ? 'pendingRecovery' : record.status;
+}
+
+function generationFailureHint(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
+  if (!isPotentialBackgroundCompletion(record)) return record.error;
+  const raw = record.raw as { poll_url?: string; poll_error?: string } | undefined;
+  const pollUrl = raw?.poll_url ? ` 轮询地址：${raw.poll_url}` : '';
+  const pollError = raw?.poll_error ? ` 轮询错误：${raw.poll_error}` : '';
+  return `同步连接先断开，但中转或上游可能仍在后台继续生成。建议稍后重新加载历史，或查看中转后台任务状态。${pollUrl}${pollError}`;
+}
 
 const statusLabel: Record<ProviderCapabilityStatus, string> = {
   supported: '支持',
@@ -199,6 +246,10 @@ export function App() {
   const [providerConfig, setProviderConfig] = useState<OpenAICompatibleConfig>(
     defaultOpenAICompatibleConfig
   );
+  const [providerProfiles, setProviderProfiles] = useState<ProviderConnectionProfile[]>(() => loadProviderProfiles());
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [isCreatingProviderProfile, setIsCreatingProviderProfile] = useState(false);
+  const [configActionState, setConfigActionState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const [configMessage, setConfigMessage] = useState('');
   const [settingsMessage, setSettingsMessage] = useState('');
   const [activeUtilityModal, setActiveUtilityModal] = useState<UtilityModal>(null);
@@ -214,7 +265,11 @@ export function App() {
   const [storageSettings, setStorageSettings] = useState<StorageSettings | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [generateSessionStartedAt] = useState(() => Date.now());
+  const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() =>
+    typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  );
   const themeMode = appSettings.themeMode;
+  const resolvedThemeMode = themeMode === 'system' ? systemTheme : themeMode;
 
   const {
     selectedProviderId,
@@ -239,6 +294,13 @@ export function App() {
   } = useStudioStore();
 
   const selectedProvider = providers.find((provider) => provider.id === selectedProviderId) ?? providers[0];
+  const selectedProviderProfiles = useMemo(
+    () => getProfilesForProvider(providerProfiles, selectedProviderId),
+    [providerProfiles, selectedProviderId]
+  );
+  const selectedProfile = isCreatingProviderProfile
+    ? null
+    : selectedProviderProfiles.find((profile) => profile.id === selectedProfileId) ?? null;
   const desktopRuntime = isTauriRuntime();
   const supportsOpenAICompatible =
     selectedProviderId === 'openai-gpt-image' || selectedProviderId === 'custom-http-provider';
@@ -269,8 +331,29 @@ export function App() {
     setSecretDraft('');
     setSecretMessage('');
     setConfigMessage('');
+    setConfigActionState('idle');
     setProviderDiagnostics([]);
-    const config = loadProviderConfig(selectedProviderId);
+    if (isCreatingProviderProfile) {
+      const draftConfig = createEmptyProviderDraftConfig(selectedProvider);
+      setSelectedProfileId(null);
+      setProviderConfig(draftConfig);
+      setSecretAvailable(false);
+      if (supportsOpenAICompatible) setSelectedModel(draftConfig.modelId);
+      return;
+    }
+
+    const nextProfile =
+      selectedProviderProfiles.find((profile) => profile.id === selectedProfileId) ??
+      selectedProviderProfiles.find((profile) => profile.enabled) ??
+      selectedProviderProfiles[0] ??
+      null;
+    const config = nextProfile
+      ? profileToProviderConfig(nextProfile)
+      : {
+          ...loadProviderConfig(selectedProviderId),
+          displayName: selectedProvider.name
+        };
+    setSelectedProfileId(nextProfile?.id ?? null);
     setProviderConfig(config);
     if (supportsOpenAICompatible) setSelectedModel(config.modelId);
 
@@ -279,12 +362,31 @@ export function App() {
       return;
     }
 
-    void getProviderSecretStatus(selectedProviderId)
-      .then((status) => setSecretAvailable(status.available))
+    const secretId = nextProfile ? providerProfileSecretId(nextProfile.id) : selectedProviderId;
+    void getProviderSecretStatus(secretId)
+      .then(async (status) => {
+        if (status.available || !nextProfile) {
+          setSecretAvailable(status.available);
+          return;
+        }
+        const legacyStatus = await getProviderSecretStatus(selectedProviderId);
+        setSecretAvailable(legacyStatus.available);
+      })
       .catch(() => setSecretAvailable(false));
-  }, [desktopRuntime, selectedProviderId, setSelectedModel, supportsOpenAICompatible]);
+  }, [
+    desktopRuntime,
+    selectedProviderId,
+    selectedProvider.name,
+    selectedProfileId,
+    selectedProviderProfiles,
+    isCreatingProviderProfile,
+    setSelectedModel,
+    supportsOpenAICompatible
+  ]);
 
   function selectProvider(providerId: string) {
+    setIsCreatingProviderProfile(false);
+    setSelectedProfileId(null);
     setSelectedProvider(providerId);
   }
 
@@ -526,7 +628,7 @@ export function App() {
   }
 
   function toggleThemeMode() {
-    updateThemeMode(themeMode === 'dark' ? 'light' : 'dark');
+    updateThemeMode(resolvedThemeMode === 'dark' ? 'light' : 'dark');
   }
 
   function updateSidebarCollapsed(nextCollapsed: boolean) {
@@ -539,6 +641,15 @@ export function App() {
     window.addEventListener('keydown', handleGlobalShortcut);
     return () => window.removeEventListener('keydown', handleGlobalShortcut);
   }, [activeUtilityModal, page, generatePreviewUrl, libraryPreviewUrl, inspirationPreviewUrl, isSidebarCollapsed, desktopRuntime, appSettings]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateSystemTheme = () => setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
+    updateSystemTheme();
+    mediaQuery.addEventListener?.('change', updateSystemTheme);
+    return () => mediaQuery.removeEventListener?.('change', updateSystemTheme);
+  }, []);
 
   async function openLibraryDirectory() {
     if (!desktopRuntime) {
@@ -606,7 +717,13 @@ export function App() {
     try {
       const result = await exportSettingsBackup({
         appSettings,
-        providerConfigs: exportProviderConfigMap()
+        providerConfigs: {
+          legacy: exportProviderConfigMap(),
+          profiles: providerProfiles.map((profile) => ({
+            ...profile,
+            secret: undefined
+          }))
+        }
       });
       setSettingsMessage(`已导出设置备份：${result.path}`);
       await revealGenerationFile(result.path);
@@ -619,6 +736,7 @@ export function App() {
     key: K,
     value: OpenAICompatibleConfig[K]
   ) {
+    setConfigActionState('idle');
     setProviderConfig((current) => {
       if (key === 'protocol') {
         const protocol = value as OpenAICompatibleConfig['protocol'];
@@ -629,28 +747,170 @@ export function App() {
     if (key === 'modelId') setSelectedModel(String(value));
   }
 
-  function saveCurrentProviderConfig() {
+  function activeSecretId() {
+    return selectedProfileId ? providerProfileSecretId(selectedProfileId) : selectedProviderId;
+  }
+
+  function buildProfileFromCurrentConfig(enable: boolean) {
+    if (!providerConfig.baseUrl.trim()) {
+      throw new Error('请先填写 Base URL。');
+    }
+    if (!providerConfig.modelId.trim()) {
+      throw new Error('请先填写模型 ID。');
+    }
+    const normalizedConfig = normalizeProviderConfig({
+      ...providerConfig,
+      displayName: providerConfig.displayName.trim() || inferProfileName(providerConfig)
+    });
+    new URL(normalizedConfig.baseUrl);
+    if (!normalizedConfig.endpointPath.startsWith('/')) {
+      throw new Error('接口路径必须以 / 开头。');
+    }
+
+    const existing = selectedProfileId
+      ? providerProfiles.find((profile) => profile.id === selectedProfileId)
+      : undefined;
+    const now = new Date().toISOString();
+    return {
+      ...(existing ?? createProviderProfile(selectedProviderId, normalizedConfig)),
+      ...normalizedConfig,
+      providerId: selectedProviderId,
+      enabled: enable || existing?.enabled || false,
+      updatedAt: now
+    };
+  }
+
+  function persistProfile(profile: ProviderConnectionProfile) {
+    const upserted = upsertProviderProfile(providerProfiles, profile);
+    const nextProfiles = profile.enabled
+      ? setProviderProfileEnabled(upserted, profile.id, true)
+      : upserted;
+    setProviderProfiles(nextProfiles);
+    setIsCreatingProviderProfile(false);
+    setSelectedProfileId(profile.id);
+    setProviderConfig(profileToProviderConfig(profile));
+    setSelectedModel(profile.modelId);
+    saveProviderConfig(selectedProviderId, profileToProviderConfig(profile));
+    return nextProfiles;
+  }
+
+  async function saveCurrentProviderConfig(enable = true) {
+    setConfigActionState('saving');
     try {
       parseExtraHeaders(providerConfig.extraHeadersJson);
-      new URL(providerConfig.baseUrl);
-      if (!providerConfig.endpointPath.startsWith('/')) {
-        throw new Error('接口路径必须以 / 开头。');
+      const profile = buildProfileFromCurrentConfig(enable);
+      if (secretDraft.trim()) {
+        if (!desktopRuntime) {
+          throw new Error('当前是网页预览模式，只有 Tauri 桌面端会写入系统凭据。');
+        }
+        const status = await saveProviderSecret(providerProfileSecretId(profile.id), secretDraft);
+        setSecretAvailable(status.available);
+        setSecretDraft('');
+        setSecretMessage('API Key 已保存到当前配置实例。');
       }
-      const normalizedConfig = normalizeProviderConfig(providerConfig);
-      saveProviderConfig(selectedProviderId, normalizedConfig);
-      setProviderConfig(normalizedConfig);
-      setSelectedModel(normalizedConfig.modelId);
-      setConfigMessage('中转配置已保存。');
+      persistProfile(profile);
+      setConfigActionState('saved');
+      setConfigMessage(
+        enable
+          ? `已保存并启用：${profile.displayName}。已加入左侧配置列表。`
+          : `已保存：${profile.displayName}。已加入左侧配置列表，暂未启用。`
+      );
     } catch (error) {
+      setConfigActionState('failed');
       setConfigMessage(error instanceof Error ? error.message : String(error));
     }
   }
 
-  function applyCurrentProviderPreset(presetId: string) {
-    const nextConfig = applyProviderConfigPreset(providerConfig, presetId);
-    setProviderConfig(nextConfig);
-    setSelectedModel(nextConfig.modelId);
-    setConfigMessage('已套用预设，请确认 Base URL 和模型后保存。');
+  function startNewProviderProfile() {
+    const draftConfig = createEmptyProviderDraftConfig(selectedProvider);
+    setIsCreatingProviderProfile(true);
+    setSelectedProfileId(null);
+    setProviderConfig(draftConfig);
+    setSecretDraft('');
+    setSecretAvailable(false);
+    setSecretMessage('');
+    setProviderDiagnostics([]);
+    setConfigActionState('idle');
+    setSelectedModel(draftConfig.modelId);
+    setConfigMessage('正在新建配置；保存后会出现在左侧配置列表。');
+  }
+
+  function selectProviderProfile(profileId: string) {
+    const profile = providerProfiles.find((item) => item.id === profileId);
+    if (!profile) return;
+    setIsCreatingProviderProfile(false);
+    setSelectedProfileId(profile.id);
+    setProviderConfig(profileToProviderConfig(profile));
+    setSelectedModel(profile.modelId);
+    setSecretDraft('');
+    setSecretMessage('');
+    setConfigMessage('');
+    setConfigActionState('idle');
+    setProviderDiagnostics([]);
+  }
+
+  async function deleteCurrentProviderProfile(profileId: string) {
+    const profile = providerProfiles.find((item) => item.id === profileId);
+    if (!profile) return;
+    if (!window.confirm(`删除配置「${profile.displayName}」？这不会删除作品画廊。`)) return;
+    const nextProfiles = deleteProviderProfile(providerProfiles, profileId);
+    setProviderProfiles(nextProfiles);
+    if (selectedProfileId === profileId) {
+      const fallback = getProfilesForProvider(nextProfiles, selectedProviderId)[0] ?? null;
+      setIsCreatingProviderProfile(false);
+      setSelectedProfileId(fallback?.id ?? null);
+      setProviderConfig(fallback ? profileToProviderConfig(fallback) : defaultOpenAICompatibleConfig);
+    }
+    if (desktopRuntime) {
+      await deleteProviderSecret(providerProfileSecretId(profileId)).catch(() => undefined);
+    }
+    setConfigMessage(`已删除配置：${profile.displayName}`);
+  }
+
+  function toggleProviderProfile(profileId: string, enabled: boolean) {
+    const nextProfiles = setProviderProfileEnabled(providerProfiles, profileId, enabled);
+    setProviderProfiles(nextProfiles);
+    const profile = nextProfiles.find((item) => item.id === profileId);
+    if (profile) {
+      setIsCreatingProviderProfile(false);
+      setSelectedProfileId(profile.id);
+      setProviderConfig(profileToProviderConfig(profile));
+      setSelectedModel(profile.modelId);
+      setConfigMessage(`${enabled ? '已启用' : '已停用'}：${profile.displayName}`);
+    }
+  }
+
+  function updateProviderProfileTestState(
+    profileId: string | null,
+    status: ProviderConnectionProfile['lastTestStatus'],
+    latencyMs: number,
+    message: string
+  ) {
+    if (!profileId) return;
+    const now = new Date().toISOString();
+    const nextProfiles = providerProfiles.map((profile) =>
+      profile.id === profileId
+        ? {
+            ...profile,
+            lastTestStatus: status,
+            lastLatencyMs: latencyMs,
+            lastMessage: message,
+            lastTestedAt: now,
+            updatedAt: now
+          }
+        : profile
+    );
+    setProviderProfiles(nextProfiles);
+    saveProviderProfiles(nextProfiles);
+  }
+
+  function inferProfileName(config: OpenAICompatibleConfig) {
+    try {
+      const host = new URL(config.baseUrl).hostname.replace(/^www\./, '');
+      return `${host} · ${config.modelId || 'model'}`;
+    } catch {
+      return `${selectedProvider.name} · ${config.modelId || 'model'}`;
+    }
   }
 
   async function copyCurrentProviderConfig() {
@@ -678,9 +938,8 @@ export function App() {
   function pinCurrentModelAsDefault() {
     try {
       const normalizedConfig = normalizeProviderConfig(providerConfig);
-      saveProviderConfig(selectedProviderId, normalizedConfig);
-      setProviderConfig(normalizedConfig);
-      setSelectedModel(normalizedConfig.modelId);
+      const profile = buildProfileFromCurrentConfig(true);
+      persistProfile({ ...profile, ...normalizedConfig, enabled: true });
       setConfigMessage(`已将 ${normalizedConfig.modelId} 设为默认模型。`);
     } catch (error) {
       setConfigMessage(error instanceof Error ? error.message : String(error));
@@ -717,28 +976,6 @@ export function App() {
     }
   }
 
-  async function saveSecret() {
-    if (!desktopRuntime) {
-      setSecretMessage('当前是网页预览模式，只有 Tauri 桌面端会写入系统凭据。');
-      return;
-    }
-    try {
-      const status = await saveProviderSecret(selectedProviderId, secretDraft);
-      setSecretAvailable(status.available);
-      setSecretDraft('');
-      setSecretMessage('API Key 已保存到系统安全凭据。');
-    } catch (error) {
-      setSecretMessage(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  async function deleteSecret() {
-    if (!desktopRuntime) return;
-    const status = await deleteProviderSecret(selectedProviderId);
-    setSecretAvailable(status.available);
-    setSecretMessage('API Key 已删除。');
-  }
-
   async function refreshModels() {
     if (!desktopRuntime) {
       setConfigMessage('请在 Tauri 桌面端刷新模型列表。');
@@ -755,7 +992,8 @@ export function App() {
       const models = await listOpenAICompatibleModels(
         selectedProviderId,
         providerConfig.baseUrl,
-        parseExtraHeaders(providerConfig.extraHeadersJson)
+        parseExtraHeaders(providerConfig.extraHeadersJson),
+        activeSecretId()
       );
       const modelOptions = models.map((model) => model.id);
       const nextModelId =
@@ -766,18 +1004,41 @@ export function App() {
       const nextConfig = { ...providerConfig, modelOptions, modelId: nextModelId };
       setProviderConfig(nextConfig);
       saveProviderConfig(selectedProviderId, nextConfig);
+      if (selectedProfile) {
+        persistProfile({ ...selectedProfile, ...nextConfig });
+      }
       setSelectedModel(nextModelId);
       setConfigMessage(`已刷新 ${modelOptions.length} 个模型。`);
     } catch (error) {
-      setConfigMessage(mapProviderErrorMessage(error));
+      if (isModelListUnavailableError(error)) {
+        const nextConfig = ensureManualModelOption(providerConfig);
+        setProviderConfig(nextConfig);
+        saveProviderConfig(selectedProviderId, nextConfig);
+        if (selectedProfile) {
+          persistProfile({ ...selectedProfile, ...nextConfig });
+        }
+        setSelectedModel(nextConfig.modelId);
+        setConfigMessage(formatModelListFallbackMessage(error, nextConfig.modelId));
+      } else {
+        setConfigMessage(mapProviderErrorMessage(error));
+      }
     } finally {
       setIsRefreshingModels(false);
     }
   }
 
-  async function runProviderDiagnostics() {
+  async function runProviderDiagnostics(targetProfile?: ProviderConnectionProfile) {
     setIsRunningDiagnostics(true);
     const checks: ProviderDiagnosticItem[] = [];
+    const targetProviderId = targetProfile?.providerId ?? selectedProviderId;
+    const targetProvider = providers.find((provider) => provider.id === targetProviderId) ?? selectedProvider;
+    const targetConfig = targetProfile ? profileToProviderConfig(targetProfile) : providerConfig;
+    const targetSecretId = targetProfile ? providerProfileSecretId(targetProfile.id) : activeSecretId();
+    const targetSupportsOpenAICompatible =
+      targetProviderId === 'openai-gpt-image' || targetProviderId === 'custom-http-provider';
+    const startedAt = performance.now();
+    let profileStatus: ProviderConnectionProfile['lastTestStatus'] = 'warning';
+    let profileMessage = '诊断未完成。';
 
     function push(item: ProviderDiagnosticItem) {
       checks.push(item);
@@ -795,16 +1056,19 @@ export function App() {
       push({
         id: 'adapter',
         label: 'Provider 接入状态',
-        level: supportsOpenAICompatible ? 'pass' : 'info',
-        detail: supportsOpenAICompatible ? '当前 Provider 支持 OpenAI-compatible 官方/中转配置。' : '当前 Provider 仍是路线图占位，暂不支持真实连通性诊断。'
+        level: targetSupportsOpenAICompatible ? 'pass' : 'info',
+        detail: targetSupportsOpenAICompatible ? '当前 Provider 支持 OpenAI-compatible 官方/中转配置。' : '当前 Provider 仍是路线图占位，暂不支持真实连通性诊断。'
       });
 
-      if (!supportsOpenAICompatible) return;
+      if (!targetSupportsOpenAICompatible) {
+        profileMessage = '当前 Provider 暂不支持真实连通性诊断。';
+        return;
+      }
 
       let endpointPreview = '';
       try {
-        const baseUrl = new URL(providerConfig.baseUrl);
-        endpointPreview = `${baseUrl.origin}${providerConfig.endpointPath.startsWith('/') ? providerConfig.endpointPath : `/${providerConfig.endpointPath}`}`;
+        const baseUrl = new URL(targetConfig.baseUrl);
+        endpointPreview = `${baseUrl.origin}${targetConfig.endpointPath.startsWith('/') ? targetConfig.endpointPath : `/${targetConfig.endpointPath}`}`;
         push({
           id: 'base-url',
           label: 'Base URL',
@@ -821,7 +1085,7 @@ export function App() {
       }
 
       try {
-        parseExtraHeaders(providerConfig.extraHeadersJson);
+        parseExtraHeaders(targetConfig.extraHeadersJson);
         push({
           id: 'headers',
           label: '额外 Headers',
@@ -837,21 +1101,45 @@ export function App() {
         });
       }
 
+      let currentSecretAvailable = secretAvailable;
+      if (desktopRuntime) {
+        const status = await getProviderSecretStatus(targetSecretId);
+        currentSecretAvailable = status.available;
+        if (!currentSecretAvailable && targetSecretId !== targetProviderId) {
+          const legacyStatus = await getProviderSecretStatus(targetProviderId);
+          currentSecretAvailable = legacyStatus.available;
+        }
+        if (!targetProfile || targetProfile.id === selectedProfileId) {
+          setSecretAvailable(currentSecretAvailable);
+        }
+      }
+
       push({
         id: 'secret',
         label: 'API Key',
-        level: secretAvailable ? 'pass' : 'warn',
-        detail: secretAvailable ? '系统安全凭据里已有密钥。' : '尚未保存密钥；可以先保存 API Key，再刷新模型或生成图片。'
+        level: currentSecretAvailable ? 'pass' : 'warn',
+        detail: currentSecretAvailable ? '系统安全凭据里已有密钥。' : '尚未保存密钥；可以先填写 API Key，再点击保存或保存并启用。'
       });
 
       push({
         id: 'protocol',
         label: '协议与接口路径',
-        level: providerConfig.protocol === 'custom-images' || providerConfig.endpointPath === defaultEndpointForProtocol(providerConfig.protocol) ? 'pass' : 'warn',
-        detail: `当前协议：${providerConfig.protocol}；目标接口：${endpointPreview || providerConfig.endpointPath}`
+        level: targetConfig.protocol === 'custom-images' || targetConfig.endpointPath === defaultEndpointForProtocol(targetConfig.protocol) ? 'pass' : 'warn',
+        detail: `当前协议：${targetConfig.protocol}；目标接口：${endpointPreview || targetConfig.endpointPath}`
       });
 
-      if (!desktopRuntime || !secretAvailable) {
+      if (targetConfig.protocol === 'responses') {
+        push({
+          id: 'responses-background',
+          label: 'Responses 后台轮询',
+          level: 'info',
+          detail: '生成请求会优先尝试 background/store 并轮询 response id；若中转不支持 background 会回退同步请求，长任务仍可能受 524 影响。'
+        });
+      }
+
+      if (!desktopRuntime || !currentSecretAvailable) {
+        profileStatus = 'warning';
+        profileMessage = !desktopRuntime ? '需要 Tauri 桌面端运行时。' : '缺少 API Key，未执行在线延迟测试。';
         push({
           id: 'network',
           label: '模型列表连通性',
@@ -861,19 +1149,50 @@ export function App() {
         return;
       }
 
-      const models = await listOpenAICompatibleModels(
-        selectedProviderId,
-        providerConfig.baseUrl,
-        parseExtraHeaders(providerConfig.extraHeadersJson)
-      );
-      const imageModelCount = models.filter((model) => model.id.toLowerCase().includes('image')).length;
-      push({
-        id: 'models',
-        label: '模型列表连通性',
-        level: models.length > 0 ? 'pass' : 'warn',
-        detail: models.length > 0 ? `成功读取 ${models.length} 个模型，其中 ${imageModelCount} 个 ID 包含 image。` : '接口可调用但没有返回模型，请检查中转站是否支持 /v1/models。'
-      });
+      try {
+        const models = await listOpenAICompatibleModels(
+          targetProviderId,
+          targetConfig.baseUrl,
+          parseExtraHeaders(targetConfig.extraHeadersJson),
+          targetSecretId
+        );
+        const latencyMs = Math.round(performance.now() - startedAt);
+        const imageModelCount = models.filter((model) => model.id.toLowerCase().includes('image')).length;
+        profileStatus = models.length > 0 ? 'passed' : 'warning';
+        profileMessage =
+          models.length > 0
+            ? `连接成功，延迟 ${latencyMs} ms，读取 ${models.length} 个模型。`
+            : `接口可调用，延迟 ${latencyMs} ms，但没有返回模型。`;
+        push({
+          id: 'models',
+          label: '模型列表连通性',
+          level: models.length > 0 ? 'pass' : 'warn',
+          detail: models.length > 0 ? `成功读取 ${models.length} 个模型，其中 ${imageModelCount} 个 ID 包含 image；延迟 ${latencyMs} ms。` : `接口可调用但没有返回模型；延迟 ${latencyMs} ms，已保留当前手动模型 ID。`
+        });
+      } catch (error) {
+        if (isModelListUnavailableError(error)) {
+          const latencyMs = Math.round(performance.now() - startedAt);
+          const nextConfig = ensureManualModelOption(targetConfig);
+          if (!targetProfile || targetProfile.id === selectedProfileId) {
+            setProviderConfig(nextConfig);
+            saveProviderConfig(targetProviderId, nextConfig);
+            setSelectedModel(nextConfig.modelId);
+          }
+          profileStatus = 'warning';
+          profileMessage = `${formatModelListFallbackMessage(error, nextConfig.modelId)} 延迟 ${latencyMs} ms。`;
+          push({
+            id: 'models',
+            label: '模型列表连通性',
+            level: 'warn',
+            detail: profileMessage
+          });
+        } else {
+          throw error;
+        }
+      }
     } catch (error) {
+      profileStatus = 'failed';
+      profileMessage = mapProviderErrorMessage(error);
       push({
         id: 'network-error',
         label: '在线诊断错误',
@@ -881,8 +1200,26 @@ export function App() {
         detail: mapProviderErrorMessage(error)
       });
     } finally {
+      updateProviderProfileTestState(
+        targetProfile?.id ?? selectedProfileId,
+        profileStatus,
+        Math.round(performance.now() - startedAt),
+        profileMessage
+      );
+      setConfigMessage(profileMessage);
       setIsRunningDiagnostics(false);
     }
+  }
+
+  async function runProviderProfileConnectionTest(profileId: string) {
+    const profile = providerProfiles.find((item) => item.id === profileId);
+    if (!profile) return;
+    setIsCreatingProviderProfile(false);
+    setSelectedProfileId(profile.id);
+    setProviderConfig(profileToProviderConfig(profile));
+    setSelectedModel(profile.modelId);
+    setConfigMessage(`正在测试连接延迟：${profile.displayName}…`);
+    await runProviderDiagnostics(profile);
   }
 
   async function runProviderTestGeneration() {
@@ -901,6 +1238,7 @@ export function App() {
 
     setIsRunningTestGeneration(true);
     setConfigMessage('正在调用真实接口生成 1 张测试小样…');
+    const startedAt = performance.now();
     try {
       const normalizedConfig = normalizeProviderConfig(providerConfig);
       new URL(normalizedConfig.baseUrl);
@@ -925,20 +1263,28 @@ export function App() {
         protocol: normalizedConfig.protocol,
         endpointPath: normalizedConfig.endpointPath,
         extraHeaders,
+        secretId: activeSecretId(),
         metadata: { source: 'provider-hub-test-generation' }
       });
       const saved = await saveGenerationRecord(result, selectedProvider.name);
       addResult(saved);
 
       if (saved.status === 'succeeded' && saved.imageUrls[0]) {
+        updateProviderProfileTestState(selectedProfileId, 'passed', Math.round(performance.now() - startedAt), '测试生成成功');
         setPage('providers');
         setGeneratePreviewUrl(null);
         setLibraryPreviewUrl(null);
         setConfigMessage('测试生成成功：已生成 1 张小样图，并自动保存到作品画廊。');
+      } else if (isPotentialBackgroundCompletion(saved)) {
+        const message = '测试生成待核查：同步连接先超时，但中转后台可能仍会继续生成。已写入作品画廊，稍后可重载历史或查看中转后台。';
+        updateProviderProfileTestState(selectedProfileId, 'warning', Math.round(performance.now() - startedAt), message);
+        setConfigMessage(message);
       } else {
+        updateProviderProfileTestState(selectedProfileId, 'failed', Math.round(performance.now() - startedAt), saved.error ?? '接口没有返回图片。');
         setConfigMessage(`测试生成未成功：${mapProviderErrorMessage(saved.error ?? '接口没有返回图片。')} 已写入作品画廊失败记录。`);
       }
     } catch (error) {
+      updateProviderProfileTestState(selectedProfileId, 'failed', Math.round(performance.now() - startedAt), mapProviderErrorMessage(error));
       setConfigMessage(mapProviderErrorMessage(error));
     } finally {
       setIsRunningTestGeneration(false);
@@ -965,7 +1311,7 @@ export function App() {
 
   return (
     <div
-      className={`appShell theme-${themeMode} ${isSidebarCollapsed ? 'sidebarCollapsed' : ''}`}
+      className={`appShell theme-${resolvedThemeMode} ${isSidebarCollapsed ? 'sidebarCollapsed' : ''}`}
       style={appShellStyle}
     >
       <aside className="sidebar">
@@ -986,7 +1332,8 @@ export function App() {
               key={item.page}
               className={`navItem ${page === item.page ? 'active' : ''}`}
               data-tooltip={item.label}
-              title={isSidebarCollapsed ? item.label : undefined}
+              title={item.label}
+              aria-label={item.label}
               onClick={() => navigateTo(item.page)}
             >
               {item.icon} <span>{item.label}</span>
@@ -1009,18 +1356,20 @@ export function App() {
           <button
             className="themeToggle"
             type="button"
-            data-tooltip={themeMode === 'dark' ? '切换浅色模式' : '切换暗色模式'}
-            title={themeMode === 'dark' ? '切换浅色模式' : '切换暗色模式'}
+            data-tooltip={resolvedThemeMode === 'dark' ? '切换浅色模式' : '切换暗色模式'}
+            title={resolvedThemeMode === 'dark' ? '切换浅色模式' : '切换暗色模式'}
+            aria-label={resolvedThemeMode === 'dark' ? '切换浅色模式' : '切换暗色模式'}
             onClick={toggleThemeMode}
           >
-            {themeMode === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
-            <span>{themeMode === 'dark' ? '暗色模式' : '浅色模式'}</span>
+            {resolvedThemeMode === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
+            <span>{themeMode === 'system' ? '跟随系统' : resolvedThemeMode === 'dark' ? '暗色模式' : '浅色模式'}</span>
           </button>
           <button
             className="sidebarCollapseButton"
             type="button"
             data-tooltip={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
             title={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            aria-label={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
             onClick={() => updateSidebarCollapsed(!isSidebarCollapsed)}
           >
             <Sidebar size={17} />
@@ -1093,19 +1442,25 @@ export function App() {
             secretDraft={secretDraft}
             secretMessage={secretMessage}
             providerConfig={providerConfig}
+            providerProfiles={selectedProviderProfiles}
+            selectedProfileId={selectedProfileId}
+            configActionState={configActionState}
             configMessage={configMessage}
             isRefreshingModels={isRefreshingModels}
             supportsOpenAICompatible={supportsOpenAICompatible}
             onProviderChange={selectProvider}
             onSecretDraftChange={setSecretDraft}
-            onSaveSecret={saveSecret}
-            onDeleteSecret={deleteSecret}
             onConfigChange={handleConfigChange}
             onRefreshModels={refreshModels}
-            onSaveConfig={saveCurrentProviderConfig}
+            onSaveConfig={() => saveCurrentProviderConfig(true)}
+            onSaveOnly={() => saveCurrentProviderConfig(false)}
+            onNewProfile={startNewProviderProfile}
+            onSelectProfile={selectProviderProfile}
+            onDeleteProfile={deleteCurrentProviderProfile}
+            onToggleProfile={toggleProviderProfile}
             onRunDiagnostics={runProviderDiagnostics}
+            onRunProfileConnectionTest={runProviderProfileConnectionTest}
             onRunTestGeneration={runProviderTestGeneration}
-            onApplyPreset={applyCurrentProviderPreset}
             onCopyConfig={copyCurrentProviderConfig}
             onImportConfig={importProviderConfigFromClipboard}
             onPinModel={pinCurrentModelAsDefault}
@@ -1129,6 +1484,7 @@ export function App() {
             onOpenSystemInfo={() => setActiveUtilityModal('system-info')}
             onOpenShortcuts={() => setActiveUtilityModal('shortcuts')}
             onCheckUpdates={checkForUpdates}
+            systemTheme={systemTheme}
           />
         ) : page === 'library' ? (
           <>
@@ -1337,9 +1693,10 @@ function FreeGenerationPage(props: {
   return (
     <>
       <header className="topbar freeTopbar">
-        <div>
+        <div className="pageTitleBlock">
           <p className="eyebrow">Free Platform Studio</p>
-          <h1>免费平台：用网页登录额度试平台，用 API Key 做稳定自动生成。</h1>
+          <h1>免费平台</h1>
+          <p>用网页登录额度试平台；稳定自动生成仍建议走已保存的 API Key 配置。</p>
         </div>
         <div className="statusPills">
           <span>
@@ -1387,9 +1744,11 @@ function FreeGenerationPage(props: {
               <div
                 className="freePlatformLogo"
                 style={{ background: platform.brandColor }}
-                aria-hidden="true"
+                title={`${platform.name} Logo`}
+                aria-label={`${platform.name} Logo`}
               >
-                {platform.logoText}
+                <img src={platform.logoUrl} alt="" loading="lazy" />
+                <span>{platform.logoText}</span>
               </div>
               <div>
                 <strong>{platform.name}</strong>
@@ -1436,19 +1795,25 @@ function ProviderSettingsPage(props: {
   secretDraft: string;
   secretMessage: string;
   providerConfig: OpenAICompatibleConfig;
+  providerProfiles: ProviderConnectionProfile[];
+  selectedProfileId: string | null;
+  configActionState: 'idle' | 'saving' | 'saved' | 'failed';
   configMessage: string;
   isRefreshingModels: boolean;
   supportsOpenAICompatible: boolean;
   onProviderChange: (providerId: string) => void;
   onSecretDraftChange: (secret: string) => void;
-  onSaveSecret: () => void;
-  onDeleteSecret: () => void;
   onConfigChange: <K extends keyof OpenAICompatibleConfig>(key: K, value: OpenAICompatibleConfig[K]) => void;
   onRefreshModels: () => void;
   onSaveConfig: () => void;
+  onSaveOnly: () => void;
+  onNewProfile: () => void;
+  onSelectProfile: (profileId: string) => void;
+  onDeleteProfile: (profileId: string) => void;
+  onToggleProfile: (profileId: string, enabled: boolean) => void;
   onRunDiagnostics: () => void;
+  onRunProfileConnectionTest: (profileId: string) => void;
   onRunTestGeneration: () => void;
-  onApplyPreset: (presetId: string) => void;
   onCopyConfig: () => void;
   onImportConfig: () => void;
   onPinModel: () => void;
@@ -1470,34 +1835,125 @@ function ProviderSettingsPage(props: {
     fail: props.diagnostics.filter((item) => item.level === 'fail').length,
     info: props.diagnostics.filter((item) => item.level === 'info').length
   };
+  const providerOptions = props.providers.map((provider) => ({
+    value: provider.id,
+    label: provider.name,
+    description: `${provider.vendor} · ${provider.phase}`
+  }));
+  const protocolOptions = [
+    {
+      value: 'images',
+      label: 'OpenAI Images API',
+      description: '适合 OpenAI 官方图片生成和多数图片中转，默认路径 /v1/images/generations。'
+    },
+    {
+      value: 'responses',
+      label: 'OpenAI Responses API',
+      description: '适合支持 Responses 协议的上游，可用文本 + 图片工具方式生成图片。'
+    },
+    {
+      value: 'chat-completions',
+      label: 'Chat Completions 图片包装',
+      description: '适合把图片生成包装进聊天接口的中转站，兼容性取决于服务商实现。'
+    },
+    {
+      value: 'custom-images',
+      label: '自定义图片接口路径',
+      description: '适合非标准图片接口，可手动填写 endpoint path。'
+    }
+  ];
 
   return (
     <>
       <header className="topbar">
-        <div>
-          <p className="eyebrow">平台接入中心</p>
-          <h1>管理官方 API 与中转站：Base URL、API Key、模型刷新和协议类型。</h1>
+        <div className="pageTitleBlock">
+          <p className="eyebrow">Provider Access</p>
+          <h1>平台接入</h1>
+          <p>管理官方 API 与中转站的 Base URL、API Key、模型刷新和协议类型。</p>
         </div>
       </header>
 
-      <section className="settingsLayout">
+      <section className="settingsLayout providerAccessLayout">
         <div className="providerDirectory">
-          <div className="sectionTitle">Provider 列表</div>
-          {props.providers.map((provider) => (
-            <button
-              key={provider.id}
-              className={`providerCard ${provider.id === props.selectedProviderId ? 'selected' : ''}`}
-              onClick={() => props.onProviderChange(provider.id)}
-            >
-              <span className={`regionDot ${provider.region}`} />
-              <div>
-                <strong>{provider.name}</strong>
-                <small>
-                  {provider.vendor} · {provider.phase}
-                </small>
-              </div>
+          <label className="providerPickerLabel">
+            平台
+            <StudioSelect
+              value={props.selectedProviderId}
+              onChange={props.onProviderChange}
+              options={providerOptions}
+              className="providerPickerSelect"
+            />
+          </label>
+          <div className="profileListHeader">
+            <div>
+              <strong>配置实例</strong>
+              <small>{props.providerProfiles.length} 个当前平台配置</small>
+            </div>
+            <button type="button" className="miniButton profileAddButton" onClick={props.onNewProfile}>
+              <Plus size={14} /> 新增
             </button>
-          ))}
+          </div>
+          <div className="profileList">
+            {props.providerProfiles.length === 0 ? (
+              <div className="profileEmpty">
+                <strong>还没有配置</strong>
+                <span>点击新增后保存，配置会出现在这里。</span>
+              </div>
+            ) : (
+              props.providerProfiles.map((profile) => (
+                <article
+                  className={`profileCard ${profile.id === props.selectedProfileId ? 'selected' : ''}`}
+                  key={profile.id}
+                  onClick={() => props.onSelectProfile(profile.id)}
+                >
+                  <div className="profileAvatar">{profile.displayName.slice(0, 1).toUpperCase()}</div>
+                  <div className="profileMain">
+                    <div className="profileTitleRow">
+                      <strong>{profile.displayName}</strong>
+                      <span className={`profileStatus ${profile.lastTestStatus}`}>{profileLabel(profile.lastTestStatus)}</span>
+                    </div>
+                    <small>{profile.baseUrl.replace(/^https?:\/\//, '')} · {profile.modelId}</small>
+                    <div className="profileMeta">
+                      <span>{protocolLabel(profile.protocol)}</span>
+                      {profile.lastLatencyMs ? <span>{profile.lastLatencyMs} ms</span> : null}
+                      {profile.enabled ? <span className="enabled">已启用</span> : <span>未启用</span>}
+                    </div>
+                  </div>
+                  <div className="profileActions" onClick={(event) => event.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="iconMiniButton"
+                      title="测试连接延迟"
+                      onClick={() => {
+                        void props.onRunProfileConnectionTest(profile.id);
+                      }}
+                    >
+                      <Gauge size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="iconMiniButton"
+                      title="编辑配置"
+                      onClick={() => props.onSelectProfile(profile.id)}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button type="button" className="iconMiniButton dangerMiniButton" title="删除配置" onClick={() => props.onDeleteProfile(profile.id)}>
+                      <Trash2 size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className={`profileSwitch ${profile.enabled ? 'on' : ''}`}
+                      title={profile.enabled ? '停用' : '启用'}
+                      onClick={() => props.onToggleProfile(profile.id, !profile.enabled)}
+                    >
+                      <span />
+                    </button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
         </div>
 
         <div className="settingsPanel">
@@ -1525,21 +1981,7 @@ function ProviderSettingsPage(props: {
 
           {props.supportsOpenAICompatible ? (
             <div className="relayBox standalone">
-              <strong>官方 / 中转配置</strong>
-              <div className="providerPresetGrid">
-                {PROVIDER_CONFIG_PRESETS.map((preset) => (
-                  <button
-                    type="button"
-                    className="providerPresetButton"
-                    key={preset.id}
-                    title={preset.description}
-                    onClick={() => props.onApplyPreset(preset.id)}
-                  >
-                    <span>{preset.label}</span>
-                    <small>{preset.description}</small>
-                  </button>
-                ))}
-              </div>
+              <strong>配置详情</strong>
               <label>
                 名称
                 <input
@@ -1566,14 +2008,6 @@ function ProviderSettingsPage(props: {
                   disabled={!props.desktopRuntime}
                 />
               </label>
-              <div className="secretActions">
-                <button className="ghostButton" onClick={props.onSaveSecret} disabled={!props.desktopRuntime || !props.secretDraft.trim()}>
-                  保存密钥
-                </button>
-                <button className="ghostButton danger" onClick={props.onDeleteSecret} disabled={!props.desktopRuntime || !props.secretAvailable}>
-                  删除
-                </button>
-              </div>
               <p className="secretMessage">
                 密钥状态：{props.desktopRuntime ? (props.secretAvailable ? '已配置' : '未配置') : '网页预览模式'}
               </p>
@@ -1582,19 +2016,17 @@ function ProviderSettingsPage(props: {
               <label>
                 模型 ID
                 <div className="modelPicker">
-                  {props.providerConfig.modelOptions.length > 0 ? (
-                    <StudioSelect
-                      value={props.providerConfig.modelId}
-                      onChange={(value) => props.onConfigChange('modelId', value)}
-                      options={props.providerConfig.modelOptions.map((modelId) => ({ value: modelId, label: modelId }))}
-                    />
-                  ) : (
-                    <input
-                      value={props.providerConfig.modelId}
-                      onChange={(event) => props.onConfigChange('modelId', event.target.value)}
-                      placeholder="gpt-image-1 / gpt-image-2 / gpt-image-2-all"
-                    />
-                  )}
+                  <input
+                    list="provider-model-options"
+                    value={props.providerConfig.modelId}
+                    onChange={(event) => props.onConfigChange('modelId', event.target.value)}
+                    placeholder="gpt-image-1 / gpt-image-2 / gpt-image-2-all"
+                  />
+                  <datalist id="provider-model-options">
+                    {props.providerConfig.modelOptions.map((modelId) => (
+                      <option value={modelId} key={modelId} />
+                    ))}
+                  </datalist>
                   <button className="iconButton" onClick={props.onRefreshModels} disabled={props.isRefreshingModels}>
                     {props.isRefreshingModels ? '…' : '刷新'}
                   </button>
@@ -1609,12 +2041,7 @@ function ProviderSettingsPage(props: {
                 <StudioSelect
                   value={props.providerConfig.protocol}
                   onChange={(value) => props.onConfigChange('protocol', value as OpenAICompatibleConfig['protocol'])}
-                  options={[
-                    { value: 'images', label: 'OpenAI Images API' },
-                    { value: 'responses', label: 'OpenAI Responses API' },
-                    { value: 'chat-completions', label: 'Chat Completions 图片包装' },
-                    { value: 'custom-images', label: '自定义图片接口路径' }
-                  ]}
+                  options={protocolOptions}
                 />
               </label>
               <label>
@@ -1633,9 +2060,20 @@ function ProviderSettingsPage(props: {
                   placeholder='{"X-Trace":"visionhub"}'
                 />
               </label>
-              <button className="ghostButton relaySave" onClick={props.onSaveConfig}>
-                保存并启用
-              </button>
+              <div className="relaySaveGrid">
+                <button className="ghostButton relaySave" onClick={props.onSaveOnly}>
+                  保存
+                </button>
+                <button className="ghostButton relaySave primaryAction" onClick={props.onSaveConfig}>
+                  {props.configActionState === 'saving'
+                    ? '保存中…'
+                    : props.configActionState === 'saved'
+                      ? '已保存'
+                      : props.configActionState === 'failed'
+                        ? '保存失败'
+                        : '保存并启用'}
+                </button>
+              </div>
               <div className="providerConfigActions">
                 <button className="ghostButton" type="button" onClick={props.onCopyConfig}>
                   <Copy size={15} /> 复制配置
@@ -1648,11 +2086,11 @@ function ProviderSettingsPage(props: {
                 <div className="diagnosticsHeader">
                   <div>
                     <strong>Provider 诊断助手</strong>
-                    <small>先检查桌面环境、密钥、Base URL、Headers、协议路径和模型列表；再用测试生成确认图片接口。</small>
+                    <small>检查桌面环境、密钥、Base URL、Headers、协议路径和模型列表连通性。</small>
                   </div>
                   <div className="diagnosticsActions">
                     <button className="rowActionButton" onClick={props.onRunDiagnostics} disabled={props.isRunningDiagnostics}>
-                      <RefreshCcw size={15} /> {props.isRunningDiagnostics ? '诊断中…' : '运行诊断'}
+                      <RefreshCcw size={15} /> {props.isRunningDiagnostics ? '诊断中…' : '诊断'}
                     </button>
                     <button
                       className="rowActionButton primaryAction"
@@ -1660,7 +2098,7 @@ function ProviderSettingsPage(props: {
                       disabled={!props.desktopRuntime || !props.secretAvailable || props.isRunningTestGeneration}
                       title={!props.secretAvailable ? '请先保存 API Key' : '调用真实接口生成 1 张测试小样'}
                     >
-                      <Sparkles size={15} /> {props.isRunningTestGeneration ? '测试中…' : '测试生成'}
+                      <Sparkles size={15} /> {props.isRunningTestGeneration ? '测试中…' : '试生图'}
                     </button>
                   </div>
                 </div>
@@ -1708,6 +2146,7 @@ function SettingsPage(props: {
   desktopRuntime: boolean;
   settingsMessage: string;
   storageSettings: StorageSettings | null;
+  systemTheme: 'dark' | 'light';
   onSettingsChange: (patch: Partial<AppSettings>) => void;
   onSelectLibraryPath: () => void;
   onResetLibraryPath: () => void;
@@ -1736,6 +2175,7 @@ function SettingsPage(props: {
     ? promptPolish.modelId
     : polishModelOptions[0]?.value ?? promptPolish.modelId;
   const polishStatus = polishProvider.capabilities.promptPolish;
+  const [developerMode, setDeveloperMode] = useState(false);
 
   function updateGenerationDefaults(patch: Partial<GenerationDefaults>) {
     props.onSettingsChange({ generationDefaults: { ...generationDefaults, ...patch } });
@@ -1767,7 +2207,7 @@ function SettingsPage(props: {
     <section className="systemSettingsPage">
       <header className="systemSettingsHeader">
         <div>
-          <p className="eyebrow">偏好设置</p>
+          <p className="eyebrow">Preferences</p>
           <h1>偏好设置</h1>
         </div>
         <div className="settingsHeaderActions">
@@ -1796,10 +2236,11 @@ function SettingsPage(props: {
             <button className={settings.themeMode === 'dark' ? 'active' : ''} onClick={() => props.onSettingsChange({ themeMode: 'dark' })}>
               <Moon size={14} /> 深色
             </button>
-            <button disabled>
+            <button className={settings.themeMode === 'system' ? 'active' : ''} onClick={() => props.onSettingsChange({ themeMode: 'system' })}>
               <Monitor size={14} /> 跟随系统
             </button>
           </div>
+          <small className="settingsInlineHint">当前系统：{props.systemTheme === 'dark' ? '深色' : '浅色'}</small>
         </div>
 
         <div className="settingsListRow">
@@ -2157,7 +2598,7 @@ function SettingsPage(props: {
         {props.settingsMessage ? <p className="settingsActionMessage">{props.settingsMessage}</p> : null}
       </article>
 
-      <div className="settingsSectionLabel">关于与软件升级</div>
+      <div className="settingsSectionLabel">软件升级</div>
       <article className="settingsGroupCard">
         <div className="settingsListRow">
           <div className="settingsRowMain">
@@ -2176,11 +2617,24 @@ function SettingsPage(props: {
         </div>
         <div className="settingsListRow">
           <div className="settingsRowMain">
+            <strong>开发者模式</strong>
+            <small>打开后显示运行时和技术栈信息。</small>
+          </div>
+          <button
+            className={developerMode ? 'settingsTogglePill active' : 'settingsTogglePill'}
+            type="button"
+            onClick={() => setDeveloperMode((current) => !current)}
+          >
+            {developerMode ? '已开启' : '关闭'}
+          </button>
+        </div>
+        {developerMode ? <div className="settingsListRow">
+          <div className="settingsRowMain">
             <strong>技术栈</strong>
             <small>Tauri v2 + React + TypeScript，本地历史保存，密钥由系统凭据管理。</small>
           </div>
           <span className="settingsValue">Desktop MVP</span>
-        </div>
+        </div> : null}
       </article>
     </section>
   );
@@ -2232,7 +2686,7 @@ function Gallery(props: {
               <div className="resultBody">
                 <div className="resultTitleRow">
                   <strong>{result.providerName ?? props.providers.find((provider) => provider.id === result.providerId)?.name}</strong>
-                    <span className={`statusBadge ${result.status}`}>{result.status === 'succeeded' ? '\u6210\u529f' : '\u5931\u8d25'}</span>
+                    <span className={`statusBadge ${generationStatusClass(result)}`}>{generationStatusLabel(result)}</span>
                 </div>
                 <p title={result.prompt}>{result.prompt}</p>
                 <div className="metadataRow">
@@ -2242,7 +2696,7 @@ function Gallery(props: {
                   </span>
                   <span>{result.durationMs ?? '-'}ms</span>
                 </div>
-                {result.error ? <small className="errorText">{result.error}</small> : <small>{result.costHint}</small>}
+                {result.error ? <small className="errorText">{generationFailureHint(result)}</small> : <small>{result.costHint}</small>}
                 <div className="cardActions">
                   <button className="miniButton" onClick={() => void navigator.clipboard?.writeText(result.prompt)}>
                     <Copy size={13} /> Prompt
@@ -2378,9 +2832,10 @@ function LibraryPage(props: {
   return (
     <>
       <header className="topbar libraryTopbar">
-        <div>
+        <div className="pageTitleBlock">
           <p className="eyebrow">Local Library</p>
-          <h1>{'\u672c\u5730\u56fe\u518c\uff1a\u7ba1\u7406\u5df2\u751f\u6210\u56fe\u7247\u3001\u67e5\u770b Prompt\u3001\u590d\u5236\u8def\u5f84\u5e76\u6253\u5f00\u6240\u5728\u6587\u4ef6\u5939\u3002'}</h1>
+          <h1>{'\u4f5c\u54c1\u753b\u5eca'}</h1>
+          <p>{'\u7ba1\u7406\u5df2\u751f\u6210\u56fe\u7247\uff0c\u67e5\u770b Prompt\uff0c\u590d\u5236\u8def\u5f84\u5e76\u6253\u5f00\u6240\u5728\u6587\u4ef6\u5939\u3002'}</p>
         </div>
         <div className="statusPills">
           <span><Image size={15} /> {props.isHistoryLoaded ? `${successCount} ${'\u7ec4\u6210\u529f\u56fe\u7247'}` : '\u6b63\u5728\u52a0\u8f7d'}</span>
@@ -2390,54 +2845,55 @@ function LibraryPage(props: {
       </header>
 
       <section className="libraryToolbar">
-        <label className="librarySearchBox">
-          <span>{'\u641c\u7d22 Prompt / \u6a21\u578b / Provider'}</span>
-          <input
-            ref={searchInputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search local generations"
-          />
-        </label>
-        <label>
-          <span>Provider</span>
-          <StudioSelect value={providerFilter} onChange={setProviderFilter} options={providerOptions} />
-        </label>
-        <label>
-          <span>{'\u72b6\u6001'}</span>
-          <StudioSelect value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | 'succeeded' | 'failed')} options={statusOptions} />
-        </label>
-        <label>
-          <span>{'\u7c7b\u578b'}</span>
-          <StudioSelect value={modeFilter} onChange={(value) => setModeFilter(value as typeof modeFilter)} options={modeOptions} />
-        </label>
-        <label>
-          <span>{'\u65f6\u95f4'}</span>
-          <StudioSelect value={timeFilter} onChange={(value) => setTimeFilter(value as LibraryTimeFilter)} options={timeOptions} />
-        </label>
-      </section>
-
-      <section className="libraryInsightGrid">
-        <article className="libraryInsightCard primary">
-          <span>{'\u6210\u529f\u7387'}</span>
-          <strong>{props.isHistoryLoaded ? `${successRate}%` : '--'}</strong>
-          <small>{successCount} {'\u6210\u529f'} / {failedCount} {'\u5931\u8d25'}</small>
-        </article>
-        <article className="libraryInsightCard">
-          <span>{'\u5e73\u5747\u8017\u65f6'}</span>
-          <strong>{props.isHistoryLoaded ? averageDuration : '--'}</strong>
-          <small>{durations.length ? `${durations.length} ${'\u6761\u8bb0\u5f55\u53ef\u8ba1\u7b97'}` : '\u7b49\u5f85\u771f\u5b9e Provider \u8fd4\u56de'}</small>
-        </article>
-        <article className="libraryInsightCard">
-          <span>{'\u6700\u5e38\u7528 Provider'}</span>
-          <strong>{topProvider.label}</strong>
-          <small>{topProvider.count ? `${topProvider.count} ${'\u6b21\u751f\u6210'}` : '\u5c1a\u65e0\u6570\u636e'}</small>
-        </article>
-        <article className="libraryInsightCard">
-          <span>{'\u6700\u5e38\u7528\u6a21\u578b'}</span>
-          <strong>{topModel.label}</strong>
-          <small>{recentCount} {'\u6761\u8fd1 7 \u5929\u8bb0\u5f55'}</small>
-        </article>
+        <div className="libraryFilterRow">
+          <label className="librarySearchBox">
+            <span>{'\u641c\u7d22 Prompt / \u6a21\u578b / Provider'}</span>
+            <input
+              ref={searchInputRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search local generations"
+            />
+          </label>
+          <label>
+            <span>Provider</span>
+            <StudioSelect value={providerFilter} onChange={setProviderFilter} options={providerOptions} />
+          </label>
+          <label>
+            <span>{'\u72b6\u6001'}</span>
+            <StudioSelect value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | 'succeeded' | 'failed')} options={statusOptions} />
+          </label>
+          <label>
+            <span>{'\u7c7b\u578b'}</span>
+            <StudioSelect value={modeFilter} onChange={(value) => setModeFilter(value as typeof modeFilter)} options={modeOptions} />
+          </label>
+          <label>
+            <span>{'\u65f6\u95f4'}</span>
+            <StudioSelect value={timeFilter} onChange={(value) => setTimeFilter(value as LibraryTimeFilter)} options={timeOptions} />
+          </label>
+        </div>
+        <div className="libraryInsightGrid compact">
+          <article className="libraryInsightCard primary">
+            <span>{'\u6210\u529f\u7387'}</span>
+            <strong>{props.isHistoryLoaded ? `${successRate}%` : '--'}</strong>
+            <small>{successCount} {'\u6210\u529f'} / {failedCount} {'\u5931\u8d25'}</small>
+          </article>
+          <article className="libraryInsightCard">
+            <span>{'\u5e73\u5747\u8017\u65f6'}</span>
+            <strong>{props.isHistoryLoaded ? averageDuration : '--'}</strong>
+            <small>{durations.length ? `${durations.length} ${'\u6761\u8bb0\u5f55\u53ef\u8ba1\u7b97'}` : '\u7b49\u5f85\u771f\u5b9e Provider \u8fd4\u56de'}</small>
+          </article>
+          <article className="libraryInsightCard">
+            <span>{'\u6700\u5e38\u7528 Provider'}</span>
+            <strong>{topProvider.label}</strong>
+            <small>{topProvider.count ? `${topProvider.count} ${'\u6b21\u751f\u6210'}` : '\u5c1a\u65e0\u6570\u636e'}</small>
+          </article>
+          <article className="libraryInsightCard">
+            <span>{'\u6700\u5e38\u7528\u6a21\u578b'}</span>
+            <strong>{topModel.label}</strong>
+            <small>{recentCount} {'\u6761\u8fd1 7 \u5929\u8bb0\u5f55'}</small>
+          </article>
+        </div>
       </section>
 
       {copyMessage ? <p className="libraryNotice">{copyMessage}</p> : null}
@@ -2476,7 +2932,7 @@ function LibraryPage(props: {
                     <div className="cardTopActions">
                       <span className="statusBadge modeBadge">{modeLabel}</span>
                       {referenceCount > 0 ? <span className="statusBadge referenceBadge" title={`\u53c2\u8003\u6765\u6e90\uff1a${referenceSummary}`}>{referenceCount}{'\u53c2\u8003'}</span> : null}
-                      <span className={`statusBadge ${result.status}`}>{result.status === 'succeeded' ? '\u6210\u529f' : '\u5931\u8d25'}</span>
+                      <span className={`statusBadge ${generationStatusClass(result)}`}>{generationStatusLabel(result)}</span>
                       <button className="iconMiniButton dangerMiniButton" type="button" title="删除记录" onClick={() => void deleteRecord(result.id)}>
                         <Trash2 size={13} />
                       </button>
@@ -2489,7 +2945,7 @@ function LibraryPage(props: {
                     <span>{result.durationMs ?? '-'}ms</span>
                   </div>
                   {result.error ? (
-                    <small className="errorText">{result.error}</small>
+                    <small className="errorText">{generationFailureHint(result)}</small>
                   ) : (
                     <small title={referenceSummary ? `\u53c2\u8003\u6765\u6e90\uff1a${referenceSummary}` : undefined}>
                       {savedStatus}{referenceCount > 0 ? ` / ${referenceCount} \u5f20\u53c2\u8003` : ''}
@@ -2536,9 +2992,10 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
   return (
     <>
       <header className="topbar templateTopbar">
-        <div>
+        <div className="pageTitleBlock">
           <p className="eyebrow">Prompt Templates</p>
-          <h1>{'\u63d0\u793a\u8bcd\u6a21\u677f\uff1a\u5feb\u901f\u5957\u7528\u89d2\u8272\u3001\u4ea7\u54c1\u3001\u6d77\u62a5\u3001\u573a\u666f\u548c\u98ce\u683c\u63a2\u7d22\u7684\u5e38\u7528\u63d0\u793a\u8bcd\u3002'}</h1>
+          <h1>{'\u63d0\u793a\u8bcd\u5e93'}</h1>
+          <p>{'\u5feb\u901f\u5957\u7528\u89d2\u8272\u3001\u4ea7\u54c1\u3001\u6d77\u62a5\u3001\u573a\u666f\u548c\u98ce\u683c\u63a2\u7d22\u7684\u5e38\u7528\u63d0\u793a\u8bcd\u3002'}</p>
         </div>
         <div className="statusPills">
           <span><Layers size={15} /> {templates.length} {'\u4e2a\u6a21\u677f'}</span>
@@ -2779,17 +3236,17 @@ function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
     <div ref={modalRef} className="modalBackdrop" onClick={props.onClose} onKeyDown={handlePreviewKeyDown} tabIndex={-1}>
       <div className="previewModal">
         <div className="previewToolbar" onClick={(event) => event.stopPropagation()}>
-          <button type="button" title="缩小" onClick={() => zoomBy(-0.2)}>
+          <button type="button" title="缩小" aria-label="缩小" onClick={() => zoomBy(-0.2)}>
             <ZoomOut size={16} />
           </button>
           <span>{Math.round(scale * 100)}%</span>
-          <button type="button" title="放大" onClick={() => zoomBy(0.2)}>
+          <button type="button" title="放大" aria-label="放大" onClick={() => zoomBy(0.2)}>
             <ZoomIn size={16} />
           </button>
-          <button type="button" title="适配窗口" onClick={resetView}>
+          <button type="button" title="适配窗口" aria-label="适配窗口" onClick={resetView}>
             <Maximize2 size={16} />
           </button>
-          <button type="button" title="关闭预览" onClick={props.onClose}>
+          <button type="button" title="关闭预览" aria-label="关闭预览" onClick={props.onClose}>
             <X size={18} />
           </button>
         </div>
@@ -2860,6 +3317,41 @@ function summarizeReferenceSources(references?: ReferenceImage[]) {
   return Array.from(counts.entries()).map(([label, count]) => `${label} ${count}`).join('\u3001');
 }
 
+function createEmptyProviderDraftConfig(
+  provider: ReturnType<typeof listProviders>[number]
+): OpenAICompatibleConfig {
+  return {
+    ...defaultOpenAICompatibleConfig,
+    displayName: '',
+    baseUrl: '',
+    modelId: '',
+    protocol: 'images',
+    endpointPath: defaultEndpointForProtocol('images'),
+    extraHeadersJson: '{}',
+    modelOptions: provider.models.map((model) => model.id)
+  };
+}
+
+function profileLabel(status: ProviderConnectionProfile['lastTestStatus']) {
+  const labels: Record<ProviderConnectionProfile['lastTestStatus'], string> = {
+    untested: '未测试',
+    passed: '通过',
+    warning: '注意',
+    failed: '失败'
+  };
+  return labels[status] ?? '未测试';
+}
+
+function protocolLabel(protocol: OpenAICompatibleConfig['protocol']) {
+  const labels: Record<OpenAICompatibleConfig['protocol'], string> = {
+    images: 'Images',
+    responses: 'Responses',
+    'chat-completions': 'Chat',
+    'custom-images': 'Custom'
+  };
+  return labels[protocol];
+}
+
 function formatTime(value: string) {
   const numeric = Number(value);
   const date = Number.isFinite(numeric) && numeric > 0 ? new Date(numeric) : new Date(value);
@@ -2872,9 +3364,55 @@ function formatTime(value: string) {
   });
 }
 
+function ensureManualModelOption(config: OpenAICompatibleConfig): OpenAICompatibleConfig {
+  const modelId = config.modelId.trim();
+  if (!modelId || config.modelOptions.includes(modelId)) return config;
+  return {
+    ...config,
+    modelOptions: [modelId, ...config.modelOptions]
+  };
+}
+
+function providerErrorText(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isModelListUnavailableError(error: unknown) {
+  const lower = providerErrorText(error).toLowerCase();
+  return [
+    'model list',
+    '/v1/models',
+    'http 403',
+    '403 forbidden',
+    'cannot parse',
+    'body preview',
+    '<!doctype html',
+    'just a moment',
+    'challenges.cloudflare.com',
+    'cloudflare',
+    'does not contain data array'
+  ].some((hint) => lower.includes(hint));
+}
+
+function formatModelListFallbackMessage(error: unknown, modelId: string) {
+  const mapped = mapProviderErrorMessage(error);
+  const modelLabel = modelId.trim() || '当前手动模型 ID';
+  return `模型列表无法读取，但这不影响手动模型使用。已保留「${modelLabel}」；如果中转站不开放 /v1/models 或被 Cloudflare 拦截，请直接保存，再用左侧延迟测试或右侧试生图验证。原始提示：${mapped}`;
+}
+
 function mapProviderErrorMessage(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = providerErrorText(error);
   const lower = message.toLowerCase();
+
+  if (
+    lower.includes('model list') &&
+    (lower.includes('<!doctype html') ||
+      lower.includes('just a moment') ||
+      lower.includes('challenges.cloudflare.com') ||
+      lower.includes('cloudflare'))
+  ) {
+    return '模型列表接口返回了网页验证页，而不是 JSON。通常是中转站的 /v1/models 被 Cloudflare 或权限策略拦截；请手动填写模型 ID 后保存，再用左侧延迟测试或右侧试生图验证。';
+  }
 
   if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('invalid api key')) {
     return `密钥校验失败：请检查 API Key 是否正确，或中转站是否要求 Bearer Token。原始错误：${message}`;

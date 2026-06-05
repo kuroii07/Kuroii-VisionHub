@@ -34,6 +34,7 @@ struct OpenAIImageRequest {
     protocol: Option<String>,
     endpoint_path: Option<String>,
     extra_headers: Option<std::collections::HashMap<String, String>>,
+    secret_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -76,6 +77,7 @@ struct ListModelsRequest {
     provider_id: String,
     base_url: String,
     extra_headers: Option<std::collections::HashMap<String, String>>,
+    secret_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -235,6 +237,20 @@ fn secret_entry(provider_id: &str) -> Result<Entry, String> {
         .map_err(|error| format!("Cannot open secure credential store: {error}"))
 }
 
+fn read_provider_secret(secret_id: Option<&str>, provider_id: &str) -> Result<String, String> {
+    if let Some(secret_id) = secret_id.filter(|value| !value.trim().is_empty()) {
+        if let Ok(secret) = secret_entry(secret_id)?.get_password() {
+            if !secret.trim().is_empty() {
+                return Ok(secret);
+            }
+        }
+    }
+
+    secret_entry(provider_id)?
+        .get_password()
+        .map_err(|error| format!("Cannot read API Key securely: {error}"))
+}
+
 #[tauri::command]
 fn save_provider_secret(request: SaveSecretRequest) -> Result<SecretStatus, String> {
     if request.secret.trim().is_empty() {
@@ -278,8 +294,7 @@ async fn generate_openai_image(
     request: OpenAIImageRequest,
 ) -> Result<ImageGenerationResult, String> {
     let started = std::time::Instant::now();
-    let api_key = secret_entry(&request.provider_id)?
-        .get_password()
+    let api_key = read_provider_secret(request.secret_id.as_deref(), &request.provider_id)
         .map_err(|_| "OpenAI API Key is not configured. Save it in Provider settings first.".to_string())?;
 
     let protocol = request.protocol.as_deref().unwrap_or("images").to_string();
@@ -308,13 +323,17 @@ async fn generate_openai_image(
 
     let endpoint = format!("{base_url}{endpoint_path}");
     let client = reqwest::Client::new();
-    let mut builder = client.post(endpoint).bearer_auth(api_key);
+    let mut builder = client.post(&endpoint).bearer_auth(&api_key);
+    let mut request_payload: Option<Value> = None;
+    let mut responses_background_requested = false;
 
     if use_openai_images_edit {
         let form = build_openai_images_edit_form(&client, &request, &reference_images).await?;
         builder = builder.multipart(form);
     } else {
         let payload = build_openai_compatible_payload(&request, protocol.as_str());
+        responses_background_requested = protocol == "responses";
+        request_payload = Some(payload.clone());
         builder = builder.json(&payload);
     }
 
@@ -332,12 +351,38 @@ async fn generate_openai_image(
         .await
         .map_err(|error| format!("OpenAI request failed: {error}"))?;
 
-    let status = response.status();
-    let body_text = response
+    let mut status = response.status();
+    let mut body_text = response
         .text()
         .await
         .map_err(|error| format!("Cannot read OpenAI-compatible response body: {error}"))?;
-    let raw: serde_json::Value = match serde_json::from_str(&body_text) {
+    if responses_background_requested
+        && !status.is_success()
+        && response_body_mentions_background_unsupported(&body_text)
+    {
+        if let Some(payload) = request_payload.clone() {
+            let sync_payload = without_responses_background(payload);
+            let mut retry_builder = client.post(&endpoint).bearer_auth(&api_key).json(&sync_payload);
+            if let Some(headers) = request.extra_headers.clone() {
+                for (name, value) in headers {
+                    if name.eq_ignore_ascii_case("authorization") || name.eq_ignore_ascii_case("content-type") {
+                        continue;
+                    }
+                    retry_builder = retry_builder.header(name, value);
+                }
+            }
+            let retry_response = retry_builder
+                .send()
+                .await
+                .map_err(|error| format!("OpenAI request failed after background fallback: {error}"))?;
+            status = retry_response.status();
+            body_text = retry_response
+                .text()
+                .await
+                .map_err(|error| format!("Cannot read OpenAI-compatible fallback response body: {error}"))?;
+        }
+    }
+    let mut raw: serde_json::Value = match serde_json::from_str(&body_text) {
         Ok(raw) => raw,
         Err(parse_error) => {
             let preview: String = body_text.chars().take(600).collect();
@@ -368,9 +413,45 @@ async fn generate_openai_image(
             });
         }
     };
+    let mut final_status_code = status.as_u16();
+    if protocol == "responses" && status.is_success() {
+        match poll_background_response(
+            &client,
+            &base_url,
+            &endpoint_path,
+            &api_key,
+            request.extra_headers.as_ref(),
+            raw.clone(),
+        )
+        .await
+        {
+            Ok(polled_raw) => raw = polled_raw,
+            Err(error) => {
+                let raw = responses_poll_error_raw(raw, &base_url, &endpoint_path, &error);
+                return Ok(ImageGenerationResult {
+                    id: format!("openai-{}", chrono_like_timestamp_millis()),
+                    provider_id: request.provider_id,
+                    model_id: request.model_id,
+                    status: "failed".to_string(),
+                    prompt: request.prompt,
+                    image_urls: Vec::new(),
+                    local_image_paths: Vec::new(),
+                    cost_hint: Some("已创建后台任务但未取回有效图片；以中转站/供应商账单为准".to_string()),
+                    duration_ms: Some(started.elapsed().as_millis()),
+                    error: Some(error),
+                    raw,
+                    created_at: chrono_like_timestamp(),
+                    generation_mode: Some(generation_mode),
+                    reference_images: Some(reference_images),
+                });
+            }
+        }
+        final_status_code = extract_http_status_hint(&raw).unwrap_or(final_status_code);
+    }
 
     let image_urls = extract_image_urls(&raw);
-    let local_image_paths = if status.is_success() && !image_urls.is_empty() {
+    let request_succeeded = (200..300).contains(&final_status_code);
+    let local_image_paths = if request_succeeded && !image_urls.is_empty() {
         save_images_to_library(&app, &image_urls, &request.provider_id, &request.model_id)
             .await
             .unwrap_or_default()
@@ -379,11 +460,11 @@ async fn generate_openai_image(
     };
     let display_image_urls = display_image_urls_for_paths(&app, &local_image_paths, &image_urls);
 
-    let error = if status.is_success() && !image_urls.is_empty() {
+    let error = if request_succeeded && !image_urls.is_empty() {
         None
     } else {
         Some(format_openai_compatible_error(
-            status.as_u16(),
+            final_status_code,
             extract_error_message(&raw).as_deref(),
             None,
             None,
@@ -410,8 +491,7 @@ async fn generate_openai_image(
 
 #[tauri::command]
 async fn list_openai_compatible_models(request: ListModelsRequest) -> Result<Vec<ModelInfo>, String> {
-    let api_key = secret_entry(&request.provider_id)?
-        .get_password()
+    let api_key = read_provider_secret(request.secret_id.as_deref(), &request.provider_id)
         .map_err(|_| "API Key is not configured. Save it first.".to_string())?;
     let base_url = normalize_base_url(&request.base_url)?;
     let endpoint = format!("{base_url}/v1/models");
@@ -436,6 +516,13 @@ async fn list_openai_compatible_models(request: ListModelsRequest) -> Result<Vec
         .text()
         .await
         .map_err(|error| format!("Cannot read model list response: {error}"))?;
+    let trimmed_body = body_text.trim_start();
+    if trimmed_body.starts_with('<') {
+        let preview: String = body_text.chars().take(240).collect();
+        return Err(format!(
+            "Model list endpoint returned HTML instead of JSON. HTTP {status}. This relay may block /v1/models or require browser verification. Body preview: {preview}"
+        ));
+    }
     let raw: Value = serde_json::from_str(&body_text).map_err(|error| {
         let preview: String = body_text.chars().take(600).collect();
         format!("Cannot parse model list as JSON: {error}. HTTP {status}. Body preview: {preview}")
@@ -548,8 +635,12 @@ async fn polish_prompt_with_provider(request: PromptPolishRequest) -> Result<Pro
 #[tauri::command]
 fn load_generation_history(app: tauri::AppHandle) -> Result<Vec<GenerationRecord>, String> {
     let mut records = read_generation_history_records(&app)?;
+    let mut changed = false;
     for record in &mut records {
-        hydrate_record_image_urls(&app, record);
+        changed |= hydrate_record_image_urls(&app, record);
+    }
+    if changed {
+        write_generation_history(&app, &records)?;
     }
     Ok(records)
 }
@@ -922,6 +1013,153 @@ fn normalize_base_url(base_url: &str) -> Result<String, String> {
     Ok(base_url)
 }
 
+async fn poll_background_response(
+    client: &reqwest::Client,
+    base_url: &str,
+    endpoint_path: &str,
+    api_key: &str,
+    extra_headers: Option<&std::collections::HashMap<String, String>>,
+    initial_raw: Value,
+) -> Result<Value, String> {
+    let Some(response_id) = extract_response_id(&initial_raw) else {
+        return Ok(initial_raw);
+    };
+
+    if !should_poll_response(&initial_raw) {
+        return Ok(initial_raw);
+    }
+
+    let retrieve_url = responses_retrieve_url(base_url, endpoint_path, &response_id);
+    for _ in 0..96 {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+        let mut builder = client.get(&retrieve_url).bearer_auth(api_key);
+        if let Some(headers) = extra_headers {
+            for (name, value) in headers {
+                if name.eq_ignore_ascii_case("authorization") || name.eq_ignore_ascii_case("content-type") {
+                    continue;
+                }
+                builder = builder.header(name, value);
+            }
+        }
+
+        let response = builder
+            .send()
+            .await
+            .map_err(|error| format!("Cannot poll Responses background task: {error}"))?;
+        let status = response.status();
+        let body_text = response
+            .text()
+            .await
+            .map_err(|error| format!("Cannot read Responses background task: {error}"))?;
+        let raw: Value = serde_json::from_str(&body_text).map_err(|error| {
+            let preview: String = body_text.chars().take(600).collect();
+            format!(
+                "后台任务轮询响应不是 JSON：{error}. HTTP {status}. 响应预览：{preview}"
+            )
+        })?;
+
+        if !status.is_success() {
+            return Err(format_openai_compatible_error(
+                status.as_u16(),
+                extract_error_message(&raw).as_deref(),
+                None,
+                None,
+            ));
+        }
+
+        if !extract_image_urls(&raw).is_empty() {
+            return Ok(raw);
+        }
+
+        match extract_response_status(&raw).as_deref() {
+            Some("queued") | Some("in_progress") => {}
+            Some("completed") | Some("failed") | Some("cancelled") | Some("incomplete") => {
+                return Ok(raw);
+            }
+            _ => return Ok(raw),
+        }
+    }
+
+    Err("Responses 后台任务轮询超时：上游生成时间超过 8 分钟，软件没有拿到最终图片。".to_string())
+}
+
+fn responses_retrieve_url(base_url: &str, endpoint_path: &str, response_id: &str) -> String {
+    let endpoint_path = endpoint_path.trim_end_matches('/');
+    format!("{base_url}{endpoint_path}/{response_id}")
+}
+
+fn responses_poll_error_raw(
+    initial_raw: Value,
+    base_url: &str,
+    endpoint_path: &str,
+    error: &str,
+) -> Value {
+    let response_id = extract_response_id(&initial_raw);
+    let retrieve_url = response_id
+        .as_deref()
+        .map(|id| responses_retrieve_url(base_url, endpoint_path, id));
+
+    serde_json::json!({
+        "initial_response": initial_raw,
+        "poll_error": error,
+        "poll_url": retrieve_url,
+        "poll_endpoint_path": endpoint_path,
+        "response_id": response_id
+    })
+}
+
+fn extract_response_id(raw: &Value) -> Option<String> {
+    raw.get("id")
+        .and_then(|id| id.as_str())
+        .filter(|id| !id.trim().is_empty())
+        .map(|id| id.to_string())
+}
+
+fn extract_response_status(raw: &Value) -> Option<String> {
+    raw.get("status")
+        .and_then(|status| status.as_str())
+        .map(|status| status.to_string())
+}
+
+fn should_poll_response(raw: &Value) -> bool {
+    if !extract_image_urls(raw).is_empty() {
+        return false;
+    }
+
+    matches!(
+        extract_response_status(raw).as_deref(),
+        Some("queued") | Some("in_progress")
+    )
+}
+
+fn without_responses_background(mut payload: Value) -> Value {
+    if let Value::Object(map) = &mut payload {
+        map.remove("background");
+        map.remove("store");
+    }
+    payload
+}
+
+fn response_body_mentions_background_unsupported(body_text: &str) -> bool {
+    let lower = body_text.to_ascii_lowercase();
+    lower.contains("background")
+        && (lower.contains("unsupported")
+            || lower.contains("unknown")
+            || lower.contains("unrecognized")
+            || lower.contains("invalid")
+            || lower.contains("not support")
+            || lower.contains("does not support")
+            || lower.contains("不能")
+            || lower.contains("不支持"))
+}
+
+fn extract_http_status_hint(raw: &Value) -> Option<u16> {
+    raw.get("http_status")
+        .and_then(|status| status.as_u64())
+        .and_then(|status| u16::try_from(status).ok())
+}
+
 fn extract_error_message(raw: &Value) -> Option<String> {
     raw.get("error")
         .and_then(|error| {
@@ -948,7 +1186,7 @@ fn format_openai_compatible_error(
         401 => "认证失败：API Key 无效、过期，或中转站没有接受当前密钥。",
         403 => "权限不足：当前 Key/账号可能没有该模型或图片接口权限。",
         404 => "接口不存在：请检查 Base URL、协议类型和接口路径。",
-        408 | 524 => "请求超时：中转站或上游生图服务等待太久后断开。",
+        408 | 524 => "同步连接超时：中转站或上游生图服务等待太久后断开，后台可能仍会继续生成。",
         429 => "请求受限：可能是余额不足、频率限制或并发限制。",
         500..=599 => "供应商/中转站服务异常：上游没有正常返回生图结果。",
         _ => "生图接口没有返回有效图片。",
@@ -964,7 +1202,7 @@ fn format_openai_compatible_error(
     if let Some(preview) = body_preview.filter(|preview| !preview.trim().is_empty()) {
         parts.push(format!("响应预览：{preview}"));
     }
-    parts.push("你不需要重新配置；如果模型和 Base URL 没变，建议直接重试，或在 Provider Hub 切换 Responses/Images 协议、降低数量后再试。".to_string());
+    parts.push("这通常不是配置错误；如果中转站记录显示后续成功，说明同步连接先超时了。建议重启新版程序后重试后台轮询，或降低尺寸/数量后再试。".to_string());
     parts.join(" ")
 }
 
@@ -1366,7 +1604,13 @@ fn write_generation_history(
 ) -> Result<(), String> {
     let path = history_file_path(app)?;
     let tmp_path = path.with_extension("json.tmp");
-    let text = serde_json::to_string_pretty(records)
+    let mut storage_records = records.to_vec();
+    for record in &mut storage_records {
+        if !record.local_image_paths.is_empty() {
+            record.image_urls.retain(|url| !url.starts_with("data:image/"));
+        }
+    }
+    let text = serde_json::to_string_pretty(&storage_records)
         .map_err(|error| format!("Cannot serialize generation history: {error}"))?;
     std::fs::write(&tmp_path, text)
         .map_err(|error| format!("Cannot write generation history: {error}"))?;
@@ -1494,15 +1738,52 @@ fn clean_string_list(values: Vec<String>) -> Vec<String> {
     cleaned
 }
 
-fn hydrate_record_image_urls(app: &tauri::AppHandle, record: &mut GenerationRecord) {
+fn hydrate_record_image_urls(app: &tauri::AppHandle, record: &mut GenerationRecord) -> bool {
+    let mut changed = false;
     if record.local_image_paths.is_empty() {
-        return;
+        let recovered_urls = if record.image_urls.is_empty() {
+            extract_image_urls(&record.raw)
+        } else {
+            record.image_urls.clone()
+        };
+
+        if !recovered_urls.is_empty() {
+            let local_paths = save_data_url_images_to_library(
+                app,
+                &recovered_urls,
+                &record.provider_id,
+                &record.model_id,
+            )
+            .unwrap_or_default();
+
+            if !local_paths.is_empty() {
+                record.local_image_paths = local_paths;
+                record.image_urls = display_image_urls_for_paths(app, &record.local_image_paths, &[]);
+                changed = true;
+            } else if record.image_urls.is_empty() {
+                record.image_urls = recovered_urls;
+                changed = true;
+            }
+
+            if record.status != "succeeded" || record.error.is_some() {
+                record.status = "succeeded".to_string();
+                record.error = None;
+                changed = true;
+            }
+            if record.cost_hint.is_none() {
+                record.cost_hint = Some("以 OpenAI 实际账单为准".to_string());
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     let image_urls = display_image_urls_for_paths(app, &record.local_image_paths, &record.image_urls);
     if !image_urls.is_empty() {
         record.image_urls = image_urls;
+        changed = true;
     }
+    changed
 }
 
 fn display_image_urls_for_paths(
@@ -1606,6 +1887,37 @@ async fn save_images_to_library(
         let path = dir.join(filename);
         std::fs::write(&path, bytes)
             .map_err(|error| format!("Cannot save generated image: {error}"))?;
+        saved_paths.push(path_to_user_string(&path));
+    }
+
+    Ok(saved_paths)
+}
+
+fn save_data_url_images_to_library(
+    app: &tauri::AppHandle,
+    image_urls: &[String],
+    provider_id: &str,
+    model_id: &str,
+) -> Result<Vec<String>, String> {
+    let dir = library_dir(app)?;
+    let mut saved_paths = Vec::new();
+
+    for (index, image_url) in image_urls.iter().enumerate() {
+        if !image_url.starts_with("data:image/") {
+            continue;
+        }
+        let (bytes, extension) = decode_data_url_image(image_url)?;
+        let filename = format!(
+            "{}-{}-{}-recovered-{}.{}",
+            chrono_like_timestamp_millis(),
+            sanitize_filename(provider_id),
+            sanitize_filename(model_id),
+            index + 1,
+            extension
+        );
+        let path = dir.join(filename);
+        std::fs::write(&path, bytes)
+            .map_err(|error| format!("Cannot save recovered generated image: {error}"))?;
         saved_paths.push(path_to_user_string(&path));
     }
 
@@ -1834,6 +2146,8 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str)
                     "model": request.model_id,
                     "input": [{ "role": "user", "content": content }],
                     "tools": [{ "type": "image_generation" }],
+                    "background": true,
+                    "store": true,
                     "size": request.size,
                     "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string())
                 })
@@ -1842,6 +2156,8 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str)
                     "model": request.model_id,
                     "input": request.prompt,
                     "tools": [{ "type": "image_generation" }],
+                    "background": true,
+                    "store": true,
                     "size": request.size,
                     "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string())
                 })
@@ -1921,9 +2237,9 @@ fn collect_images_recursive(value: &Value, urls: &mut Vec<String>) {
                     }
                 }
             }
-            for key in ["b64_json", "image_base64", "base64", "data"] {
+            for key in ["b64_json", "image_base64", "base64", "data", "result", "image"] {
                 if let Some(b64) = map.get(key).and_then(|value| value.as_str()) {
-                    if b64.len() > 128 && !b64.starts_with("http") && !b64.starts_with("data:") {
+                    if is_probable_base64_image(b64) {
                         urls.push(format!("data:image/png;base64,{b64}"));
                     }
                 }
@@ -1944,6 +2260,24 @@ fn collect_images_recursive(value: &Value, urls: &mut Vec<String>) {
         }
         _ => {}
     }
+}
+
+fn is_probable_base64_image(value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.len() <= 128 || trimmed.starts_with("http") || trimmed.starts_with("data:") {
+        return false;
+    }
+    let sample: String = trimmed
+        .chars()
+        .take(160)
+        .filter(|ch| !ch.is_whitespace())
+        .collect();
+    if sample.len() <= 128 {
+        return false;
+    }
+    sample
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '+' | '/' | '=' | '-' | '_'))
 }
 
 fn chrono_like_timestamp_millis() -> u128 {
