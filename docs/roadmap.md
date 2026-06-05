@@ -28,6 +28,8 @@
 
 ## v0.4 Workflow Layer
 
+- Inspiration Center: configurable prompt/reference websites and local inspiration image collection
+
 - Batch generation
 - Multi-provider comparison
 - Cost statistics
