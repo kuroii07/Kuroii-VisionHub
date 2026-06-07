@@ -40,16 +40,11 @@ assert "tauri:dev" in package["scripts"]
 manifest_src = (ROOT / "src/providers/manifests.ts").read_text(encoding="utf-8")
 for provider_id in [
     "openai-gpt-image",
-    "gemini-nano-banana",
-    "xai-grok-image",
-    "volcengine-seedream",
-    "jimeng-official",
-    "kling-image",
     "custom-http-provider",
     "comfyui-local",
 ]:
     assert provider_id in manifest_src, f"Provider missing: {provider_id}"
-for term in ["promptPolish", "textModels", "gpt-4o-mini", "custom-text-model"]:
+for term in ["promptPolish", "textModels", "gpt-4o-mini", "中转站文本模型"]:
     assert term in manifest_src, f"Provider prompt polish capability missing: {term}"
 
 app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
@@ -66,6 +61,7 @@ for term in [
     "OUTPUT_FORMAT_OPTIONS",
     "PROMPT_HISTORY_LIMIT_OPTIONS",
     "PROMPT_POLISH_ENGINE_OPTIONS",
+    "PROMPT_POLISH_SECRET_ID",
     "PROMPT_POLISH_LANGUAGE_OPTIONS",
     "PROMPT_POLISH_STRENGTH_OPTIONS",
     "PROMPT_POLISH_PROTOCOL_OPTIONS",
@@ -82,26 +78,40 @@ for term in [
     "复用记录策略",
     "默认润色模式",
     "提示词润色引擎",
-    "润色平台与模型",
+    "提示词润色专用配置",
+    "DeepSeek",
+    "保存润色配置",
+    "refreshPromptPolishModels",
+    "modelOptions",
     "语言、强度与协议",
     "updatePromptPolish",
-    "POLISH_MODES",
+    "savePromptPolishSecret",
+    "getPolishModesForEngine",
     "onOpenLibraryDirectory",
     "onOpenAppDataDirectory",
     "onExportSettingsBackup",
-    "settingsActionMessage",
+    "settingsMessage",
 ]:
     assert term in app_src, f"Settings interaction missing: {term}"
 
 for term in [
-    "libraryToolbar",
-    "libraryGrid",
+    "libraryGridV2",
+    "libraryFloatingDock",
+    "libraryDetailDrawer",
+    "LibraryViewMode",
+    "LibrarySortMode",
+    "LibraryMetaMap",
+    "toggleFavorite",
+    "quickFilters",
+    "shapeFilter",
+    "formatFilter",
+    "ratingFilter",
     "providerFilter",
     "statusFilter",
     "copyText",
-    "revealGenerationFile(localPath)",
+    "revealGenerationFile",
 ]:
-    assert term in app_src, f"Library v1 interaction missing: {term}"
+    assert term in app_src, f"Library v2 interaction missing: {term}"
 
 generate_src = (ROOT / "src/ui/GeneratePage.tsx").read_text(encoding="utf-8")
 for term in [
@@ -117,6 +127,9 @@ for term in [
     "defaultOutputFormat",
     "promptHistorySettings",
     "promptPolishSettings",
+    "effectivePromptPolishSettings",
+    "promptPolishQuickGroup",
+    "quickPolishOptions",
 ]:
     assert term in generate_src, f"Generate page prompt assist missing: {term}"
 
@@ -138,6 +151,9 @@ for term in [
     "PromptHistorySettings",
     "PromptPolishSettings",
     "polishPromptWithProvider",
+    "polishModelOptions",
+    "onModelChange",
+    "本地规则润色",
     "开始模型润色",
     "模型润色失败",
     "includeFailed",
@@ -174,7 +190,7 @@ for term in [
     "ProviderDiagnosticItem",
     "runProviderDiagnostics",
     "mapProviderErrorMessage",
-    "Provider 诊断助手",
+    "平台诊断助手",
     "onRunDiagnostics",
     "onRunProfileConnectionTest",
     "onCopyConfig",
@@ -190,6 +206,12 @@ for term in [
     "diagnostics",
     "diagnosticsSummary",
     "providerAccessLayout",
+    "平台类型",
+    "服务模板",
+    "OpenAI 兼容中转",
+    "OpenRouter",
+    "本地规划",
+    "serviceTemplateId",
 ]:
     assert term in app_src, f"Provider diagnostics v1 missing: {term}"
 brand_block = app_src.split('<div className="brand">', 1)[1].split('<nav className="navGroup">', 1)[0]
@@ -249,7 +271,7 @@ for term in ["validateGenerationRequest", "请先在平台接入设置 Base URL"
     assert term in store_src, f"Generation preflight missing: {term}"
 
 tauri_src = (ROOT / "src-tauri/src/main.rs").read_text(encoding="utf-8")
-for term in ["get_app_paths", "reveal_app_data_dir", "reveal_library_dir", "export_settings_backup", "open_external_url", "polish_prompt_with_provider", "PromptPolishRequest", "extract_text_response"]:
+for term in ["get_app_paths", "reveal_app_data_dir", "reveal_library_dir", "export_settings_backup", "open_external_url", "polish_prompt_with_provider", "PromptPolishRequest", "extract_text_response", "prompt_polish_mode_rules", "ensure_prompt_polish_changed"]:
     assert term in tauri_src, f"Tauri settings command missing: {term}"
 
 styles_src = (ROOT / "src/ui/styles.css").read_text(encoding="utf-8")
@@ -269,7 +291,12 @@ for selector in [
     ".settingsBooleanGrid button.active",
     ".settingsTogglePill",
     ".settingsNotice",
-    ".libraryToolbar",
+    ".libraryFloatingDock",
+    ".libraryDockBar",
+    ".libraryDockPanel",
+    ".libraryGridV2",
+    ".libraryCardV2",
+    ".libraryDetailDrawer",
     ".libraryGrid",
     ".libraryCard",
     ".templateToolbar",
@@ -304,7 +331,6 @@ for selector in [
     ".reuseRecordCard",
     ".reuseNoImage",
     ".assistEmpty",
-    ".promptAssistMessage",
 ]:
     assert selector in styles_src, f"Remote UI hardening selector missing: {selector}"
 

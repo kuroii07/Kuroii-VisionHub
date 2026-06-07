@@ -29,14 +29,15 @@ interface StudioState {
   setQuality: (quality: string) => void;
   setSelectedModel: (modelId: string) => void;
   loadHistory: () => Promise<void>;
-  generate: (options?: { mode?: GenerationMode; references?: ReferenceImage[]; metadata?: ImageGenerationRequest['metadata'] }) => Promise<void>;
+  generate: (options?: { mode?: GenerationMode; references?: ReferenceImage[]; outputFormat?: ImageGenerationRequest['outputFormat']; outputCompression?: ImageGenerationRequest['outputCompression']; metadata?: ImageGenerationRequest['metadata'] }) => Promise<void>;
 }
 
 const providers = listProviders();
 const firstProvider = providers[0];
 const initialGenerationDefaults = loadAppSettings().generationDefaults;
+const initialProviderId = resolveInitialProviderId(initialGenerationDefaults.defaultProviderId);
 const initialProvider =
-  providers.find((provider) => provider.id === initialGenerationDefaults.defaultProviderId) ?? firstProvider;
+  providers.find((provider) => provider.id === initialProviderId) ?? firstProvider;
 const initialModel =
   initialGenerationDefaults.defaultModelId ||
   initialProvider.models.find((model) => model.id === initialGenerationDefaults.defaultModelId)?.id ||
@@ -110,6 +111,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
 
     const generationMode = options?.mode ?? 'text-to-image';
     const references = options?.references ?? [];
+    const outputFormat = options?.outputFormat ?? initialGenerationDefaults.outputFormat;
+    const outputCompression = options?.outputCompression;
     const metadata = options?.metadata;
 
     set({ isGenerating: true });
@@ -121,6 +124,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         count: state.count,
         size: state.size,
         quality: state.quality,
+        outputFormat,
+        outputCompression,
         generationMode,
         references,
         metadata,
@@ -167,6 +172,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }
   }
 }));
+
+function resolveInitialProviderId(providerId: string) {
+  if (providerId !== 'openai-gpt-image') return providerId;
+  const officialProfile = getActiveProviderProfile('openai-gpt-image');
+  const relayProfile = getActiveProviderProfile('custom-http-provider');
+  return !officialProfile && relayProfile ? 'custom-http-provider' : providerId;
+}
 
 function validateGenerationRequest(request: ImageGenerationRequest, useOpenAICompatibleConfig: boolean) {
   if (!request.prompt.trim()) {

@@ -21,6 +21,7 @@ export interface PolishMode {
   label: string;
   description: string;
   additions: string[];
+  scope: 'local' | 'provider';
 }
 
 export const INSPIRATION_TEMPLATES: InspirationTemplate[] = [
@@ -82,32 +83,117 @@ export const INSPIRATION_TEMPLATES: InspirationTemplate[] = [
   }
 ];
 
-export const POLISH_MODES: PolishMode[] = [
+export const LOCAL_POLISH_MODES: PolishMode[] = [
+  {
+    id: 'standard',
+    label: '标准补全',
+    description: '快速补全主体、场景和画质关键词。',
+    scope: 'local',
+    additions: ['主体明确', '场景清晰', '构图稳定', '光线自然', '画面干净', '适合 AI 图像生成']
+  },
   {
     id: 'detail',
     label: '更详细',
     description: '补充主体、场景、材质、光线、构图。',
+    scope: 'local',
     additions: ['主体细节清晰', '场景层次丰富', '材质真实', '光影自然', '构图稳定', '高细节']
   },
   {
     id: 'cinematic',
     label: '电影感',
     description: '强化镜头、光影、氛围和画面叙事。',
+    scope: 'local',
     additions: ['电影级构图', '体积光', '浅景深', '高对比光影', '氛围感强', '视觉焦点明确']
   },
   {
     id: 'commercial',
     label: '商业视觉',
     description: '适合产品图、海报和品牌视觉。',
+    scope: 'local',
     additions: ['商业级质感', '主体突出', '干净背景', '高级配色', '可用于宣传物料', '精致细节']
   },
   {
     id: 'platform-cn',
     label: '中文平台',
     description: '更适合中文生图平台理解。',
+    scope: 'local',
     additions: ['中文提示词清晰', '避免含混描述', '画面主体明确', '风格关键词完整', '构图要求明确']
   }
 ];
+
+export const MODEL_POLISH_MODES: PolishMode[] = [
+  {
+    id: 'smart-expand',
+    label: '智能扩写',
+    description: '适合很短、笼统的想法，扩写成完整生图提示词。',
+    scope: 'provider',
+    additions: []
+  },
+  {
+    id: 'pro-image-prompt',
+    label: '生图专业版',
+    description: '整理为主体、环境、镜头、光线、质感完整的专业 Prompt。',
+    scope: 'provider',
+    additions: []
+  },
+  {
+    id: 'poster-kv',
+    label: '海报/KV',
+    description: '面向活动主视觉、封面、品牌海报和社媒传播图。',
+    scope: 'provider',
+    additions: []
+  },
+  {
+    id: 'character-design',
+    label: '角色设定',
+    description: '扩写人物/角色外观、服装、姿态、气质和场景。',
+    scope: 'provider',
+    additions: []
+  },
+  {
+    id: 'product-photo',
+    label: '产品摄影',
+    description: '强化产品材质、棚拍灯光、背景和商业质感。',
+    scope: 'provider',
+    additions: []
+  },
+  {
+    id: 'world-scene',
+    label: '场景概念图',
+    description: '扩写空间层次、世界观细节、氛围和镜头视角。',
+    scope: 'provider',
+    additions: []
+  },
+  {
+    id: 'ecommerce-detail',
+    label: '电商详情图',
+    description: '适合商品卖点展示、材质特写和详情页视觉。',
+    scope: 'provider',
+    additions: []
+  },
+  {
+    id: 'social-cover',
+    label: '社媒封面',
+    description: '适合小红书、视频封面、头像背景和内容封面图。',
+    scope: 'provider',
+    additions: []
+  }
+];
+
+export const POLISH_MODES: PolishMode[] = [...LOCAL_POLISH_MODES, ...MODEL_POLISH_MODES];
+
+export function getPolishModesForEngine(engine: 'local' | 'provider') {
+  return engine === 'provider' ? MODEL_POLISH_MODES : LOCAL_POLISH_MODES;
+}
+
+export function getDefaultPolishMode(engine: 'local' | 'provider') {
+  return engine === 'provider' ? MODEL_POLISH_MODES[0].id : LOCAL_POLISH_MODES[1].id;
+}
+
+export function resolvePolishMode(modeId: string, engine: 'local' | 'provider') {
+  const modes = getPolishModesForEngine(engine);
+  return modes.find((mode) => mode.id === modeId) ?? modes.find((mode) => mode.id === getDefaultPolishMode(engine)) ?? modes[0];
+}
 
 export function renderInspirationPrompt(template: InspirationTemplate, values: Record<string, string>) {
   return template.template.replace(/\{(\w+)\}/g, (_, key: string) => {
@@ -118,7 +204,7 @@ export function renderInspirationPrompt(template: InspirationTemplate, values: R
 
 export function polishPrompt(source: string, modeId: string) {
   const base = source.trim();
-  const mode = POLISH_MODES.find((item) => item.id === modeId) ?? POLISH_MODES[0];
+  const mode = resolvePolishMode(modeId, 'local');
   const normalized = base || '一个清晰明确的画面主体';
   return `${normalized}，${mode.additions.join('，')}，画面干净，主题明确，适合 AI 图像生成。`;
 }

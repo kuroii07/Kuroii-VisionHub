@@ -13,7 +13,7 @@ import {
   Upload,
   X
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ClipboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import type {
   InspirationAsset,
   InspirationCommercialReference,
@@ -32,6 +32,8 @@ import {
 } from '../services/inspirationApi';
 import { openExternalUrl } from '../services/desktopApi';
 import { StudioSelect } from './StudioSelect';
+import type { ConfirmDialogRequest } from './confirmDialog';
+import { useToastMessage } from './toast';
 
 type InspirationTab = 'sources' | 'assets';
 
@@ -136,6 +138,7 @@ export function InspirationPage(props: {
   onUseAsReference: (asset: InspirationAsset) => void;
   onUsePrompt: (prompt: string) => void;
   onCreateTemplate: (title: string, prompt: string, tags: string[]) => string;
+  onRequestConfirm: (request: ConfirmDialogRequest) => void;
 }) {
   const [activeTab, setActiveTab] = useState<InspirationTab>('sources');
   const [sources, setSources] = useState<InspirationSource[]>([]);
@@ -152,6 +155,7 @@ export function InspirationPage(props: {
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  useToastMessage(message, setMessage);
 
   useEffect(() => {
     let active = true;
@@ -278,14 +282,22 @@ export function InspirationPage(props: {
   }
 
   async function removeSource(sourceId: string) {
-    if (!window.confirm('确定删除这个灵感网站吗？')) return;
-    try {
-      await deleteInspirationSource(sourceId);
-      setSources((current) => current.filter((source) => source.id !== sourceId));
-      setMessage('灵感网站已删除。');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
-    }
+    props.onRequestConfirm({
+      title: '删除灵感网站',
+      message: '确定删除这个灵感网站吗？删除后它会从灵感中心的网站列表中移除。',
+      confirmLabel: '删除',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteInspirationSource(sourceId);
+          setSources((current) => current.filter((source) => source.id !== sourceId));
+          setMessage('灵感网站已删除。');
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : String(error));
+          throw error;
+        }
+      }
+    });
   }
 
   async function importAsset() {
@@ -383,15 +395,23 @@ export function InspirationPage(props: {
   }
 
   async function removeAsset(assetId: string) {
-    if (!window.confirm('确定删除这条灵感收藏吗？这只会删除 VisionHub 记录，不会删除已导入的图片文件。')) return;
-    try {
-      await deleteInspirationAsset(assetId);
-      setAssets((current) => current.filter((asset) => asset.id !== assetId));
-      if (editingAssetId === assetId) cancelAssetEdit();
-      setMessage('灵感收藏已删除。');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
-    }
+    props.onRequestConfirm({
+      title: '删除灵感收藏',
+      message: '确定删除这条灵感收藏吗？这只会删除 VisionHub 记录，不会删除已导入的图片文件。',
+      confirmLabel: '删除',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await deleteInspirationAsset(assetId);
+          setAssets((current) => current.filter((asset) => asset.id !== assetId));
+          if (editingAssetId === assetId) cancelAssetEdit();
+          setMessage('灵感收藏已删除。');
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : String(error));
+          throw error;
+        }
+      }
+    });
   }
 
   function assetPrompt(asset: InspirationAsset) {
@@ -455,8 +475,6 @@ export function InspirationPage(props: {
           </label>
         )}
       </section>
-
-      {message ? <p className="libraryNotice inspirationNotice">{message}</p> : null}
 
       {activeTab === 'sources' ? (
         <section className="inspirationLayout">

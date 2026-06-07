@@ -819,6 +819,23 @@ label {
   font-size: 12px;
 }
 
+.secretInputRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.secretInputRow input {
+  min-width: 0;
+}
+
+.secretSaveButton {
+  min-width: 104px;
+  height: 54px;
+  white-space: nowrap;
+}
+
 .secretActions .ghostButton {
   justify-content: center;
   flex: 1;
@@ -1124,7 +1141,7 @@ textarea {
 .modalBackdrop {
   position: fixed;
   inset: 0 0 0 272px;
-  z-index: 120;
+  z-index: 2200;
   display: grid;
   place-items: stretch;
   padding: 0;
@@ -1393,12 +1410,51 @@ textarea {
   left: 24px;
   bottom: 22px;
   max-width: 680px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   color: #b4233d;
   background: #fff2f4;
   border: 1px solid #ffd1da;
   border-radius: 14px;
   padding: 10px 12px;
   font-size: 12px;
+}
+
+.previewError > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.previewError strong {
+  font-size: 12px;
+}
+
+.previewError span {
+  min-width: 0;
+  line-height: 1.45;
+}
+
+.previewErrorActions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 7px;
+}
+
+.previewErrorActions button {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid rgba(180, 35, 61, 0.24);
+  border-radius: 999px;
+  padding: 0 10px;
+  color: #9f1239;
+  background: rgba(255, 255, 255, 0.74);
+  font-size: 11px;
+  font-weight: 850;
 }
 
 .referenceDock {
@@ -1414,10 +1470,16 @@ textarea {
 }
 
 .referenceInfo {
+  display: grid;
+  align-items: center;
+  gap: 4px;
+  color: #008b82;
+}
+
+.referenceInfo > div {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #008b82;
 }
 
 .referenceInfo span {
@@ -1425,6 +1487,12 @@ textarea {
   padding: 4px 8px;
   border-radius: 999px;
   background: #d9fbf7;
+}
+
+.referenceInfo small {
+  color: #527182;
+  font-size: 12px;
+  font-weight: 750;
 }
 
 .referenceAdd {
@@ -1483,6 +1551,10 @@ textarea {
 }
 
 .chipButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   border: 1px solid #d2e3ef;
   border-radius: 999px;
   padding: 6px 10px;
@@ -2484,6 +2556,24 @@ select option {
   min-width: 0;
 }
 
+.workspaceGenerate .promptPolishQuickGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.workspaceGenerate .promptPolishQuickSelect {
+  width: 132px;
+}
+
+.workspaceGenerate .promptPolishQuickSelect .studioSelectButton {
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .workspaceGenerate .chipButton.ghostSoon {
   min-height: 28px;
   padding: 0 10px;
@@ -2835,6 +2925,27 @@ select option {
   font-weight: 850;
   text-align: left;
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.studioSelectButton:has(.studioSelectLeadingIcon) {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.studioSelectLeadingIcon {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  color: var(--studio-accent, var(--app-accent-strong));
+  background: color-mix(in srgb, var(--studio-accent, var(--app-accent-strong)) 10%, transparent);
+}
+
+.studioSelectLeadingIcon svg {
+  width: 14px;
+  height: 14px;
+  color: currentColor;
 }
 
 .studioSelectValue,
@@ -3344,32 +3455,80 @@ select option {
   margin: 0 auto;
   color: var(--app-text-2);
 }
-.sidebarCollapsed .navItem::after,
-.sidebarCollapsed .themeToggle::after,
-.sidebarCollapsed .sidebarCollapseButton::after {
+.appShell [data-tooltip] {
+  position: relative;
+}
+
+.appShell [data-tooltip]::after {
   content: attr(data-tooltip);
   position: absolute;
-  z-index: 200;
-  left: calc(100% + 14px);
-  top: 50%;
-  transform: translateY(-50%) translateX(-4px);
+  z-index: 1200;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(2px);
   opacity: 0;
   pointer-events: none;
   white-space: nowrap;
+  max-width: 220px;
   padding: 8px 10px;
-  border: 1px solid var(--app-line);
-  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 22%, var(--app-line));
+  border-radius: 11px;
   color: var(--app-text);
   background: color-mix(in srgb, var(--app-surface) 96%, var(--app-bg));
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 18px 48px rgba(2, 6, 23, 0.22);
   font-size: 12px;
   font-weight: 850;
-  transition: opacity 0.14s ease, transform 0.14s ease;
+  line-height: 1;
+  transition: opacity 0.08s ease, transform 0.08s ease;
 }
-.sidebarCollapsed .navItem:hover::after,
-.sidebarCollapsed .themeToggle:hover::after,
-.sidebarCollapsed .sidebarCollapseButton:hover::after {
+
+@keyframes tooltipAutoDismiss {
+  0%,
+  82% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+.appShell [data-tooltip]:hover::after,
+.appShell [data-tooltip]:focus-visible::after {
   opacity: 1;
+  animation: tooltipAutoDismiss 3s ease forwards;
+  transform: translateX(-50%) translateY(0);
+}
+
+.appShell.sidebarCollapsed .navItem::after,
+.appShell.sidebarCollapsed .themeToggle::after,
+.appShell.sidebarCollapsed .sidebarCollapseButton::after {
+  left: calc(100% + 12px);
+  right: auto;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%) translateX(-2px);
+}
+
+.appShell.sidebarCollapsed .navItem:hover::after,
+.appShell.sidebarCollapsed .themeToggle:hover::after,
+.appShell.sidebarCollapsed .sidebarCollapseButton:hover::after,
+.appShell.sidebarCollapsed .navItem:focus-visible::after,
+.appShell.sidebarCollapsed .themeToggle:focus-visible::after,
+.appShell.sidebarCollapsed .sidebarCollapseButton:focus-visible::after {
+  transform: translateY(-50%) translateX(0);
+}
+
+.appShell .sidebarFooter [data-tooltip]::after {
+  left: calc(100% + 12px);
+  right: auto;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%) translateX(-2px);
+}
+
+.appShell .sidebarFooter [data-tooltip]:hover::after,
+.appShell .sidebarFooter [data-tooltip]:focus-visible::after {
   transform: translateY(-50%) translateX(0);
 }
 
@@ -3741,6 +3900,276 @@ kbd {
   width: min(640px, 100%);
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
+.settingsConfigBlock {
+  display: grid;
+  gap: 18px;
+  padding: 18px 20px 20px;
+  border-bottom: 1px solid var(--app-line);
+}
+.promptPolishConfigHeader {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  align-items: start;
+  gap: 18px;
+}
+.promptPolishHeaderTools {
+  min-width: min(520px, 100%);
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+.settingsConfigGrid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+  row-gap: 14px;
+}
+.settingsConfigGrid label {
+  display: grid;
+  gap: 7px;
+  align-content: start;
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 850;
+}
+.settingsConfigGrid input,
+.settingsConfigGrid textarea {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid var(--app-line);
+  border-radius: 14px;
+  padding: 0 16px;
+  color: var(--app-text);
+  background: var(--app-surface-2);
+  font: inherit;
+  font-weight: 750;
+  outline: none;
+}
+.settingsConfigGrid textarea {
+  min-height: 78px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  resize: vertical;
+  line-height: 1.5;
+}
+.settingsConfigGrid input:focus,
+.settingsConfigGrid textarea:focus {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 62%, var(--app-line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent-strong) 14%, transparent);
+}
+.settingsConfigGrid small {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+.settingsConfigGrid code {
+  color: var(--app-text);
+  font-size: 11px;
+}
+.settingsWideField { grid-column: 1 / -1; }
+.settingsPresetRow,
+.settingsConfigActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.settingsPresetRow button {
+  min-height: 32px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  padding: 0 12px;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+  font-size: 12px;
+  font-weight: 850;
+}
+.settingsPresetRow button:hover {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 42%, var(--app-line));
+}
+.settingsPresetRow button.active {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 58%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 15%, var(--app-surface-2));
+}
+.settingsModelSelectRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.settingsModelSelectRow .studioSelectButton {
+  min-height: 54px;
+  border-radius: 14px;
+}
+.settingsModelSelectRow button {
+  min-height: 54px;
+  border: 1px solid var(--app-line);
+  border-radius: 14px;
+  padding: 0 16px;
+  color: var(--app-text);
+  background: var(--app-surface-2);
+  font-size: 12px;
+  font-weight: 900;
+}
+.settingsModelSelectRow button:disabled { cursor: not-allowed; opacity: .62; }
+.settingsConfigActions {
+  padding-top: 2px;
+}
+.settingsConfigActions small {
+  flex: 1 1 240px;
+  text-align: right;
+}
+.promptPolishConfigInstances {
+  display: grid;
+  gap: 9px;
+}
+.promptPolishConfigInstances > strong {
+  color: var(--app-text);
+  font-size: 12px;
+}
+.promptPolishConfigInstances p {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+.promptPolishConfigInstances > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.promptPolishConfigInstances article {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+}
+.promptPolishConfigInstances article.active {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 50%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 12%, var(--app-surface-2));
+}
+.promptPolishConfigInstances article > button:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  border: 0;
+  padding: 10px 12px;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.promptPolishConfigInstances .promptPolishConfigDelete {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-left: 1px solid var(--app-line);
+  padding: 0;
+  color: var(--app-muted);
+  background: transparent;
+}
+.promptPolishConfigInstances .promptPolishConfigDelete:hover {
+  color: #f43f5e;
+  background: color-mix(in srgb, #f43f5e 10%, transparent);
+}
+.promptPolishConfigInstances button span,
+.promptPolishConfigInstances button small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.promptPolishConfigInstances button span {
+  font-size: 12px;
+  font-weight: 900;
+}
+.promptPolishConfigInstances button small {
+  color: var(--app-muted);
+  font-size: 11px;
+}
+.settingsSecretInputRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.settingsSecretInputRow button {
+  min-height: 54px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 0 18px;
+  color: #042f2e;
+  background: linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--app-accent-strong) 42%, #ffffff));
+  font-size: 12px;
+  font-weight: 900;
+}
+.settingsSecretInputRow button:disabled { cursor: not-allowed; opacity: .62; }
+.settingsStatusPills {
+  width: min(460px, 100%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.settingsStatusPills.compact { width: 100%; }
+.settingsStatusPills span {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  padding: 0 12px;
+  color: var(--app-muted);
+  background: var(--app-surface-2);
+  font-size: 12px;
+  font-weight: 850;
+}
+.settingsStatusPills span.ready {
+  color: #063b35;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--app-accent-strong) 36%, #ffffff);
+}
+.settingsAdvancedBox {
+  border: 1px solid var(--app-line);
+  border-radius: 14px;
+  background: var(--app-surface-2);
+}
+.settingsAdvancedBox summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  cursor: pointer;
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 900;
+}
+.settingsAdvancedBox summary::marker { color: var(--app-muted); }
+.settingsAdvancedBox summary small {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.settingsAdvancedBox p {
+  margin: 0;
+  padding: 0 14px 10px;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.settingsAdvancedBox textarea {
+  width: calc(100% - 28px);
+  margin: 0 14px 14px;
+}
 .settingsBooleanGrid {
   width: min(520px, 100%);
   display: grid;
@@ -3818,10 +4247,20 @@ kbd {
   .settingsPathActions { justify-content: flex-start; }
   .settingsInlineGrid,
   .settingsInlineGrid.triple,
+  .settingsConfigGrid,
   .settingsBooleanGrid {
     width: 100%;
     grid-template-columns: 1fr;
   }
+  .settingsStatusPills { justify-content: flex-start; }
+  .promptPolishConfigHeader { grid-template-columns: 1fr; }
+  .promptPolishHeaderTools {
+    min-width: 0;
+    justify-items: start;
+  }
+  .settingsPresetRow,
+  .settingsConfigActions { justify-content: flex-start; }
+  .settingsConfigActions small { text-align: left; }
 }
 
 /* Final app-wide panel + sidebar fixes.
@@ -4382,9 +4821,7 @@ kbd {
 .appShell.theme-light .freePlatformCard .quotaHint,
 .appShell.theme-light .templateToolbar label > span,
 .appShell.theme-light .templateCardHeader small,
-.appShell.theme-light .templateCard p,
-.appShell.theme-light .freeNotice,
-.appShell.theme-light .libraryNotice {
+.appShell.theme-light .templateCard p {
   color: #475569;
 }
 
@@ -4481,16 +4918,6 @@ kbd {
   display: none;
 }
 
-.settingsActionMessage {
-  margin: 0;
-  padding: 14px 20px 16px;
-  color: var(--app-muted);
-  border-top: 1px solid var(--app-line);
-  font-size: 13px;
-  line-height: 1.55;
-  word-break: break-all;
-}
-
 .libraryTopbar {
   align-items: flex-start;
 }
@@ -4583,15 +5010,6 @@ kbd {
   white-space: nowrap;
 }
 
-.libraryNotice {
-  margin: 0 0 14px;
-  padding: 10px 14px;
-  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 24%, var(--app-line));
-  border-radius: 14px;
-  color: var(--app-text-2);
-  background: color-mix(in srgb, var(--app-accent-strong) 8%, var(--app-surface));
-}
-
 .libraryGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -4600,9 +5018,8 @@ kbd {
 }
 
 .libraryCard {
-  height: 430px;
-  display: grid;
-  grid-template-rows: 196px minmax(0, 1fr);
+  height: auto;
+  display: block;
   overflow: hidden;
   border: 1px solid var(--app-line);
   border-radius: 24px;
@@ -4615,8 +5032,8 @@ kbd {
 .libraryFailedThumb {
   position: relative;
   width: 100%;
-  height: 196px;
-  min-height: 196px;
+  height: auto;
+  min-height: 0;
   aspect-ratio: auto;
   display: grid;
   place-items: center;
@@ -4636,12 +5053,14 @@ kbd {
   height: 100%;
   display: block;
   object-fit: cover;
+  object-position: center;
 }
 
 .libraryThumb span {
   position: absolute;
   right: 12px;
   bottom: 12px;
+  z-index: 10;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -4920,10 +5339,10 @@ kbd {
 }
 
 .polishEngineBar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(232px, 252px) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
   padding: 12px 14px;
   border: 1px solid var(--app-line);
   border-radius: 18px;
@@ -4945,7 +5364,135 @@ kbd {
   line-height: 1.45;
 }
 
-.polishEngineBar button {
+.workspaceGenerate .promptPolishQuickSelect .studioSelectButton,
+.workspaceGenerate .promptPolishDetailButton {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 26%, var(--app-line));
+  color: var(--app-text);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--app-accent-strong) 13%, transparent), color-mix(in srgb, var(--app-purple) 10%, transparent)),
+    var(--app-surface-2);
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.workspaceGenerate .promptPolishQuickSelect .studioSelectButton:hover,
+.workspaceGenerate .promptPolishQuickSelect.open .studioSelectButton,
+.workspaceGenerate .promptPolishDetailButton:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 46%, var(--app-line));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--app-accent-strong) 16%, transparent);
+}
+
+.polishModelPicker {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.polishModelPicker .studioSelectButton,
+.polishModelPicker .polishModelTag {
+  min-height: 34px;
+  border-radius: 999px;
+}
+
+.polishModelPicker .polishConfigSelect {
+  width: 100%;
+}
+
+.polishModelPicker .polishModelSelect {
+  min-width: 0;
+  width: 100%;
+}
+
+.polishModelPicker .polishModelTag {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  overflow: hidden;
+  color: var(--app-text-2);
+  border: 1px solid var(--app-line);
+  background: var(--app-surface-2);
+  font-size: 12px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.polishModelPicker .studioSelect {
+  min-width: 0;
+}
+
+.polishModelPicker .studioSelectButton {
+  width: 100%;
+  padding: 0 10px;
+}
+
+.polishModelPicker .studioSelectValue,
+.polishModelPicker .studioSelectOptionText,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectValue,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectOptionText {
+  min-height: 0;
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.polishModelPicker .studioSelectValue > span,
+.polishModelPicker .studioSelectOptionText > span,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectValue > span,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectOptionText > span {
+  min-height: 0;
+  display: block;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+}
+
+.polishModelPicker .studioSelectMenu {
+  min-width: 220px;
+  max-width: min(320px, 78vw);
+}
+
+.polishModelPicker .studioSelectMenu button {
+  min-height: 36px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.polishModelPicker .studioSelectMenu button.active {
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface-2));
+}
+
+.polishModelPicker .studioSelectMenu button svg {
+  color: var(--app-accent);
+}
+
+.polishModelPicker .noSelectCheck .studioSelectButton > svg,
+.appShell .workspaceGenerate .promptPolishQuickSelect.noSelectCheck .studioSelectButton > svg {
+  display: block;
+}
+
+.polishModelPicker .noSelectCheck .studioSelectMenu button > svg,
+.appShell .workspaceGenerate .promptPolishQuickSelect.noSelectCheck .studioSelectMenu button > svg {
+  display: none;
+}
+
+.polishModelPicker .noSelectCheck .studioSelectMenu button,
+.appShell .workspaceGenerate .promptPolishQuickSelect.noSelectCheck .studioSelectMenu button {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.polishEngineBar .polishRunButton {
   min-height: 34px;
   display: inline-flex;
   align-items: center;
@@ -4960,9 +5507,26 @@ kbd {
   font-weight: 900;
 }
 
-.polishEngineBar button:disabled {
+.polishEngineBar .polishRunButton:disabled {
   cursor: not-allowed;
   opacity: .55;
+}
+
+.polishConfigHint {
+  margin: -4px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 1180px) {
+  .polishEngineBar {
+    grid-template-columns: 1fr;
+  }
+
+  .polishModelPicker {
+    grid-template-columns: 1fr;
+  }
 }
 
 .polishCompareGrid {
@@ -5036,21 +5600,6 @@ kbd {
   border: 1px dashed var(--app-line-strong);
   border-radius: 22px;
   background: var(--app-surface-2);
-}
-
-.promptAssistMessage {
-  margin: 0 18px 18px;
-  padding: 9px 12px;
-  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 24%, var(--app-line));
-  border-radius: 14px;
-  color: var(--app-accent);
-  background: color-mix(in srgb, var(--app-accent-strong) 10%, transparent);
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.promptAssistMessage.inline {
-  margin: 0;
 }
 
 .promptAssistWindow .studioSelectMenu {
@@ -5182,12 +5731,6 @@ kbd {
   border-radius: 22px;
   background: var(--app-surface);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.18);
-}
-
-.freeNotice {
-  margin: 0 0 14px;
-  color: var(--app-muted);
-  font-size: 13px;
 }
 
 .freePlatformGrid {
@@ -5478,7 +6021,7 @@ body {
 .appShell .workspaceGenerate .chipButton:not(.ghostSoon),
 .appShell .assistTemplateList button.active,
 .appShell .assistActionRow button:first-child,
-.appShell .polishEngineBar button,
+.appShell .polishEngineBar .polishRunButton,
 .appShell .integrationBox,
 .appShell .relayBox,
 .appShell .libraryInsightCard.primary {
@@ -5501,7 +6044,7 @@ body {
 .appShell.theme-light .workspaceGenerate .chipButton:not(.ghostSoon),
 .appShell.theme-light .assistTemplateList button.active,
 .appShell.theme-light .assistActionRow button:first-child,
-.appShell.theme-light .polishEngineBar button,
+.appShell.theme-light .polishEngineBar .polishRunButton,
 .appShell.theme-light .integrationBox,
 .appShell.theme-light .relayBox,
 .appShell.theme-light .libraryInsightCard.primary {
@@ -5548,7 +6091,7 @@ body {
 .appShell.theme-dark .workspaceGenerate .chipButton:not(.ghostSoon),
 .appShell.theme-dark .assistTemplateList button.active,
 .appShell.theme-dark .assistActionRow button:first-child,
-.appShell.theme-dark .polishEngineBar button,
+.appShell.theme-dark .polishEngineBar .polishRunButton,
 .appShell.theme-dark .integrationBox,
 .appShell.theme-dark .relayBox,
 .appShell.theme-dark .libraryInsightCard.primary {
@@ -5824,14 +6367,19 @@ body {
 }
 
 .workspaceGenerate .chipButton:not(.ghostSoon),
-.workspaceGenerate .chipButton.ghostSoon {
+.workspaceGenerate .chipButton.ghostSoon,
+.workspaceGenerate .promptPolishQuickSelect .studioSelectButton,
+.workspaceGenerate .promptPolishDetailButton {
   min-height: 30px;
   color: var(--app-text-2);
   border-color: var(--app-line);
   background: var(--app-surface-2);
 }
 
-.workspaceGenerate .chipButton:not(.ghostSoon):hover {
+.workspaceGenerate .chipButton:not(.ghostSoon):hover,
+.workspaceGenerate .promptPolishQuickSelect .studioSelectButton:hover,
+.workspaceGenerate .promptPolishQuickSelect.open .studioSelectButton,
+.workspaceGenerate .promptPolishDetailButton:hover {
   color: var(--app-text);
   border-color: color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-line));
   background: color-mix(in srgb, var(--app-accent-strong) 8%, var(--app-surface-2));
@@ -6067,6 +6615,9 @@ body {
 .appShell.theme-light .studioSelect.open .studioSelectButton,
 .appShell.theme-light .workspaceGenerate .modeToggle:hover,
 .appShell.theme-light .workspaceGenerate .chipButton:hover,
+.appShell.theme-light .workspaceGenerate .promptPolishQuickSelect .studioSelectButton:hover,
+.appShell.theme-light .workspaceGenerate .promptPolishQuickSelect.open .studioSelectButton,
+.appShell.theme-light .workspaceGenerate .promptPolishDetailButton:hover,
 .appShell.theme-light .workspaceGenerate .ratioGrid button:hover,
 .appShell.theme-light .workspaceGenerate .resolutionList button:hover,
 .appShell.theme-light .workspaceGenerate .customSizeBox button:hover,
@@ -6125,6 +6676,9 @@ body {
 .appShell.theme-dark .studioSelect.open .studioSelectButton,
 .appShell.theme-dark .workspaceGenerate .modeToggle:hover,
 .appShell.theme-dark .workspaceGenerate .chipButton:hover,
+.appShell.theme-dark .workspaceGenerate .promptPolishQuickSelect .studioSelectButton:hover,
+.appShell.theme-dark .workspaceGenerate .promptPolishQuickSelect.open .studioSelectButton,
+.appShell.theme-dark .workspaceGenerate .promptPolishDetailButton:hover,
 .appShell.theme-dark .workspaceGenerate .ratioGrid button:hover,
 .appShell.theme-dark .workspaceGenerate .resolutionList button:hover,
 .appShell.theme-dark .workspaceGenerate .customSizeBox button:hover,
@@ -6180,6 +6734,54 @@ body {
   bottom: auto;
   left: 50%;
   transform: translate(-50%, -50%);
+}
+
+.workspaceGenerate .previewStage > .generationOverlay,
+.appShell.theme-light .workspaceGenerate .previewStage > .generationOverlay,
+.appShell.theme-dark .workspaceGenerate .previewStage > .generationOverlay {
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.workspaceGenerate .previewEmpty > .inlineGenerationOverlay,
+.appShell.theme-light .workspaceGenerate .previewEmpty > .inlineGenerationOverlay,
+.appShell.theme-dark .workspaceGenerate .previewEmpty > .inlineGenerationOverlay {
+  position: static;
+  transform: none;
+}
+
+.workspaceGenerate .previewError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(720px, calc(100% - 48px));
+}
+
+.workspaceGenerate .previewError.pendingRecovery {
+  color: #925200;
+  border-color: color-mix(in srgb, #f59e0b 34%, var(--app-line));
+  background: color-mix(in srgb, #f59e0b 14%, var(--app-surface));
+}
+
+.workspaceGenerate .previewErrorActions button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, rgba(180, 35, 61, 0.24));
+  color: var(--app-text);
+}
+
+.appShell.theme-dark .workspaceGenerate .previewError.pendingRecovery {
+  color: #ffe5b3;
+  background: color-mix(in srgb, #f59e0b 16%, rgba(15, 23, 42, 0.9));
+}
+
+.appShell.theme-dark .workspaceGenerate .previewErrorActions button {
+  color: #fff7ed;
+  border-color: rgba(251, 191, 36, 0.24);
+  background: rgba(15, 23, 42, 0.58);
 }
 
 /* Final local library card layout: uniform tiles without clipping controls. */
@@ -6411,7 +7013,20 @@ body {
   align-items: center;
   gap: 8px;
   overflow-x: auto;
-  padding: 2px;
+  overflow-y: visible;
+  padding: 16px 2px 22px;
+}
+
+.appShell .libraryGridV2 .libraryThumb span {
+  right: 8px;
+  bottom: 8px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+.appShell .libraryGridV2 .libraryCardV2:hover .libraryThumb span,
+.appShell .libraryGridV2 .libraryCardV2:focus-within .libraryThumb span {
+  opacity: 1;
 }
 
 .workspaceGenerate .referenceTile {
@@ -6422,14 +7037,29 @@ body {
   padding: 0;
   border: 1px solid var(--app-line);
   border-radius: 16px;
-  overflow: hidden;
+  overflow: visible;
   background: var(--app-surface);
+  cursor: grab;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
+}
+
+.workspaceGenerate .referenceTile:active {
+  cursor: grabbing;
+}
+
+.workspaceGenerate .referenceTile.isDragging {
+  opacity: 0.58;
+  transform: scale(0.96);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 56%, var(--app-line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent-strong) 18%, transparent);
 }
 
 .workspaceGenerate .referenceThumb {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  display: block;
+  padding: 0;
   border: 0;
   border-radius: 15px;
   background: var(--app-surface-2);
@@ -6440,6 +7070,25 @@ body {
   height: 100%;
   display: block;
   object-fit: cover;
+}
+
+.workspaceGenerate .referenceSourceBadge {
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  max-width: calc(100% - 10px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 3px 6px;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(8px);
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .workspaceGenerate .referenceRemove {
@@ -6509,6 +7158,18 @@ body {
   font-weight: 800;
 }
 
+.settingsListRow .themeSegment {
+  justify-self: start;
+}
+
+.themeSegment {
+  grid-template-columns: repeat(3, minmax(92px, auto));
+}
+
+.themeSegment button {
+  justify-content: center;
+}
+
 .freePlatformLogo {
   position: relative;
   overflow: hidden;
@@ -6574,7 +7235,15 @@ body {
 }
 
 .workspaceGenerate .referenceInfo {
+  align-content: center;
+  justify-items: start;
   color: #075f5b;
+}
+
+.workspaceGenerate .referenceInfo > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .workspaceGenerate .referenceInfo strong {
@@ -6584,6 +7253,13 @@ body {
 .workspaceGenerate .referenceInfo span {
   color: #075f5b;
   background: rgba(255, 255, 255, 0.76);
+}
+
+.workspaceGenerate .referenceInfo small {
+  color: #355f70;
+  max-width: 260px;
+  text-align: left;
+  line-height: 1.35;
 }
 
 .workspaceGenerate .referenceDock p {
@@ -6603,62 +7279,77 @@ body {
   display: block;
 }
 
-.workspaceGenerate .referenceOrderControls {
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  display: flex;
-  gap: 3px;
-  opacity: 0;
-  transition: opacity 0.16s ease;
-}
-
-.workspaceGenerate .referenceOrderControls button {
-  width: 19px;
-  height: 19px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 999px;
-  color: #fff;
-  background: rgba(15, 23, 42, 0.56);
-  padding: 0;
-}
-
-.workspaceGenerate .referenceOrderControls button:disabled {
-  cursor: not-allowed;
-  opacity: 0.42;
-}
-
 .workspaceGenerate .referenceRoleSelect {
   position: absolute;
-  left: 4px;
-  right: 4px;
-  bottom: 4px;
-  min-width: 0;
-  height: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.36);
-  border-radius: 999px;
-  padding: 0 6px;
-  color: #ffffff;
-  background: rgba(15, 23, 42, 0.62);
-  backdrop-filter: blur(8px);
-  font-size: 10px;
-  font-weight: 850;
+  left: 50%;
+  bottom: -16px;
+  z-index: 24;
+  width: 58px;
+  min-width: 58px;
+  transform: translateX(-50%);
   opacity: 0;
-  outline: none;
   transition: opacity 0.16s ease, background 0.16s ease;
 }
 
-.workspaceGenerate .referenceTile:hover .referenceOrderControls,
-.workspaceGenerate .referenceTile:focus-within .referenceOrderControls,
+.workspaceGenerate .referenceRoleSelect .studioSelectButton {
+  min-height: 24px;
+  height: 24px;
+  border-radius: 999px;
+  padding: 0 7px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  font-size: 10px;
+  line-height: 1;
+  text-align: center;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.68);
+  backdrop-filter: blur(8px);
+}
+
+.workspaceGenerate .referenceRoleSelect .studioSelectButton svg {
+  display: none;
+}
+
+.workspaceGenerate .referenceRoleSelect .studioSelectValue {
+  display: block;
+  text-align: center;
+}
+
+.workspaceGenerate .referenceRoleSelect .studioSelectValue > span {
+  display: block;
+  text-align: center;
+}
+
+.workspaceGenerate .referenceRoleSelect .studioSelectMenu {
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: calc(100% + 8px);
+  z-index: 80;
+  width: 96px;
+  transform: translateX(-50%);
+  max-height: 190px;
+  border-color: var(--app-line-strong);
+  background: color-mix(in srgb, var(--app-surface) 96%, var(--app-bg));
+  animation: none;
+}
+
+.workspaceGenerate .referenceRoleSelect .studioSelectMenu button {
+  min-height: 30px;
+  font-size: 11px;
+}
+
 .workspaceGenerate .referenceTile:hover .referenceRoleSelect,
 .workspaceGenerate .referenceTile:focus-within .referenceRoleSelect {
   opacity: 1;
 }
 
-.workspaceGenerate .referenceRoleSelect:focus {
+.workspaceGenerate .referenceTile:focus-within {
+  z-index: 30;
+}
+
+.workspaceGenerate .referenceRoleSelect .studioSelectButton:focus,
+.workspaceGenerate .referenceRoleSelect.open .studioSelectButton {
   background: rgba(15, 23, 42, 0.86);
 }
 
@@ -6666,6 +7357,10 @@ body {
 .appShell.theme-dark .workspaceGenerate .referenceInfo strong,
 .appShell.theme-dark .workspaceGenerate .referenceInfo span {
   color: #ecfffb;
+}
+
+.appShell.theme-dark .workspaceGenerate .referenceInfo small {
+  color: #b8f7ee;
 }
 
 .appShell.theme-dark .workspaceGenerate .referenceInfo span {
@@ -6676,6 +7371,2136 @@ body {
   color: #d5fbf5;
 }
 
+/* Gallery V2: image-first grid, floating search dock, and hidden detail drawer. */
+.libraryWorkspace {
+  position: relative;
+  display: block;
+}
+
+.libraryOrganizerBackdrop {
+  position: fixed;
+  inset: 0 0 0 var(--sidebar-current-width);
+  z-index: 705;
+  border: 0;
+  background: rgba(2, 6, 23, 0.16);
+  backdrop-filter: blur(2px);
+}
+
+.libraryOrganizer {
+  position: fixed;
+  left: calc(var(--sidebar-current-width) + 18px);
+  top: 146px;
+  z-index: 710;
+  width: min(264px, calc(100vw - var(--sidebar-current-width) - 36px));
+  max-height: calc(100vh - 214px);
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  box-shadow: 0 24px 70px rgba(2, 6, 23, 0.22);
+  backdrop-filter: blur(20px) saturate(1.08);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-14px) scale(0.985);
+  transform-origin: left center;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.libraryOrganizer.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0) scale(1);
+}
+
+.libraryOrganizerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.libraryOrganizerHeader > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.libraryOrganizerHeader strong,
+.libraryOrganizerSection > div strong {
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.libraryOrganizerHeader span,
+.libraryOrganizerSection p {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.libraryOrganizerGroup,
+.libraryOrganizerSection {
+  display: grid;
+  gap: 5px;
+}
+
+.libraryOrganizerItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.libraryOrganizerSection > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 3px;
+}
+
+.libraryOrganizerSection > div button {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+}
+
+.libraryOrganizer button:not(.libraryDockButton) {
+  min-width: 0;
+}
+
+.libraryOrganizerGroup > button,
+.libraryOrganizerItem > button:first-child {
+  min-height: 28px;
+  display: grid;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 0 8px;
+  color: var(--app-text-2);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 850;
+  text-align: left;
+}
+
+.libraryOrganizerGroup > button {
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+}
+
+.libraryOrganizerItem > button:first-child {
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+}
+
+.libraryOrganizerGroup > button span,
+.libraryOrganizerItem > button:first-child span:not(.libraryFolderDot) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.libraryOrganizerGroup > button em,
+.libraryOrganizerItem > button:first-child em {
+  color: var(--app-muted);
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.libraryOrganizerGroup > button:hover,
+.libraryOrganizerGroup > button.active,
+.libraryOrganizerItem > button:first-child:hover,
+.libraryOrganizerItem > button:first-child.active,
+.libraryOrganizerSection > div button:hover {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+}
+
+.libraryOrganizerGroup > button.active,
+.libraryOrganizerItem > button:first-child.active {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 54%, var(--app-line));
+  box-shadow: inset 3px 0 0 var(--app-accent-strong);
+}
+
+.libraryOrganizerItemActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px;
+  border: 1px solid color-mix(in srgb, var(--app-line) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-surface-2) 58%, transparent);
+  opacity: 0.32;
+  transition: opacity 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.libraryOrganizerItem:hover .libraryOrganizerItemActions,
+.libraryOrganizerItemActions:focus-within {
+  opacity: 1;
+  border-color: var(--app-line);
+  background: color-mix(in srgb, var(--app-surface-2) 88%, transparent);
+}
+
+.libraryOrganizerIconAction,
+.libraryOrganizerDelete {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--app-muted);
+  background: transparent;
+  opacity: 0.72;
+  transition: opacity 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.libraryOrganizerIconAction:focus-visible,
+.libraryOrganizerDelete:focus-visible {
+  opacity: 1;
+}
+
+.libraryOrganizerIconAction:hover,
+.libraryOrganizerIconAction:focus-visible {
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+  opacity: 1;
+  outline: none;
+}
+
+.libraryOrganizerDelete:hover,
+.libraryOrganizerDelete:focus-visible {
+  color: #e11d48;
+  background: rgba(225, 29, 72, 0.1);
+  opacity: 1;
+  outline: none;
+}
+
+.libraryFolderDot {
+  width: 10px;
+  height: 10px;
+  justify-self: center;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-surface) 82%, transparent);
+}
+
+.libraryContentPane {
+  min-width: 0;
+}
+
+.libraryScopeBar {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 0 2px;
+}
+
+.libraryScopeBar strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.libraryScopeBar span {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 820;
+}
+
+.libraryScopeClearButton {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-muted);
+  background: var(--app-surface-2);
+}
+
+.libraryScopeClearButton:hover {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+}
+
+.appShell .libraryGridV2 {
+  --library-thumb-scale: 1;
+  padding-bottom: 112px;
+  grid-template-columns: repeat(auto-fill, minmax(calc(190px * var(--library-thumb-scale)), 1fr));
+  align-items: start;
+  gap: 10px;
+}
+
+.appShell .libraryGridV2.view-masonry {
+  display: block;
+  columns: calc(210px * var(--library-thumb-scale)) auto;
+  column-gap: 10px;
+}
+
+.appShell .libraryGridV2.view-masonry .libraryCardV2 {
+  display: inline-flex;
+  width: 100%;
+  margin: 0 0 10px;
+  break-inside: avoid;
+}
+
+.appShell .libraryGridV2.view-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.appShell .libraryCardV2 {
+  position: relative;
+  height: auto;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  box-shadow: none;
+  transition: border-color 0.16s ease, transform 0.16s ease, background 0.16s ease;
+}
+
+.appShell .libraryCardV2:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-line));
+}
+
+.appShell .libraryCardV2.selected {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 78%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 8%, var(--app-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-accent-strong) 58%, transparent);
+}
+
+.appShell .libraryCardV2.favorite {
+  border-color: color-mix(in srgb, #f59e0b 38%, var(--app-line));
+}
+
+.librarySelectMark {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 34;
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 999px;
+  color: #ffffff;
+  background: rgba(2, 6, 23, 0.44);
+  opacity: 0;
+  transform: scale(0.92);
+  box-shadow: none;
+  backdrop-filter: blur(10px) saturate(1.08);
+  transition: opacity 0.14s ease, transform 0.14s ease, background 0.14s ease;
+}
+
+.librarySelectMark span {
+  width: 11px;
+  height: 11px;
+  display: block;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+}
+
+.libraryCardV2:hover .librarySelectMark,
+.libraryCardV2:focus-within .librarySelectMark,
+.libraryCardV2.selected .librarySelectMark {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.librarySelectMark.active {
+  color: #ffffff;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 72%, rgba(255, 255, 255, 0.5));
+  background: var(--app-accent-strong);
+}
+
+.librarySelectMark.active span {
+  width: 12px;
+  height: 12px;
+  border-width: 0;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: inset 0 0 0 4px var(--app-accent-strong);
+}
+
+.appShell .libraryGridV2.view-list .librarySelectMark {
+  top: 10px;
+  left: 10px;
+}
+
+.libraryInlineFilters {
+  position: relative;
+  z-index: 220;
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 10px;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--app-surface) 84%, transparent);
+  backdrop-filter: blur(14px) saturate(1.04);
+}
+
+.libraryStructuredFilters {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(92px, 156px)) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.libraryStructuredFilters > label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.libraryStructuredFilters .studioSelect,
+.libraryStructuredFilters .studioSelectButton {
+  width: 100%;
+  min-width: 0;
+}
+
+.libraryStructuredFilters .studioSelect {
+  position: relative;
+  z-index: 1;
+}
+
+.libraryStructuredFilters .studioSelect.open {
+  z-index: 260;
+}
+
+.libraryStructuredFilters .studioSelectMenu {
+  z-index: 280;
+  width: 168px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--app-surface) 92%, transparent);
+  box-shadow: 0 18px 54px rgba(2, 6, 23, 0.19);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.libraryStructuredFilters .studioSelectMenu button {
+  min-width: 0;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface-2) 72%, transparent);
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.libraryStructuredFilters .studioSelectMenu button svg {
+  display: none;
+}
+
+.libraryStructuredFilters .studioSelectMenu button:hover,
+.libraryStructuredFilters .studioSelectMenu button.active {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--filter-icon-a, var(--app-accent-strong)) 58%, var(--app-line));
+  background: color-mix(in srgb, var(--filter-icon-a, var(--app-accent-strong)) 11%, var(--app-surface-2));
+}
+
+.libraryStructuredFilters .studioSelectOptionText > span {
+  max-width: none;
+}
+
+.libraryStructuredFilters .studioSelectOptionText {
+  display: block;
+  min-width: 0;
+}
+
+.libraryStructuredFilters .studioSelectOptionText > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.libraryFilterSelect.filterIconPlatform .studioSelectMenu,
+.libraryFilterSelect.filterIconShape .studioSelectMenu {
+  width: 198px;
+}
+
+.libraryFilterSelect.filterIconPlatform .studioSelectMenu {
+  grid-template-columns: 1fr;
+}
+
+.libraryFilterSelect.filterIconRating .studioSelectMenu {
+  width: 132px;
+  grid-template-columns: 1fr;
+}
+
+.libraryStructuredFilters .studioSelectButton {
+  min-height: 34px;
+  padding: 0 10px;
+  gap: 7px;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  color: var(--app-text);
+  background: var(--app-surface-2);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 880;
+}
+
+.libraryStructuredFilters .studioSelectButton:has(.studioSelectLeadingIcon) {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.libraryStructuredFilters .studioSelectButton > svg {
+  display: none;
+}
+
+.libraryStructuredFilters .studioSelectLeadingIcon {
+  width: 17px;
+  height: 17px;
+  overflow: hidden;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--filter-icon-a, #38bdf8), var(--filter-icon-b, #8b5cf6));
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, var(--app-surface) 58%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--filter-icon-a, #38bdf8) 28%, transparent);
+}
+
+.libraryStructuredFilters .studioSelectLeadingIcon svg {
+  width: 13px;
+  height: 13px;
+  filter: drop-shadow(0 1px 2px rgba(2, 6, 23, 0.18));
+}
+
+.libraryFilterSelect.filterIconPlatform {
+  --filter-icon-a: #38bdf8;
+  --filter-icon-b: #22c55e;
+}
+
+.libraryFilterSelect.filterIconStatus {
+  --filter-icon-a: #60a5fa;
+  --filter-icon-b: #a78bfa;
+}
+
+.libraryFilterSelect.filterIconType {
+  --filter-icon-a: #14b8a6;
+  --filter-icon-b: #3b82f6;
+}
+
+.libraryFilterSelect.filterIconTime {
+  --filter-icon-a: #f59e0b;
+  --filter-icon-b: #ef4444;
+}
+
+.libraryFilterSelect.filterIconShape {
+  --filter-icon-a: #8b5cf6;
+  --filter-icon-b: #ec4899;
+}
+
+.libraryFilterSelect.filterIconFormat {
+  --filter-icon-a: #64748b;
+  --filter-icon-b: #06b6d4;
+}
+
+.libraryFilterSelect.filterIconRating {
+  --filter-icon-a: #fbbf24;
+  --filter-icon-b: #f97316;
+}
+
+.libraryColorFilter {
+  position: relative;
+  min-width: 92px;
+}
+
+.libraryColorFilterButton {
+  width: 100%;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  color: var(--app-text);
+  background: var(--app-surface-2);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 880;
+  white-space: nowrap;
+}
+
+.libraryColorFilterButton:hover,
+.libraryColorFilterButton.active {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 42%, var(--app-line));
+  background: var(--app-surface-2);
+}
+
+.appShell.theme-light .libraryColorFilterButton {
+  color: #334155;
+  border-color: rgba(15, 23, 42, 0.13);
+  background: #ffffff;
+}
+
+.appShell.theme-light .libraryColorFilterButton:hover,
+.appShell.theme-light .libraryColorFilterButton.active {
+  color: #0f172a;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 34%, rgba(15, 23, 42, 0.14));
+  background: color-mix(in srgb, var(--app-accent-strong) 5%, #ffffff);
+}
+
+.appShell.theme-dark .libraryColorFilterButton {
+  color: #dbe7f6;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.appShell.theme-dark .libraryColorFilterButton:hover,
+.appShell.theme-dark .libraryColorFilterButton.active {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 34%, rgba(255, 255, 255, 0.12));
+  background: color-mix(in srgb, var(--app-accent-strong) 7%, rgba(255, 255, 255, 0.055));
+}
+
+.libraryColorWheel {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: conic-gradient(#ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #ef4444);
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, var(--app-surface) 58%, transparent),
+    0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.libraryColorFilterMenu {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  z-index: 290;
+  width: 168px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--app-surface) 92%, transparent);
+  box-shadow: 0 18px 54px rgba(2, 6, 23, 0.19);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.libraryColorFilterMenu button {
+  min-width: 0;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  padding: 0 7px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface-2) 72%, transparent);
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.libraryColorFilterMenu button span {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  display: block;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.libraryColorFilterMenu button:hover,
+.libraryColorFilterMenu button.active {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 58%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 11%, var(--app-surface-2));
+}
+
+.libraryColorPalette {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.libraryColorPalette.compact {
+  min-height: 34px;
+  padding: 5px 7px;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  background: var(--app-surface-2);
+}
+
+.libraryColorPalette button {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--app-line) 86%, transparent);
+  border-radius: 999px;
+  padding: 0;
+  background: color-mix(in srgb, var(--app-surface) 70%, transparent);
+  box-shadow: none;
+}
+
+.libraryColorPalette button span {
+  width: 14px;
+  height: 14px;
+  display: block;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.libraryColorPalette button:hover,
+.libraryColorPalette button.active {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 58%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+}
+
+.libraryColorPalette button.active {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent-strong) 18%, transparent);
+}
+
+.libraryInlineFilters .toggleRow {
+  min-width: 116px;
+  min-height: 34px;
+  display: inline-flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  background: var(--app-surface-2);
+  white-space: nowrap;
+}
+
+.libraryInlineFilters .toggleRow input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--app-accent-strong);
+}
+
+.libraryInlineFilters .miniButton {
+  min-height: 34px;
+  align-self: end;
+  padding: 0 14px;
+  border-radius: 12px;
+}
+
+.libraryClearFiltersButton {
+  min-width: 78px;
+  white-space: nowrap;
+}
+
+.libraryQuickFilters,
+.libraryActiveFilters {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.libraryQuickFilters .libraryQuickFilterChip,
+.libraryActiveFilters span {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  padding: 0 10px;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.libraryQuickFilters .libraryQuickFilterChip:hover,
+.libraryQuickFilters .libraryQuickFilterChip.active,
+.libraryCustomQuickFilter.active {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+}
+
+.libraryCustomQuickFilter {
+  min-height: 28px;
+  max-width: 176px;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+}
+
+.libraryCustomQuickFilterToggle,
+.libraryCustomQuickFilterDelete,
+.libraryQuickFilterAddButton {
+  border: 0;
+  color: inherit;
+  background: transparent;
+}
+
+.libraryCustomQuickFilterToggle {
+  min-width: 0;
+  min-height: 26px;
+  overflow: hidden;
+  padding: 0 4px 0 10px;
+  font-size: 11px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.libraryCustomQuickFilterDelete {
+  width: 24px;
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--app-muted);
+}
+
+.libraryCustomQuickFilterDelete:hover {
+  color: #e11d48;
+  background: rgba(225, 29, 72, 0.08);
+}
+
+.libraryQuickFilterAddWrap {
+  position: relative;
+  margin-left: auto;
+}
+
+.libraryQuickFilterAddButton {
+  width: 30px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+}
+
+.libraryQuickFilterAddButton:hover,
+.libraryQuickFilterAddButton.active {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+}
+
+.libraryQuickFilterEditor {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 7px);
+  z-index: 80;
+  width: min(276px, calc(100vw - 34px));
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--app-line) 78%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--app-surface) 92%, transparent);
+  box-shadow: 0 18px 42px rgba(2, 6, 23, 0.22);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.libraryQuickFilterEditor > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.libraryQuickFilterEditor strong {
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.libraryQuickFilterEditor span {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.libraryQuickFilterEditor input {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  padding: 0 10px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface-2) 88%, transparent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  outline: none;
+}
+
+.libraryQuickFilterEditor input:focus {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 44%, var(--app-line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent-strong) 12%, transparent);
+}
+
+.libraryQuickFilterSave {
+  min-height: 32px;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 40%, var(--app-line));
+  border-radius: 10px;
+  color: #ffffff;
+  background: var(--app-accent-strong);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.libraryQuickFilterSave:hover {
+  filter: brightness(1.04);
+}
+
+.libraryQuickFilterManage {
+  display: grid;
+  gap: 4px;
+  max-height: 152px;
+  overflow: auto;
+  padding-top: 2px;
+}
+
+.libraryQuickFilterManage button {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--app-line);
+  border-radius: 9px;
+  padding: 0 8px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface-2) 80%, transparent);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.libraryQuickFilterManage button span {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.libraryQuickFilterManage button:hover {
+  color: #e11d48;
+  border-color: rgba(225, 29, 72, 0.28);
+  background: rgba(225, 29, 72, 0.08);
+}
+
+.libraryActiveFilters {
+  padding-top: 2px;
+}
+
+.libraryActiveFilters span {
+  min-height: 24px;
+  color: var(--app-muted);
+  background: color-mix(in srgb, var(--app-surface) 70%, transparent);
+}
+
+.librarySelectionBar {
+  position: sticky;
+  top: 10px;
+  z-index: 230;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+  border-radius: 16px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 90%, transparent);
+  box-shadow: 0 14px 40px rgba(2, 6, 23, 0.12);
+  backdrop-filter: blur(16px) saturate(1.06);
+}
+
+.librarySelectionBar strong {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.librarySelectionBar span {
+  margin-right: auto;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.librarySelectionBar .miniButton {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.librarySelectionBar > .miniButton,
+.libraryBatchMenuWrap {
+  flex: 0 0 176px;
+}
+
+.libraryBatchMenuWrap {
+  position: relative;
+  display: inline-grid;
+}
+
+.libraryBatchMenuWrap > .miniButton {
+  width: 100%;
+}
+
+.libraryBatchMenuWrap .libraryQuickMenu {
+  left: 0;
+  right: auto;
+  top: calc(100% + 6px);
+  width: 134px;
+  z-index: 245;
+  border-color: var(--app-line-strong);
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.libraryBatchMenuWrap:hover .libraryQuickMenu,
+.libraryBatchMenuWrap:focus-within .libraryQuickMenu {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.appShell .libraryGridV2.view-adaptive .libraryThumb,
+.appShell .libraryGridV2.view-adaptive .libraryFailedThumb {
+  aspect-ratio: 4 / 3;
+  height: auto;
+  min-height: 0;
+}
+
+.appShell .libraryGridV2.view-square .libraryThumb,
+.appShell .libraryGridV2.view-square .libraryFailedThumb {
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1;
+}
+
+.appShell .libraryGridV2.view-contain .libraryThumb,
+.appShell .libraryGridV2.view-contain .libraryFailedThumb {
+  aspect-ratio: 4 / 3;
+  height: auto;
+  min-height: 0;
+  background: var(--app-surface-2);
+}
+
+.appShell .libraryGridV2.view-contain .libraryThumb img {
+  object-fit: contain;
+  padding: 6px;
+}
+
+.appShell .libraryGridV2.view-masonry .libraryThumb,
+.appShell .libraryGridV2.view-masonry .libraryFailedThumb {
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 4 / 3;
+}
+
+.appShell .libraryGridV2.view-masonry .libraryCardV2:nth-child(3n + 1) .libraryThumb {
+  aspect-ratio: 1 / 1.18;
+}
+
+.appShell .libraryGridV2.view-masonry .libraryCardV2:nth-child(3n + 2) .libraryThumb {
+  aspect-ratio: 4 / 5;
+}
+
+.appShell .libraryGridV2.view-list .libraryCardV2 {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr) 84px;
+  align-items: stretch;
+  min-height: 148px;
+  overflow: visible;
+}
+
+.appShell .libraryGridV2.view-list .libraryThumb,
+.appShell .libraryGridV2.view-list .libraryFailedThumb {
+  grid-column: 1;
+  grid-row: 1;
+  height: 100%;
+  min-height: 148px;
+}
+
+.libraryImageOverlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 30;
+  display: inline-flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.libraryCardV2:hover .libraryImageOverlay,
+.libraryCardV2:focus-within .libraryImageOverlay {
+  opacity: 1;
+}
+
+.appShell .libraryGridV2:not(.view-list) .libraryImageOverlay {
+  opacity: 1;
+}
+
+.appShell .libraryGridV2:not(.view-list) .libraryImageOverlay .iconMiniButton {
+  width: 30px;
+  height: 30px;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(2, 6, 23, 0.48);
+  box-shadow: none;
+  backdrop-filter: blur(10px) saturate(1.08);
+}
+
+.appShell .libraryGridV2:not(.view-list) .libraryImageOverlay .iconMiniButton:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.36);
+  background: rgba(2, 6, 23, 0.64);
+}
+
+.appShell .libraryGridV2:not(.view-list) .libraryImageOverlay .favoriteButton.active {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.48);
+  background: rgba(120, 53, 15, 0.56);
+}
+
+.favoriteButton.active,
+.miniButton.active {
+  color: #f59e0b;
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--app-line));
+  background: color-mix(in srgb, #f59e0b 12%, var(--app-surface-2));
+}
+
+.miniButton.danger {
+  color: #e11d48;
+}
+
+.appShell .libraryCardV2 .libraryCardBody {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  min-height: 0;
+  display: none;
+  gap: 3px;
+  padding: 22px 8px 8px;
+  color: #ffffff;
+  background: linear-gradient(180deg, transparent, rgba(2, 6, 23, 0.38) 30%, rgba(2, 6, 23, 0.72));
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  pointer-events: none;
+}
+
+.appShell .libraryCardV2:hover .libraryCardBody,
+.appShell .libraryCardV2:focus-within .libraryCardBody {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.appShell .libraryCardV2 .resultTitleRow {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px;
+  align-items: center;
+}
+
+.appShell .libraryCardV2 .resultTitleRow strong,
+.appShell .libraryCardV2 .libraryCardBody p,
+.appShell .libraryCardV2 .metadataRow span {
+  color: #ffffff;
+}
+
+.appShell .libraryCardV2 .resultTitleRow strong {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.appShell .libraryCardV2 .libraryCardBody p {
+  min-height: 0;
+  max-height: 20px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  line-height: 20px;
+  -webkit-line-clamp: 1;
+}
+
+.appShell .libraryCardV2 .metadataRow {
+  min-height: 0;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.appShell .libraryCardV2 .metadataRow span {
+  border: 0;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.72);
+  background: transparent;
+}
+
+.appShell .libraryCardV2 .statusBadge {
+  min-height: 18px;
+  padding: 0 7px;
+  color: rgba(255, 255, 255, 0.82);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.appShell .libraryGridV2.view-square .libraryCardV2 .libraryCardBody {
+  padding-top: 18px;
+}
+
+.appShell .libraryGridV2.view-square .libraryCardV2 .metadataRow {
+  display: none;
+}
+
+.appShell .libraryGridV2.view-contain .libraryCardV2 .libraryCardBody {
+  padding-top: 18px;
+}
+
+.appShell .libraryGridV2.view-masonry .libraryCardV2 .libraryCardBody {
+  padding-top: 20px;
+}
+
+.appShell .libraryGridV2.view-masonry .libraryCardV2:nth-child(3n + 1) .metadataRow {
+  display: none;
+}
+
+.appShell .libraryCardV2 .statusBadge.succeeded {
+  color: #bbf7d0;
+  background: rgba(16, 185, 129, 0.22);
+}
+
+.appShell .libraryCardV2 .statusBadge.failed {
+  color: #fecdd3;
+  background: rgba(244, 63, 94, 0.22);
+}
+
+.libraryMoreMenuWrap {
+  position: relative;
+  display: inline-grid;
+}
+
+.libraryQuickMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  z-index: 20;
+  width: 148px;
+  display: grid;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-surface) 96%, transparent);
+  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.2);
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.libraryMoreMenuWrap:hover .libraryQuickMenu,
+.libraryMoreMenuWrap:focus-within .libraryQuickMenu {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.libraryQuickMenu button {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 7px;
+  color: var(--app-text-2);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 850;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.libraryQuickMenu button svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+}
+
+.libraryQuickMenu button:hover:not(:disabled) {
+  color: var(--app-text);
+  background: var(--app-surface-2);
+}
+
+.libraryQuickMenu button.dangerAction {
+  color: #be123c;
+}
+
+.libraryQuickMenu button.dangerAction:hover {
+  color: #e11d48;
+  background: rgba(225, 29, 72, 0.08);
+}
+
+.libraryQuickMenu button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.libraryMenuDivider {
+  display: block;
+  height: 1px;
+  margin: 3px 4px;
+  background: var(--app-line);
+}
+
+.libraryContextMenu {
+  position: fixed;
+  z-index: 750;
+  width: 176px;
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 14px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  box-shadow: 0 18px 54px rgba(2, 6, 23, 0.2);
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+.libraryContextMenuHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 1px 1px 3px 7px;
+  color: var(--app-text);
+  font-size: 12px;
+}
+
+.libraryContextMenuHeader .iconMiniButton {
+  width: 24px;
+  height: 24px;
+}
+
+.libraryContextMenu > button {
+  width: 100%;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 0 8px;
+  color: var(--app-text-2);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 850;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.libraryContextMenu > button svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.libraryContextMenu > button:hover:not(:disabled) {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 24%, transparent);
+  background: color-mix(in srgb, var(--app-accent-strong) 9%, var(--app-surface-2));
+}
+
+.libraryContextMenu > button.dangerAction {
+  color: #be123c;
+}
+
+.libraryContextMenu > button.dangerAction:hover:not(:disabled) {
+  color: #e11d48;
+  border-color: rgba(225, 29, 72, 0.2);
+  background: rgba(225, 29, 72, 0.08);
+}
+
+.libraryContextMenu > button:disabled {
+  cursor: not-allowed;
+  opacity: .48;
+}
+
+.libraryContextMenu > .libraryMenuDivider {
+  margin: 3px 4px;
+}
+
+.appShell .libraryGridV2.view-list .libraryImageOverlay {
+  grid-column: 3;
+  grid-row: 1;
+  position: static;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  opacity: 1;
+  border-left: 1px solid var(--app-line);
+  background: color-mix(in srgb, var(--app-surface-2) 72%, transparent);
+}
+
+.appShell .libraryGridV2.view-list .libraryCardBody {
+  grid-column: 2;
+  grid-row: 1;
+  position: static;
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 9px;
+  padding: 14px 16px;
+  color: var(--app-text);
+  background: transparent;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.appShell .libraryGridV2.view-list .libraryCardBody p {
+  max-height: 40px;
+  color: var(--app-text-2);
+  font-size: 13px;
+  line-height: 20px;
+  -webkit-line-clamp: 2;
+}
+
+.appShell .libraryGridV2.view-list .resultTitleRow {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.appShell .libraryGridV2.view-list .resultTitleRow strong,
+.appShell .libraryGridV2.view-list .metadataRow span {
+  color: var(--app-text);
+}
+
+.appShell .libraryGridV2.view-list .metadataRow span {
+  color: var(--app-muted);
+}
+
+.appShell .libraryGridV2.view-list .statusBadge {
+  color: var(--app-text-2);
+  border-color: var(--app-line);
+  background: var(--app-surface-2);
+}
+
+.appShell .libraryGridV2.view-list .statusBadge.succeeded {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.appShell .libraryGridV2.view-list .statusBadge.failed {
+  color: #be123c;
+  background: rgba(244, 63, 94, 0.12);
+}
+
+.appShell .libraryGridV2.view-list .libraryMoreMenuWrap {
+  position: static;
+}
+
+.appShell .libraryGridV2.view-list .libraryQuickMenu {
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+}
+
+.appShell .libraryGridV2.view-list .libraryMoreMenuWrap:hover .libraryQuickMenu,
+.appShell .libraryGridV2.view-list .libraryMoreMenuWrap:focus-within .libraryQuickMenu {
+  transform: translateY(-50%) translateX(0);
+}
+
+.libraryFloatingDock {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 740;
+  width: min(860px, calc(100vw - 44px));
+  display: grid;
+  gap: 8px;
+  align-items: end;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.libraryFloatingDock > * {
+  pointer-events: auto;
+}
+
+.libraryDockBar {
+  display: grid;
+  grid-template-columns: auto auto minmax(220px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-surface) 92%, transparent);
+  box-shadow: 0 18px 55px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.libraryFloatingDock.collapsed .libraryDockBar {
+  grid-template-columns: auto auto auto auto;
+  justify-content: center;
+}
+
+.libraryDockIcon,
+.libraryDockAdd,
+.libraryDockRestore {
+  position: relative;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--app-line);
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+}
+
+.libraryDockIcon {
+  width: 38px;
+  border-radius: 999px;
+}
+
+.libraryDockAdd {
+  width: 42px;
+  border-radius: 999px;
+  color: #fff;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 50%, var(--app-line));
+  background: var(--app-accent-strong);
+}
+
+.libraryDockIcon:hover,
+.libraryDockIcon.active,
+.libraryDockRestore:hover,
+.libraryDockAdd:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+}
+
+.libraryDockIcon.active {
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-accent-strong) 12%, var(--app-surface-2));
+}
+
+.libraryDockIcon span {
+  position: absolute;
+  right: -2px;
+  top: -4px;
+  min-width: 16px;
+  height: 16px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: #e11d48;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.libraryDockSearch input {
+  width: 100%;
+  height: 38px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  padding: 0 16px;
+  color: var(--app-text);
+  background: var(--app-surface);
+  outline: none;
+}
+
+.libraryDockSearch input:focus {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 48%, var(--app-line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent-strong) 13%, transparent);
+}
+
+.libraryDockRestore {
+  min-width: 120px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.libraryDockPanel {
+  justify-self: start;
+  width: min(218px, calc(100vw - 44px));
+  max-height: min(390px, calc(100vh - 170px));
+  display: grid;
+  gap: 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 15px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  box-shadow: 0 18px 54px rgba(2, 6, 23, 0.19);
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+.libraryDockPanel.dockAlignEnd {
+  justify-self: end;
+}
+
+.libraryDockPanel.dockPanel-add {
+  max-height: min(390px, calc(100vh - 170px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+.libraryDockPanel.dockPanel-display {
+  width: min(218px, calc(100vw - 44px));
+}
+
+.libraryDockPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 1px 1px 3px 3px;
+  color: var(--app-text);
+  font-size: 12px;
+}
+
+.libraryDisplayList label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  justify-content: flex-start;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.libraryDisplayList label input {
+  width: 14px !important;
+  min-width: 14px;
+  height: 14px !important;
+  flex: 0 0 14px;
+  margin: 0;
+  padding: 0;
+  border-radius: 3px;
+  accent-color: var(--app-accent-strong);
+}
+
+.libraryDisplayList label {
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--app-line);
+  border-radius: 9px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface) 58%, transparent);
+  backdrop-filter: blur(10px) saturate(1.04);
+  font-size: 12px;
+  font-weight: 850;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.librarySegmentGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  min-width: 0;
+}
+
+.librarySegmentGrid button {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  border: 1px solid var(--app-line);
+  border-radius: 9px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface) 58%, transparent);
+  backdrop-filter: blur(10px) saturate(1.04);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.librarySegmentGrid button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  padding: 0 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.librarySegmentGrid button svg,
+.libraryMainMenuGrid button svg,
+.libraryAddList button svg {
+  flex: 0 0 auto;
+}
+
+.librarySegmentGrid button.active,
+.librarySegmentGrid button:hover,
+.libraryMainMenuGrid button:hover,
+.libraryAddList button:hover {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 9%, var(--app-surface-2));
+  backdrop-filter: blur(10px) saturate(1.04);
+}
+
+.libraryDisplayList {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  min-width: 0;
+}
+
+.libraryMainMenuGrid,
+.libraryAddList {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  min-width: 0;
+}
+
+.libraryMainMenuGrid button,
+.libraryAddList button {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid var(--app-line);
+  border-radius: 9px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface) 58%, transparent);
+  backdrop-filter: blur(10px) saturate(1.04);
+  font-size: 12px;
+  font-weight: 850;
+  overflow: hidden;
+}
+
+.libraryMainMenuGrid button span,
+.libraryAddList button span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.libraryMainMenuGrid button.menuHasChild {
+  padding-right: 7px;
+}
+
+.libraryMainMenuGrid button .menuChevron {
+  margin-left: auto;
+  color: var(--app-muted);
+}
+
+.libraryMainMenuGrid button:hover .menuChevron {
+  color: var(--app-text);
+}
+
+.libraryDetailBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 755;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.libraryDetailDrawer {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  bottom: 18px;
+  z-index: 760;
+  width: min(420px, calc(100vw - 36px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, auto) auto;
+  align-content: start;
+  gap: 14px;
+  overflow-y: auto;
+  padding: 18px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 24px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  box-shadow: 0 26px 90px rgba(2, 6, 23, 0.28);
+  backdrop-filter: blur(22px) saturate(1.08);
+}
+
+.libraryDetailHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.libraryDetailTitle {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.libraryDetailHeader h2 {
+  margin: 2px 0 0;
+  font-size: 20px;
+  letter-spacing: 0;
+}
+
+.libraryDetailTitle small {
+  max-width: 250px;
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 780;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.libraryDetailHeaderActions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.libraryRatingControl {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  min-height: 28px;
+  padding: 2px 5px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-surface) 70%, transparent);
+  backdrop-filter: blur(10px) saturate(1.04);
+}
+
+.libraryRatingControl button {
+  width: 23px;
+  height: 23px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  color: color-mix(in srgb, var(--app-muted) 82%, transparent);
+  background: transparent;
+}
+
+.libraryRatingControl button:hover,
+.libraryRatingControl button.active {
+  color: #f5b82e;
+  background: color-mix(in srgb, #f5b82e 12%, transparent);
+}
+
+.libraryDetailPreview {
+  position: relative;
+  width: 100%;
+  max-height: 300px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: var(--app-surface-2);
+}
+
+.libraryDetailPreviewImageButton {
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.libraryDetailPreview img {
+  max-width: 100%;
+  max-height: 300px;
+  display: block;
+  object-fit: contain;
+}
+
+.libraryDetailImageMetaOverlay {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  max-width: calc(100% - 20px);
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 4px;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.libraryDetailImageMetaOverlay > span {
+  min-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.78);
+  background: rgba(2, 6, 23, 0.42);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.12);
+  backdrop-filter: blur(10px) saturate(1.05);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.libraryDetailOrganizerSection {
+  display: grid;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--app-surface-2) 78%, transparent);
+}
+
+.libraryDetailOrganizerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.libraryDetailOrganizerHeader strong {
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 880;
+}
+
+.libraryDetailOrganizerHeader > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.libraryDetailOrganizerHeader .iconMiniButton {
+  width: 28px;
+  height: 28px;
+}
+
+.libraryDetailOrganizerChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.libraryDetailOrganizerChips button,
+.libraryDetailOrganizerChips > span {
+  max-width: 100%;
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  padding: 0 9px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface) 70%, transparent);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.libraryDetailOrganizerChips button:hover {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+}
+
+.libraryDetailOrganizerChips > span {
+  color: var(--app-muted);
+}
+
+.libraryDetailOrganizerChips button span:last-child,
+.libraryDetailOrganizerChips > span span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.libraryDetailColorSection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--app-surface-2) 78%, transparent);
+}
+
+.libraryDetailColorSection > span {
+  flex: 0 0 auto;
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 880;
+}
+
+.libraryDetailColorSection .libraryColorPalette {
+  justify-content: flex-end;
+}
+
+.libraryAutoColorPalette {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.libraryAutoColorPalette span {
+  width: 22px;
+  height: 22px;
+  display: block;
+  border: 2px solid color-mix(in srgb, var(--app-surface) 86%, transparent);
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 1px var(--app-line),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.libraryDetailColorSection small {
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.libraryDetailMissing {
+  display: grid;
+  place-items: center;
+  min-height: 180px;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  color: var(--app-muted);
+  background: var(--app-surface-2);
+}
+
+.libraryDetailActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.libraryDetailActions .miniButton {
+  justify-content: center;
+}
+
+.libraryDetailSection {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 16px;
+  background: var(--app-surface-2);
+}
+
+.libraryDetailSection.warning {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.libraryDetailSection p {
+  margin: 0;
+  color: var(--app-text-2);
+  font-size: 13px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.libraryDetailSection.promptDetailSection {
+  min-height: 0;
+}
+
+.libraryDetailSection.promptDetailSection p {
+  max-height: min(300px, 36vh);
+  overflow: auto;
+}
+
 @media (max-width: 1280px) {
   .libraryFilterRow {
     grid-template-columns: 1fr;
@@ -6684,6 +9509,11 @@ body {
   .libraryToolbar .libraryInsightGrid.compact {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .libraryStructuredFilters {
+    grid-template-columns: repeat(4, minmax(104px, 156px)) auto;
+  }
+
 }
 
 @media (max-width: 720px) {
@@ -6698,6 +9528,75 @@ body {
 
   .libraryToolbar .libraryInsightGrid.compact {
     grid-template-columns: 1fr;
+  }
+
+  .appShell .libraryGridV2,
+  .appShell .libraryGridV2.view-list {
+    grid-template-columns: 1fr;
+  }
+
+  .appShell .libraryGridV2.view-list .libraryCardV2 {
+    grid-template-columns: 1fr;
+  }
+
+  .libraryInlineFilters {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .libraryOrganizer {
+    left: 11px;
+    top: 82px;
+    width: calc(100vw - 22px);
+    max-height: calc(100vh - 154px);
+  }
+
+  .libraryOrganizerBackdrop {
+    left: 0;
+  }
+
+  .libraryStructuredFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .libraryStructuredFilters > label,
+  .libraryInlineFilters .toggleRow,
+  .libraryInlineFilters .miniButton,
+  .libraryQuickFilters,
+  .libraryActiveFilters {
+    width: 100%;
+  }
+
+  .libraryFloatingDock {
+    bottom: 12px;
+    width: calc(100vw - 22px);
+  }
+
+  .libraryDockPanel,
+  .libraryDockPanel.dockPanel-add {
+    width: min(218px, calc(100vw - 22px));
+  }
+
+  .libraryDockPanel.dockPanel-display {
+    width: min(218px, calc(100vw - 22px));
+  }
+
+  .libraryDockBar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    border-radius: 24px;
+  }
+
+  .librarySegmentGrid,
+  .libraryMainMenuGrid,
+  .libraryDisplayList,
+  .libraryAddList,
+  .libraryDetailActions {
+    grid-template-columns: 1fr;
+  }
+
+  .libraryDetailDrawer {
+    inset: 10px;
+    width: auto;
   }
 }
 
@@ -7115,7 +10014,6 @@ body {
   padding: 14px;
 }
 .assetCardBody p { -webkit-line-clamp: 3; }
-.inspirationNotice { margin-bottom: 0; }
 
 @media (max-width: 1180px) {
   .inspirationLayout { grid-template-columns: 1fr; }
@@ -7152,6 +10050,119 @@ body {
   overflow: hidden;
 }
 
+.providerAccessLayout .providerHero {
+  align-items: flex-start;
+}
+
+.providerAccessLayout .providerHero > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.providerAccessLayout .providerAccessControls {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.providerAccessLayout .providerAccessControls > div,
+.providerAccessLayout .providerAccessControls > label {
+  min-width: 0;
+}
+
+.providerAccessLayout .providerAccessControls small {
+  display: block;
+  margin-top: 7px;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.providerAccessLayout .providerTypeSwitch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--app-line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--app-surface-2) 76%, transparent);
+}
+
+.providerAccessLayout .providerTypeSwitch button {
+  min-width: 0;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+
+.providerAccessLayout .providerTypeSwitch button.active {
+  color: #06211f;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 72%, #ffffff);
+  background:
+    linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--app-accent-strong) 78%, #ffffff));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--app-accent-strong) 24%, transparent),
+    0 10px 24px color-mix(in srgb, var(--app-accent-strong) 18%, transparent);
+}
+
+.providerAccessLayout .serviceStatusBadge {
+  align-self: start;
+  justify-self: end;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--app-line);
+  color: var(--app-text-2);
+  background: var(--app-surface);
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.providerAccessLayout .serviceStatusBadge.connected {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.providerAccessLayout .serviceStatusBadge.configurable {
+  color: #2563eb;
+  background: rgba(59, 130, 246, 0.13);
+}
+
+.providerAccessLayout .serviceStatusBadge.planned {
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.providerAccessLayout .serviceStatusBadge.local-plan {
+  color: #6d28d9;
+  background: rgba(124, 58, 237, 0.13);
+}
+
+.providerAccessLayout .serviceTemplateNotes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.providerAccessLayout .serviceTemplateNotes span {
+  padding: 7px 9px;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface) 76%, transparent);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .providerAccessLayout .settingsPanel {
   overflow-y: auto;
 }
@@ -7172,6 +10183,42 @@ body {
 .providerAccessLayout .studioSelect.open .studioSelectButton {
   border-color: color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-line-strong));
   background: color-mix(in srgb, var(--app-accent-strong) 5%, var(--app-surface));
+}
+
+.providerAccessLayout .studioSelectMenu {
+  animation: none;
+}
+
+.providerAccessLayout .studioSelectMenu button,
+.providerAccessLayout .studioSelectMenu button:hover,
+.providerAccessLayout .studioSelectMenu button.active {
+  transform: none;
+}
+
+.providerAccessLayout .studioSelectMenu button.active svg {
+  color: #38d7c4;
+  stroke: #38d7c4;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 5px rgba(56, 215, 196, 0.5));
+}
+
+.appShell.theme-dark .providerAccessLayout .studioSelectValue small,
+.theme-dark .providerAccessLayout .studioSelectValue small,
+.appShell.theme-dark .providerAccessLayout .studioSelectOptionText small,
+.theme-dark .providerAccessLayout .studioSelectOptionText small {
+  color: #c7d2fe;
+}
+
+.appShell.theme-dark .providerAccessLayout .studioSelectMenu button.active,
+.theme-dark .providerAccessLayout .studioSelectMenu button.active {
+  color: #f8fbff;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 34%, rgba(255, 255, 255, 0.14));
+  background: color-mix(in srgb, var(--app-accent-strong) 16%, rgba(15, 23, 42, 0.96));
+}
+
+.appShell.theme-dark .providerAccessLayout .studioSelectMenu button.active small,
+.theme-dark .providerAccessLayout .studioSelectMenu button.active small {
+  color: #dbeafe !important;
 }
 
 .providerAccessLayout .profileList {
@@ -7231,6 +10278,19 @@ body {
   background: color-mix(in srgb, var(--app-accent-strong) 11%, var(--app-surface-2));
 }
 
+.providerAccessLayout .profileCard.selected {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 70%, rgba(255, 255, 255, 0.18));
+  background: color-mix(in srgb, var(--app-accent-strong) 18%, var(--app-surface-2));
+  box-shadow:
+    inset 3px 0 0 var(--app-accent-strong),
+    0 0 0 1px color-mix(in srgb, var(--app-accent-strong) 20%, transparent);
+}
+
+.providerAccessLayout .profileCard.selected .profileAvatar {
+  background: color-mix(in srgb, var(--app-accent-strong) 72%, var(--app-primary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent-strong) 18%, transparent);
+}
+
 .providerAccessLayout .profileTitleRow strong {
   color: var(--app-text);
 }
@@ -7258,6 +10318,11 @@ body {
   padding: 0 14px;
   border-radius: 14px;
   line-height: 1;
+}
+
+.providerAccessLayout .profileAddButton:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
 }
 
 .providerAccessLayout .profileAddButton svg {
@@ -7616,6 +10681,15 @@ body {
   background: rgba(255, 255, 255, 0.045);
 }
 
+.appShell.theme-dark .providerAccessLayout .profileCard.selected,
+.theme-dark .providerAccessLayout .profileCard.selected {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 72%, rgba(255, 255, 255, 0.2));
+  background: color-mix(in srgb, var(--app-accent-strong) 20%, rgba(255, 255, 255, 0.06));
+  box-shadow:
+    inset 3px 0 0 var(--app-accent-strong),
+    0 0 0 1px color-mix(in srgb, var(--app-accent-strong) 24%, transparent);
+}
+
 .appShell.theme-dark .providerAccessLayout .studioSelectButton,
 .appShell.theme-dark .providerAccessLayout .studioSelectButton:hover,
 .appShell.theme-dark .providerAccessLayout .studioSelect.open .studioSelectButton,
@@ -7763,7 +10837,7 @@ body {
 .appShell .chipButton,
 .appShell .assistTemplateList button,
 .appShell .assistActionRow button,
-.appShell .polishEngineBar button,
+.appShell .polishEngineBar .polishRunButton,
 .appShell .inspirationTabs button {
   box-shadow: none !important;
   transition:
@@ -7777,6 +10851,143 @@ body {
 
 .appShell .profileSwitch span {
   box-shadow: none !important;
+}
+
+.appShell .workspaceGenerate .promptPolishQuickGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.appShell .workspaceGenerate .promptPolishQuickSelect {
+  width: 104px;
+  flex: 0 0 104px;
+}
+
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectButton {
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 0 9px 0 11px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectValue > span {
+  max-width: none;
+}
+
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu {
+  min-width: 148px;
+  max-width: min(220px, 72vw);
+  padding: 6px;
+}
+
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu button {
+  min-height: 34px;
+  border-radius: 10px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectOptionText > span {
+  max-width: none;
+}
+
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu button.active {
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface-2));
+}
+
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu button svg {
+  color: var(--app-accent);
+}
+
+.appShell .polishModelPicker .studioSelectMenu button,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  align-items: center;
+  justify-content: initial;
+  color: var(--app-text-2);
+  background-image: none;
+  transform: none !important;
+}
+
+.appShell .polishModelPicker .noSelectCheck .studioSelectMenu button > svg,
+.appShell .workspaceGenerate .promptPolishQuickSelect.noSelectCheck .studioSelectMenu button > svg {
+  display: none !important;
+}
+
+.appShell .polishModelPicker .studioSelectMenu button:hover,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu button:hover {
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-accent-strong) 9%, var(--app-surface-2));
+  transform: none !important;
+}
+
+.appShell .polishModelPicker .studioSelectMenu button.active,
+.appShell.theme-light .polishModelPicker .studioSelectMenu button.active,
+.appShell.theme-dark .polishModelPicker .studioSelectMenu button.active,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu button.active,
+.appShell.theme-light .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu button.active,
+.appShell.theme-dark .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu button.active {
+  color: var(--app-text);
+  border-color: transparent;
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface-2));
+  transform: none !important;
+}
+
+.appShell .polishModelPicker .studioSelectValue,
+.appShell .polishModelPicker .studioSelectOptionText,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectValue,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectOptionText,
+.appShell .polishModelPicker .studioSelectValue > span,
+.appShell .polishModelPicker .studioSelectOptionText > span,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectValue > span,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectOptionText > span {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none !important;
+}
+
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectButton span,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectButton .studioSelectValue,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectButton .studioSelectValue > span,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu .studioSelectOptionText,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu .studioSelectOptionText > span {
+  min-height: 0;
+  display: block;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  color: inherit;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.appShell .workspaceGenerate .promptPolishDetailButton {
+  width: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 26%, var(--app-line));
+  border-radius: 999px;
+  padding: 0;
+  color: var(--app-text);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--app-accent-strong) 13%, transparent), color-mix(in srgb, var(--app-purple) 10%, transparent)),
+    var(--app-surface-2);
+}
+
+.appShell .polishModelPicker .noSelectCheck .studioSelectMenu button > svg,
+.appShell .workspaceGenerate .promptPolishQuickSelect.noSelectCheck .studioSelectMenu button > svg {
+  display: none !important;
 }
 
 .appShell button:hover:not(:disabled),
@@ -7798,9 +11009,10 @@ body {
 .appShell .referenceAdd:hover,
 .appShell .modeToggle:hover,
 .appShell .chipButton:hover,
+.appShell .workspaceGenerate .promptPolishDetailButton:hover,
 .appShell .assistTemplateList button:hover,
 .appShell .assistActionRow button:hover:not(:disabled),
-.appShell .polishEngineBar button:hover:not(:disabled),
+.appShell .polishEngineBar .polishRunButton:hover:not(:disabled),
 .appShell .inspirationTabs button:hover {
   transform: translateY(-1px);
 }
@@ -7821,6 +11033,56 @@ body {
   outline-offset: 2px;
 }
 
+.appShell.theme-light .workspaceGenerate .promptActions .chipButton:not(.ghostSoon),
+.appShell.theme-light .workspaceGenerate .promptPolishQuickSelect .studioSelectButton,
+.appShell.theme-light .workspaceGenerate .promptPolishDetailButton {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 42%, rgba(15, 23, 42, 0.12)) !important;
+  color: #0f172a !important;
+  background: color-mix(in srgb, var(--app-accent-strong) 13%, #ffffff) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.appShell.theme-dark .workspaceGenerate .promptActions .chipButton:not(.ghostSoon),
+.appShell.theme-dark .workspaceGenerate .promptPolishQuickSelect .studioSelectButton,
+.appShell.theme-dark .workspaceGenerate .promptPolishDetailButton {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 46%, rgba(255, 255, 255, 0.12)) !important;
+  color: #eefcff !important;
+  background: color-mix(in srgb, var(--app-accent-strong) 18%, rgba(13, 18, 31, 0.88)) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectButton,
+.appShell .workspaceGenerate .promptPolishDetailButton {
+  background-image: none !important;
+}
+
+.appShell.theme-light .workspaceGenerate .promptActions .chipButton:not(.ghostSoon):hover,
+.appShell.theme-light .workspaceGenerate .promptPolishQuickSelect .studioSelectButton:hover,
+.appShell.theme-light .workspaceGenerate .promptPolishQuickSelect.open .studioSelectButton,
+.appShell.theme-light .workspaceGenerate .promptPolishDetailButton:hover,
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectButton:hover,
+.appShell .workspaceGenerate .promptPolishQuickSelect.open .studioSelectButton,
+.appShell .workspaceGenerate .promptPolishDetailButton:hover {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 52%, rgba(15, 23, 42, 0.12)) !important;
+  color: #0f172a !important;
+  background: color-mix(in srgb, var(--app-accent-strong) 18%, #ffffff) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.appShell.theme-dark .workspaceGenerate .promptActions .chipButton:not(.ghostSoon):hover,
+.appShell.theme-dark .workspaceGenerate .promptPolishQuickSelect .studioSelectButton:hover,
+.appShell.theme-dark .workspaceGenerate .promptPolishQuickSelect.open .studioSelectButton,
+.appShell.theme-dark .workspaceGenerate .promptPolishDetailButton:hover {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 56%, rgba(255, 255, 255, 0.12)) !important;
+  color: #eefcff !important;
+  background: color-mix(in srgb, var(--app-accent-strong) 24%, rgba(13, 18, 31, 0.88)) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
 .appShell .workspaceGenerate .resolutionList {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -7830,4 +11092,731 @@ body {
   width: 0;
   height: 0;
   display: none;
+}
+
+/* Final Gallery V2 and tooltip refinement pass. */
+.appShell {
+  --sidebar-current-width: 272px;
+}
+
+.appShell.sidebarCollapsed {
+  --sidebar-current-width: 96px;
+}
+
+.appShell .workspace {
+  position: relative;
+  z-index: 1;
+}
+
+.appShell .sidebar {
+  z-index: 3000;
+  overflow: visible;
+}
+
+.appShell .sidebarFooter,
+.appShell.sidebarCollapsed .navGroup,
+.appShell.sidebarCollapsed .navItem,
+.appShell.sidebarCollapsed .themeToggle,
+.appShell.sidebarCollapsed .sidebarCollapseButton {
+  z-index: 3010;
+}
+
+.appShell .libraryImageOverlay [data-tooltip]::after,
+.appShell .libraryDockBar [data-tooltip]::after,
+.appShell .libraryDockPanelHeader [data-tooltip]::after,
+.workspaceGenerate [data-tooltip]::after {
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(2px);
+}
+
+.appShell .libraryImageOverlay [data-tooltip]:hover::after,
+.appShell .libraryDockBar [data-tooltip]:hover::after,
+.appShell .libraryDockPanelHeader [data-tooltip]:hover::after,
+.workspaceGenerate [data-tooltip]:hover::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+.appShell .settingsHeaderActions [data-tooltip]::after,
+.appShell .utilityModalHeader [data-tooltip]::after,
+.appShell .previewToolbar [data-tooltip]::after,
+.appShell .libraryDetailHeader [data-tooltip]::after {
+  left: 50%;
+  right: auto;
+  top: calc(100% + 10px);
+  bottom: auto;
+  z-index: 9999;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.appShell .previewToolbar button:last-child::after,
+.appShell .libraryDetailHeader [data-tooltip]::after,
+.appShell .settingsHeaderActions button:last-child::after,
+.appShell .utilityModalHeader button:last-child::after {
+  left: auto;
+  right: 0;
+  transform: translateY(-2px);
+}
+
+.appShell .settingsHeaderActions [data-tooltip]:hover::after,
+.appShell .settingsHeaderActions [data-tooltip]:focus-visible::after,
+.appShell .utilityModalHeader [data-tooltip]:hover::after,
+.appShell .utilityModalHeader [data-tooltip]:focus-visible::after,
+.appShell .previewToolbar [data-tooltip]:hover::after,
+.appShell .previewToolbar [data-tooltip]:focus-visible::after,
+.appShell .libraryDetailHeader [data-tooltip]:hover::after,
+.appShell .libraryDetailHeader [data-tooltip]:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+.appShell .previewToolbar button:last-child:hover::after,
+.appShell .previewToolbar button:last-child:focus-visible::after,
+.appShell .libraryDetailHeader [data-tooltip]:hover::after,
+.appShell .libraryDetailHeader [data-tooltip]:focus-visible::after,
+.appShell .settingsHeaderActions button:last-child:hover::after,
+.appShell .settingsHeaderActions button:last-child:focus-visible::after,
+.appShell .utilityModalHeader button:last-child:hover::after,
+.appShell .utilityModalHeader button:last-child:focus-visible::after {
+  transform: translateY(0);
+}
+
+.appShell .sidebarFooter [data-tooltip]::after,
+.appShell.sidebarCollapsed .navItem::after,
+.appShell.sidebarCollapsed .themeToggle::after,
+.appShell.sidebarCollapsed .sidebarCollapseButton::after {
+  z-index: 9999;
+}
+
+.appShell:not(.sidebarCollapsed) .navItem::after {
+  display: none;
+}
+
+.appShell:not(.sidebarCollapsed) .sidebarFooter .themeToggle::after,
+.appShell:not(.sidebarCollapsed) .sidebarFooter .sidebarCollapseButton::after {
+  display: none;
+}
+
+.appShell .settingsListRow .themeSegment {
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.toastViewport {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 1900;
+  max-width: calc(100vw - 44px);
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.appToast {
+  width: fit-content;
+  max-width: min(340px, calc(100vw - 44px));
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 8px minmax(max-content, 1fr) 26px;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 9px 9px 12px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 14px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 93%, transparent);
+  box-shadow: 0 18px 50px rgba(2, 6, 23, 0.2);
+  backdrop-filter: blur(18px) saturate(1.08);
+  pointer-events: auto;
+  animation: toastIn 0.18s ease-out both;
+}
+
+.appToast > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--app-accent-strong);
+}
+
+.appToast p {
+  min-width: 0;
+  max-width: 240px;
+  max-height: 42px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.appToast button {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  color: var(--app-muted);
+  background: transparent;
+}
+
+.appToast button:hover {
+  color: var(--app-text);
+  background: var(--app-surface-2);
+}
+
+.appToast.success > span {
+  background: #10b981;
+}
+
+.appToast.warning > span {
+  background: #f59e0b;
+}
+
+.appToast.error > span {
+  background: #e11d48;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.confirmBackdrop {
+  left: var(--sidebar-current-width);
+  z-index: 2600;
+  place-items: center;
+  padding: clamp(18px, 4vw, 42px);
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--app-accent-strong) 18%, transparent), transparent 32%),
+    rgba(2, 6, 23, 0.52);
+}
+
+.appShell.sidebarCollapsed .confirmBackdrop {
+  left: var(--sidebar-current-width);
+}
+
+.confirmDialog {
+  width: min(420px, 100%);
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 22px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.34);
+  backdrop-filter: blur(22px) saturate(1.08);
+  animation: confirmIn 0.16s ease-out both;
+}
+
+.confirmIconWrap {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, #ef4444 32%, var(--app-line));
+  border-radius: 15px;
+  color: #fecdd3;
+  background: color-mix(in srgb, #ef4444 14%, var(--app-surface-2));
+}
+
+.confirmContent {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.confirmContent .eyebrow {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 10px;
+}
+
+.confirmContent h2 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.confirmContent p {
+  margin: 0;
+  color: var(--app-text-2);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.confirmError {
+  display: block;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #ef4444 28%, var(--app-line));
+  border-radius: 12px;
+  color: #fecdd3;
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+  line-height: 1.5;
+}
+
+.confirmActions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 4px;
+}
+
+.confirmActions button {
+  min-width: 82px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  padding: 0 13px;
+  font-size: 12px;
+  font-weight: 860;
+}
+
+.confirmCancelButton {
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+}
+
+.confirmCancelButton:hover:not(:disabled) {
+  color: var(--app-text);
+  border-color: var(--app-line-strong);
+}
+
+.confirmPrimaryButton {
+  color: #07101c;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 54%, transparent);
+  background: var(--app-accent-strong);
+}
+
+.confirmPrimaryButton.danger {
+  color: #fff;
+  border-color: color-mix(in srgb, #ef4444 68%, transparent);
+  background: linear-gradient(135deg, #ef4444, #f43f5e);
+}
+
+.confirmActions button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.appShell.theme-light .confirmBackdrop {
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--app-accent-strong) 14%, transparent), transparent 32%),
+    rgba(15, 23, 42, 0.22);
+}
+
+.appShell.theme-light .confirmDialog {
+  background: color-mix(in srgb, #ffffff 92%, transparent);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.2);
+}
+
+.appShell.theme-light .confirmIconWrap {
+  color: #dc2626;
+  background: rgba(254, 226, 226, 0.78);
+}
+
+.appShell.theme-light .confirmError {
+  color: #be123c;
+  background: rgba(254, 226, 226, 0.74);
+}
+
+.organizerDialogBackdrop {
+  left: var(--sidebar-current-width);
+  z-index: 2580;
+  place-items: center;
+  padding: clamp(18px, 4vw, 42px);
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--app-accent-strong) 16%, transparent), transparent 32%),
+    rgba(2, 6, 23, 0.48);
+}
+
+.organizerDialog {
+  width: min(390px, 100%);
+  display: grid;
+  gap: 13px;
+  padding: 18px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 22px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.32);
+  backdrop-filter: blur(22px) saturate(1.08);
+  animation: confirmIn 0.16s ease-out both;
+}
+
+.organizerDialog header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.organizerDialog .eyebrow,
+.organizerDialog h2,
+.organizerDialog p {
+  margin: 0;
+}
+
+.organizerDialog h2 {
+  color: var(--app-text);
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.organizerDialog label {
+  display: grid;
+  gap: 7px;
+}
+
+.organizerDialog label span {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.organizerDialog input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  padding: 0 12px;
+  color: var(--app-text);
+  background: var(--app-surface-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  outline: none;
+}
+
+.organizerDialog input:focus {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 44%, var(--app-line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent-strong) 12%, transparent);
+}
+
+.organizerDialog > p {
+  color: var(--app-text-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.organizerDialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.organizerDialogActions button {
+  min-width: 82px;
+  min-height: 34px;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  padding: 0 13px;
+  font-size: 12px;
+  font-weight: 860;
+}
+
+.assignDialog {
+  width: min(360px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 20px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  box-shadow: 0 28px 90px rgba(2, 6, 23, 0.32);
+  backdrop-filter: blur(22px) saturate(1.08);
+  animation: confirmIn 0.16s ease-out both;
+}
+
+.assignDialog header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.assignDialog .eyebrow,
+.assignDialog h2,
+.assignDialog p {
+  margin: 0;
+}
+
+.assignDialog h2 {
+  color: var(--app-text);
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.assignDialog header span {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.assignDialogList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.assignDialogList button,
+.assignDialogCreate {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--app-line);
+  border-radius: 11px;
+  padding: 0 10px;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+  font-size: 12px;
+  font-weight: 850;
+  text-align: left;
+}
+
+.assignDialogList button span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assignDialogList button em {
+  grid-column: 2;
+  color: var(--app-muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.assignDialogList button:hover,
+.assignDialogCreate:hover {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+}
+
+.assignDialogList button.assigned {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 38%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+}
+
+.assignDialogList button:disabled {
+  cursor: default;
+  opacity: 0.76;
+}
+
+.assignDialogList p {
+  padding: 12px;
+  border: 1px dashed var(--app-line);
+  border-radius: 12px;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 780;
+  text-align: center;
+}
+
+.assignDialogCreate {
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-height: 36px;
+  color: var(--app-text);
+}
+
+.appShell.theme-light .organizerDialogBackdrop {
+  background:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--app-accent-strong) 13%, transparent), transparent 32%),
+    rgba(15, 23, 42, 0.2);
+}
+
+.appShell.theme-light .organizerDialog {
+  background: color-mix(in srgb, #ffffff 92%, transparent);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.2);
+}
+
+.appShell.theme-light .assignDialog {
+  background: color-mix(in srgb, #ffffff 92%, transparent);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.2);
+}
+
+@keyframes confirmIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.appShell .themeSettingsRow {
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.appShell .themeSegment {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(86px, auto));
+}
+
+.appShell .themeSegment button {
+  min-width: 0;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.workspaceGenerate .canvasPane {
+  overflow: visible;
+}
+
+.workspaceGenerate .referenceDock {
+  overflow: visible;
+}
+
+.workspaceGenerate .referenceStrip {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  overflow: visible;
+  padding: 8px 2px 20px;
+}
+
+.appShell.theme-light .systemSettingsPage .colorDot.active {
+  border-color: #ffffff !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px #475569 !important;
+}
+
+.appShell.theme-dark .colorDot.active {
+  border-color: #ffffff;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.82),
+    0 0 0 5px color-mix(in srgb, var(--app-accent-strong) 24%, transparent);
+}
+
+.freePlatformLogo {
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.freePlatformLogo span {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.freePlatformLogo img {
+  position: relative;
+  z-index: 1;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+.appShell .libraryFloatingDock {
+  left: calc(var(--sidebar-current-width) + (100vw - var(--sidebar-current-width)) / 2);
+  width: min(860px, calc(100vw - var(--sidebar-current-width) - 44px));
+  max-width: calc(100vw - var(--sidebar-current-width) - 44px);
+}
+
+.appShell .libraryDockBar {
+  width: 100%;
+}
+
+.appShell .libraryActions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.appShell .libraryActions .miniButton {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.appShell .libraryActions .miniButton svg {
+  flex: 0 0 auto;
+}
+
+.appShell .libraryDetailSection {
+  min-height: 0;
+}
+
+.appShell .libraryDetailSection p {
+  max-height: 148px;
+  overflow: auto;
+}
+
+.appShell .libraryDetailSection.promptDetailSection p {
+  max-height: min(320px, 38vh);
+}
+
+.appShell .libraryDetailActions .miniButton {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .appShell .libraryFloatingDock {
+    left: 50%;
+    width: calc(100vw - 22px);
+    max-width: calc(100vw - 22px);
+  }
+}
+
+/* Keep prompt-assist/reuse modal centered in the active workspace, not the full window. */
+.appShell .promptAssistBackdrop {
+  inset: 0 0 0 var(--sidebar-current-width);
+  z-index: 2350;
+  padding: clamp(18px, 4vw, 42px);
+}
+
+.appShell .promptAssistWindow {
+  width: min(1040px, calc(100vw - var(--sidebar-current-width) - 56px));
+  max-width: calc(100vw - var(--sidebar-current-width) - 56px);
+}
+
+@media (max-width: 900px) {
+  .appShell .promptAssistBackdrop {
+    left: 0;
+  }
+
+  .appShell .promptAssistWindow {
+    width: calc(100vw - 28px);
+    max-width: calc(100vw - 28px);
+  }
 }

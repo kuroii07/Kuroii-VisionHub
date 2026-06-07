@@ -18,6 +18,7 @@ keyring = "2"
 reqwest = { version = "0.12", features = ["json", "multipart"] }
 base64 = "0.22"
 tokio = { version = "1", features = ["time"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 
 [features]
 default = ["custom-protocol"]

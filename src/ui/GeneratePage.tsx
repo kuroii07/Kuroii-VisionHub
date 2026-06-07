@@ -1,16 +1,18 @@
 ﻿import {
   ChevronDown,
   Clock3,
+  GalleryHorizontal,
+  History,
   ImagePlus,
   Maximize2,
   PanelRight,
-  ArrowLeft,
-  ArrowRight,
+  RotateCcw,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   Trash2,
   Upload,
+  Wand2,
   XCircle
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -24,8 +26,10 @@ import type {
   ReviewMode
 } from '../services/appSettings';
 import type { GenerationMode, ReferenceImage } from '../domain/providerTypes';
-import type { PromptAssistMode } from '../services/promptAssist';
-import type { OpenAICompatibleConfig } from '../services/providerConfig';
+import { getDefaultPolishMode, polishPrompt, resolvePolishMode, type PromptAssistMode } from '../services/promptAssist';
+import { polishPromptWithProvider } from '../services/desktopApi';
+import { PROMPT_POLISH_SECRET_ID } from '../services/appSettings';
+import { parseExtraHeaders, type OpenAICompatibleConfig } from '../services/providerConfig';
 import { useStudioStore } from '../store/useStudioStore';
 import { PromptAssistModal } from './PromptAssistModal';
 import { StudioSelect } from './StudioSelect';
@@ -92,6 +96,14 @@ const SIZE_OPTIONS: SizeOption[] = [
   { value: '2560x3200', ratio: '4:5', desc: '4K 竖版实验尺寸', badge: '4K', experimental: true }
 ];
 
+const REFERENCE_ROLE_OPTIONS = [
+  { value: 'auto', label: '自动' },
+  { value: 'composition', label: '构图' },
+  { value: 'style', label: '风格' },
+  { value: 'character', label: '角色' },
+  { value: 'color', label: '颜色' }
+];
+
 const RATIO_OPTIONS = [
   { label: '1:1', size: '1024x1024', w: 18, h: 18 },
   { label: '16:9', size: '1280x720', w: 24, h: 14 },
@@ -135,15 +147,53 @@ function generationTimeMs(createdAt: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function isPotentialBackgroundCompletion(error?: string) {
-  const message = (error ?? '').toLowerCase();
+function isPotentialBackgroundCompletion(record?: Pick<ReturnType<typeof useStudioStore.getState>['results'][number], 'status' | 'error' | 'raw'>) {
+  if (!record || record.status !== 'failed') return false;
+  const message = `${record.error ?? ''} ${JSON.stringify(record.raw ?? {})}`.toLowerCase();
   return (
     message.includes('524') ||
+    message.includes('408') ||
     message.includes('同步连接超时') ||
-    message.includes('后台可能') ||
     message.includes('background task') ||
+    message.includes('poll_error') ||
+    message.includes('poll_url') ||
     message.includes('轮询')
   );
+}
+
+function providerAccessLabel(provider: ReturnType<typeof listProviders>[number]) {
+  if (provider.id === 'custom-http-provider') return '中转站 / 聚合 API · OpenAI 兼容中转';
+  if (provider.id === 'openai-gpt-image') return '官方 API · OpenAI 官方';
+  if (provider.phase === 'local-lab') return `本地模型 · ${provider.name}`;
+  return provider.name;
+}
+
+function providerAccessDescription(provider: ReturnType<typeof listProviders>[number]) {
+  if (provider.id === 'custom-http-provider') return '默认主入口，使用平台接入页保存的中转站 / 聚合 API 配置。';
+  if (provider.id === 'openai-gpt-image') return '官方 OpenAI API，使用 https://api.openai.com。';
+  if (provider.phase === 'local-lab') return '本地模型路线暂为规划入口，不作为当前生图主通道。';
+  return provider.notes[0] ?? '平台能力以当前模板和服务商文档为准。';
+}
+
+function compactModelLabel(modelId: string) {
+  const cleaned = modelId.trim();
+  return cleaned
+    .replace(/^deepseek-/i, 'DS ')
+    .replace(/^gpt-/i, '')
+    .replace(/^claude-/i, 'Claude ')
+    .replace(/^qwen-/i, 'Qwen ')
+    .slice(0, 20);
+}
+
+function referenceSourceLabel(source: ReferenceImage['source']) {
+  const labels: Record<ReferenceImage['source'], string> = {
+    upload: '本地',
+    'generated-result': '作品',
+    clipboard: '剪贴板',
+    'drag-drop': '拖拽',
+    inspiration: '灵感'
+  };
+  return labels[source] ?? source;
 }
 
 export function ModernGeneratePage(props: {
@@ -173,8 +223,10 @@ export function ModernGeneratePage(props: {
   onCountChange: (count: number) => void;
   onSizeChange: (size: string) => void;
   onQualityChange: (quality: string) => void;
-  onGenerate: (options?: { mode?: GenerationMode; references?: ReferenceImage[]; metadata?: Record<string, unknown> }) => void;
+  onGenerate: (options?: { mode?: GenerationMode; references?: ReferenceImage[]; outputFormat?: OutputFormat; outputCompression?: number; metadata?: Record<string, unknown> }) => void;
   onPreview: (imageUrl: string) => void;
+  onReloadHistory: () => void | Promise<void>;
+  onOpenLibrary: () => void;
   referenceImages: ReferenceImage[];
   onReferenceImagesChange: (references: ReferenceImage[]) => void;
 }) {
@@ -189,7 +241,12 @@ export function ModernGeneratePage(props: {
   const [customWidth, setCustomWidth] = useState(() => parseSize(props.size)[0]);
   const [customHeight, setCustomHeight] = useState(() => parseSize(props.size)[1]);
   const [assistMode, setAssistMode] = useState<PromptAssistMode | null>(null);
+  const [quickPolishModelId, setQuickPolishModelId] = useState(() =>
+    props.promptPolishSettings.engine === 'local' ? '__local__' : props.promptPolishSettings.modelId
+  );
+  const [isQuickPolishing, setIsQuickPolishing] = useState(false);
   const [isReferenceDragActive, setIsReferenceDragActive] = useState(false);
+  const [draggingReferenceId, setDraggingReferenceId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
   const modelOptions = props.supportsOpenAICompatible
@@ -197,6 +254,36 @@ export function ModernGeneratePage(props: {
       ? props.providerConfig.modelOptions
       : [props.providerConfig.modelId]
     : props.selectedProvider.models.map((model) => model.id);
+  const quickPolishOptions = [
+    { value: '__local__', label: '本地规则' },
+    ...Array.from(new Set([
+      props.promptPolishSettings.modelId,
+      ...props.promptPolishSettings.savedConfigs.map((config) => config.modelId)
+    ].filter((item) => item.trim()).map((item) => item.trim())))
+      .slice(0, 3)
+      .map((modelId) => ({ value: modelId, label: compactModelLabel(modelId) }))
+  ];
+  const selectedQuickPolishValue = quickPolishOptions.some((option) => option.value === quickPolishModelId)
+    ? quickPolishModelId
+    : props.promptPolishSettings.engine === 'local'
+      ? '__local__'
+      : props.promptPolishSettings.modelId;
+  const selectedQuickPolishConfig =
+    props.promptPolishSettings.savedConfigs.find((config) => config.modelId === selectedQuickPolishValue || config.modelOptions.includes(selectedQuickPolishValue)) ??
+    props.promptPolishSettings.savedConfigs[0];
+  const effectivePromptPolishSettings: PromptPolishSettings =
+    selectedQuickPolishValue === '__local__'
+      ? { ...props.promptPolishSettings, engine: 'local' }
+      : {
+          ...props.promptPolishSettings,
+          engine: 'provider',
+          displayName: selectedQuickPolishConfig?.displayName ?? props.promptPolishSettings.displayName,
+          baseUrl: selectedQuickPolishConfig?.baseUrl ?? props.promptPolishSettings.baseUrl,
+          modelId: selectedQuickPolishValue,
+          modelOptions: selectedQuickPolishConfig?.modelOptions ?? props.promptPolishSettings.modelOptions,
+          extraHeadersJson: selectedQuickPolishConfig?.extraHeadersJson ?? props.promptPolishSettings.extraHeadersJson,
+          protocol: selectedQuickPolishConfig?.protocol ?? props.promptPolishSettings.protocol
+        };
   const modelValue = props.supportsOpenAICompatible ? props.providerConfig.modelId : props.selectedModelId;
   const selectedRatio = ratioFromSize(props.size);
   const selectedSize = SIZE_OPTIONS.find((item) => item.value === props.size);
@@ -207,7 +294,7 @@ export function ModernGeneratePage(props: {
   );
   const latestImage = sessionResults.find((result) => result.imageUrls[0]);
   const failedLatest = sessionResults.find((result) => result.status === 'failed');
-  const failedLatestNeedsCheck = isPotentialBackgroundCompletion(failedLatest?.error);
+  const failedLatestNeedsCheck = isPotentialBackgroundCompletion(failedLatest);
   const imageToImageStatus = props.selectedProvider.capabilities.imageToImage;
   const multiReferenceStatus = props.selectedProvider.capabilities.multiReferenceImage;
   const advancedImageTuningEnabled = ['supported', 'partial'].includes(imageToImageStatus);
@@ -220,6 +307,10 @@ export function ModernGeneratePage(props: {
   useEffect(() => {
     setMode(props.defaultMode);
   }, [props.defaultMode]);
+
+  useEffect(() => {
+    setQuickPolishModelId(props.promptPolishSettings.engine === 'local' ? '__local__' : props.promptPolishSettings.modelId);
+  }, [props.promptPolishSettings.engine, props.promptPolishSettings.modelId]);
 
   useEffect(() => {
     setOutputFormat(props.defaultOutputFormat);
@@ -248,6 +339,43 @@ export function ModernGeneratePage(props: {
     if (!trimmed) return;
     props.onPromptChange(placement === 'append' && props.prompt.trim() ? `${props.prompt.trim()}\n\n${trimmed}` : trimmed);
     setAssistMode(null);
+  }
+
+  async function runQuickPromptPolish() {
+    const sourcePrompt = props.prompt.trim();
+    if (!sourcePrompt || isQuickPolishing) return;
+    const modeId = resolvePolishMode(
+      props.promptHistorySettings.defaultPolishMode || getDefaultPolishMode(effectivePromptPolishSettings.engine),
+      effectivePromptPolishSettings.engine
+    ).id;
+    if (selectedQuickPolishValue === '__local__' || effectivePromptPolishSettings.engine === 'local') {
+      props.onPromptChange(polishPrompt(sourcePrompt, modeId));
+      return;
+    }
+    if (!effectivePromptPolishSettings.baseUrl.trim() || !effectivePromptPolishSettings.modelId.trim()) {
+      props.onPromptChange(polishPrompt(sourcePrompt, modeId));
+      return;
+    }
+    setIsQuickPolishing(true);
+    try {
+      const result = await polishPromptWithProvider({
+        providerId: 'prompt-polish',
+        modelId: effectivePromptPolishSettings.modelId,
+        prompt: sourcePrompt,
+        modeId,
+        settings: effectivePromptPolishSettings,
+        baseUrl: effectivePromptPolishSettings.baseUrl,
+        extraHeaders: parseExtraHeaders(effectivePromptPolishSettings.extraHeadersJson),
+        secretId: PROMPT_POLISH_SECRET_ID
+      });
+      props.onPromptChange(result.polishedPrompt.trim() || sourcePrompt);
+    } catch {
+      if (props.promptPolishSettings.fallbackToLocal) {
+        props.onPromptChange(polishPrompt(sourcePrompt, modeId));
+      }
+    } finally {
+      setIsQuickPolishing(false);
+    }
   }
 
   function updateReferences(nextReferences: ReferenceImage[]) {
@@ -281,14 +409,43 @@ export function ModernGeneratePage(props: {
     setReferenceRoles({});
   }
 
-  function moveReference(referenceId: string, direction: -1 | 1) {
-    const index = props.referenceImages.findIndex((reference) => reference.id === referenceId);
-    const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= props.referenceImages.length) return;
+  function reorderReference(activeId: string, overId: string) {
+    if (activeId === overId || props.isGenerating) return;
+    const index = props.referenceImages.findIndex((reference) => reference.id === activeId);
+    const nextIndex = props.referenceImages.findIndex((reference) => reference.id === overId);
+    if (index < 0 || nextIndex < 0 || index === nextIndex) return;
     const nextReferences = [...props.referenceImages];
     const [item] = nextReferences.splice(index, 1);
     nextReferences.splice(nextIndex, 0, item);
     updateReferences(nextReferences);
+  }
+
+  function handleReferenceSortDragStart(referenceId: string, event: DragEvent<HTMLElement>) {
+    if (props.isGenerating) {
+      event.preventDefault();
+      return;
+    }
+    setDraggingReferenceId(referenceId);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', referenceId);
+  }
+
+  function handleReferenceSortDragOver(referenceId: string, event: DragEvent<HTMLElement>) {
+    const activeId = draggingReferenceId ?? event.dataTransfer.getData('text/plain');
+    if (!activeId || activeId === referenceId || props.isGenerating) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }
+
+  function handleReferenceSortDrop(referenceId: string, event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    const activeId = draggingReferenceId ?? event.dataTransfer.getData('text/plain');
+    if (activeId) reorderReference(activeId, referenceId);
+    setDraggingReferenceId(null);
+  }
+
+  function handleReferenceSortDragEnd() {
+    setDraggingReferenceId(null);
   }
 
   function setReferenceRole(referenceId: string, role: string) {
@@ -381,10 +538,17 @@ export function ModernGeneratePage(props: {
   });
 
   function runGenerate() {
+    const trimmedCompression = compression.trim();
+    const parsedCompression = trimmedCompression ? Number(trimmedCompression) : Number.NaN;
+    const outputCompression = trimmedCompression && Number.isFinite(parsedCompression)
+      ? Math.max(75, Math.min(100, Math.round(parsedCompression)))
+      : undefined;
     if (mode === 'image') {
       props.onGenerate({
         mode: 'image-to-image',
         references: props.referenceImages,
+        outputFormat,
+        outputCompression,
         metadata: {
           imageToImageTuning: {
             referenceStrength,
@@ -398,7 +562,7 @@ export function ModernGeneratePage(props: {
       });
       return;
     }
-    props.onGenerate({ mode: 'text-to-image', references: [] });
+    props.onGenerate({ mode: 'text-to-image', references: [], outputFormat, outputCompression });
   }
 
   return (
@@ -409,7 +573,7 @@ export function ModernGeneratePage(props: {
             <span className="tealLabel">AI 创作工作台</span>
             <div className="workspaceTitleLine">
               <strong>{props.isGenerating ? '渲染进行中' : latestImage ? '最近画面' : '准备生成'}</strong>
-              <small>{props.selectedProvider.name} · {modelValue}</small>
+              <small>{providerAccessLabel(props.selectedProvider)} · {modelValue}</small>
             </div>
           </div>
           <div className="quickToolbar">
@@ -460,7 +624,22 @@ export function ModernGeneratePage(props: {
           )}
           {failedLatest && !latestImage ? (
             <div className={`previewError ${failedLatestNeedsCheck ? 'pendingRecovery' : ''}`}>
-              {failedLatestNeedsCheck ? '上一轮待核查：同步连接先超时，中转后台可能仍在继续生成。稍后可重载历史或查看中转后台。' : `上一轮失败：${failedLatest.error}`}
+              <div>
+                <strong>{failedLatestNeedsCheck ? '上一轮待核查' : '上一轮失败'}</strong>
+                <span>
+                  {failedLatestNeedsCheck
+                    ? '同步连接先断开，中转后台可能仍在继续生成。稍后可重载历史，或到作品画廊查看是否已落盘。'
+                    : failedLatest.error}
+                </span>
+              </div>
+              <div className="previewErrorActions">
+                <button type="button" onClick={() => void props.onReloadHistory()}>
+                  <RotateCcw size={13} /> 重载历史
+                </button>
+                <button type="button" onClick={props.onOpenLibrary}>
+                  <GalleryHorizontal size={13} /> 作品画廊
+                </button>
+              </div>
             </div>
           ) : null}
           {props.isGenerating && latestImage?.imageUrls[0] ? (
@@ -482,8 +661,11 @@ export function ModernGeneratePage(props: {
             onDrop={handleReferenceDrop}
           >
             <div className="referenceInfo">
-              <strong>参考图</strong>
-              <span>{props.referenceImages.length}/4</span>
+              <div>
+                <strong>参考图</strong>
+                <span>{props.referenceImages.length}/4</span>
+              </div>
+              <small>支持本地、拖拽、粘贴和最近生成图</small>
             </div>
             <input
               ref={fileInputRef}
@@ -509,41 +691,38 @@ export function ModernGeneratePage(props: {
                 <button
                   className="referenceClear"
                   type="button"
-                  title="清空全部参考图"
+                  data-tooltip="清空全部参考图"
+                  aria-label="清空全部参考图"
                   disabled={props.isGenerating}
                   onClick={clearReferences}
                 >
                   <XCircle size={15} /> 清空
                 </button>
                 <div className="referenceStrip">
-                  {props.referenceImages.map((reference, index) => (
-                    <article className="referenceTile" key={reference.id}>
+                  {props.referenceImages.map((reference) => (
+                    <article
+                      className={`referenceTile ${draggingReferenceId === reference.id ? 'isDragging' : ''}`}
+                      key={reference.id}
+                      draggable={!props.isGenerating}
+                      onDragStart={(event) => handleReferenceSortDragStart(reference.id, event)}
+                      onDragOver={(event) => handleReferenceSortDragOver(reference.id, event)}
+                      onDrop={(event) => handleReferenceSortDrop(reference.id, event)}
+                      onDragEnd={handleReferenceSortDragEnd}
+                    >
                       <button type="button" className="referenceThumb" onClick={() => reference.previewUrl && props.onPreview(reference.previewUrl)}>
                         {reference.previewUrl ? <img src={reference.previewUrl} alt={reference.name ?? '参考图'} /> : <ImagePlus size={18} />}
                       </button>
-                      <div className="referenceOrderControls">
-                        <button type="button" title="左移参考图" aria-label="左移参考图" disabled={props.isGenerating || index === 0} onClick={() => moveReference(reference.id, -1)}>
-                          <ArrowLeft size={11} />
-                        </button>
-                        <button type="button" title="右移参考图" aria-label="右移参考图" disabled={props.isGenerating || index === props.referenceImages.length - 1} onClick={() => moveReference(reference.id, 1)}>
-                          <ArrowRight size={11} />
-                        </button>
-                      </div>
-                      <select
+                      <span className="referenceSourceBadge" title={reference.name ?? referenceSourceLabel(reference.source)}>
+                        {referenceSourceLabel(reference.source)}
+                      </span>
+                      <StudioSelect
                         className="referenceRoleSelect"
                         value={referenceRoles[reference.id] ?? 'auto'}
-                        title="参考用途"
-                        aria-label="参考用途"
+                        options={REFERENCE_ROLE_OPTIONS}
                         disabled={props.isGenerating}
-                        onChange={(event) => setReferenceRole(reference.id, event.target.value)}
-                      >
-                        <option value="auto">自动</option>
-                        <option value="composition">构图</option>
-                        <option value="style">风格</option>
-                        <option value="character">角色</option>
-                        <option value="color">颜色</option>
-                      </select>
-                      <button className="referenceRemove" type="button" title="移除参考图" disabled={props.isGenerating} onClick={() => removeReference(reference.id)}>
+                        onChange={(value) => setReferenceRole(reference.id, value)}
+                      />
+                      <button className="referenceRemove" type="button" data-tooltip="移除参考图" aria-label="移除参考图" disabled={props.isGenerating} onClick={() => removeReference(reference.id)}>
                         <Trash2 size={13} />
                       </button>
                     </article>
@@ -563,14 +742,25 @@ export function ModernGeneratePage(props: {
               <span>{promptLength} 字符</span>
             </div>
             <div className="promptActions" aria-label="提示词辅助功能">
-              <button type="button" className="chipButton" title="打开灵感库" onClick={() => setAssistMode('inspiration')}>
-                灵感库
+              <button type="button" className="chipButton" data-tooltip="打开灵感库" onClick={() => setAssistMode('inspiration')}>
+                <Sparkles size={13} /> 模板灵感
               </button>
-              <button type="button" className="chipButton" title="润色当前提示词" onClick={() => setAssistMode('polish')}>
-                提示词润色
-              </button>
-              <button type="button" className="chipButton" title="复用历史提示词" onClick={() => setAssistMode('reuse')}>
-                复用记录
+              <div className="promptPolishQuickGroup">
+                <button type="button" className="chipButton" data-tooltip="按右侧模型快速润色并替换当前提示词" disabled={isQuickPolishing || !props.prompt.trim()} onClick={runQuickPromptPolish}>
+                  <Wand2 size={13} /> {isQuickPolishing ? '润色中…' : '提示词润色'}
+                </button>
+                <StudioSelect
+                  className="promptPolishQuickSelect noSelectCheck"
+                  value={selectedQuickPolishValue}
+                  onChange={(value) => setQuickPolishModelId(value)}
+                  options={quickPolishOptions}
+                />
+                <button type="button" className="promptPolishDetailButton" data-tooltip="打开详细润色窗口" aria-label="打开详细润色窗口" onClick={() => setAssistMode('polish')}>
+                  <SlidersHorizontal size={13} />
+                </button>
+              </div>
+              <button type="button" className="chipButton" data-tooltip="复用历史提示词" onClick={() => setAssistMode('reuse')}>
+                <History size={13} /> 复用记录
               </button>
             </div>
           </div>
@@ -612,7 +802,7 @@ export function ModernGeneratePage(props: {
             </label>
             <label>
               压缩率
-              <input value={compression} placeholder="自动 / 0-100" onChange={(event) => setCompression(event.target.value)} />
+              <input value={compression} placeholder="自动 / 75-100" onChange={(event) => setCompression(event.target.value)} />
             </label>
             <label>
               审核
@@ -652,7 +842,11 @@ export function ModernGeneratePage(props: {
             <StudioSelect
               value={props.selectedProviderId}
               onChange={props.onProviderChange}
-              options={props.providers.map((provider) => ({ value: provider.id, label: provider.name }))}
+              options={props.providers.map((provider) => ({
+                value: provider.id,
+                label: providerAccessLabel(provider),
+                description: providerAccessDescription(provider)
+              }))}
             />
           </label>
           <label>
@@ -720,7 +914,7 @@ export function ModernGeneratePage(props: {
               <input value={customHeight} type="number" min={64} max={4096} onChange={(event) => setCustomHeight(Number(event.target.value))} />
               <button onClick={applyCustomSize}>应用</button>
             </div>
-            <small>建议 64–4096，具体是否支持取决于当前 Provider / 中转模型。</small>
+            <small>建议 64–4096，具体是否支持取决于当前平台 / 中转模型。</small>
           </div>
         </section>
 
@@ -730,7 +924,7 @@ export function ModernGeneratePage(props: {
               <SlidersHorizontal size={15} /> 图生图参数
             </div>
             <div className={`capabilityNotice ${advancedImageTuningEnabled ? 'ready' : 'blocked'}`}>
-              <strong>{advancedImageTuningEnabled ? '当前 Provider 可尝试图生图参数' : '当前 Provider 未声明图生图参数能力'}</strong>
+              <strong>{advancedImageTuningEnabled ? '当前平台可尝试图生图参数' : '当前平台未声明图生图参数能力'}</strong>
               <span>图生图：{statusLabel(imageToImageStatus)} ? 多参考：{statusLabel(multiReferenceStatus)}</span>
             </div>
             <label>
@@ -764,7 +958,7 @@ export function ModernGeneratePage(props: {
               />
               <span>偏向风格迁移</span>
             </label>
-            <small>{multiReferenceAllowed ? '会随生成请求记录为 Provider 参数偏好；真实生效取决于当前接口协议。' : '该 Provider 未声明多参考能力，建议只放 1 张参考图。'}</small>
+            <small>{multiReferenceAllowed ? '会随生成请求记录为平台参数偏好；真实生效取决于当前接口协议。' : '该平台未声明多参考能力，建议只放 1 张参考图。'}</small>
           </section>
         ) : null}
 
@@ -781,7 +975,7 @@ export function ModernGeneratePage(props: {
           prompt={props.prompt}
           results={props.results}
           promptHistorySettings={props.promptHistorySettings}
-          promptPolishSettings={props.promptPolishSettings}
+          promptPolishSettings={effectivePromptPolishSettings}
           onClose={() => setAssistMode(null)}
           onApplyPrompt={applyAssistedPrompt}
         />

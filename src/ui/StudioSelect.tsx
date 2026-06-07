@@ -1,5 +1,5 @@
 import { Check, ChevronDown } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 export type StudioSelectOption = {
   value: string;
@@ -14,6 +14,7 @@ export function StudioSelect(props: {
   className?: string;
   disabled?: boolean;
   placeholder?: string;
+  leadingIcon?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -44,6 +45,7 @@ export function StudioSelect(props: {
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
+        {props.leadingIcon ? <span className="studioSelectLeadingIcon">{props.leadingIcon}</span> : null}
         <span className="studioSelectValue">
           <span>{label}</span>
           {description ? <small>{description}</small> : null}

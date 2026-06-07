@@ -1,4 +1,8 @@
 ﻿use base64::Engine;
+use image::codecs::jpeg::JpegEncoder;
+use image::codecs::png::PngEncoder;
+use image::codecs::webp::WebPEncoder;
+use image::{ColorType, ImageEncoder};
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -27,6 +31,8 @@ struct OpenAIImageRequest {
     prompt: String,
     size: String,
     quality: Option<String>,
+    output_format: Option<String>,
+    output_compression: Option<u8>,
     count: u8,
     generation_mode: Option<String>,
     reference_images: Option<Vec<ReferenceImage>>,
@@ -60,6 +66,7 @@ struct PromptPolishRequest {
     protocol: Option<String>,
     base_url: Option<String>,
     extra_headers: Option<std::collections::HashMap<String, String>>,
+    secret_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -128,6 +135,13 @@ struct SettingsBackupResult {
 struct DeleteGenerationRecordResult {
     id: String,
     deleted: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct ImportLibraryImagesResult {
+    records: Vec<GenerationRecord>,
+    skipped_duplicates: usize,
+    skipped_unsupported: usize,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -327,11 +341,13 @@ async fn generate_openai_image(
     let mut request_payload: Option<Value> = None;
     let mut responses_background_requested = false;
 
+    let api_size = normalize_openai_image_size_for_base_url(&base_url, &request.size);
+
     if use_openai_images_edit {
-        let form = build_openai_images_edit_form(&client, &request, &reference_images).await?;
+        let form = build_openai_images_edit_form(&client, &request, &reference_images, &api_size).await?;
         builder = builder.multipart(form);
     } else {
-        let payload = build_openai_compatible_payload(&request, protocol.as_str());
+        let payload = build_openai_compatible_payload(&request, protocol.as_str(), &api_size);
         responses_background_requested = protocol == "responses";
         request_payload = Some(payload.clone());
         builder = builder.json(&payload);
@@ -449,16 +465,16 @@ async fn generate_openai_image(
         final_status_code = extract_http_status_hint(&raw).unwrap_or(final_status_code);
     }
 
-    let image_urls = extract_image_urls(&raw);
+    let image_urls = extract_image_urls(&raw, None);
     let request_succeeded = (200..300).contains(&final_status_code);
     let local_image_paths = if request_succeeded && !image_urls.is_empty() {
-        save_images_to_library(&app, &image_urls, &request.provider_id, &request.model_id)
+        save_images_to_library(&app, &image_urls, &request)
             .await
             .unwrap_or_default()
     } else {
         Vec::new()
     };
-    let display_image_urls = display_image_urls_for_paths(&app, &local_image_paths, &image_urls);
+    let display_image_urls = display_library_image_urls_for_paths(&app, &local_image_paths, &image_urls);
 
     let error = if request_succeeded && !image_urls.is_empty() {
         None
@@ -564,15 +580,17 @@ async fn polish_prompt_with_provider(request: PromptPolishRequest) -> Result<Pro
         return Err("请先在偏好设置里选择提示词润色模型。".to_string());
     }
 
-    let api_key = secret_entry(&request.provider_id)?
-        .get_password()
-        .map_err(|_| "API Key 未配置：请先到「平台接入」保存该平台的 API Key。".to_string())?;
-    let base_url = normalize_base_url(
-        request
-            .base_url
-            .as_deref()
-            .unwrap_or("https://api.openai.com"),
-    )?;
+    let api_key = read_provider_secret(request.secret_id.as_deref(), &request.provider_id)
+        .map_err(|_| "润色专用 API Key 未配置：请先到「偏好设置」保存提示词润色专用 Key。".to_string())?;
+    let base_url_text = request
+        .base_url
+        .as_deref()
+        .unwrap_or("")
+        .trim();
+    if base_url_text.is_empty() {
+        return Err("请先到「偏好设置」填写提示词润色专用 Base URL。".to_string());
+    }
+    let base_url = normalize_base_url(base_url_text)?;
     let protocol = request.protocol.as_deref().unwrap_or("chat-completions");
     let endpoint_path = match protocol {
         "responses" => "/v1/responses",
@@ -621,12 +639,13 @@ async fn polish_prompt_with_provider(request: PromptPolishRequest) -> Result<Pro
 
     let polished_prompt = extract_text_response(&raw)
         .ok_or_else(|| "模型已返回，但没有找到可用文本内容；已自动保留本地润色兜底。".to_string())?;
+    let polished_prompt = ensure_prompt_polish_changed(&request.prompt, &polished_prompt, &request.mode_id);
 
     Ok(PromptPolishResult {
         provider_id: request.provider_id,
         model_id: request.model_id,
         prompt: request.prompt,
-        polished_prompt: polished_prompt.trim().trim_matches('"').trim().to_string(),
+        polished_prompt,
         raw,
         created_at: chrono_like_timestamp(),
     })
@@ -701,6 +720,87 @@ fn delete_generation_record(
     }
 
     Ok(DeleteGenerationRecordResult { id: record_id, deleted })
+}
+
+#[tauri::command]
+fn import_library_images_from_files(app: tauri::AppHandle) -> Result<ImportLibraryImagesResult, String> {
+    let paths = pick_image_files_with_system_dialog()?;
+    import_library_image_paths(app, paths)
+}
+
+#[tauri::command]
+fn import_library_images_from_folder(app: tauri::AppHandle) -> Result<ImportLibraryImagesResult, String> {
+    let current_dir = library_dir(&app)?;
+    let Some(folder) = pick_folder_with_system_dialog(&current_dir)? else {
+        return Ok(ImportLibraryImagesResult { records: Vec::new(), skipped_duplicates: 0, skipped_unsupported: 0 });
+    };
+    let paths = scan_image_files_in_folder(&folder)?;
+    import_library_image_paths(app, paths)
+}
+
+fn import_library_image_paths(
+    app: tauri::AppHandle,
+    paths: Vec<PathBuf>,
+) -> Result<ImportLibraryImagesResult, String> {
+    if paths.is_empty() {
+        return Ok(ImportLibraryImagesResult { records: Vec::new(), skipped_duplicates: 0, skipped_unsupported: 0 });
+    }
+
+    let mut records = read_generation_history_records(&app)?;
+    let now = chrono_like_timestamp();
+    let mut imported = Vec::new();
+    let mut skipped_duplicates = 0usize;
+    let mut skipped_unsupported = 0usize;
+    for path in paths {
+        if !path.is_file() || !is_supported_image_path(&path) {
+            skipped_unsupported += 1;
+            continue;
+        }
+        let canonical = path
+            .canonicalize()
+            .map_err(|error| format!("Cannot resolve imported image path: {error}"))?;
+        let path_text = path_to_user_string(&canonical);
+        if records.iter().any(|record| record.local_image_paths.iter().any(|item| item == &path_text)) {
+            skipped_duplicates += 1;
+            continue;
+        }
+        let file_name = canonical
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("本地图片")
+            .to_string();
+        let mut record = GenerationRecord {
+            id: format!("local-import-{}-{}", chrono_like_timestamp_millis(), imported.len()),
+            provider_id: "local-import".to_string(),
+            provider_name: Some("本地导入".to_string()),
+            model_id: "local-file".to_string(),
+            status: "succeeded".to_string(),
+            prompt: format!("本地导入：{file_name}"),
+            image_urls: Vec::new(),
+            local_image_paths: vec![path_text],
+            cost_hint: None,
+            duration_ms: None,
+            error: None,
+            raw: serde_json::json!({
+                "visionhubSource": "local-import",
+                "fileName": file_name
+            }),
+            created_at: now.clone(),
+            saved_at: Some(now.clone()),
+            generation_mode: Some("imported".to_string()),
+            reference_images: Some(Vec::new()),
+        };
+        hydrate_record_image_urls(&app, &mut record);
+        records.insert(0, record.clone());
+        imported.push(record);
+    }
+
+    if !imported.is_empty() {
+        records.truncate(500);
+        write_generation_history(&app, &records)?;
+    }
+
+    Ok(ImportLibraryImagesResult { records: imported, skipped_duplicates, skipped_unsupported })
 }
 
 #[tauri::command]
@@ -1013,6 +1113,35 @@ fn normalize_base_url(base_url: &str) -> Result<String, String> {
     Ok(base_url)
 }
 
+fn normalize_openai_image_size_for_base_url(base_url: &str, requested_size: &str) -> String {
+    if !base_url.eq_ignore_ascii_case("https://api.openai.com") {
+        return requested_size.to_string();
+    }
+
+    match requested_size.trim() {
+        "auto" | "1024x1024" | "1536x1024" | "1024x1536" => requested_size.trim().to_string(),
+        other => {
+            let Some((width, height)) = parse_image_size(other) else {
+                return "1024x1024".to_string();
+            };
+            if width > height {
+                "1536x1024".to_string()
+            } else if height > width {
+                "1024x1536".to_string()
+            } else {
+                "1024x1024".to_string()
+            }
+        }
+    }
+}
+
+fn parse_image_size(size: &str) -> Option<(u32, u32)> {
+    let (width, height) = size.trim().split_once('x')?;
+    let width = width.trim().parse::<u32>().ok()?;
+    let height = height.trim().parse::<u32>().ok()?;
+    Some((width, height))
+}
+
 async fn poll_background_response(
     client: &reqwest::Client,
     base_url: &str,
@@ -1068,7 +1197,7 @@ async fn poll_background_response(
             ));
         }
 
-        if !extract_image_urls(&raw).is_empty() {
+        if !extract_image_urls(&raw, None).is_empty() {
             return Ok(raw);
         }
 
@@ -1123,7 +1252,7 @@ fn extract_response_status(raw: &Value) -> Option<String> {
 }
 
 fn should_poll_response(raw: &Value) -> bool {
-    if !extract_image_urls(raw).is_empty() {
+    if !extract_image_urls(raw, None).is_empty() {
         return false;
     }
 
@@ -1182,14 +1311,19 @@ fn format_openai_compatible_error(
     body_preview: Option<&str>,
     parse_error: Option<&str>,
 ) -> String {
-    let prefix = match status_code {
-        401 => "认证失败：API Key 无效、过期，或中转站没有接受当前密钥。",
-        403 => "权限不足：当前 Key/账号可能没有该模型或图片接口权限。",
-        404 => "接口不存在：请检查 Base URL、协议类型和接口路径。",
-        408 | 524 => "同步连接超时：中转站或上游生图服务等待太久后断开，后台可能仍会继续生成。",
-        429 => "请求受限：可能是余额不足、频率限制或并发限制。",
-        500..=599 => "供应商/中转站服务异常：上游没有正常返回生图结果。",
-        _ => "生图接口没有返回有效图片。",
+    let lower_message = json_message.unwrap_or("").to_ascii_lowercase();
+    let prefix = if lower_message.contains("billing hard limit") {
+        "账单硬限制：OpenAI 官方项目已达到 Billing hard limit，需要在 OpenAI 控制台检查额度、付款方式或项目用量上限。"
+    } else {
+        match status_code {
+            401 => "认证失败：API Key 无效、过期，或中转站没有接受当前密钥。",
+            403 => "权限不足：当前 Key/账号可能没有该模型或图片接口权限。",
+            404 => "接口不存在：请检查 Base URL、协议类型和接口路径。",
+            408 | 524 => "同步连接超时：中转站或上游生图服务等待太久后断开，后台可能仍会继续生成。",
+            429 => "请求受限：可能是余额不足、频率限制或并发限制。",
+            500..=599 => "供应商/中转站服务异常：上游没有正常返回生图结果。",
+            _ => "生图接口没有返回有效图片。",
+        }
     };
 
     let mut parts = vec![format!("{prefix} HTTP {status_code}.")];
@@ -1202,7 +1336,9 @@ fn format_openai_compatible_error(
     if let Some(preview) = body_preview.filter(|preview| !preview.trim().is_empty()) {
         parts.push(format!("响应预览：{preview}"));
     }
-    parts.push("这通常不是配置错误；如果中转站记录显示后续成功，说明同步连接先超时了。建议重启新版程序后重试后台轮询，或降低尺寸/数量后再试。".to_string());
+    if matches!(status_code, 408 | 524) {
+        parts.push("这通常不是配置错误；如果中转站记录显示后续成功，说明同步连接先超时了。建议重启新版程序后重试后台轮询，或降低尺寸/数量后再试。".to_string());
+    }
     parts.join(" ")
 }
 
@@ -1219,20 +1355,23 @@ fn build_prompt_polish_instruction(request: &PromptPolishRequest) -> String {
         "commercial" => "商业摄影：强化产品/主体质感、干净背景、品牌感、灯光和可交付性。",
         _ => "专业生图提示词：整理成适合 AI 图像生成的完整提示词。",
     };
-    let mode = match request.mode_id.as_str() {
-        "cinematic" => "当前弹窗模式偏向电影感润色。",
-        "commercial" => "当前弹窗模式偏向商业视觉润色。",
-        "platform-cn" => "当前弹窗模式偏向中文平台更易理解的描述。",
-        _ => "当前弹窗模式偏向补全细节。",
-    };
+    let mode = prompt_polish_mode_rules(&request.mode_id);
 
     format!(
-        "你是专业 AI 图像提示词编辑器。请润色用户提示词，使其更适合文生图/图生图。要求：{language}{strength}{mode} 只输出润色后的提示词，不要解释，不要 Markdown，不要加标题。"
+        "你是专业 AI 图像提示词编辑器，不是普通文本改写助手。你的任务是把用户原始提示词改写成更适合文生图/图生图的可执行提示词。硬性要求：{language}{strength}当前模式规则：{mode} 如果原始提示词很短、笼统或只是关键词，要主动扩写成完整画面方案，而不是询问用户。必须明显扩写或重组原提示词，不能只同义替换，不能只调整语序。优先补充主体细节、场景/背景、动作/姿态、材质、光线、构图、镜头视角、色彩氛围、画质风格中的多个维度。保留用户明确指定的主体、人物特征、服装、颜色、物体和限制，不要编造冲突信息，不要引入具体艺术家、真实品牌或版权角色，除非原文已经明确要求。只输出润色后的提示词，不要解释，不要 Markdown，不要加标题，不要复述规则。"
     )
 }
 
 fn build_prompt_polish_payload(request: &PromptPolishRequest, protocol: &str, instruction: &str) -> Value {
-    let user_content = format!("原始提示词：\n{}", request.prompt.trim());
+    let mode_rules = prompt_polish_mode_rules(&request.mode_id);
+    let strength_rules = prompt_polish_strength_rules(&request.strength);
+    let user_content = format!(
+        "请按以下规则润色原始提示词。\n\n当前润色模式：{}\n模式规则：{}\n强度规则：{}\n输出要求：只输出一段完整的最终生图提示词；如果原文少于 20 个字，要扩写到可直接用于生成的丰富画面描述；相对原文至少增加主体细节、场景背景、光线构图、材质质感、色彩氛围、画质风格中的 4 类信息；不要输出说明文字。\n\n原始提示词：\n{}",
+        prompt_polish_mode_label(&request.mode_id),
+        mode_rules,
+        strength_rules,
+        request.prompt.trim()
+    );
     match protocol {
         "responses" => serde_json::json!({
             "model": request.model_id,
@@ -1240,7 +1379,7 @@ fn build_prompt_polish_payload(request: &PromptPolishRequest, protocol: &str, in
                 { "role": "system", "content": instruction },
                 { "role": "user", "content": user_content }
             ],
-            "temperature": 0.4
+            "temperature": 0.7
         }),
         _ => serde_json::json!({
             "model": request.model_id,
@@ -1248,9 +1387,46 @@ fn build_prompt_polish_payload(request: &PromptPolishRequest, protocol: &str, in
                 { "role": "system", "content": instruction },
                 { "role": "user", "content": user_content }
             ],
-            "temperature": 0.4
+            "temperature": 0.7
         }),
     }
+}
+
+fn ensure_prompt_polish_changed(source: &str, polished: &str, mode_id: &str) -> String {
+    let cleaned = polished.trim().trim_matches('"').trim();
+    let source_normalized = normalize_prompt_for_similarity(source);
+    let polished_normalized = normalize_prompt_for_similarity(cleaned);
+    let source_len = source.trim().chars().count();
+    let min_extra = if source_len < 20 { 42 } else { 18 };
+    let too_similar = cleaned.chars().count() < source_len + min_extra
+        || source_normalized == polished_normalized;
+    if !too_similar {
+        return cleaned.to_string();
+    }
+
+    let fallback_additions = match mode_id {
+        "smart-expand" => "主体设定更完整，场景背景清晰，动作姿态自然，镜头视角明确，光线氛围丰富，色彩层次协调，细节充足，适合 AI 图像生成",
+        "pro-image-prompt" => "主体、环境、构图、镜头、光线、材质、色彩和画质要求完整，提示词结构清晰，可直接用于专业 AI 图像生成",
+        "poster-kv" => "主视觉构图，主体突出，背景层次丰富，适合海报和封面，预留文字空间，商业级光影，高级配色，传播感强",
+        "character-design" => "角色外观清晰，服装材质细节丰富，姿态有表现力，性格气质明确，背景服务角色设定，电影感灯光，高细节",
+        "product-photo" => "产品主体突出，材质真实，棚拍灯光，干净背景，边缘高光清晰，柔和阴影，高级商业摄影质感",
+        "world-scene" => "宏观场景层次丰富，前景中景远景明确，世界观细节充足，空间纵深强，氛围光影明确，电影级概念图",
+        "ecommerce-detail" => "商品卖点突出，材质纹理清晰，局部特写细节，干净构图，电商详情页视觉，高级质感，信息表达明确",
+        "social-cover" => "封面视觉焦点明确，构图抓人，色彩醒目但协调，适合社媒传播，画面干净，高辨识度，高质量细节",
+        "cinematic" => "电影级构图，镜头感明确，浅景深，体积光，高对比光影，氛围感强，视觉焦点清晰，画面层次丰富",
+        "commercial" => "主体突出，商业级质感，干净背景，高级配色，棚拍灯光，精致细节，可用于宣传物料",
+        "platform-cn" => "画面主体明确，场景描述清晰，风格关键词完整，构图要求明确，光线自然，高清细节，适合中文 AI 图像生成平台",
+        _ => "主体细节清晰，场景层次丰富，材质真实，光影自然，构图稳定，高细节，画面干净，主题明确，适合 AI 图像生成",
+    };
+    format!("{}, {}", source.trim(), fallback_additions)
+}
+
+fn normalize_prompt_for_similarity(value: &str) -> String {
+    value
+        .chars()
+        .filter(|ch| !ch.is_whitespace() && !"，。,.、；;：:！!？?\"'“”‘’（）()[]【】".contains(*ch))
+        .collect::<String>()
+        .to_lowercase()
 }
 
 fn extract_text_response(raw: &Value) -> Option<String> {
@@ -1535,6 +1711,185 @@ fn pick_folder_with_system_dialog(initial_dir: &Path) -> Result<Option<PathBuf>,
     }
 }
 
+fn prompt_polish_mode_label(mode_id: &str) -> &'static str {
+    match mode_id {
+        "smart-expand" => "智能扩写",
+        "pro-image-prompt" => "生图专业版",
+        "poster-kv" => "海报/KV",
+        "character-design" => "角色设定",
+        "product-photo" => "产品摄影",
+        "world-scene" => "场景概念图",
+        "ecommerce-detail" => "电商详情图",
+        "social-cover" => "社媒封面",
+        "standard" => "标准补全",
+        "cinematic" => "电影感",
+        "commercial" => "商业视觉",
+        "platform-cn" => "中文平台",
+        _ => "更详细",
+    }
+}
+
+fn prompt_polish_mode_rules(mode_id: &str) -> &'static str {
+    match mode_id {
+        "smart-expand" => "适合短句和笼统想法。主动补全画面主体、场景、动作、镜头、光线、色彩、质感和画质，不要停留在关键词堆砌。",
+        "pro-image-prompt" => "整理成专业生图提示词，结构应覆盖主体、环境、构图、镜头、光线、材质、色彩、氛围和质量要求，可直接复制到文生图或图生图模型。",
+        "poster-kv" => "面向海报、活动 KV、封面和品牌主视觉。强化主体层级、视觉焦点、背景空间、商业质感、传播感和可放标题的构图空间。",
+        "character-design" => "面向人物或角色。扩写身份气质、外观特征、服装材质、姿态动作、表情、场景关系、镜头距离和氛围光。",
+        "product-photo" => "面向产品摄影和商品主图。扩写产品形态、材质纹理、棚拍布光、阴影、高光、背景、摆放方式和高级商业质感。",
+        "world-scene" => "面向场景概念图。扩写空间层次、前中远景、地貌/建筑/道具、时间天气、氛围光、尺度感和世界观细节。",
+        "ecommerce-detail" => "面向电商详情图。扩写商品卖点、局部特写、材质细节、使用场景、干净背景、信息表达和高转化视觉。",
+        "social-cover" => "面向社媒封面。扩写强视觉焦点、清晰主体、醒目色彩、简洁背景、动态感、封面辨识度和移动端可读性。",
+        "standard" => "快速补全主体、场景、构图、光线和画质关键词，保持原意清晰。",
+        "cinematic" => "强化电影级构图、镜头焦段、景深、光影对比、氛围叙事和视觉焦点，可加入 cinematic lighting、depth of field、wide shot/close-up 等等效描述。",
+        "commercial" => "强化主体质感、干净背景、产品/人物展示感、商业棚拍灯光、高级配色、可用于宣传物料的清晰构图。",
+        "platform-cn" => "使用清晰中文短句和逗号分隔的关键词，避免抽象空泛词，明确主体、动作、场景、风格、构图、光线和画质要求。",
+        _ => "补充主体外观、年龄/身份/姿态、场景背景、材质纹理、光线方向、构图方式、画面质量和适合 AI 生图的关键词。",
+    }
+}
+
+fn prompt_polish_strength_rules(strength: &str) -> &'static str {
+    match strength {
+        "concise" => "简洁增强，控制在 1 段内，只补关键缺失信息。",
+        "detailed" => "细节扩写，补充更完整的画面要素，允许显著增加描述密度。",
+        "cinematic" => "偏电影感，优先补镜头、光影、景深、色调和氛围。",
+        "commercial" => "偏商业视觉，优先补主体质感、干净背景、灯光、构图和交付质感。",
+        _ => "专业生图提示词，整理成结构清晰、信息完整、可直接用于 AI 图像生成的一段提示词。",
+    }
+}
+
+fn pick_image_files_with_system_dialog() -> Result<Vec<PathBuf>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        const MAX_FILE_BUFFER: usize = 65536;
+        const OFN_ALLOWMULTISELECT: u32 = 0x00000200;
+        const OFN_EXPLORER: u32 = 0x00080000;
+        const OFN_FILEMUSTEXIST: u32 = 0x00001000;
+        const OFN_PATHMUSTEXIST: u32 = 0x00000800;
+
+        #[repr(C)]
+        struct OpenFileNameW {
+            l_struct_size: u32,
+            hwnd_owner: *mut c_void,
+            h_instance: *mut c_void,
+            lpstr_filter: *const u16,
+            lpstr_custom_filter: *mut u16,
+            n_max_cust_filter: u32,
+            n_filter_index: u32,
+            lpstr_file: *mut u16,
+            n_max_file: u32,
+            lpstr_file_title: *mut u16,
+            n_max_file_title: u32,
+            lpstr_initial_dir: *const u16,
+            lpstr_title: *const u16,
+            flags: u32,
+            n_file_offset: u16,
+            n_file_extension: u16,
+            lpstr_def_ext: *const u16,
+            l_cust_data: isize,
+            lpfn_hook: Option<unsafe extern "system" fn()>,
+            lp_template_name: *const u16,
+            pv_reserved: *mut c_void,
+            dw_reserved: u32,
+            flags_ex: u32,
+        }
+
+        #[link(name = "comdlg32")]
+        unsafe extern "system" {
+            fn GetOpenFileNameW(param: *mut OpenFileNameW) -> i32;
+        }
+
+        let filter: Vec<u16> = "图片文件\0*.png;*.jpg;*.jpeg;*.webp;*.gif;*.svg\0所有文件\0*.*\0\0"
+            .encode_utf16()
+            .collect();
+        let title: Vec<u16> = "导入本地图片到 VisionHub 作品画廊\0"
+            .encode_utf16()
+            .collect();
+        let mut file_buffer = vec![0u16; MAX_FILE_BUFFER];
+        let mut open_file_name = OpenFileNameW {
+            l_struct_size: std::mem::size_of::<OpenFileNameW>() as u32,
+            hwnd_owner: std::ptr::null_mut(),
+            h_instance: std::ptr::null_mut(),
+            lpstr_filter: filter.as_ptr(),
+            lpstr_custom_filter: std::ptr::null_mut(),
+            n_max_cust_filter: 0,
+            n_filter_index: 1,
+            lpstr_file: file_buffer.as_mut_ptr(),
+            n_max_file: file_buffer.len() as u32,
+            lpstr_file_title: std::ptr::null_mut(),
+            n_max_file_title: 0,
+            lpstr_initial_dir: std::ptr::null(),
+            lpstr_title: title.as_ptr(),
+            flags: OFN_ALLOWMULTISELECT | OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST,
+            n_file_offset: 0,
+            n_file_extension: 0,
+            lpstr_def_ext: std::ptr::null(),
+            l_cust_data: 0,
+            lpfn_hook: None,
+            lp_template_name: std::ptr::null(),
+            pv_reserved: std::ptr::null_mut(),
+            dw_reserved: 0,
+            flags_ex: 0,
+        };
+
+        let ok = unsafe { GetOpenFileNameW(&mut open_file_name) };
+        if ok == 0 {
+            return Ok(Vec::new());
+        }
+
+        let mut parts = Vec::new();
+        let mut start = 0;
+        for index in 0..file_buffer.len() {
+            if file_buffer[index] == 0 {
+                if index == start {
+                    break;
+                }
+                parts.push(String::from_utf16_lossy(&file_buffer[start..index]));
+                start = index + 1;
+            }
+        }
+
+        if parts.is_empty() {
+            return Ok(Vec::new());
+        }
+        if parts.len() == 1 {
+            return Ok(vec![PathBuf::from(&parts[0])]);
+        }
+
+        let dir = PathBuf::from(&parts[0]);
+        Ok(parts.into_iter().skip(1).map(|name| dir.join(name)).collect())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("当前平台暂未接入系统图片选择窗口。".to_string())
+    }
+}
+
+fn scan_image_files_in_folder(folder: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut paths = Vec::new();
+    let entries = std::fs::read_dir(folder)
+        .map_err(|error| format!("Cannot read selected folder: {error}"))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("Cannot read selected folder entry: {error}"))?;
+        let path = entry.path();
+        if path.is_file() && is_supported_image_path(&path) {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    Ok(paths)
+}
+
+fn is_supported_image_path(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| extension.to_ascii_lowercase())
+            .as_deref(),
+        Some("png" | "jpg" | "jpeg" | "webp" | "gif" | "svg")
+    )
+}
+
 fn open_path_in_file_manager(path: PathBuf) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
@@ -1742,7 +2097,7 @@ fn hydrate_record_image_urls(app: &tauri::AppHandle, record: &mut GenerationReco
     let mut changed = false;
     if record.local_image_paths.is_empty() {
         let recovered_urls = if record.image_urls.is_empty() {
-            extract_image_urls(&record.raw)
+            extract_image_urls(&record.raw, None)
         } else {
             record.image_urls.clone()
         };
@@ -1758,7 +2113,7 @@ fn hydrate_record_image_urls(app: &tauri::AppHandle, record: &mut GenerationReco
 
             if !local_paths.is_empty() {
                 record.local_image_paths = local_paths;
-                record.image_urls = display_image_urls_for_paths(app, &record.local_image_paths, &[]);
+                record.image_urls = display_image_urls_for_paths(app, record, &[]);
                 changed = true;
             } else if record.image_urls.is_empty() {
                 record.image_urls = recovered_urls;
@@ -1778,7 +2133,7 @@ fn hydrate_record_image_urls(app: &tauri::AppHandle, record: &mut GenerationReco
         return changed;
     }
 
-    let image_urls = display_image_urls_for_paths(app, &record.local_image_paths, &record.image_urls);
+    let image_urls = display_image_urls_for_paths(app, record, &record.image_urls);
     if !image_urls.is_empty() {
         record.image_urls = image_urls;
         changed = true;
@@ -1787,6 +2142,35 @@ fn hydrate_record_image_urls(app: &tauri::AppHandle, record: &mut GenerationReco
 }
 
 fn display_image_urls_for_paths(
+    app: &tauri::AppHandle,
+    record: &GenerationRecord,
+    fallback_urls: &[String],
+) -> Vec<String> {
+    if record.local_image_paths.is_empty() {
+        return fallback_urls.to_vec();
+    }
+
+    let is_local_import = record.provider_id == "local-import"
+        || record.raw.get("visionhubSource").and_then(Value::as_str) == Some("local-import");
+    let display_urls: Vec<String> = record.local_image_paths
+        .iter()
+        .filter_map(|path| {
+            if is_local_import {
+                imported_image_path_to_data_url(path).ok()
+            } else {
+                local_image_path_to_data_url(app, path).ok()
+            }
+        })
+        .collect();
+
+    if display_urls.is_empty() {
+        fallback_urls.to_vec()
+    } else {
+        display_urls
+    }
+}
+
+fn display_library_image_urls_for_paths(
     app: &tauri::AppHandle,
     local_paths: &[String],
     fallback_urls: &[String],
@@ -1813,8 +2197,20 @@ fn local_image_path_to_data_url(app: &tauri::AppHandle, path: &str) -> Result<St
         return Err("Image path is outside the current VisionHub library scope.".to_string());
     }
 
+    image_path_to_data_url(&file_path, "generated")
+}
+
+fn imported_image_path_to_data_url(path: &str) -> Result<String, String> {
+    let file_path = PathBuf::from(path);
+    if !file_path.is_file() || !is_supported_image_path(&file_path) {
+        return Err("Imported image path is not a supported image file.".to_string());
+    }
+    image_path_to_data_url(&file_path, "imported")
+}
+
+fn image_path_to_data_url(file_path: &Path, label: &str) -> Result<String, String> {
     let bytes = std::fs::read(&file_path)
-        .map_err(|error| format!("Cannot read generated image: {error}"))?;
+        .map_err(|error| format!("Cannot read {label} image: {error}"))?;
     let mime = image_mime_from_path(&file_path);
     let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
     Ok(format!("data:{mime};base64,{encoded}"))
@@ -1860,27 +2256,32 @@ fn image_mime_from_path(path: &Path) -> &'static str {
 async fn save_images_to_library(
     app: &tauri::AppHandle,
     image_urls: &[String],
-    provider_id: &str,
-    model_id: &str,
+    request: &OpenAIImageRequest,
 ) -> Result<Vec<String>, String> {
     let dir = library_dir(app)?;
     let client = reqwest::Client::new();
     let mut saved_paths = Vec::new();
 
     for (index, image_url) in image_urls.iter().enumerate() {
-        let (bytes, extension) = if image_url.starts_with("data:image/") {
+        let (bytes, source_extension) = if image_url.starts_with("data:image/") {
             decode_data_url_image(image_url)?
         } else if image_url.starts_with("http://") || image_url.starts_with("https://") {
             download_remote_image(&client, image_url).await?
         } else {
             continue;
         };
+        let (bytes, extension) = convert_generated_image_bytes(
+            bytes,
+            &source_extension,
+            request.output_format.as_deref(),
+            request.output_compression,
+        )?;
 
         let filename = format!(
             "{}-{}-{}-{}.{}",
             chrono_like_timestamp_millis(),
-            sanitize_filename(provider_id),
-            sanitize_filename(model_id),
+            sanitize_filename(&request.provider_id),
+            sanitize_filename(&request.model_id),
             index + 1,
             extension
         );
@@ -1922,6 +2323,65 @@ fn save_data_url_images_to_library(
     }
 
     Ok(saved_paths)
+}
+
+fn normalize_output_format(value: Option<&str>) -> Option<&'static str> {
+    match value.unwrap_or("").trim().to_ascii_lowercase().as_str() {
+        "jpeg" | "jpg" => Some("jpg"),
+        "webp" => Some("webp"),
+        "png" => Some("png"),
+        _ => None,
+    }
+}
+
+fn normalized_image_quality(compression: Option<u8>) -> u8 {
+    compression.unwrap_or(96).clamp(75, 100)
+}
+
+fn convert_generated_image_bytes(
+    bytes: Vec<u8>,
+    source_extension: &str,
+    output_format: Option<&str>,
+    output_compression: Option<u8>,
+) -> Result<(Vec<u8>, String), String> {
+    let Some(target_extension) = normalize_output_format(output_format) else {
+        return Ok((bytes, source_extension.to_string()));
+    };
+    if target_extension == source_extension && target_extension != "jpg" && target_extension != "webp" {
+        return Ok((bytes, source_extension.to_string()));
+    }
+    if source_extension == "svg" {
+        return Ok((bytes, source_extension.to_string()));
+    }
+
+    let image = image::load_from_memory(&bytes)
+        .map_err(|error| format!("Cannot decode generated image for {target_extension} export: {error}"))?;
+    let mut output = Vec::new();
+    match target_extension {
+        "jpg" => {
+            let rgb = image.to_rgb8();
+            let mut encoder = JpegEncoder::new_with_quality(&mut output, normalized_image_quality(output_compression));
+            encoder
+                .encode(&rgb, rgb.width(), rgb.height(), ColorType::Rgb8.into())
+                .map_err(|error| format!("Cannot encode generated image as JPEG: {error}"))?;
+        }
+        "webp" => {
+            let rgba = image.to_rgba8();
+            let encoder = WebPEncoder::new_lossless(&mut output);
+            encoder
+                .encode(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
+                .map_err(|error| format!("Cannot encode generated image as WebP: {error}"))?;
+        }
+        "png" => {
+            let rgba = image.to_rgba8();
+            let encoder = PngEncoder::new(&mut output);
+            encoder
+                .write_image(&rgba, rgba.width(), rgba.height(), ColorType::Rgba8.into())
+                .map_err(|error| format!("Cannot encode generated image as PNG: {error}"))?;
+        }
+        _ => return Ok((bytes, source_extension.to_string())),
+    }
+    Ok((output, target_extension.to_string()))
 }
 
 fn decode_data_url_image(data_url: &str) -> Result<(Vec<u8>, String), String> {
@@ -2052,6 +2512,7 @@ async fn build_openai_images_edit_form(
     client: &reqwest::Client,
     request: &OpenAIImageRequest,
     references: &[ReferenceImage],
+    api_size: &str,
 ) -> Result<reqwest::multipart::Form, String> {
     if references.is_empty() {
         return Err("图生图需要先添加至少一张参考图。".to_string());
@@ -2060,13 +2521,12 @@ async fn build_openai_images_edit_form(
     let mut form = reqwest::multipart::Form::new()
         .text("model", request.model_id.clone())
         .text("prompt", request.prompt.clone())
-        .text("size", request.size.clone())
+        .text("size", api_size.to_string())
         .text("n", request.count.max(1).min(4).to_string());
 
     if let Some(quality) = request.quality.as_ref().filter(|quality| !quality.trim().is_empty()) {
         form = form.text("quality", quality.clone());
     }
-
     for (index, reference) in references.iter().enumerate() {
         let image_url = reference
             .data_url
@@ -2104,7 +2564,15 @@ fn mime_from_extension(extension: &str) -> &'static str {
     }
 }
 
-fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str) -> Value {
+fn mime_from_output_format(output_format: Option<&str>) -> &'static str {
+    match normalize_output_format(output_format) {
+        Some("jpg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        _ => "image/png",
+    }
+}
+
+fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str, api_size: &str) -> Value {
     let reference_data_urls: Vec<String> = request
         .reference_images
         .as_ref()
@@ -2148,7 +2616,7 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str)
                     "tools": [{ "type": "image_generation" }],
                     "background": true,
                     "store": true,
-                    "size": request.size,
+                    "size": api_size,
                     "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string())
                 })
             } else {
@@ -2158,7 +2626,7 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str)
                     "tools": [{ "type": "image_generation" }],
                     "background": true,
                     "store": true,
-                    "size": request.size,
+                    "size": api_size,
                     "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string())
                 })
             }
@@ -2179,7 +2647,7 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str)
                     "model": request.model_id,
                     "messages": [{ "role": "user", "content": content }],
                     "modalities": ["text", "image"],
-                    "size": request.size,
+                    "size": api_size,
                     "n": request.count.max(1).min(4)
                 })
             } else {
@@ -2192,7 +2660,7 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str)
                         }
                     ],
                     "modalities": ["text", "image"],
-                    "size": request.size,
+                    "size": api_size,
                     "n": request.count.max(1).min(4)
                 })
             }
@@ -2204,7 +2672,7 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str)
                     "prompt": request.prompt,
                     "image": reference_data_urls.first(),
                     "images": reference_data_urls,
-                    "size": request.size,
+                    "size": api_size,
                     "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string()),
                     "n": request.count.max(1).min(4)
                 })
@@ -2212,7 +2680,7 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str)
                 serde_json::json!({
                     "model": request.model_id,
                     "prompt": request.prompt,
-                    "size": request.size,
+                    "size": api_size,
                     "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string()),
                     "n": request.count.max(1).min(4)
                 })
@@ -2221,13 +2689,14 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str)
     }
 }
 
-fn extract_image_urls(raw: &Value) -> Vec<String> {
+fn extract_image_urls(raw: &Value, output_format: Option<&str>) -> Vec<String> {
     let mut urls = Vec::new();
-    collect_images_recursive(raw, &mut urls);
+    let default_mime = mime_from_output_format(output_format);
+    collect_images_recursive(raw, &mut urls, default_mime);
     urls
 }
 
-fn collect_images_recursive(value: &Value, urls: &mut Vec<String>) {
+fn collect_images_recursive(value: &Value, urls: &mut Vec<String>, default_base64_mime: &str) {
     match value {
         Value::Object(map) => {
             for key in ["url", "image_url"] {
@@ -2240,17 +2709,17 @@ fn collect_images_recursive(value: &Value, urls: &mut Vec<String>) {
             for key in ["b64_json", "image_base64", "base64", "data", "result", "image"] {
                 if let Some(b64) = map.get(key).and_then(|value| value.as_str()) {
                     if is_probable_base64_image(b64) {
-                        urls.push(format!("data:image/png;base64,{b64}"));
+                        urls.push(format!("data:{default_base64_mime};base64,{b64}"));
                     }
                 }
             }
             for child in map.values() {
-                collect_images_recursive(child, urls);
+                collect_images_recursive(child, urls, default_base64_mime);
             }
         }
         Value::Array(items) => {
             for item in items {
-                collect_images_recursive(item, urls);
+                collect_images_recursive(item, urls, default_base64_mime);
             }
         }
         Value::String(text) => {
@@ -2305,6 +2774,8 @@ pub fn run() {
             load_generation_history,
             save_generation_record,
             delete_generation_record,
+            import_library_images_from_files,
+            import_library_images_from_folder,
             load_inspirations,
             save_inspiration_source,
             delete_inspiration_source,

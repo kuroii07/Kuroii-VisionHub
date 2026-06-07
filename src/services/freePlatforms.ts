@@ -7,6 +7,7 @@ export interface FreePlatform {
   vendor: string;
   logoText: string;
   logoUrl: string;
+  fallbackLogoUrl: string;
   brandColor: string;
   region: FreePlatformRegion;
   kind: FreePlatformKind;
@@ -16,14 +17,23 @@ export interface FreePlatform {
   workflowHint: string;
 }
 
+function faviconUrl(domain: string) {
+  return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
+}
+
+function fallbackFaviconUrl(domain: string) {
+  return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+}
+
 export const FREE_PLATFORMS: FreePlatform[] = [
   {
     id: 'doubao',
     name: '豆包',
     vendor: 'ByteDance',
     logoText: '豆',
-    logoUrl: 'https://www.doubao.com/favicon.ico',
     brandColor: '#2563eb',
+    logoUrl: faviconUrl('www.doubao.com'),
+    fallbackLogoUrl: fallbackFaviconUrl('www.doubao.com'),
     region: 'china',
     kind: 'chat-image',
     url: 'https://www.doubao.com',
@@ -36,8 +46,9 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: '即梦',
     vendor: 'ByteDance / Jianying',
     logoText: '即',
-    logoUrl: 'https://www.jimeng.com/favicon.ico',
     brandColor: '#ec4899',
+    logoUrl: faviconUrl('www.jimeng.com'),
+    fallbackLogoUrl: fallbackFaviconUrl('www.jimeng.com'),
     region: 'china',
     kind: 'image-video',
     url: 'https://www.jimeng.com',
@@ -50,8 +61,9 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: '可灵',
     vendor: 'Kuaishou',
     logoText: '可',
-    logoUrl: 'https://klingai.com/favicon.ico',
     brandColor: '#7c3aed',
+    logoUrl: faviconUrl('klingai.com'),
+    fallbackLogoUrl: fallbackFaviconUrl('klingai.com'),
     region: 'china',
     kind: 'image-video',
     url: 'https://klingai.com',
@@ -64,8 +76,9 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: '元宝',
     vendor: 'Tencent',
     logoText: '元',
-    logoUrl: 'https://yuanbao.tencent.cn/favicon.ico',
     brandColor: '#16a34a',
+    logoUrl: faviconUrl('yuanbao.tencent.cn'),
+    fallbackLogoUrl: fallbackFaviconUrl('yuanbao.tencent.cn'),
     region: 'china',
     kind: 'chat-image',
     url: 'https://yuanbao.tencent.cn',
@@ -78,8 +91,9 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: '千问 / Qwen',
     vendor: 'Alibaba',
     logoText: '千',
-    logoUrl: 'https://chat.qwen.ai/favicon.ico',
     brandColor: '#0ea5e9',
+    logoUrl: faviconUrl('chat.qwen.ai'),
+    fallbackLogoUrl: fallbackFaviconUrl('chat.qwen.ai'),
     region: 'global',
     kind: 'chat-image',
     url: 'https://chat.qwen.ai',
@@ -92,8 +106,9 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: 'ChatGPT',
     vendor: 'OpenAI',
     logoText: 'G',
-    logoUrl: 'https://chatgpt.com/favicon.ico',
     brandColor: '#10a37f',
+    logoUrl: faviconUrl('chatgpt.com'),
+    fallbackLogoUrl: fallbackFaviconUrl('chatgpt.com'),
     region: 'global',
     kind: 'chat-image',
     url: 'https://chatgpt.com',
@@ -106,8 +121,9 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: 'Grok',
     vendor: 'xAI',
     logoText: 'X',
-    logoUrl: 'https://grok.com/favicon.ico',
     brandColor: '#111827',
+    logoUrl: faviconUrl('grok.com'),
+    fallbackLogoUrl: fallbackFaviconUrl('grok.com'),
     region: 'global',
     kind: 'chat-image',
     url: 'https://grok.com',
@@ -120,8 +136,9 @@ export const FREE_PLATFORMS: FreePlatform[] = [
     name: 'Gemini / Nano Banana',
     vendor: 'Google',
     logoText: 'N',
-    logoUrl: 'https://gemini.google.com/favicon.ico',
     brandColor: '#f59e0b',
+    logoUrl: faviconUrl('gemini.google.com'),
+    fallbackLogoUrl: fallbackFaviconUrl('gemini.google.com'),
     region: 'global',
     kind: 'chat-image',
     url: 'https://gemini.google.com',

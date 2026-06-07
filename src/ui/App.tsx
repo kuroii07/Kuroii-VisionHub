@@ -1,4 +1,6 @@
 ﻿import {
+  ChevronRight,
+  ClipboardPaste,
   Clock3,
   Copy,
   Database,
@@ -8,6 +10,7 @@
   Gauge,
   Gift,
   Globe2,
+  Grid2X2,
   HardDrive,
   Image,
   ImagePlus,
@@ -16,6 +19,7 @@
   Layers,
   Maximize2,
   Monitor,
+  MoreHorizontal,
   Pencil,
   Plus,
   RefreshCcw,
@@ -24,6 +28,8 @@
   Sidebar,
   Sparkles,
   Bookmark,
+  SlidersHorizontal,
+  Star,
   Sun,
   Moon,
   Trash2,
@@ -44,6 +50,8 @@ import {
   exportSettingsBackup,
   generateOpenAIImage,
   getStorageSettings,
+  importLibraryImagesFromFiles,
+  importLibraryImagesFromFolder,
   revealAppDataDir,
   isTauriRuntime,
   listOpenAICompatibleModels,
@@ -61,6 +69,7 @@ import {
   exportProviderConfigMap,
   loadProviderConfig,
   normalizeProviderConfig,
+  OFFICIAL_OPENAI_BASE_URL,
   parseProviderConfigImport,
   parseExtraHeaders,
   saveProviderConfig,
@@ -85,12 +94,14 @@ import {
   DEFAULT_SIZE_OPTIONS,
   GENERATOR_ACCENT_OPTIONS,
   getRecommendedGlobalAccent,
+  promptPolishConfigId,
   OUTPUT_FORMAT_OPTIONS,
   PRIMARY_ACCENT_OPTIONS,
   PROMPT_HISTORY_LIMIT_OPTIONS,
   PROMPT_POLISH_ENGINE_OPTIONS,
   PROMPT_POLISH_LANGUAGE_OPTIONS,
   PROMPT_POLISH_PROTOCOL_OPTIONS,
+  PROMPT_POLISH_SECRET_ID,
   PROMPT_POLISH_STRENGTH_OPTIONS,
   REFRESH_INTERVAL_OPTIONS,
   REVIEW_MODE_OPTIONS,
@@ -104,7 +115,7 @@ import {
   type PromptPolishSettings,
   type ThemeMode
 } from '../services/appSettings';
-import { POLISH_MODES } from '../services/promptAssist';
+import { getPolishModesForEngine, resolvePolishMode } from '../services/promptAssist';
 import {
   PROMPT_TEMPLATE_CATEGORIES,
   loadPromptTemplates,
@@ -112,28 +123,477 @@ import {
   type PromptTemplate
 } from '../services/promptTemplates';
 import { FREE_PLATFORMS, type FreePlatform } from '../services/freePlatforms';
+import { readStorageValue, writeStorageValue } from '../services/safeStorage';
 import { useStudioStore } from '../store/useStudioStore';
 import { ModernGeneratePage } from './GeneratePage';
 import { InspirationPage } from './InspirationPage';
 import { StudioSelect } from './StudioSelect';
+import type { ConfirmDialogRequest } from './confirmDialog';
+import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
 type Page = AppPage;
 type ProviderDiagnosticLevel = 'pass' | 'warn' | 'fail' | 'info';
+type ProviderPlatformType = 'aggregator' | 'official' | 'local';
+type ProviderServiceTemplateStatus = 'connected' | 'configurable' | 'planned' | 'local-plan';
 type LibraryTimeFilter = 'all' | 'today' | '7d' | '30d';
+type LibraryViewMode = 'masonry' | 'adaptive' | 'square' | 'contain' | 'list';
+type LibrarySortMode = 'newest' | 'oldest' | 'favorites' | 'provider' | 'model' | 'duration' | 'size' | 'filename';
+type LibraryQuickFilter = 'favorites' | 'recent7d' | 'references' | 'failed' | 'local';
+type LibraryShapeFilter = 'all' | 'landscape' | 'portrait' | 'square' | 'wide' | 'tall' | 'four-three' | 'three-four' | 'sixteen-nine' | 'nine-sixteen' | 'custom';
+type LibraryFormatFilter = 'all' | 'png' | 'jpg' | 'gif' | 'webp' | 'svg' | 'unknown';
+type LibraryRatingFilter = 'all' | 'unrated' | '1' | '2' | '3' | '4' | '5';
+type LibraryColorFilter = 'all' | 'red' | 'orange' | 'yellow' | 'green' | 'cyan' | 'blue' | 'purple' | 'pink' | 'mono';
+type LibraryModeFilter = 'all' | 'text-to-image' | 'image-to-image' | 'with-references';
 type ProviderDiagnosticItem = {
   id: string;
   label: string;
   detail: string;
   level: ProviderDiagnosticLevel;
 };
+type ProviderPlatformOption = {
+  id: ProviderPlatformType;
+  label: string;
+  description: string;
+};
+type ProviderServiceTemplate = {
+  id: string;
+  platformType: ProviderPlatformType;
+  label: string;
+  description: string;
+  status: ProviderServiceTemplateStatus;
+  providerId?: string;
+  defaultDisplayName?: string;
+  notes: string[];
+};
+type LibraryMetaEntry = {
+  favorite?: boolean;
+  tags?: string[];
+  folderId?: string;
+  collectionIds?: string[];
+  note?: string;
+  rating?: number;
+  colorPalette?: string[];
+  colorFamilies?: LibraryColorFilter[];
+  imageSize?: string;
+  colorAnalyzedAt?: string;
+  colorAnalysisFailed?: boolean;
+  lastViewedAt?: string;
+  lastUsedAsReferenceAt?: string;
+};
+type LibraryMetaMap = Record<string, LibraryMetaEntry>;
+type LibraryDisplaySettings = {
+  showPrompt: boolean;
+  showProvider: boolean;
+  showModel: boolean;
+  showFailed: boolean;
+  showReferenceBadge: boolean;
+  compact: boolean;
+};
+type LibraryCustomQuickFilterCriteria = {
+  query?: string;
+  providerFilter?: string;
+  statusFilter?: 'all' | 'succeeded' | 'failed';
+  modeFilter?: LibraryModeFilter;
+  timeFilter?: LibraryTimeFilter;
+  colorFilter?: LibraryColorFilter;
+  shapeFilter?: LibraryShapeFilter;
+  formatFilter?: LibraryFormatFilter;
+  ratingFilter?: LibraryRatingFilter;
+};
+type LibraryCustomQuickFilter = {
+  id: string;
+  label: string;
+  criteria: LibraryCustomQuickFilterCriteria;
+  createdAt: string;
+};
+type LibraryFolder = {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+};
+type LibraryCollection = {
+  id: string;
+  name: string;
+  description?: string;
+  coverRecordId?: string;
+  createdAt: string;
+};
+type LibraryOrganization = {
+  folders: LibraryFolder[];
+  collections: LibraryCollection[];
+};
+type LibraryScope =
+  | { type: 'all' }
+  | { type: 'favorites' }
+  | { type: 'recent7d' }
+  | { type: 'local' }
+  | { type: 'folder'; id: string }
+  | { type: 'collection'; id: string };
+type LibraryOrganizerDialogState = {
+  type: 'folder' | 'collection';
+  mode: 'create' | 'rename';
+  defaultName: string;
+  targetId?: string;
+};
+type LibraryAssignDialogState = {
+  type: 'folder' | 'collection';
+  recordIds: string[];
+};
+type LibraryAddAction = 'folder' | 'collection' | 'import-file' | 'batch-folder';
+type LibraryContextMenuState = {
+  x: number;
+  y: number;
+  recordId: string;
+};
+type ToastItem = {
+  id: number;
+  message: string;
+  level: ToastLevel;
+  durationMs: number;
+};
+
+const LIBRARY_META_STORAGE_KEY = 'visionhub.library.meta.v1';
+const LIBRARY_DISPLAY_STORAGE_KEY = 'visionhub.library.display.v1';
+const LIBRARY_CUSTOM_QUICK_FILTERS_STORAGE_KEY = 'visionhub.library.customQuickFilters.v1';
+const LIBRARY_ORGANIZATION_STORAGE_KEY = 'visionhub.library.organization.v1';
+
+const providerPlatformOptions: ProviderPlatformOption[] = [
+  {
+    id: 'aggregator',
+    label: '中转站 / 聚合 API',
+    description: '默认主入口，适合中转站、聚合站和 OpenAI-compatible 服务。'
+  },
+  {
+    id: 'official',
+    label: '官方 API',
+    description: '官方服务商入口；当前只有 OpenAI 官方已接入真实生图。'
+  },
+  {
+    id: 'local',
+    label: '本地模型',
+    description: '本地工作流规划区，暂不影响在线中转站使用。'
+  }
+];
+
+const providerServiceTemplates: ProviderServiceTemplate[] = [
+  {
+    id: 'aggregator-openai-compatible',
+    platformType: 'aggregator',
+    label: 'OpenAI 兼容中转',
+    description: '当前真实可用。适合把 GPT Image、Nano Banana、Qwen、豆包、Grok、Midjourney、可灵等包装成 OpenAI-compatible 的中转站。',
+    status: 'connected',
+    providerId: 'custom-http-provider',
+    defaultDisplayName: 'OpenAI 兼容中转',
+    notes: ['Base URL、模型 ID、协议路径以服务商文档为准。', '旧的中转站配置会自动归到这里，profile id 不会变化。']
+  },
+  {
+    id: 'aggregator-generic-api',
+    platformType: 'aggregator',
+    label: '聚合网站 API',
+    description: '通用聚合站模板；能保存配置，图片能力取决于服务商实际支持。',
+    status: 'configurable',
+    providerId: 'custom-http-provider',
+    defaultDisplayName: '聚合网站 API',
+    notes: ['适合没有明确品牌模板的聚合 API。', '保存前请按服务商文档填写 Base URL、模型 ID 和协议。']
+  },
+  {
+    id: 'openrouter',
+    platformType: 'aggregator',
+    label: 'OpenRouter',
+    description: '先作为 OpenAI-compatible 模板；图片能力待按服务商实际接口验证。',
+    status: 'configurable',
+    providerId: 'custom-http-provider',
+    defaultDisplayName: 'OpenRouter',
+    notes: ['可保存连接配置；是否能生成图片取决于 OpenRouter 当前模型与图片接口支持。']
+  },
+  {
+    id: 'dmxapi',
+    platformType: 'aggregator',
+    label: 'DMXAPI',
+    description: '先作为聚合站模板；图片能力待验证。',
+    status: 'configurable',
+    providerId: 'custom-http-provider',
+    defaultDisplayName: 'DMXAPI',
+    notes: ['可保存连接配置；试生图前请确认服务商文档中的模型 ID 和路径。']
+  },
+  {
+    id: 'siliconflow',
+    platformType: 'aggregator',
+    label: '硅基流动',
+    description: '先作为聚合站模板；图片能力待验证。',
+    status: 'configurable',
+    providerId: 'custom-http-provider',
+    defaultDisplayName: '硅基流动',
+    notes: ['可保存连接配置；图片模型和 OpenAI-compatible 兼容程度以服务商为准。']
+  },
+  {
+    id: 'lmrouter',
+    platformType: 'aggregator',
+    label: 'LMRouter',
+    description: '先作为聚合站模板；图片能力待验证。',
+    status: 'configurable',
+    providerId: 'custom-http-provider',
+    defaultDisplayName: 'LMRouter',
+    notes: ['可保存连接配置；图片能力需要按实际模型返回验证。']
+  },
+  {
+    id: 'aggregator-custom',
+    platformType: 'aggregator',
+    label: '其他聚合站',
+    description: '通用自定义模板，适合其他 OpenAI-compatible 聚合 API。',
+    status: 'configurable',
+    providerId: 'custom-http-provider',
+    defaultDisplayName: '其他聚合站',
+    notes: ['保留最大手动配置空间，适合服务商文档比较特殊的场景。']
+  },
+  {
+    id: 'official-openai',
+    platformType: 'official',
+    label: 'OpenAI 官方',
+    description: '当前真实可用；仅用于 https://api.openai.com。',
+    status: 'connected',
+    providerId: 'openai-gpt-image',
+    defaultDisplayName: 'OpenAI 官方',
+    notes: ['ChatGPT Plus 网页额度不等于 API 额度。', '旧官方 OpenAI 配置会自动归到这里，profile id 不会变化。']
+  },
+  {
+    id: 'official-gemini',
+    platformType: 'official',
+    label: 'Google Gemini / Nano Banana 官方',
+    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    status: 'planned',
+    notes: ['后续需要单独实现官方 API adapter、鉴权和图片返回解析。']
+  },
+  {
+    id: 'official-xai',
+    platformType: 'official',
+    label: 'xAI 官方',
+    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    status: 'planned',
+    notes: ['后续按官方图片接口能力接入。']
+  },
+  {
+    id: 'official-volcengine',
+    platformType: 'official',
+    label: '火山方舟 / Seedream 官方',
+    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    status: 'planned',
+    notes: ['后续需要接入火山鉴权、模型参数和结果落盘链路。']
+  },
+  {
+    id: 'official-bailian',
+    platformType: 'official',
+    label: '阿里百炼 / 通义万相官方',
+    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    status: 'planned',
+    notes: ['后续需要接入官方鉴权与异步任务轮询。']
+  },
+  {
+    id: 'official-fal',
+    platformType: 'official',
+    label: 'fal.ai',
+    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    status: 'planned',
+    notes: ['后续按 fal.ai 图片任务接口实现。']
+  },
+  {
+    id: 'official-replicate',
+    platformType: 'official',
+    label: 'Replicate',
+    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    status: 'planned',
+    notes: ['后续需要模型级参数表单和任务轮询。']
+  },
+  {
+    id: 'official-stability',
+    platformType: 'official',
+    label: 'Stability AI',
+    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    status: 'planned',
+    notes: ['后续按官方生图与编辑接口拆分配置。']
+  },
+  {
+    id: 'official-kling',
+    platformType: 'official',
+    label: '可灵企业 API',
+    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    status: 'planned',
+    notes: ['后续可作为图像 / 视频生成企业 API 路线。']
+  },
+  {
+    id: 'official-jimeng',
+    platformType: 'official',
+    label: '即梦企业 API',
+    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    status: 'planned',
+    notes: ['后续可作为国内官方企业 API 路线。']
+  },
+  {
+    id: 'local-comfyui',
+    platformType: 'local',
+    label: 'ComfyUI',
+    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    status: 'local-plan',
+    notes: ['后续需要工作流 JSON、节点参数映射和本地队列轮询。']
+  },
+  {
+    id: 'local-sd-webui',
+    platformType: 'local',
+    label: 'Stable Diffusion WebUI / Forge',
+    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    status: 'local-plan',
+    notes: ['后续接入本地 endpoint、采样器、尺寸和 ControlNet 参数。']
+  },
+  {
+    id: 'local-invokeai',
+    platformType: 'local',
+    label: 'InvokeAI',
+    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    status: 'local-plan',
+    notes: ['后续按 InvokeAI API 能力接入。']
+  },
+  {
+    id: 'local-swarmui',
+    platformType: 'local',
+    label: 'SwarmUI',
+    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    status: 'local-plan',
+    notes: ['后续按本地任务队列和模型列表接入。']
+  },
+  {
+    id: 'local-fooocus',
+    platformType: 'local',
+    label: 'Fooocus',
+    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    status: 'local-plan',
+    notes: ['后续评估可用 API 与参数覆盖范围。']
+  },
+  {
+    id: 'local-openai-compatible',
+    platformType: 'local',
+    label: 'LocalAI / OpenAI-compatible 本地服务',
+    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    status: 'local-plan',
+    notes: ['后续可复用 OpenAI-compatible 调用层，但需要独立本地服务发现和安全提示。']
+  },
+  {
+    id: 'local-ollama',
+    platformType: 'local',
+    label: 'Ollama',
+    description: '本地文本润色优先，不作为生图主入口。',
+    status: 'local-plan',
+    notes: ['后续优先接入提示词润色，不默认作为图片生成平台。']
+  }
+];
+
+const providerServiceStatusLabel: Record<ProviderServiceTemplateStatus, string> = {
+  connected: '已接入',
+  configurable: '可配置',
+  planned: '待接入',
+  'local-plan': '本地规划'
+};
+
+const defaultLibraryDisplaySettings: LibraryDisplaySettings = {
+  showPrompt: true,
+  showProvider: true,
+  showModel: true,
+  showFailed: false,
+  showReferenceBadge: true,
+  compact: false
+};
+
+const libraryViewOptions: Array<{ value: LibraryViewMode; label: string }> = [
+  { value: 'masonry', label: '瀑布流' },
+  { value: 'adaptive', label: '自适应' },
+  { value: 'square', label: '正方形' },
+  { value: 'contain', label: '完整宽高比' },
+  { value: 'list', label: '列表视图' }
+];
+
+const librarySortOptions: Array<{ value: LibrarySortMode; label: string }> = [
+  { value: 'newest', label: '最新优先' },
+  { value: 'oldest', label: '最早优先' },
+  { value: 'favorites', label: '收藏优先' },
+  { value: 'provider', label: '平台分组' },
+  { value: 'model', label: '模型分组' },
+  { value: 'duration', label: '生成耗时' },
+  { value: 'size', label: '图片尺寸' },
+  { value: 'filename', label: '文件名' }
+];
+
+const libraryQuickFilters: Array<{ value: LibraryQuickFilter; label: string }> = [
+  { value: 'favorites', label: '收藏' },
+  { value: 'recent7d', label: '最近 7 天' },
+  { value: 'references', label: '有参考图' },
+  { value: 'local', label: '本地已落盘' }
+];
+
+const libraryShapeOptions: Array<{ value: LibraryShapeFilter; label: string }> = [
+  { value: 'all', label: '全部形状' },
+  { value: 'landscape', label: '横图' },
+  { value: 'portrait', label: '竖图' },
+  { value: 'square', label: '方形' },
+  { value: 'wide', label: '细长横图' },
+  { value: 'tall', label: '细长竖图' },
+  { value: 'four-three', label: '4:3' },
+  { value: 'three-four', label: '3:4' },
+  { value: 'sixteen-nine', label: '16:9' },
+  { value: 'nine-sixteen', label: '9:16' },
+  { value: 'custom', label: '自定义' }
+];
+
+const libraryFormatOptions: Array<{ value: LibraryFormatFilter; label: string }> = [
+  { value: 'all', label: '全部格式' },
+  { value: 'png', label: 'PNG' },
+  { value: 'jpg', label: 'JPG' },
+  { value: 'webp', label: 'WebP' },
+  { value: 'gif', label: 'GIF' },
+  { value: 'svg', label: 'SVG' },
+  { value: 'unknown', label: '未知格式' }
+];
+
+const libraryRatingOptions: Array<{ value: LibraryRatingFilter; label: string }> = [
+  { value: 'all', label: '全部评分' },
+  { value: '5', label: '★★★★★' },
+  { value: '4', label: '★★★★☆' },
+  { value: '3', label: '★★★☆☆' },
+  { value: '2', label: '★★☆☆☆' },
+  { value: '1', label: '★☆☆☆☆' },
+  { value: 'unrated', label: '尚未评分' }
+];
+
+const libraryRatingValues = [1, 2, 3, 4, 5] as const;
+
+const libraryColorOptions: Array<{ value: LibraryColorFilter; label: string; color: string }> = [
+  { value: 'all', label: '全部颜色', color: 'linear-gradient(135deg, #ef4444, #f59e0b, #22c55e, #38bdf8, #8b5cf6)' },
+  { value: 'red', label: '红色', color: '#ef4444' },
+  { value: 'orange', label: '橙色', color: '#f97316' },
+  { value: 'yellow', label: '黄色', color: '#eab308' },
+  { value: 'green', label: '绿色', color: '#22c55e' },
+  { value: 'cyan', label: '青色', color: '#06b6d4' },
+  { value: 'blue', label: '蓝色', color: '#3b82f6' },
+  { value: 'purple', label: '紫色', color: '#8b5cf6' },
+  { value: 'pink', label: '粉色', color: '#ec4899' },
+  { value: 'mono', label: '黑白', color: 'linear-gradient(135deg, #111827 0 45%, #f8fafc 45% 100%)' }
+];
+
+const libraryAddActions: Array<{ id: LibraryAddAction; label: string; detail: string }> = [
+  { id: 'folder', label: '新建文件夹', detail: '后续会用于整理本地作品。' },
+  { id: 'collection', label: '新建收藏集', detail: '适合按项目、风格或客户归档。' },
+  { id: 'import-file', label: '导入本地图片', detail: '索引单张或多张本地图片，不移动原文件。' },
+  { id: 'batch-folder', label: '批量导入文件夹', detail: '扫描所选文件夹内图片，不移动原文件。' }
+];
+
+const libraryFolderColors = ['#14b8a6', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#22c55e'];
 
 function isPotentialBackgroundCompletion(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
   if (record.status !== 'failed') return false;
   const message = `${record.error ?? ''} ${JSON.stringify(record.raw ?? {})}`.toLowerCase();
   return (
     message.includes('524') ||
+    message.includes('408') ||
     message.includes('同步连接超时') ||
-    message.includes('后台可能') ||
     message.includes('background task') ||
     message.includes('poll_error') ||
     message.includes('poll_url') ||
@@ -162,6 +622,413 @@ function generationFailureHint(record: Pick<GenerationRecord, 'status' | 'error'
   return `同步连接先断开，但中转或上游可能仍在后台继续生成。建议稍后重新加载历史，或查看中转后台任务状态。${pollUrl}${pollError}`;
 }
 
+function loadLibraryMeta(): LibraryMetaMap {
+  const raw = readStorageValue(LIBRARY_META_STORAGE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as LibraryMetaMap;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    console.warn('[VisionHub] library meta parse failed; using empty meta', error);
+    return {};
+  }
+}
+
+function saveLibraryMeta(meta: LibraryMetaMap) {
+  writeStorageValue(LIBRARY_META_STORAGE_KEY, JSON.stringify(meta));
+}
+
+function normalizeLibraryDisplaySettings(value: Partial<LibraryDisplaySettings> | null | undefined): LibraryDisplaySettings {
+  return {
+    showPrompt: typeof value?.showPrompt === 'boolean' ? value.showPrompt : defaultLibraryDisplaySettings.showPrompt,
+    showProvider: typeof value?.showProvider === 'boolean' ? value.showProvider : defaultLibraryDisplaySettings.showProvider,
+    showModel: typeof value?.showModel === 'boolean' ? value.showModel : defaultLibraryDisplaySettings.showModel,
+    showFailed: typeof value?.showFailed === 'boolean' ? value.showFailed : defaultLibraryDisplaySettings.showFailed,
+    showReferenceBadge: typeof value?.showReferenceBadge === 'boolean' ? value.showReferenceBadge : defaultLibraryDisplaySettings.showReferenceBadge,
+    compact: typeof value?.compact === 'boolean' ? value.compact : defaultLibraryDisplaySettings.compact
+  };
+}
+
+function loadLibraryDisplaySettings(): LibraryDisplaySettings {
+  const raw = readStorageValue(LIBRARY_DISPLAY_STORAGE_KEY);
+  if (!raw) return defaultLibraryDisplaySettings;
+  try {
+    return normalizeLibraryDisplaySettings(JSON.parse(raw) as Partial<LibraryDisplaySettings>);
+  } catch (error) {
+    console.warn('[VisionHub] library display settings parse failed; using defaults', error);
+    return defaultLibraryDisplaySettings;
+  }
+}
+
+function saveLibraryDisplaySettings(settings: LibraryDisplaySettings) {
+  const normalized = normalizeLibraryDisplaySettings(settings);
+  writeStorageValue(LIBRARY_DISPLAY_STORAGE_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+
+function loadLibraryCustomQuickFilters(): LibraryCustomQuickFilter[] {
+  const raw = readStorageValue(LIBRARY_CUSTOM_QUICK_FILTERS_STORAGE_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as LibraryCustomQuickFilter[];
+    return Array.isArray(parsed) ? parsed.filter((item) => item.id && item.label && item.criteria) : [];
+  } catch (error) {
+    console.warn('[VisionHub] library custom quick filters parse failed; using empty list', error);
+    return [];
+  }
+}
+
+function saveLibraryCustomQuickFilters(filters: LibraryCustomQuickFilter[]) {
+  writeStorageValue(LIBRARY_CUSTOM_QUICK_FILTERS_STORAGE_KEY, JSON.stringify(filters));
+}
+
+function normalizeLibraryOrganization(value: Partial<LibraryOrganization> | null | undefined): LibraryOrganization {
+  const folders = Array.isArray(value?.folders)
+    ? value.folders
+        .filter((folder): folder is LibraryFolder => Boolean(folder?.id && folder.name))
+        .map((folder) => ({
+          id: folder.id,
+          name: folder.name,
+          color: folder.color || libraryFolderColors[0],
+          createdAt: folder.createdAt || new Date().toISOString()
+        }))
+    : [];
+  const collections = Array.isArray(value?.collections)
+    ? value.collections
+        .filter((collection): collection is LibraryCollection => Boolean(collection?.id && collection.name))
+        .map((collection) => ({
+          id: collection.id,
+          name: collection.name,
+          description: collection.description,
+          coverRecordId: collection.coverRecordId,
+          createdAt: collection.createdAt || new Date().toISOString()
+        }))
+    : [];
+  return { folders, collections };
+}
+
+function loadLibraryOrganization(): LibraryOrganization {
+  const raw = readStorageValue(LIBRARY_ORGANIZATION_STORAGE_KEY);
+  if (!raw) return { folders: [], collections: [] };
+  try {
+    return normalizeLibraryOrganization(JSON.parse(raw) as Partial<LibraryOrganization>);
+  } catch (error) {
+    console.warn('[VisionHub] library organization parse failed; using empty organization', error);
+    return { folders: [], collections: [] };
+  }
+}
+
+function saveLibraryOrganization(organization: LibraryOrganization) {
+  writeStorageValue(LIBRARY_ORGANIZATION_STORAGE_KEY, JSON.stringify(organization));
+}
+
+function getRecordPrimaryPath(record: GenerationRecord) {
+  return record.localImagePaths?.[0] ?? record.imageUrls[0] ?? '';
+}
+
+function getRecordFileName(record: GenerationRecord) {
+  const path = getRecordPrimaryPath(record);
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? '';
+}
+
+function parseSizePixels(size?: string) {
+  if (!size) return 0;
+  const match = size.match(/(\d+)\s*[x×]\s*(\d+)/i);
+  if (!match) return 0;
+  return Number(match[1]) * Number(match[2]);
+}
+
+function parseSizeDimensions(size?: string): [number, number] | null {
+  if (!size) return null;
+  const match = size.match(/(\d+)\s*[x×]\s*(\d+)/i);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2])];
+}
+
+function getRecordSizeLabel(record: GenerationRecord, meta?: LibraryMetaEntry) {
+  const raw = record.raw as {
+    size?: string;
+    width?: number;
+    height?: number;
+    image_width?: number;
+    image_height?: number;
+    request?: { size?: string; width?: number; height?: number };
+    output?: { size?: string; width?: number; height?: number };
+  } | undefined;
+  const width = raw?.width ?? raw?.image_width ?? raw?.output?.width ?? raw?.request?.width;
+  const height = raw?.height ?? raw?.image_height ?? raw?.output?.height ?? raw?.request?.height;
+  if (width && height) return `${width}x${height}`;
+  return raw?.size ?? raw?.output?.size ?? raw?.request?.size ?? meta?.imageSize ?? '-';
+}
+
+function formatBytes(bytes?: number) {
+  if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return '未知';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${unitIndex === 0 ? Math.round(value) : value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
+}
+
+function getRecordDataUrlBytes(source: string) {
+  if (!source.startsWith('data:image/')) return undefined;
+  const [, payload = ''] = source.split(',', 2);
+  if (!payload) return undefined;
+  if (source.includes(';base64,')) {
+    const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0;
+    return Math.max(0, Math.floor((payload.length * 3) / 4) - padding);
+  }
+  try {
+    return new TextEncoder().encode(decodeURIComponent(payload)).length;
+  } catch {
+    return payload.length;
+  }
+}
+
+function getRecordFileSizeLabel(record: GenerationRecord) {
+  const raw = record.raw as {
+    fileSize?: number;
+    file_size?: number;
+    sizeBytes?: number;
+    size_bytes?: number;
+    bytes?: number;
+    image_bytes?: number;
+    output?: { fileSize?: number; file_size?: number; sizeBytes?: number; size_bytes?: number; bytes?: number };
+  } | undefined;
+  const byteSize =
+    raw?.fileSize ??
+    raw?.file_size ??
+    raw?.sizeBytes ??
+    raw?.size_bytes ??
+    raw?.bytes ??
+    raw?.image_bytes ??
+    raw?.output?.fileSize ??
+    raw?.output?.file_size ??
+    raw?.output?.sizeBytes ??
+    raw?.output?.size_bytes ??
+    raw?.output?.bytes ??
+    getRecordDataUrlBytes(record.imageUrls[0] ?? '');
+  return formatBytes(byteSize);
+}
+
+function getRecordFormatLabel(record: GenerationRecord) {
+  const format = getRecordFormat(record);
+  const labels: Record<LibraryFormatFilter, string> = {
+    all: '全部',
+    png: 'PNG',
+    jpg: 'JPG',
+    webp: 'WebP',
+    gif: 'GIF',
+    svg: 'SVG',
+    unknown: '未知'
+  };
+  return labels[format];
+}
+
+function getLibraryColorLabel(color?: LibraryColorFilter) {
+  return libraryColorOptions.find((option) => option.value === color)?.label ?? '';
+}
+
+function rgbToHex(red: number, green: number, blue: number) {
+  return `#${[red, green, blue].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function hexToRgb(hex: string) {
+  const normalized = hex.trim().replace(/^#/, '');
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) return null;
+  return {
+    red: Number.parseInt(normalized.slice(0, 2), 16),
+    green: Number.parseInt(normalized.slice(2, 4), 16),
+    blue: Number.parseInt(normalized.slice(4, 6), 16)
+  };
+}
+
+function rgbToHsl(red: number, green: number, blue: number) {
+  const r = red / 255;
+  const g = green / 255;
+  const b = blue / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const lightness = (max + min) / 2;
+  if (max === min) return { hue: 0, saturation: 0, lightness };
+  const delta = max - min;
+  const saturation = lightness > 0.5 ? delta / (2 - max - min) : delta / (max + min);
+  const hue = max === r
+    ? ((g - b) / delta + (g < b ? 6 : 0)) * 60
+    : max === g
+      ? ((b - r) / delta + 2) * 60
+      : ((r - g) / delta + 4) * 60;
+  return { hue, saturation, lightness };
+}
+
+function getColorFamily(red: number, green: number, blue: number): LibraryColorFilter {
+  const { hue, saturation, lightness } = rgbToHsl(red, green, blue);
+  if (saturation < 0.16 || lightness < 0.16 || lightness > 0.9) return 'mono';
+  if (hue < 18 || hue >= 344) return 'red';
+  if (hue < 45) return 'orange';
+  if (hue < 72) return 'yellow';
+  if (hue < 155) return 'green';
+  if (hue < 195) return 'cyan';
+  if (hue < 250) return 'blue';
+  if (hue < 292) return 'purple';
+  if (hue < 344) return 'pink';
+  return 'mono';
+}
+
+function getFilterColorFamilies(filter: LibraryColorFilter): LibraryColorFilter[] {
+  if (filter === 'all') return ['all'];
+  if (filter === 'orange') return ['orange', 'red', 'yellow'];
+  if (filter === 'cyan') return ['cyan', 'blue', 'green'];
+  if (filter === 'purple') return ['purple', 'blue', 'pink'];
+  if (filter === 'pink') return ['pink', 'red', 'purple'];
+  return [filter];
+}
+
+function colorPaletteMatchesFilter(palette: string[] | undefined, filter: LibraryColorFilter) {
+  if (filter === 'all') return true;
+  if (!palette?.length) return false;
+  const accepted = new Set(getFilterColorFamilies(filter));
+  return palette.some((hex) => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return false;
+    return accepted.has(getColorFamily(rgb.red, rgb.green, rgb.blue));
+  });
+}
+
+function libraryColorMatchesFilter(meta: LibraryMetaEntry | undefined, filter: LibraryColorFilter) {
+  if (filter === 'all') return true;
+  if (!meta) return false;
+  const accepted = new Set(getFilterColorFamilies(filter));
+  return (
+    Boolean(meta.colorFamilies?.some((family) => accepted.has(family))) ||
+    colorPaletteMatchesFilter(meta.colorPalette, filter)
+  );
+}
+
+function analyzeImageColors(image: HTMLImageElement) {
+  if (!image.naturalWidth || !image.naturalHeight) return null;
+  const canvas = document.createElement('canvas');
+  const size = 48;
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) return null;
+  context.drawImage(image, 0, 0, size, size);
+  const pixels = context.getImageData(0, 0, size, size).data;
+  const buckets = new Map<string, { red: number; green: number; blue: number; count: number; score: number }>();
+  const familyScores = new Map<LibraryColorFilter, number>();
+  for (let index = 0; index < pixels.length; index += 4) {
+    const alpha = pixels[index + 3];
+    if (alpha < 96) continue;
+    const red = pixels[index];
+    const green = pixels[index + 1];
+    const blue = pixels[index + 2];
+    const { saturation, lightness } = rgbToHsl(red, green, blue);
+    const weight = 0.45 + saturation * 1.3 + (1 - Math.abs(lightness - 0.52)) * 0.45;
+    const family = getColorFamily(red, green, blue);
+    familyScores.set(family, (familyScores.get(family) ?? 0) + weight);
+    const key = `${Math.round(red / 28)}-${Math.round(green / 28)}-${Math.round(blue / 28)}`;
+    const current = buckets.get(key) ?? { red: 0, green: 0, blue: 0, count: 0, score: 0 };
+    current.red += red;
+    current.green += green;
+    current.blue += blue;
+    current.count += 1;
+    current.score += weight;
+    buckets.set(key, current);
+  }
+  const palette = Array.from(buckets.values())
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 10)
+    .map((bucket) => rgbToHex(
+      Math.round(bucket.red / bucket.count),
+      Math.round(bucket.green / bucket.count),
+      Math.round(bucket.blue / bucket.count)
+    ));
+  const familyEntries = Array.from(familyScores.entries())
+    .filter(([family]) => family !== 'all')
+    .sort((left, right) => right[1] - left[1]);
+  const topFamilyScore = familyEntries[0]?.[1] ?? 0;
+  const families = Array.from(new Set([
+    ...familyEntries
+      .filter(([, score]) => score >= topFamilyScore * 0.14)
+      .slice(0, 8)
+      .map(([family]) => family),
+    ...palette
+      .map((hex) => hexToRgb(hex))
+      .filter((rgb): rgb is { red: number; green: number; blue: number } => Boolean(rgb))
+      .map((rgb) => getColorFamily(rgb.red, rgb.green, rgb.blue))
+  ]));
+  return palette.length ? { palette, families } : null;
+}
+
+function ratioClose(left: number, right: number) {
+  return Math.abs(left - right) < 0.04;
+}
+
+function getRecordShapeTokens(record: GenerationRecord, meta?: LibraryMetaEntry): LibraryShapeFilter[] {
+  const dimensions = parseSizeDimensions(getRecordSizeLabel(record, meta));
+  if (!dimensions) return ['custom'];
+  const [width, height] = dimensions;
+  if (!width || !height) return ['custom'];
+  const ratio = width / height;
+  const tokens: LibraryShapeFilter[] = ['custom'];
+  if (ratioClose(ratio, 1)) tokens.push('square');
+  if (ratio > 1.04) tokens.push('landscape');
+  if (ratio < 0.96) tokens.push('portrait');
+  if (ratio >= 1.9) tokens.push('wide');
+  if (ratio <= 0.53) tokens.push('tall');
+  if (ratioClose(ratio, 4 / 3)) tokens.push('four-three');
+  if (ratioClose(ratio, 3 / 4)) tokens.push('three-four');
+  if (ratioClose(ratio, 16 / 9)) tokens.push('sixteen-nine');
+  if (ratioClose(ratio, 9 / 16)) tokens.push('nine-sixteen');
+  return tokens;
+}
+
+function getRecordFormat(record: GenerationRecord): LibraryFormatFilter {
+  const source = getRecordPrimaryPath(record).toLowerCase();
+  const dataUrlMatch = source.match(/^data:image\/([^;,]+)/);
+  const extensionMatch = source.match(/\.([a-z0-9]+)(?:$|[?#])/);
+  const rawFormat = dataUrlMatch?.[1] ?? extensionMatch?.[1] ?? '';
+  if (rawFormat === 'jpeg' || rawFormat === 'jpg') return 'jpg';
+  if (rawFormat === 'png') return 'png';
+  if (rawFormat === 'webp') return 'webp';
+  if (rawFormat === 'gif') return 'gif';
+  if (rawFormat === 'svg' || rawFormat === 'svg+xml') return 'svg';
+  return 'unknown';
+}
+
+function sortLibraryRecords(records: GenerationRecord[], sortMode: LibrarySortMode, meta: LibraryMetaMap, providerNameMap: Map<string, string>) {
+  return [...records].sort((a, b) => {
+    if (sortMode === 'favorites') {
+      const favoriteDiff = Number(Boolean(meta[b.id]?.favorite)) - Number(Boolean(meta[a.id]?.favorite));
+      if (favoriteDiff !== 0) return favoriteDiff;
+      return getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt);
+    }
+    if (sortMode === 'oldest') return getRecordTimeMs(a.createdAt) - getRecordTimeMs(b.createdAt);
+    if (sortMode === 'provider') {
+      const left = providerNameMap.get(a.providerId) ?? a.providerName ?? a.providerId;
+      const right = providerNameMap.get(b.providerId) ?? b.providerName ?? b.providerId;
+      return left.localeCompare(right, 'zh-Hans-CN') || getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt);
+    }
+    if (sortMode === 'model') {
+      return a.modelId.localeCompare(b.modelId, 'zh-Hans-CN') || getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt);
+    }
+    if (sortMode === 'duration') {
+      return (b.durationMs ?? -1) - (a.durationMs ?? -1) || getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt);
+    }
+    if (sortMode === 'size') {
+      return parseSizePixels(getRecordSizeLabel(b, meta[b.id])) - parseSizePixels(getRecordSizeLabel(a, meta[a.id])) || getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt);
+    }
+    if (sortMode === 'filename') {
+      return getRecordFileName(a).localeCompare(getRecordFileName(b), 'zh-Hans-CN') || getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt);
+    }
+    return getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt);
+  });
+}
+
 const statusLabel: Record<ProviderCapabilityStatus, string> = {
   supported: '支持',
   partial: '部分',
@@ -176,6 +1043,7 @@ const GITHUB_RELEASES_URL = `${GITHUB_REPOSITORY_URL}/releases`;
 
 type UtilityModal = 'system-info' | 'shortcuts' | null;
 type GenerateShortcutName = 'submit' | 'focus-prompt' | 'add-reference' | 'clear-references' | 'mode-image' | 'mode-text';
+type ConfirmDialogState = ConfirmDialogRequest & { error?: string };
 
 const generateShortcutEventName: Record<GenerateShortcutName, string> = {
   submit: 'visionhub:generate-submit',
@@ -247,13 +1115,21 @@ export function App() {
     defaultOpenAICompatibleConfig
   );
   const [providerProfiles, setProviderProfiles] = useState<ProviderConnectionProfile[]>(() => loadProviderProfiles());
+  const [selectedPlatformType, setSelectedPlatformType] = useState<ProviderPlatformType>('aggregator');
+  const [selectedServiceTemplateId, setSelectedServiceTemplateId] = useState('aggregator-openai-compatible');
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [isCreatingProviderProfile, setIsCreatingProviderProfile] = useState(false);
   const [configActionState, setConfigActionState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const [configMessage, setConfigMessage] = useState('');
   const [settingsMessage, setSettingsMessage] = useState('');
+  const [promptPolishSecretDraft, setPromptPolishSecretDraft] = useState('');
+  const [promptPolishSecretAvailable, setPromptPolishSecretAvailable] = useState(false);
+  const [isSavingPromptPolishSecret, setIsSavingPromptPolishSecret] = useState(false);
+  const [promptPolishDraft, setPromptPolishDraft] = useState<PromptPolishSettings>(() => appSettings.promptPolish);
+  const [isRefreshingPromptPolishModels, setIsRefreshingPromptPolishModels] = useState(false);
   const [activeUtilityModal, setActiveUtilityModal] = useState<UtilityModal>(null);
   const [freePlatformMessage, setFreePlatformMessage] = useState('');
+  const [isSavingSecret, setIsSavingSecret] = useState(false);
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
   const [isRunningDiagnostics, setIsRunningDiagnostics] = useState(false);
   const [isRunningTestGeneration, setIsRunningTestGeneration] = useState(false);
@@ -264,12 +1140,19 @@ export function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => appSettings.sidebarCollapsed);
   const [storageSettings, setStorageSettings] = useState<StorageSettings | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [generateSessionStartedAt] = useState(() => Date.now());
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() =>
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   );
   const themeMode = appSettings.themeMode;
   const resolvedThemeMode = themeMode === 'system' ? systemTheme : themeMode;
+
+  useToastMessage(secretMessage, setSecretMessage);
+  useToastMessage(configMessage, setConfigMessage);
+  useToastMessage(settingsMessage, setSettingsMessage);
+  useToastMessage(freePlatformMessage, setFreePlatformMessage);
 
   const {
     selectedProviderId,
@@ -293,18 +1176,28 @@ export function App() {
     generate
   } = useStudioStore();
 
-  const selectedProvider = providers.find((provider) => provider.id === selectedProviderId) ?? providers[0];
+  const generationSelectedProvider = providers.find((provider) => provider.id === selectedProviderId) ?? providers[0];
+  const selectedServiceTemplate =
+    getProviderServiceTemplate(selectedServiceTemplateId) ??
+    getProviderServiceTemplatesForPlatform(selectedPlatformType)[0] ??
+    providerServiceTemplates[0];
+  const selectedProvider =
+    providers.find((provider) => provider.id === (selectedServiceTemplate.providerId ?? selectedProviderId)) ??
+    generationSelectedProvider;
+  const isSelectedServiceConfigurable = isProviderServiceTemplateConfigurable(selectedServiceTemplate);
   const selectedProviderProfiles = useMemo(
-    () => getProfilesForProvider(providerProfiles, selectedProviderId),
-    [providerProfiles, selectedProviderId]
+    () => providerProfiles.filter((profile) => providerProfileBelongsToTemplate(profile, selectedServiceTemplate)),
+    [providerProfiles, selectedServiceTemplate]
   );
   const selectedProfile = isCreatingProviderProfile
     ? null
     : selectedProviderProfiles.find((profile) => profile.id === selectedProfileId) ?? null;
   const desktopRuntime = isTauriRuntime();
   const supportsOpenAICompatible =
+    selectedProvider.id === 'openai-gpt-image' || selectedProvider.id === 'custom-http-provider';
+  const generationSupportsOpenAICompatible =
     selectedProviderId === 'openai-gpt-image' || selectedProviderId === 'custom-http-provider';
-  const isRealProviderReady = desktopRuntime && supportsOpenAICompatible && secretAvailable;
+  const isRealProviderReady = desktopRuntime && generationSupportsOpenAICompatible && secretAvailable;
 
   useEffect(() => {
     void loadHistory();
@@ -328,13 +1221,51 @@ export function App() {
   }, [desktopRuntime]);
 
   useEffect(() => {
+    if (!desktopRuntime) {
+      setPromptPolishSecretAvailable(false);
+      return;
+    }
+    let isActive = true;
+    void getProviderSecretStatus(PROMPT_POLISH_SECRET_ID)
+      .then((status) => {
+        if (isActive) setPromptPolishSecretAvailable(status.available);
+      })
+      .catch(() => {
+        if (isActive) setPromptPolishSecretAvailable(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [desktopRuntime]);
+
+  useEffect(() => {
+    setPromptPolishDraft(appSettings.promptPolish);
+  }, [appSettings.promptPolish]);
+
+  useEffect(() => {
+    if (page === 'providers') return;
+    const template = getDefaultProviderServiceTemplateForProvider(selectedProviderId);
+    if (!template || template.id === selectedServiceTemplate.id) return;
+    setSelectedPlatformType(template.platformType);
+    setSelectedServiceTemplateId(template.id);
+  }, [page, selectedProviderId, selectedServiceTemplate.id]);
+
+  useEffect(() => {
     setSecretDraft('');
     setSecretMessage('');
     setConfigMessage('');
     setConfigActionState('idle');
     setProviderDiagnostics([]);
+    if (!isSelectedServiceConfigurable) {
+      setIsCreatingProviderProfile(false);
+      setSelectedProfileId(null);
+      setProviderConfig(defaultOpenAICompatibleConfig);
+      setSecretAvailable(false);
+      return;
+    }
     if (isCreatingProviderProfile) {
-      const draftConfig = createEmptyProviderDraftConfig(selectedProvider);
+      const draftConfig = createEmptyProviderDraftConfig(selectedProvider, selectedServiceTemplate);
       setSelectedProfileId(null);
       setProviderConfig(draftConfig);
       setSecretAvailable(false);
@@ -350,7 +1281,7 @@ export function App() {
     const config = nextProfile
       ? profileToProviderConfig(nextProfile)
       : {
-          ...loadProviderConfig(selectedProviderId),
+          ...loadProviderConfig(selectedProvider.id),
           displayName: selectedProvider.name
         };
     setSelectedProfileId(nextProfile?.id ?? null);
@@ -362,24 +1293,26 @@ export function App() {
       return;
     }
 
-    const secretId = nextProfile ? providerProfileSecretId(nextProfile.id) : selectedProviderId;
+    const secretId = nextProfile ? providerProfileSecretId(nextProfile.id) : selectedProvider.id;
     void getProviderSecretStatus(secretId)
       .then(async (status) => {
         if (status.available || !nextProfile) {
           setSecretAvailable(status.available);
           return;
         }
-        const legacyStatus = await getProviderSecretStatus(selectedProviderId);
+        const legacyStatus = await getProviderSecretStatus(selectedProvider.id);
         setSecretAvailable(legacyStatus.available);
       })
       .catch(() => setSecretAvailable(false));
   }, [
     desktopRuntime,
-    selectedProviderId,
+    selectedProvider.id,
     selectedProvider.name,
+    selectedServiceTemplate,
     selectedProfileId,
     selectedProviderProfiles,
     isCreatingProviderProfile,
+    isSelectedServiceConfigurable,
     setSelectedModel,
     supportsOpenAICompatible
   ]);
@@ -388,6 +1321,33 @@ export function App() {
     setIsCreatingProviderProfile(false);
     setSelectedProfileId(null);
     setSelectedProvider(providerId);
+    const template = getDefaultProviderServiceTemplateForProvider(providerId);
+    if (template) {
+      setSelectedPlatformType(template.platformType);
+      setSelectedServiceTemplateId(template.id);
+    }
+  }
+
+  function selectPlatformType(platformType: ProviderPlatformType) {
+    const firstTemplate = getProviderServiceTemplatesForPlatform(platformType)[0] ?? providerServiceTemplates[0];
+    setSelectedPlatformType(platformType);
+    selectServiceTemplate(firstTemplate.id);
+  }
+
+  function selectServiceTemplate(templateId: string) {
+    const template = getProviderServiceTemplate(templateId) ?? providerServiceTemplates[0];
+    setSelectedServiceTemplateId(template.id);
+    setSelectedPlatformType(template.platformType);
+    setIsCreatingProviderProfile(false);
+    setSelectedProfileId(null);
+    setSecretDraft('');
+    setSecretMessage('');
+    setConfigMessage('');
+    setConfigActionState('idle');
+    setProviderDiagnostics([]);
+    if (template.providerId) {
+      setSelectedProvider(template.providerId);
+    }
   }
 
   function navigateTo(nextPage: Page) {
@@ -651,6 +1611,29 @@ export function App() {
     return () => mediaQuery.removeEventListener?.('change', updateSystemTheme);
   }, []);
 
+  useEffect(() => {
+    function handleToast(event: Event) {
+      const detail = (event as CustomEvent<ToastEventDetail>).detail;
+      if (!detail?.message?.trim()) return;
+      const toast: ToastItem = {
+        id: Date.now() + Math.random(),
+        message: detail.message,
+        level: detail.level ?? 'info',
+        durationMs: detail.durationMs ?? defaultToastDurationMs
+      };
+      setToasts((current) => [...current, toast].slice(-4));
+      window.setTimeout(() => {
+        setToasts((current) => current.filter((item) => item.id !== toast.id));
+      }, toast.durationMs);
+    }
+    window.addEventListener(appToastEventName, handleToast);
+    return () => window.removeEventListener(appToastEventName, handleToast);
+  }, []);
+
+  function requestConfirm(request: ConfirmDialogRequest) {
+    setConfirmDialog(request);
+  }
+
   async function openLibraryDirectory() {
     if (!desktopRuntime) {
       setSettingsMessage('请在 Tauri 桌面端打开作品画廊目录。');
@@ -748,10 +1731,157 @@ export function App() {
   }
 
   function activeSecretId() {
-    return selectedProfileId ? providerProfileSecretId(selectedProfileId) : selectedProviderId;
+    return selectedProfileId ? providerProfileSecretId(selectedProfileId) : selectedProvider.id;
+  }
+
+  async function saveActiveProviderSecret() {
+    if (!isSelectedServiceConfigurable) {
+      setSecretMessage('当前服务模板尚未接入，暂不能保存密钥。');
+      return false;
+    }
+    const trimmedSecret = secretDraft.trim();
+    if (!trimmedSecret) {
+      setSecretMessage(secretAvailable ? 'API Key 已配置；如需更换，请先输入新的 API Key。' : '请先填写 API Key。');
+      return false;
+    }
+    if (!desktopRuntime) {
+      setSecretMessage('当前是网页预览模式，只有 Tauri 桌面端会写入系统凭据。');
+      return false;
+    }
+
+    setIsSavingSecret(true);
+    try {
+      const status = await saveProviderSecret(activeSecretId(), trimmedSecret);
+      setSecretAvailable(status.available);
+      setSecretDraft('');
+      setSecretMessage(selectedProfileId ? 'API Key 已保存到当前配置实例。' : 'API Key 已保存；保存配置后会绑定到配置实例。');
+      return status.available;
+    } catch (error) {
+      setSecretMessage(error instanceof Error ? error.message : String(error));
+      return false;
+    } finally {
+      setIsSavingSecret(false);
+    }
+  }
+
+  async function savePromptPolishSecret() {
+    const trimmedSecret = promptPolishSecretDraft.trim();
+    if (!trimmedSecret) {
+      setSettingsMessage(promptPolishSecretAvailable ? '润色专用 API Key 已配置；如需更换，请先输入新的 Key。' : '请先填写润色专用 API Key。');
+      return false;
+    }
+    if (!desktopRuntime) {
+      setSettingsMessage('当前是网页预览模式，只有 Tauri 桌面端会写入系统凭据。');
+      return false;
+    }
+
+    setIsSavingPromptPolishSecret(true);
+    try {
+      const status = await saveProviderSecret(PROMPT_POLISH_SECRET_ID, trimmedSecret);
+      setPromptPolishSecretAvailable(status.available);
+      setPromptPolishSecretDraft('');
+      setSettingsMessage('润色专用 API Key 已保存，不会影响生图平台配置。');
+      return status.available;
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+      return false;
+    } finally {
+      setIsSavingPromptPolishSecret(false);
+    }
+  }
+
+  function updatePromptPolishDraft(patch: Partial<PromptPolishSettings>) {
+    setPromptPolishDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function savePromptPolishConfig() {
+    const displayName = promptPolishDraft.displayName.trim() || '提示词润色专用配置';
+    const baseUrl = promptPolishDraft.baseUrl.trim();
+    const modelId = promptPolishDraft.modelId.trim();
+    try {
+      parseExtraHeaders(promptPolishDraft.extraHeadersJson);
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+      return;
+    }
+
+    const modelOptions = Array.from(
+      new Set([...promptPolishDraft.modelOptions, modelId].filter((item) => item.trim()).map((item) => item.trim()))
+    );
+    const configId = promptPolishConfigId(displayName, baseUrl);
+    const nextSettings: PromptPolishSettings = {
+      ...promptPolishDraft,
+      displayName,
+      baseUrl,
+      modelId,
+      modelOptions,
+      savedConfigs: Array.from(new Map([
+        ...promptPolishDraft.savedConfigs.map((config) => [config.id, config] as const),
+        [
+          configId,
+          {
+            id: configId,
+            displayName,
+            baseUrl,
+            modelId,
+            modelOptions,
+            extraHeadersJson: promptPolishDraft.extraHeadersJson.trim() || '{}',
+            protocol: promptPolishDraft.protocol
+          }
+        ] as const
+      ]).values()).slice(0, 30)
+    };
+    updateAppSettings({ promptPolish: nextSettings });
+    setSettingsMessage('提示词润色配置已保存；本地润色仍可在引擎里切换使用。');
+  }
+
+  async function refreshPromptPolishModels() {
+    const baseUrl = promptPolishDraft.baseUrl.trim();
+    if (!baseUrl) {
+      setSettingsMessage('请先填写润色专用 Base URL。');
+      return;
+    }
+    if (!desktopRuntime) {
+      setSettingsMessage('当前是网页预览模式，只有 Tauri 桌面端可以刷新模型列表。');
+      return;
+    }
+    if (!promptPolishSecretAvailable) {
+      setSettingsMessage('请先保存润色专用 API Key，再刷新模型列表。');
+      return;
+    }
+
+    setIsRefreshingPromptPolishModels(true);
+    try {
+      const models = await listOpenAICompatibleModels(
+        'prompt-polish',
+        baseUrl,
+        parseExtraHeaders(promptPolishDraft.extraHeadersJson),
+        PROMPT_POLISH_SECRET_ID
+      );
+      const modelOptions = Array.from(
+        new Set([...models.map((model) => model.id), promptPolishDraft.modelId.trim()].filter(Boolean))
+      );
+      if (!modelOptions.length) {
+        setSettingsMessage('模型接口已返回，但没有发现可用模型。');
+        return;
+      }
+      setPromptPolishDraft((current) => ({
+        ...current,
+        modelOptions,
+        modelId: modelOptions.includes(current.modelId.trim()) ? current.modelId.trim() : ''
+      }));
+      setSettingsMessage(`已刷新 ${modelOptions.length} 个润色文本模型，请在模型选择框里选择或手动填写后保存配置。`);
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsRefreshingPromptPolishModels(false);
+    }
   }
 
   function buildProfileFromCurrentConfig(enable: boolean) {
+    if (!isSelectedServiceConfigurable) {
+      throw new Error('当前服务模板尚未接入，暂不能保存配置。');
+    }
     if (!providerConfig.baseUrl.trim()) {
       throw new Error('请先填写 Base URL。');
     }
@@ -772,9 +1902,10 @@ export function App() {
       : undefined;
     const now = new Date().toISOString();
     return {
-      ...(existing ?? createProviderProfile(selectedProviderId, normalizedConfig)),
+      ...(existing ?? createProviderProfile(selectedProvider.id, normalizedConfig)),
       ...normalizedConfig,
-      providerId: selectedProviderId,
+      providerId: selectedProvider.id,
+      serviceTemplateId: selectedServiceTemplate.id,
       enabled: enable || existing?.enabled || false,
       updatedAt: now
     };
@@ -790,7 +1921,7 @@ export function App() {
     setSelectedProfileId(profile.id);
     setProviderConfig(profileToProviderConfig(profile));
     setSelectedModel(profile.modelId);
-    saveProviderConfig(selectedProviderId, profileToProviderConfig(profile));
+    saveProviderConfig(selectedProvider.id, profileToProviderConfig(profile));
     return nextProfiles;
   }
 
@@ -822,7 +1953,11 @@ export function App() {
   }
 
   function startNewProviderProfile() {
-    const draftConfig = createEmptyProviderDraftConfig(selectedProvider);
+    if (!isSelectedServiceConfigurable) {
+      setConfigMessage('当前服务模板尚未接入，只展示规划说明。');
+      return;
+    }
+    const draftConfig = createEmptyProviderDraftConfig(selectedProvider, selectedServiceTemplate);
     setIsCreatingProviderProfile(true);
     setSelectedProfileId(null);
     setProviderConfig(draftConfig);
@@ -849,22 +1984,30 @@ export function App() {
     setProviderDiagnostics([]);
   }
 
-  async function deleteCurrentProviderProfile(profileId: string) {
+  function deleteCurrentProviderProfile(profileId: string) {
     const profile = providerProfiles.find((item) => item.id === profileId);
     if (!profile) return;
-    if (!window.confirm(`删除配置「${profile.displayName}」？这不会删除作品画廊。`)) return;
-    const nextProfiles = deleteProviderProfile(providerProfiles, profileId);
-    setProviderProfiles(nextProfiles);
-    if (selectedProfileId === profileId) {
-      const fallback = getProfilesForProvider(nextProfiles, selectedProviderId)[0] ?? null;
-      setIsCreatingProviderProfile(false);
-      setSelectedProfileId(fallback?.id ?? null);
-      setProviderConfig(fallback ? profileToProviderConfig(fallback) : defaultOpenAICompatibleConfig);
-    }
-    if (desktopRuntime) {
-      await deleteProviderSecret(providerProfileSecretId(profileId)).catch(() => undefined);
-    }
-    setConfigMessage(`已删除配置：${profile.displayName}`);
+    requestConfirm({
+      title: '删除配置实例',
+      message: `确定删除配置「${profile.displayName}」吗？这不会删除作品画廊，也不会影响已经保存的图片。`,
+      confirmLabel: '删除',
+      tone: 'danger',
+      onConfirm: async () => {
+        const nextProfiles = deleteProviderProfile(providerProfiles, profileId);
+        setProviderProfiles(nextProfiles);
+        if (selectedProfileId === profileId) {
+          const fallback =
+            nextProfiles.find((item) => providerProfileBelongsToTemplate(item, selectedServiceTemplate)) ?? null;
+          setIsCreatingProviderProfile(false);
+          setSelectedProfileId(fallback?.id ?? null);
+          setProviderConfig(fallback ? profileToProviderConfig(fallback) : defaultOpenAICompatibleConfig);
+        }
+        if (desktopRuntime) {
+          await deleteProviderSecret(providerProfileSecretId(profileId)).catch(() => undefined);
+        }
+        setConfigMessage(`已删除配置：${profile.displayName}`);
+      }
+    });
   }
 
   function toggleProviderProfile(profileId: string, enabled: boolean) {
@@ -909,14 +2052,14 @@ export function App() {
       const host = new URL(config.baseUrl).hostname.replace(/^www\./, '');
       return `${host} · ${config.modelId || 'model'}`;
     } catch {
-      return `${selectedProvider.name} · ${config.modelId || 'model'}`;
+      return `${selectedServiceTemplate.label || selectedProvider.name} · ${config.modelId || 'model'}`;
     }
   }
 
   async function copyCurrentProviderConfig() {
     try {
       await navigator.clipboard?.writeText(serializeProviderConfig(providerConfig));
-      setConfigMessage('当前 Provider 配置已复制，API Key 不会包含在导出内容中。');
+      setConfigMessage('当前平台接入配置已复制，API Key 不会包含在导出内容中。');
     } catch (error) {
       setConfigMessage(error instanceof Error ? error.message : String(error));
     }
@@ -925,11 +2068,11 @@ export function App() {
   async function importProviderConfigFromClipboard() {
     try {
       const text = await navigator.clipboard?.readText();
-      if (!text?.trim()) throw new Error('剪贴板里没有可导入的 Provider JSON。');
+      if (!text?.trim()) throw new Error('剪贴板里没有可粘贴的平台配置 JSON。');
       const importedConfig = parseProviderConfigImport(text);
       setProviderConfig(importedConfig);
       setSelectedModel(importedConfig.modelId);
-      setConfigMessage('已从剪贴板导入 Provider 配置，请确认后保存。');
+      setConfigMessage('已从剪贴板粘贴配置，并填入配置详情。请确认后保存。');
     } catch (error) {
       setConfigMessage(error instanceof Error ? error.message : String(error));
     }
@@ -977,20 +2120,27 @@ export function App() {
   }
 
   async function refreshModels() {
+    if (!isSelectedServiceConfigurable) {
+      setConfigMessage('当前服务模板尚未接入，暂不能刷新模型。');
+      return;
+    }
     if (!desktopRuntime) {
       setConfigMessage('请在 Tauri 桌面端刷新模型列表。');
       return;
     }
     if (!secretAvailable) {
-      setConfigMessage('请先保存 API Key，再刷新模型列表。');
-      return;
+      const savedSecret = await saveActiveProviderSecret();
+      if (!savedSecret) {
+        setConfigMessage('请先保存 API Key，再刷新模型列表。');
+        return;
+      }
     }
 
     setIsRefreshingModels(true);
     setConfigMessage('正在刷新模型列表…');
     try {
       const models = await listOpenAICompatibleModels(
-        selectedProviderId,
+        selectedProvider.id,
         providerConfig.baseUrl,
         parseExtraHeaders(providerConfig.extraHeadersJson),
         activeSecretId()
@@ -1003,7 +2153,7 @@ export function App() {
         providerConfig.modelId;
       const nextConfig = { ...providerConfig, modelOptions, modelId: nextModelId };
       setProviderConfig(nextConfig);
-      saveProviderConfig(selectedProviderId, nextConfig);
+      saveProviderConfig(selectedProvider.id, nextConfig);
       if (selectedProfile) {
         persistProfile({ ...selectedProfile, ...nextConfig });
       }
@@ -1013,7 +2163,7 @@ export function App() {
       if (isModelListUnavailableError(error)) {
         const nextConfig = ensureManualModelOption(providerConfig);
         setProviderConfig(nextConfig);
-        saveProviderConfig(selectedProviderId, nextConfig);
+        saveProviderConfig(selectedProvider.id, nextConfig);
         if (selectedProfile) {
           persistProfile({ ...selectedProfile, ...nextConfig });
         }
@@ -1030,7 +2180,21 @@ export function App() {
   async function runProviderDiagnostics(targetProfile?: ProviderConnectionProfile) {
     setIsRunningDiagnostics(true);
     const checks: ProviderDiagnosticItem[] = [];
-    const targetProviderId = targetProfile?.providerId ?? selectedProviderId;
+    if (!targetProfile && !isSelectedServiceConfigurable) {
+      const plannedChecks: ProviderDiagnosticItem[] = [
+        {
+          id: 'template-status',
+          label: '服务模板状态',
+          level: 'info',
+          detail: `${providerServiceStatusLabel[selectedServiceTemplate.status]}：${selectedServiceTemplate.description}`
+        }
+      ];
+      setProviderDiagnostics(plannedChecks);
+      setConfigMessage('当前服务模板尚未接入，只展示路线规划。');
+      setIsRunningDiagnostics(false);
+      return;
+    }
+    const targetProviderId = targetProfile?.providerId ?? selectedProvider.id;
     const targetProvider = providers.find((provider) => provider.id === targetProviderId) ?? selectedProvider;
     const targetConfig = targetProfile ? profileToProviderConfig(targetProfile) : providerConfig;
     const targetSecretId = targetProfile ? providerProfileSecretId(targetProfile.id) : activeSecretId();
@@ -1055,13 +2219,13 @@ export function App() {
 
       push({
         id: 'adapter',
-        label: 'Provider 接入状态',
+        label: '平台接入状态',
         level: targetSupportsOpenAICompatible ? 'pass' : 'info',
-        detail: targetSupportsOpenAICompatible ? '当前 Provider 支持 OpenAI-compatible 官方/中转配置。' : '当前 Provider 仍是路线图占位，暂不支持真实连通性诊断。'
+        detail: targetSupportsOpenAICompatible ? '当前平台支持 OpenAI-compatible 官方或聚合站配置。' : '当前平台仍是路线图占位，暂不支持真实连通性诊断。'
       });
 
       if (!targetSupportsOpenAICompatible) {
-        profileMessage = '当前 Provider 暂不支持真实连通性诊断。';
+        profileMessage = '当前平台暂不支持真实连通性诊断。';
         return;
       }
 
@@ -1223,8 +2387,12 @@ export function App() {
   }
 
   async function runProviderTestGeneration() {
+    if (!isSelectedServiceConfigurable) {
+      setConfigMessage('当前服务模板尚未接入，暂不能试生图。');
+      return;
+    }
     if (!supportsOpenAICompatible) {
-      setConfigMessage('当前 Provider 还没有真实图片生成 Adapter，暂不能测试生成。');
+      setConfigMessage('当前平台还没有真实图片生成适配器，暂不能测试生成。');
       return;
     }
     if (!desktopRuntime) {
@@ -1232,8 +2400,11 @@ export function App() {
       return;
     }
     if (!secretAvailable) {
-      setConfigMessage('请先保存 API Key，再执行测试生成。');
-      return;
+      const savedSecret = await saveActiveProviderSecret();
+      if (!savedSecret) {
+        setConfigMessage('请先保存 API Key，再执行测试生成。');
+        return;
+      }
     }
 
     setIsRunningTestGeneration(true);
@@ -1247,12 +2418,12 @@ export function App() {
         throw new Error('接口路径必须以 / 开头。');
       }
 
-      saveProviderConfig(selectedProviderId, normalizedConfig);
+      saveProviderConfig(selectedProvider.id, normalizedConfig);
       setProviderConfig(normalizedConfig);
       setSelectedModel(normalizedConfig.modelId);
 
       const result = await generateOpenAIImage({
-        providerId: selectedProviderId,
+        providerId: selectedProvider.id,
         modelId: normalizedConfig.modelId,
         prompt:
           'VisionHub Studio provider test image, a clean minimal glowing glass cube on a dark desk, soft studio light, square composition, no text',
@@ -1332,7 +2503,6 @@ export function App() {
               key={item.page}
               className={`navItem ${page === item.page ? 'active' : ''}`}
               data-tooltip={item.label}
-              title={item.label}
               aria-label={item.label}
               onClick={() => navigateTo(item.page)}
             >
@@ -1357,7 +2527,6 @@ export function App() {
             className="themeToggle"
             type="button"
             data-tooltip={resolvedThemeMode === 'dark' ? '切换浅色模式' : '切换暗色模式'}
-            title={resolvedThemeMode === 'dark' ? '切换浅色模式' : '切换暗色模式'}
             aria-label={resolvedThemeMode === 'dark' ? '切换浅色模式' : '切换暗色模式'}
             onClick={toggleThemeMode}
           >
@@ -1368,7 +2537,6 @@ export function App() {
             className="sidebarCollapseButton"
             type="button"
             data-tooltip={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
-            title={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
             aria-label={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
             onClick={() => updateSidebarCollapsed(!isSidebarCollapsed)}
           >
@@ -1383,9 +2551,9 @@ export function App() {
           <>
             <ModernGeneratePage
               providers={providers}
-              selectedProvider={selectedProvider}
+              selectedProvider={generationSelectedProvider}
               selectedProviderId={selectedProviderId}
-              supportsOpenAICompatible={supportsOpenAICompatible}
+              supportsOpenAICompatible={generationSupportsOpenAICompatible}
               isRealProviderReady={isRealProviderReady}
               providerConfig={providerConfig}
               selectedModelId={selectedModelId}
@@ -1404,7 +2572,7 @@ export function App() {
               sessionStartedAtMs={generateSessionStartedAt}
               onProviderChange={selectProvider}
               onModelChange={(modelId) => {
-                if (supportsOpenAICompatible) handleConfigChange('modelId', modelId);
+                if (generationSupportsOpenAICompatible) handleConfigChange('modelId', modelId);
                 else setSelectedModel(modelId);
               }}
               onPromptChange={setPrompt}
@@ -1413,6 +2581,8 @@ export function App() {
               onQualityChange={setQuality}
               onGenerate={generate}
               onPreview={setGeneratePreviewUrl}
+              onReloadHistory={loadHistory}
+              onOpenLibrary={() => navigateTo('library')}
               referenceImages={referenceImages}
               onReferenceImagesChange={setReferenceImages}
             />
@@ -1423,7 +2593,6 @@ export function App() {
         ) : page === 'free' ? (
           <FreeGenerationPage
             prompt={prompt}
-            message={freePlatformMessage}
             onCopyPrompt={copyPromptForPlatform}
             onOpenPlatform={openPlatform}
             onCopyPromptAndOpen={copyPromptAndOpenPlatform}
@@ -1436,20 +2605,26 @@ export function App() {
           <ProviderSettingsPage
             providers={providers}
             selectedProvider={selectedProvider}
-            selectedProviderId={selectedProviderId}
+            selectedProviderId={selectedProvider.id}
+            platformOptions={providerPlatformOptions}
+            selectedPlatformType={selectedPlatformType}
+            serviceTemplates={getProviderServiceTemplatesForPlatform(selectedPlatformType)}
+            selectedServiceTemplate={selectedServiceTemplate}
+            isSelectedServiceConfigurable={isSelectedServiceConfigurable}
             desktopRuntime={desktopRuntime}
             secretAvailable={secretAvailable}
             secretDraft={secretDraft}
-            secretMessage={secretMessage}
             providerConfig={providerConfig}
             providerProfiles={selectedProviderProfiles}
             selectedProfileId={selectedProfileId}
             configActionState={configActionState}
-            configMessage={configMessage}
+            isSavingSecret={isSavingSecret}
             isRefreshingModels={isRefreshingModels}
             supportsOpenAICompatible={supportsOpenAICompatible}
-            onProviderChange={selectProvider}
+            onPlatformTypeChange={selectPlatformType}
+            onServiceTemplateChange={selectServiceTemplate}
             onSecretDraftChange={setSecretDraft}
+            onSaveSecret={saveActiveProviderSecret}
             onConfigChange={handleConfigChange}
             onRefreshModels={refreshModels}
             onSaveConfig={() => saveCurrentProviderConfig(true)}
@@ -1473,9 +2648,18 @@ export function App() {
             appSettings={appSettings}
             providers={providers}
             desktopRuntime={desktopRuntime}
-            settingsMessage={settingsMessage}
             storageSettings={storageSettings}
+            promptPolishDraft={promptPolishDraft}
+            promptPolishSecretDraft={promptPolishSecretDraft}
+            promptPolishSecretAvailable={promptPolishSecretAvailable}
+            isSavingPromptPolishSecret={isSavingPromptPolishSecret}
+            isRefreshingPromptPolishModels={isRefreshingPromptPolishModels}
             onSettingsChange={updateAppSettings}
+            onPromptPolishDraftChange={updatePromptPolishDraft}
+            onSavePromptPolishConfig={savePromptPolishConfig}
+            onRefreshPromptPolishModels={refreshPromptPolishModels}
+            onPromptPolishSecretDraftChange={setPromptPolishSecretDraft}
+            onSavePromptPolishSecret={savePromptPolishSecret}
             onSelectLibraryPath={selectLibraryDirectory}
             onResetLibraryPath={resetLibraryDirectoryOverride}
             onOpenLibraryDirectory={openLibraryDirectory}
@@ -1492,8 +2676,10 @@ export function App() {
               providers={providers}
               results={results}
               isHistoryLoaded={isHistoryLoaded}
+              onAddResult={addResult}
               onPreview={setLibraryPreviewUrl}
               onUseAsReference={useRecordAsReference}
+              onRequestConfirm={requestConfirm}
               onDelete={async (recordId) => {
                 setLibraryPreviewUrl(null);
                 await removeResult(recordId);
@@ -1510,6 +2696,7 @@ export function App() {
               onUseAsReference={useInspirationAssetAsReference}
               onUsePrompt={useInspirationPrompt}
               onCreateTemplate={createPromptTemplateFromInspiration}
+              onRequestConfirm={requestConfirm}
             />
             {inspirationPreviewUrl ? (
               <ImagePreviewModal imageUrl={inspirationPreviewUrl} onClose={() => setInspirationPreviewUrl(null)} />
@@ -1535,6 +2722,26 @@ export function App() {
           settingsMessage={settingsMessage}
           onClose={() => setActiveUtilityModal(null)}
         />
+      ) : null}
+      {confirmDialog ? (
+        <ConfirmDialog
+          request={confirmDialog}
+          onClose={() => setConfirmDialog(null)}
+          onError={(error) => setConfirmDialog((current) => (current ? { ...current, error } : current))}
+        />
+      ) : null}
+      {toasts.length ? (
+        <div className="toastViewport" aria-live="polite" aria-atomic="false">
+          {toasts.map((toast) => (
+            <div className={`appToast ${toast.level}`} key={toast.id}>
+              <span />
+              <p>{toast.message}</p>
+              <button type="button" aria-label="关闭通知" onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}>
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
       ) : null}
     </div>
   );
@@ -1583,7 +2790,7 @@ function GeneratePage(props: {
             <ShieldCheck size={15} /> {props.isRealProviderReady ? '真实通道已就绪' : '未配置密钥时使用演示模式'}
           </span>
           <span>
-            <Gauge size={15} /> 当前 Provider：{props.selectedProvider.name}
+            <Gauge size={15} /> 当前平台：{props.selectedProvider.name}
           </span>
         </div>
       </header>
@@ -1675,7 +2882,6 @@ function GeneratePage(props: {
 
 function FreeGenerationPage(props: {
   prompt: string;
-  message: string;
   onCopyPrompt: (platform: FreePlatform) => void;
   onOpenPlatform: (platform: FreePlatform) => void;
   onCopyPromptAndOpen: (platform: FreePlatform) => void;
@@ -1735,8 +2941,6 @@ function FreeGenerationPage(props: {
         </button>
       </section>
 
-      {props.message ? <p className="freeNotice">{props.message}</p> : null}
-
       <section className="freePlatformGrid">
         {filteredPlatforms.map((platform) => (
           <article className="freePlatformCard" key={platform.id}>
@@ -1744,10 +2948,22 @@ function FreeGenerationPage(props: {
               <div
                 className="freePlatformLogo"
                 style={{ background: platform.brandColor }}
-                title={`${platform.name} Logo`}
                 aria-label={`${platform.name} Logo`}
               >
-                <img src={platform.logoUrl} alt="" loading="lazy" />
+                <img
+                  src={platform.logoUrl}
+                  alt=""
+                  loading="lazy"
+                  onError={(event) => {
+                    const image = event.currentTarget;
+                    if (image.dataset.fallback !== 'used') {
+                      image.dataset.fallback = 'used';
+                      image.src = platform.fallbackLogoUrl;
+                      return;
+                    }
+                    image.style.display = 'none';
+                  }}
+                />
                 <span>{platform.logoText}</span>
               </div>
               <div>
@@ -1790,19 +3006,25 @@ function ProviderSettingsPage(props: {
   providers: ReturnType<typeof listProviders>;
   selectedProvider: ReturnType<typeof listProviders>[number];
   selectedProviderId: string;
+  platformOptions: ProviderPlatformOption[];
+  selectedPlatformType: ProviderPlatformType;
+  serviceTemplates: ProviderServiceTemplate[];
+  selectedServiceTemplate: ProviderServiceTemplate;
+  isSelectedServiceConfigurable: boolean;
   desktopRuntime: boolean;
   secretAvailable: boolean;
   secretDraft: string;
-  secretMessage: string;
   providerConfig: OpenAICompatibleConfig;
   providerProfiles: ProviderConnectionProfile[];
   selectedProfileId: string | null;
   configActionState: 'idle' | 'saving' | 'saved' | 'failed';
-  configMessage: string;
+  isSavingSecret: boolean;
   isRefreshingModels: boolean;
   supportsOpenAICompatible: boolean;
-  onProviderChange: (providerId: string) => void;
+  onPlatformTypeChange: (platformType: ProviderPlatformType) => void;
+  onServiceTemplateChange: (templateId: string) => void;
   onSecretDraftChange: (secret: string) => void;
+  onSaveSecret: () => void;
   onConfigChange: <K extends keyof OpenAICompatibleConfig>(key: K, value: OpenAICompatibleConfig[K]) => void;
   onRefreshModels: () => void;
   onSaveConfig: () => void;
@@ -1835,10 +3057,11 @@ function ProviderSettingsPage(props: {
     fail: props.diagnostics.filter((item) => item.level === 'fail').length,
     info: props.diagnostics.filter((item) => item.level === 'info').length
   };
-  const providerOptions = props.providers.map((provider) => ({
-    value: provider.id,
-    label: provider.name,
-    description: `${provider.vendor} · ${provider.phase}`
+  const selectedPlatform = props.platformOptions.find((item) => item.id === props.selectedPlatformType);
+  const serviceTemplateOptions = props.serviceTemplates.map((template) => ({
+    value: template.id,
+    label: `${template.label} · ${providerServiceStatusLabel[template.status]}`,
+    description: template.description
   }));
   const protocolOptions = [
     {
@@ -1867,34 +3090,62 @@ function ProviderSettingsPage(props: {
     <>
       <header className="topbar">
         <div className="pageTitleBlock">
-          <p className="eyebrow">Provider Access</p>
+          <p className="eyebrow">Platform Access</p>
           <h1>平台接入</h1>
-          <p>管理官方 API 与中转站的 Base URL、API Key、模型刷新和协议类型。</p>
+          <p>默认从中转站 / 聚合 API 开始；官方和本地待接入模板只展示规划，不会误触保存、启用或试生图。</p>
         </div>
       </header>
 
       <section className="settingsLayout providerAccessLayout">
         <div className="providerDirectory">
-          <label className="providerPickerLabel">
-            平台
-            <StudioSelect
-              value={props.selectedProviderId}
-              onChange={props.onProviderChange}
-              options={providerOptions}
-              className="providerPickerSelect"
-            />
-          </label>
+          <div className="providerAccessControls">
+            <div>
+              <span className="providerPickerLabel">平台类型</span>
+              <div className="segmentedControl providerTypeSwitch">
+                {props.platformOptions.map((option) => (
+                  <button
+                    type="button"
+                    key={option.id}
+                    className={option.id === props.selectedPlatformType ? 'active' : ''}
+                    onClick={() => props.onPlatformTypeChange(option.id)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <small>{selectedPlatform?.description}</small>
+            </div>
+            <label className="providerPickerLabel">
+              服务模板
+              <StudioSelect
+                value={props.selectedServiceTemplate.id}
+                onChange={props.onServiceTemplateChange}
+                options={serviceTemplateOptions}
+                className="providerPickerSelect"
+              />
+            </label>
+          </div>
           <div className="profileListHeader">
             <div>
               <strong>配置实例</strong>
-              <small>{props.providerProfiles.length} 个当前平台配置</small>
+              <small>{props.providerProfiles.length} 个当前服务模板配置</small>
             </div>
-            <button type="button" className="miniButton profileAddButton" onClick={props.onNewProfile}>
+            <button
+              type="button"
+              className="miniButton profileAddButton"
+              onClick={props.onNewProfile}
+              disabled={!props.isSelectedServiceConfigurable}
+            >
               <Plus size={14} /> 新增
             </button>
           </div>
           <div className="profileList">
-            {props.providerProfiles.length === 0 ? (
+            {!props.isSelectedServiceConfigurable ? (
+              <div className="profileEmpty">
+                <strong>{providerServiceStatusLabel[props.selectedServiceTemplate.status]}</strong>
+                <span>当前模板只展示规划，暂不开放保存、启用或试生图。</span>
+              </div>
+            ) : props.providerProfiles.length === 0 ? (
               <div className="profileEmpty">
                 <strong>还没有配置</strong>
                 <span>点击新增后保存，配置会出现在这里。</span>
@@ -1923,7 +3174,8 @@ function ProviderSettingsPage(props: {
                     <button
                       type="button"
                       className="iconMiniButton"
-                      title="测试连接延迟"
+                      data-tooltip="测试连接延迟"
+                      aria-label="测试连接延迟"
                       onClick={() => {
                         void props.onRunProfileConnectionTest(profile.id);
                       }}
@@ -1933,18 +3185,20 @@ function ProviderSettingsPage(props: {
                     <button
                       type="button"
                       className="iconMiniButton"
-                      title="编辑配置"
+                      data-tooltip="编辑配置"
+                      aria-label="编辑配置"
                       onClick={() => props.onSelectProfile(profile.id)}
                     >
                       <Pencil size={13} />
                     </button>
-                    <button type="button" className="iconMiniButton dangerMiniButton" title="删除配置" onClick={() => props.onDeleteProfile(profile.id)}>
+                    <button type="button" className="iconMiniButton dangerMiniButton" data-tooltip="删除配置" aria-label="删除配置" onClick={() => props.onDeleteProfile(profile.id)}>
                       <Trash2 size={13} />
                     </button>
                     <button
                       type="button"
                       className={`profileSwitch ${profile.enabled ? 'on' : ''}`}
-                      title={profile.enabled ? '停用' : '启用'}
+                      data-tooltip={profile.enabled ? '停用' : '启用'}
+                      aria-label={profile.enabled ? '停用' : '启用'}
                       onClick={() => props.onToggleProfile(profile.id, !profile.enabled)}
                     >
                       <span />
@@ -1960,27 +3214,36 @@ function ProviderSettingsPage(props: {
           <div className="providerHero">
             <Globe2 size={22} />
             <div>
-              <h2>{props.selectedProvider.name}</h2>
+              <h2>{props.selectedServiceTemplate.label}</h2>
               <p>
-                {props.selectedProvider.vendor} · {props.selectedProvider.region} ·{' '}
-                {props.selectedProvider.executionModes.join(' / ')}
+                {providerServiceStatusLabel[props.selectedServiceTemplate.status]} · {props.selectedServiceTemplate.description}
               </p>
             </div>
+            <span className={`serviceStatusBadge ${props.selectedServiceTemplate.status}`}>
+              {providerServiceStatusLabel[props.selectedServiceTemplate.status]}
+            </span>
           </div>
 
-          <div className="matrix compact">
-            {capabilityRows.map(([label, key]) => (
-              <div className="matrixRow" key={key}>
-                <span>{label}</span>
-                <strong className={props.selectedProvider.capabilities[key]}>
-                  {statusLabel[props.selectedProvider.capabilities[key]]}
-                </strong>
-              </div>
-            ))}
-          </div>
+          {props.isSelectedServiceConfigurable ? (
+            <div className="matrix compact">
+              {capabilityRows.map(([label, key]) => (
+                <div className="matrixRow" key={key}>
+                  <span>{label}</span>
+                  <strong className={props.selectedProvider.capabilities[key]}>
+                    {statusLabel[props.selectedProvider.capabilities[key]]}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          ) : null}
 
-          {props.supportsOpenAICompatible ? (
+          {props.isSelectedServiceConfigurable && props.supportsOpenAICompatible ? (
             <div className="relayBox standalone">
+              <div className="serviceTemplateNotes">
+                {props.selectedServiceTemplate.notes.map((note) => (
+                  <span key={note}>{note}</span>
+                ))}
+              </div>
               <strong>配置详情</strong>
               <label>
                 名称
@@ -1995,24 +3258,32 @@ function ProviderSettingsPage(props: {
                 <input
                   value={props.providerConfig.baseUrl}
                   onChange={(event) => props.onConfigChange('baseUrl', event.target.value)}
-                  placeholder="https://api.openai.com 或 https://你的中转站"
+                  placeholder={props.selectedProviderId === 'openai-gpt-image' ? OFFICIAL_OPENAI_BASE_URL : 'https://你的聚合站或中转站'}
                 />
               </label>
               <label>
                 API Key
-                <input
-                  type="password"
-                  placeholder={props.desktopRuntime ? props.selectedProvider.auth.label : '请在 Tauri 桌面端保存密钥'}
-                  value={props.secretDraft}
-                  onChange={(event) => props.onSecretDraftChange(event.target.value)}
-                  disabled={!props.desktopRuntime}
-                />
+                <div className="secretInputRow">
+                  <input
+                    type="password"
+                    placeholder={props.desktopRuntime ? props.selectedProvider.auth.label : '请在 Tauri 桌面端保存密钥'}
+                    value={props.secretDraft}
+                    onChange={(event) => props.onSecretDraftChange(event.target.value)}
+                    disabled={!props.desktopRuntime}
+                  />
+                  <button
+                    type="button"
+                    className="iconButton secretSaveButton"
+                    onClick={props.onSaveSecret}
+                    disabled={!props.desktopRuntime || props.isSavingSecret || !props.secretDraft.trim()}
+                  >
+                    {props.isSavingSecret ? '保存中…' : '保存密钥'}
+                  </button>
+                </div>
               </label>
               <p className="secretMessage">
                 密钥状态：{props.desktopRuntime ? (props.secretAvailable ? '已配置' : '未配置') : '网页预览模式'}
               </p>
-              {props.secretMessage ? <p className="secretMessage">{props.secretMessage}</p> : null}
-
               <label>
                 模型 ID
                 <div className="modelPicker">
@@ -2020,7 +3291,7 @@ function ProviderSettingsPage(props: {
                     list="provider-model-options"
                     value={props.providerConfig.modelId}
                     onChange={(event) => props.onConfigChange('modelId', event.target.value)}
-                    placeholder="gpt-image-1 / gpt-image-2 / gpt-image-2-all"
+                    placeholder="填写服务商支持的模型 ID，例如 gpt-image-2 / nano-banana / qwen-image"
                   />
                   <datalist id="provider-model-options">
                     {props.providerConfig.modelOptions.map((modelId) => (
@@ -2030,7 +3301,7 @@ function ProviderSettingsPage(props: {
                   <button className="iconButton" onClick={props.onRefreshModels} disabled={props.isRefreshingModels}>
                     {props.isRefreshingModels ? '…' : '刷新'}
                   </button>
-                  <button className="iconButton" onClick={props.onPinModel} title="设为默认模型">
+                  <button className="iconButton" onClick={props.onPinModel}>
                     默认
                   </button>
                 </div>
@@ -2079,13 +3350,13 @@ function ProviderSettingsPage(props: {
                   <Copy size={15} /> 复制配置
                 </button>
                 <button className="ghostButton" type="button" onClick={props.onImportConfig}>
-                  <Upload size={15} /> 导入剪贴板
+                  <ClipboardPaste size={15} /> 粘贴配置
                 </button>
               </div>
               <div className="providerDiagnostics">
                 <div className="diagnosticsHeader">
                   <div>
-                    <strong>Provider 诊断助手</strong>
+                    <strong>平台诊断助手</strong>
                     <small>检查桌面环境、密钥、Base URL、Headers、协议路径和模型列表连通性。</small>
                   </div>
                   <div className="diagnosticsActions">
@@ -2095,7 +3366,7 @@ function ProviderSettingsPage(props: {
                     <button
                       className="rowActionButton primaryAction"
                       onClick={props.onRunTestGeneration}
-                      disabled={!props.desktopRuntime || !props.secretAvailable || props.isRunningTestGeneration}
+                      disabled={!props.desktopRuntime || !props.secretAvailable || props.isRunningTestGeneration || !props.isSelectedServiceConfigurable}
                       title={!props.secretAvailable ? '请先保存 API Key' : '调用真实接口生成 1 张测试小样'}
                     >
                       <Sparkles size={15} /> {props.isRunningTestGeneration ? '测试中…' : '试生图'}
@@ -2126,12 +3397,16 @@ function ProviderSettingsPage(props: {
                   </>
                 )}
               </div>
-              {props.configMessage ? <p className="secretMessage">{props.configMessage}</p> : null}
             </div>
           ) : (
             <div className="integrationBox">
               <strong>接入状态</strong>
-              <p>当前 Provider 仍为路线图占位，真实 API Adapter 尚未接入。</p>
+              <p>{props.selectedServiceTemplate.description}</p>
+              <div className="serviceTemplateNotes">
+                {props.selectedServiceTemplate.notes.map((note) => (
+                  <span key={note}>{note}</span>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -2144,10 +3419,19 @@ function SettingsPage(props: {
   appSettings: AppSettings;
   providers: ReturnType<typeof listProviders>;
   desktopRuntime: boolean;
-  settingsMessage: string;
   storageSettings: StorageSettings | null;
   systemTheme: 'dark' | 'light';
+  promptPolishDraft: PromptPolishSettings;
+  promptPolishSecretDraft: string;
+  promptPolishSecretAvailable: boolean;
+  isSavingPromptPolishSecret: boolean;
+  isRefreshingPromptPolishModels: boolean;
   onSettingsChange: (patch: Partial<AppSettings>) => void;
+  onPromptPolishDraftChange: (patch: Partial<PromptPolishSettings>) => void;
+  onSavePromptPolishConfig: () => void;
+  onRefreshPromptPolishModels: () => void;
+  onPromptPolishSecretDraftChange: (value: string) => void;
+  onSavePromptPolishSecret: () => void;
   onSelectLibraryPath: () => void;
   onResetLibraryPath: () => void;
   onOpenLibraryDirectory: () => void;
@@ -2160,21 +3444,14 @@ function SettingsPage(props: {
   const settings = props.appSettings;
   const generationDefaults = settings.generationDefaults;
   const promptHistory = settings.promptHistory;
-  const promptPolish = settings.promptPolish;
+  const promptPolish = props.promptPolishDraft;
+  const promptPolishDefaultMode = resolvePolishMode(promptHistory.defaultPolishMode, promptPolish.engine);
+  const promptPolishModeOptions = getPolishModesForEngine(promptPolish.engine);
   const defaultProvider = props.providers.find((provider) => provider.id === generationDefaults.defaultProviderId) ?? props.providers[0];
   const defaultModelOptions = defaultProvider.models.map((model) => ({ value: model.id, label: model.label || model.id }));
   const selectedDefaultModel = defaultModelOptions.some((option) => option.value === generationDefaults.defaultModelId)
     ? generationDefaults.defaultModelId
     : defaultModelOptions[0]?.value ?? generationDefaults.defaultModelId;
-  const polishProvider = props.providers.find((provider) => provider.id === promptPolish.providerId) ?? props.providers[0];
-  const polishModelOptions = (polishProvider.textModels?.length ? polishProvider.textModels : polishProvider.models).map((model) => ({
-    value: model.id,
-    label: model.label || model.id
-  }));
-  const selectedPolishModel = polishModelOptions.some((option) => option.value === promptPolish.modelId)
-    ? promptPolish.modelId
-    : polishModelOptions[0]?.value ?? promptPolish.modelId;
-  const polishStatus = polishProvider.capabilities.promptPolish;
   const [developerMode, setDeveloperMode] = useState(false);
 
   function updateGenerationDefaults(patch: Partial<GenerationDefaults>) {
@@ -2185,8 +3462,44 @@ function SettingsPage(props: {
     props.onSettingsChange({ promptHistory: { ...promptHistory, ...patch } });
   }
 
-  function updatePromptPolish(patch: Partial<PromptPolishSettings>) {
-    props.onSettingsChange({ promptPolish: { ...promptPolish, ...patch } });
+  function updatePromptPolish(patch: Partial<PromptPolishSettings>, options?: { commit?: boolean }) {
+    const nextPromptPolish = { ...promptPolish, ...patch };
+    props.onPromptPolishDraftChange(patch);
+    if (options?.commit) {
+      props.onSettingsChange({ promptPolish: nextPromptPolish });
+    }
+  }
+
+  function deletePromptPolishConfig(configId: string) {
+    const nextConfigs = promptPolish.savedConfigs.filter((config) => config.id !== configId);
+    const currentConfigId = promptPolishConfigId(promptPolish.displayName, promptPolish.baseUrl);
+    const nextActive = configId === currentConfigId ? nextConfigs[0] : null;
+    const nextPromptPolish: PromptPolishSettings = {
+      ...promptPolish,
+      ...(nextActive
+        ? {
+            displayName: nextActive.displayName,
+            baseUrl: nextActive.baseUrl,
+            modelId: nextActive.modelId,
+            modelOptions: nextActive.modelOptions,
+            extraHeadersJson: nextActive.extraHeadersJson,
+            protocol: nextActive.protocol
+          }
+        : {}),
+      ...(configId === currentConfigId && !nextActive
+        ? {
+            displayName: '提示词润色专用配置',
+            baseUrl: '',
+            modelId: '',
+            modelOptions: [],
+            extraHeadersJson: '{}',
+            protocol: 'chat-completions' as const
+          }
+        : {}),
+      savedConfigs: nextConfigs
+    };
+    props.onPromptPolishDraftChange(nextPromptPolish);
+    props.onSettingsChange({ promptPolish: nextPromptPolish });
   }
 
   function updateDefaultProvider(providerId: string) {
@@ -2197,12 +3510,6 @@ function SettingsPage(props: {
     });
   }
 
-  function updatePromptPolishProvider(providerId: string) {
-    const provider = props.providers.find((item) => item.id === providerId) ?? props.providers[0];
-    const firstTextModel = provider.textModels?.[0]?.id ?? provider.models[0]?.id ?? promptPolish.modelId;
-    updatePromptPolish({ providerId: provider.id, modelId: firstTextModel });
-  }
-
   return (
     <section className="systemSettingsPage">
       <header className="systemSettingsHeader">
@@ -2211,13 +3518,13 @@ function SettingsPage(props: {
           <h1>偏好设置</h1>
         </div>
         <div className="settingsHeaderActions">
-          <button type="button" title="系统信息" aria-label="系统信息" onClick={props.onOpenSystemInfo}>
+          <button type="button" data-tooltip="系统信息" aria-label="系统信息" onClick={props.onOpenSystemInfo}>
             <Info size={16} />
           </button>
-          <button type="button" title="快捷键" aria-label="快捷键" onClick={props.onOpenShortcuts}>
+          <button type="button" data-tooltip="快捷键" aria-label="快捷键" onClick={props.onOpenShortcuts}>
             <Keyboard size={16} />
           </button>
-          <button type="button" title="检查更新" aria-label="检查更新" onClick={props.onCheckUpdates}>
+          <button type="button" data-tooltip="检查更新" aria-label="检查更新" onClick={props.onCheckUpdates}>
             <RefreshCcw size={16} />
           </button>
         </div>
@@ -2229,7 +3536,7 @@ function SettingsPage(props: {
           <div className="settingsRowMain">
             <strong>主题</strong>
           </div>
-          <div className="segmentedControl">
+          <div className="segmentedControl themeSegment">
             <button className={settings.themeMode === 'light' ? 'active' : ''} onClick={() => props.onSettingsChange({ themeMode: 'light' })}>
               <Sun size={14} /> 浅色
             </button>
@@ -2240,7 +3547,6 @@ function SettingsPage(props: {
               <Monitor size={14} /> 跟随系统
             </button>
           </div>
-          <small className="settingsInlineHint">当前系统：{props.systemTheme === 'dark' ? '深色' : '浅色'}</small>
         </div>
 
         <div className="settingsListRow">
@@ -2407,13 +3713,13 @@ function SettingsPage(props: {
         <div className="settingsListRow">
           <div className="settingsRowMain">
             <strong>默认润色模式</strong>
-            <small>提示词润色弹窗打开后默认选中的扩写方向。</small>
+            <small>跟随当前润色引擎切换，本地规则和模型扩写方向分开保存。</small>
           </div>
           <div className="settingsControlSlim">
             <StudioSelect
-              value={promptHistory.defaultPolishMode}
+              value={promptPolishDefaultMode.id}
               onChange={(value) => updatePromptHistory({ defaultPolishMode: value })}
-              options={POLISH_MODES.map((mode) => ({ value: mode.id, label: mode.label }))}
+              options={promptPolishModeOptions.map((mode) => ({ value: mode.id, label: mode.label }))}
             />
           </div>
         </div>
@@ -2421,44 +3727,177 @@ function SettingsPage(props: {
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
             <strong>提示词润色引擎</strong>
-            <small>本地规则不消耗额度；模型润色会使用平台接入页已保存的 API Key。</small>
+            <small>本地规则不消耗额度；模型润色使用下方独立配置，不复用生图平台 Key。</small>
           </div>
           <div className="settingsInlineGrid">
             <StudioSelect
               value={promptPolish.engine}
-              onChange={(value) => updatePromptPolish({ engine: value as PromptPolishSettings['engine'] })}
+              onChange={(value) => updatePromptPolish({ engine: value as PromptPolishSettings['engine'] }, { commit: true })}
               options={PROMPT_POLISH_ENGINE_OPTIONS}
             />
             <button
               className={promptPolish.fallbackToLocal ? 'settingsTogglePill active' : 'settingsTogglePill'}
-              onClick={() => updatePromptPolish({ fallbackToLocal: !promptPolish.fallbackToLocal })}
+              onClick={() => updatePromptPolish({ fallbackToLocal: !promptPolish.fallbackToLocal }, { commit: true })}
             >
               失败时本地兜底
             </button>
           </div>
         </div>
 
-        <div className="settingsListRow settingsTallRow">
-          <div className="settingsRowMain">
-            <strong>润色平台与模型</strong>
-            <small>
-              当前能力：{polishProvider.name} · {statusLabel[polishStatus]}。若模型不在列表中，可先选自定义中转并在平台接入页保存 Base URL / API Key。
-            </small>
+        <div className="settingsConfigBlock">
+          <div className="promptPolishConfigHeader">
+            <div className="settingsRowMain promptPolishIntro">
+              <strong>提示词润色专用配置</strong>
+              <small>这里单独保存润色用的接口信息和 API Key，可接入 DeepSeek、聚合站或其他 OpenAI-compatible 文本模型。</small>
+            </div>
+            <div className="promptPolishHeaderTools">
+              <div className="settingsPresetRow">
+                <button
+                  type="button"
+                  className={promptPolish.displayName === 'DeepSeek 提示词润色' ? 'active' : ''}
+                  onClick={() => updatePromptPolish({
+                    displayName: 'DeepSeek 提示词润色',
+                    baseUrl: 'https://api.deepseek.com',
+                    modelId: '',
+                    modelOptions: [],
+                    protocol: 'chat-completions'
+                  })}
+                >
+                  DeepSeek
+                </button>
+                <button
+                  type="button"
+                  className={promptPolish.displayName === '聚合站文本润色' ? 'active' : ''}
+                  onClick={() => updatePromptPolish({
+                    displayName: '聚合站文本润色',
+                    baseUrl: '',
+                    modelId: '',
+                    modelOptions: [],
+                    protocol: 'chat-completions'
+                  })}
+                >
+                  聚合站通用
+                </button>
+                <button
+                  type="button"
+                  className={promptPolish.displayName === 'OpenAI 官方文本润色' ? 'active' : ''}
+                  onClick={() => updatePromptPolish({
+                    displayName: 'OpenAI 官方文本润色',
+                    baseUrl: OFFICIAL_OPENAI_BASE_URL,
+                    modelId: '',
+                    modelOptions: [],
+                    protocol: 'chat-completions'
+                  })}
+                >
+                  OpenAI 官方
+                </button>
+              </div>
+              <div className="settingsStatusPills compact">
+                <span className={promptPolish.baseUrl.trim() ? 'ready' : ''}>Base URL</span>
+                <span className={promptPolish.modelId.trim() ? 'ready' : ''}>模型 ID</span>
+                <span className={props.promptPolishSecretAvailable ? 'ready' : ''}>API Key</span>
+              </div>
+            </div>
           </div>
-          <div className="settingsInlineGrid">
-            <StudioSelect
-              value={promptPolish.providerId}
-              onChange={updatePromptPolishProvider}
-              options={props.providers.map((provider) => ({
-                value: provider.id,
-                label: `${provider.name} · ${statusLabel[provider.capabilities.promptPolish]}`
-              }))}
-            />
-            <StudioSelect
-              value={selectedPolishModel}
-              onChange={(value) => updatePromptPolish({ modelId: value })}
-              options={polishModelOptions}
-            />
+          <div className="settingsConfigGrid">
+            <label>
+              配置名称
+              <input
+                value={promptPolish.displayName}
+                placeholder="提示词润色专用配置"
+                onChange={(event) => updatePromptPolish({ displayName: event.target.value })}
+              />
+            </label>
+            <label>
+              Base URL
+              <input
+                value={promptPolish.baseUrl}
+                placeholder="例如 https://api.example.com"
+                onChange={(event) => updatePromptPolish({ baseUrl: event.target.value })}
+              />
+            </label>
+            <label>
+              模型选择 / 手动填写
+              <div className="settingsModelSelectRow">
+                <input
+                  value={promptPolish.modelId}
+                  list="prompt-polish-model-options"
+                  placeholder={promptPolish.modelOptions.length > 0 ? '选择刷新出的模型，或手动输入模型 ID' : '先刷新模型列表；刷不出来就手动填写模型 ID'}
+                  onChange={(event) => updatePromptPolish({ modelId: event.target.value })}
+                />
+                <datalist id="prompt-polish-model-options">
+                  {promptPolish.modelOptions.map((modelId) => <option key={modelId} value={modelId} />)}
+                </datalist>
+                <button type="button" onClick={props.onRefreshPromptPolishModels} disabled={props.isRefreshingPromptPolishModels}>
+                  {props.isRefreshingPromptPolishModels ? '刷新中…' : '刷新'}
+                </button>
+              </div>
+              <small>刷新读取 /v1/models；列表没有目标模型时直接在同一个输入框填写。</small>
+            </label>
+            <label>
+              API Key
+              <div className="settingsSecretInputRow">
+                <input
+                  type="password"
+                  value={props.promptPolishSecretDraft}
+                  placeholder={props.promptPolishSecretAvailable ? '已保存，输入新 Key 可替换' : '粘贴润色专用 API Key'}
+                  onChange={(event) => props.onPromptPolishSecretDraftChange(event.target.value)}
+                />
+                <button type="button" onClick={props.onSavePromptPolishSecret} disabled={props.isSavingPromptPolishSecret}>
+                  {props.isSavingPromptPolishSecret ? '保存中…' : '保存'}
+                </button>
+              </div>
+              <small>{props.promptPolishSecretAvailable ? '润色专用 Key 已配置。' : '尚未保存润色专用 Key。'}</small>
+            </label>
+            <details className="settingsAdvancedBox settingsWideField">
+              <summary>
+                <span>高级设置：Headers JSON</span>
+                <small>默认保持 {'{}'}</small>
+              </summary>
+              <p>用于给少数中转站或企业 API 额外传请求头，例如 <code>{'{"X-Provider":"visionhub"}'}</code>。一般服务商不需要，保持空对象即可。</p>
+              <textarea
+                rows={3}
+                value={promptPolish.extraHeadersJson}
+                placeholder='{"X-Provider": "visionhub"}'
+                onChange={(event) => updatePromptPolish({ extraHeadersJson: event.target.value })}
+              />
+            </details>
+            <div className="promptPolishConfigInstances settingsWideField">
+              <strong>已保存配置实例</strong>
+              {promptPolish.savedConfigs.length === 0 ? (
+                <p>保存当前配置后会显示在这里。</p>
+              ) : (
+                <div>
+                  {promptPolish.savedConfigs.map((config) => (
+                    <article key={config.id} className={config.id === promptPolishConfigId(promptPolish.displayName, promptPolish.baseUrl) ? 'active' : ''}>
+                      <button
+                        type="button"
+                        onClick={() => updatePromptPolish({
+                          displayName: config.displayName,
+                          baseUrl: config.baseUrl,
+                          modelId: config.modelId,
+                          modelOptions: config.modelOptions,
+                          extraHeadersJson: config.extraHeadersJson,
+                          protocol: config.protocol
+                        })}
+                      >
+                        <span>{config.displayName}</span>
+                        <small>{config.modelId || '未设置模型'} · {config.baseUrl || '未设置 Base URL'}</small>
+                      </button>
+                      <button type="button" className="promptPolishConfigDelete" data-tooltip="删除配置实例" aria-label={`删除配置实例：${config.displayName}`} onClick={() => deletePromptPolishConfig(config.id)}>
+                        <Trash2 size={13} />
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="settingsConfigActions settingsWideField">
+              <button type="button" className="rowActionButton" onClick={props.onSavePromptPolishConfig}>
+                <ShieldCheck size={14} /> 保存润色配置
+              </button>
+              <small>保存配置不会保存 API Key；API Key 仍需单独点击上方“保存”。</small>
+            </div>
           </div>
         </div>
 
@@ -2486,7 +3925,7 @@ function SettingsPage(props: {
           </div>
         </div>
 
-        <p className="settingsNotice">模型润色不会读取或导出你的 API Key；密钥仍由桌面端安全凭据存储。未配置 Key 或请求失败时，会按设置自动回退到本地规则润色。</p>
+        <p className="settingsNotice">模型润色不会读取或导出你的 API Key；密钥由桌面端安全凭据存储在独立的润色通道。未配置或请求失败时，会按设置自动回退到本地规则润色。</p>
       </article>
 
       <div className="settingsSectionLabel">数据与缓存</div>
@@ -2589,18 +4028,17 @@ function SettingsPage(props: {
         <div className="settingsListRow">
           <div className="settingsRowMain">
             <strong>备份与恢复</strong>
-            <small>{'\u5bfc\u51fa\u5e94\u7528\u8bbe\u7f6e\u3001Provider \u914d\u7f6e\u548c\u672c\u5730\u5386\u53f2\u3002API Key \u4e0d\u4f1a\u88ab\u5bfc\u51fa\u3002'}</small>
+            <small>{'\u5bfc\u51fa\u5e94\u7528\u8bbe\u7f6e\u3001\u5e73\u53f0\u914d\u7f6e\u548c\u672c\u5730\u5386\u53f2\u3002API Key \u4e0d\u4f1a\u88ab\u5bfc\u51fa\u3002'}</small>
           </div>
           <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onExportSettingsBackup}>
             <Download size={15} /> {'\u5bfc\u51fa\u8bbe\u7f6e'}
           </button>
         </div>
-        {props.settingsMessage ? <p className="settingsActionMessage">{props.settingsMessage}</p> : null}
       </article>
 
       <div className="settingsSectionLabel">软件升级</div>
       <article className="settingsGroupCard">
-        <div className="settingsListRow">
+        <div className="settingsListRow themeSettingsRow">
           <div className="settingsRowMain">
             <strong>版本</strong>
           </div>
@@ -2668,7 +4106,7 @@ function Gallery(props: {
           <div className="emptyState">
             <Sparkles size={42} />
             <h3>先生成一张图片</h3>
-            <p>真实 Provider 接入后，这里会保存每张图的来源平台、模型、Prompt、成本和耗时。</p>
+            <p>真实平台接入后，这里会保存每张图的来源平台、模型、Prompt、成本和耗时。</p>
           </div>
         ) : (
           props.results.map((result) => (
@@ -2722,18 +4160,52 @@ function LibraryPage(props: {
   providers: ReturnType<typeof listProviders>;
   results: ReturnType<typeof useStudioStore.getState>['results'];
   isHistoryLoaded: boolean;
+  onAddResult: (record: GenerationRecord) => void;
   onPreview: (imageUrl: string) => void;
   onUseAsReference: (record: GenerationRecord) => void;
+  onRequestConfirm: (request: ConfirmDialogRequest) => void;
   onDelete: (recordId: string) => Promise<void>;
 }) {
   const [query, setQuery] = useState('');
   const [providerFilter, setProviderFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'succeeded' | 'failed'>('all');
-  const [modeFilter, setModeFilter] = useState<'all' | 'text-to-image' | 'image-to-image' | 'with-references'>('all');
+  const [modeFilter, setModeFilter] = useState<LibraryModeFilter>('all');
   const [timeFilter, setTimeFilter] = useState<LibraryTimeFilter>('all');
+  const [colorFilter, setColorFilter] = useState<LibraryColorFilter>('all');
+  const [shapeFilter, setShapeFilter] = useState<LibraryShapeFilter>('all');
+  const [formatFilter, setFormatFilter] = useState<LibraryFormatFilter>('all');
+  const [ratingFilter, setRatingFilter] = useState<LibraryRatingFilter>('all');
+  const [colorMenuOpen, setColorMenuOpen] = useState(false);
+  const [quickFilters, setQuickFilters] = useState<LibraryQuickFilter[]>([]);
+  const [customQuickFilters, setCustomQuickFilters] = useState<LibraryCustomQuickFilter[]>(() => loadLibraryCustomQuickFilters());
+  const [activeCustomQuickFilterIds, setActiveCustomQuickFilterIds] = useState<string[]>([]);
+  const [libraryOrganization, setLibraryOrganization] = useState<LibraryOrganization>(() => loadLibraryOrganization());
+  const [libraryScope, setLibraryScope] = useState<LibraryScope>({ type: 'all' });
+  const [libraryOrganizerOpen, setLibraryOrganizerOpen] = useState(false);
+  const [organizerDialog, setOrganizerDialog] = useState<LibraryOrganizerDialogState | null>(null);
+  const [assignDialog, setAssignDialog] = useState<LibraryAssignDialogState | null>(null);
+  const [quickFilterEditorOpen, setQuickFilterEditorOpen] = useState(false);
+  const [quickFilterName, setQuickFilterName] = useState('');
+  const [viewMode, setViewMode] = useState<LibraryViewMode>('adaptive');
+  const [sortMode, setSortMode] = useState<LibrarySortMode>('newest');
+  const [thumbnailScale, setThumbnailScale] = useState(1);
+  const [searchVisible, setSearchVisible] = useState(true);
+  const [filtersVisible, setFiltersVisible] = useState(true);
+  const [activePanel, setActivePanel] = useState<'main' | 'view' | 'display' | 'sort' | 'add' | null>(null);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+  const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<LibraryContextMenuState | null>(null);
+  const [libraryMeta, setLibraryMeta] = useState<LibraryMetaMap>(() => loadLibraryMeta());
+  const [displaySettings, setDisplaySettings] = useState<LibraryDisplaySettings>(() => loadLibraryDisplaySettings());
   const [copyMessage, setCopyMessage] = useState('');
+  const dockRef = useRef<HTMLElement | null>(null);
+  const colorFilterRef = useRef<HTMLLabelElement | null>(null);
+  const quickFilterEditorRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const providerNameMap = new Map(props.providers.map((provider) => [provider.id, provider.name]));
+  useToastMessage(copyMessage, setCopyMessage);
+  const isDockSubPanel = activePanel !== null && activePanel !== 'main' && activePanel !== 'add';
+  const providerNameMap = new Map(props.providers.map((provider) => [provider.id, providerGenerationLabel(provider)]));
   const libraryItems = props.results.filter((result) => result.imageUrls.length > 0 || result.status === 'failed');
   const successCount = libraryItems.filter((result) => result.status === 'succeeded').length;
   const failedCount = libraryItems.filter((result) => result.status === 'failed').length;
@@ -2741,26 +4213,13 @@ function LibraryPage(props: {
   const nowMs = Date.now();
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
-  const recentCutoff = nowMs - 7 * 24 * 60 * 60 * 1000;
-  const recentCount = libraryItems.filter((result) => getRecordTimeMs(result.createdAt) >= recentCutoff).length;
-  const successRate = libraryItems.length ? Math.round((successCount / libraryItems.length) * 100) : 0;
-  const durations = libraryItems
-    .map((result) => result.durationMs)
-    .filter((duration): duration is number => typeof duration === 'number' && Number.isFinite(duration) && duration > 0);
-  const averageDuration = durations.length
-    ? `${Math.round(durations.reduce((sum, duration) => sum + duration, 0) / durations.length)}ms`
-    : '\u6682\u65e0\u8017\u65f6';
-  const topProvider = getTopLibraryValue(
-    libraryItems.map((result) => result.providerName ?? providerNameMap.get(result.providerId) ?? result.providerId)
-  );
-  const topModel = getTopLibraryValue(libraryItems.map((result) => result.modelId));
   const normalizedQuery = query.trim().toLowerCase();
   const providerOptions = [
-    { value: 'all', label: '\u5168\u90e8 Provider' },
-    ...props.providers.map((provider) => ({ value: provider.id, label: provider.name }))
+    { value: 'all', label: '全部平台' },
+    ...props.providers.map((provider) => ({ value: provider.id, label: providerGenerationLabel(provider) }))
   ];
   const statusOptions = [
-    { value: 'all', label: '\u5168\u90e8\u72b6\u6001' },
+    { value: 'all', label: '默认状态' },
     { value: 'succeeded', label: '\u6210\u529f' },
     { value: 'failed', label: '\u5931\u8d25' }
   ];
@@ -2776,12 +4235,12 @@ function LibraryPage(props: {
     { value: '7d', label: '\u8fd1 7 \u5929' },
     { value: '30d', label: '\u8fd1 30 \u5929' }
   ];
-  const filteredItems = libraryItems.filter((result) => {
-    const providerName = result.providerName ?? providerNameMap.get(result.providerId) ?? result.providerId;
+  const filteredItems = sortLibraryRecords(libraryItems.filter((result) => {
+    const providerName = providerNameMap.get(result.providerId) ?? result.providerName ?? result.providerId;
     const generationMode = result.generationMode ?? 'text-to-image';
     const recordTime = getRecordTimeMs(result.createdAt);
     const matchesProvider = providerFilter === 'all' || result.providerId === providerFilter;
-    const matchesStatus = statusFilter === 'all' || result.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' ? result.status !== 'failed' : result.status === statusFilter;
     const matchesMode =
       modeFilter === 'all' ||
       generationMode === modeFilter ||
@@ -2792,21 +4251,213 @@ function LibraryPage(props: {
       (timeFilter === '7d' && recordTime >= nowMs - 7 * 24 * 60 * 60 * 1000) ||
       (timeFilter === '30d' && recordTime >= nowMs - 30 * 24 * 60 * 60 * 1000);
     const referenceText = result.referenceImages?.map((reference) => `${reference.name ?? ''} ${reference.source}`).join(' ') ?? '';
-    const haystack = [result.prompt, result.modelId, result.providerId, providerName, referenceText, result.error ?? '']
+    const meta = libraryMeta[result.id];
+    const shapeTokens = getRecordShapeTokens(result, meta);
+    const format = getRecordFormat(result);
+    const rating = meta?.rating;
+    const matchesShape = shapeFilter === 'all' || shapeTokens.includes(shapeFilter);
+    const matchesFormat = formatFilter === 'all' || format === formatFilter;
+    const matchesRating =
+      ratingFilter === 'all' ||
+      (ratingFilter === 'unrated' && !rating) ||
+      (ratingFilter !== 'unrated' && rating === Number(ratingFilter));
+    const matchesColor = libraryColorMatchesFilter(meta, colorFilter);
+    const matchesQuickFilters = quickFilters.every((filter) => {
+      if (filter === 'favorites') return Boolean(meta?.favorite);
+      if (filter === 'recent7d') return recordTime >= nowMs - 7 * 24 * 60 * 60 * 1000;
+      if (filter === 'references') return Boolean(result.referenceImages?.length);
+      if (filter === 'failed') return result.status === 'failed';
+      if (filter === 'local') return Boolean(result.localImagePaths?.[0]);
+      return true;
+    });
+    const matchesLibraryScope =
+      libraryScope.type === 'all' ||
+      (libraryScope.type === 'favorites' && Boolean(meta?.favorite)) ||
+      (libraryScope.type === 'recent7d' && recordTime >= nowMs - 7 * 24 * 60 * 60 * 1000) ||
+      (libraryScope.type === 'local' && Boolean(result.localImagePaths?.[0])) ||
+      (libraryScope.type === 'folder' && meta?.folderId === libraryScope.id) ||
+      (libraryScope.type === 'collection' && Boolean(meta?.collectionIds?.includes(libraryScope.id)));
+    const matchesCustomQuickFilters = activeCustomQuickFilterIds.every((filterId) => {
+      const filter = customQuickFilters.find((item) => item.id === filterId);
+      if (!filter) return true;
+      const criteria = filter.criteria;
+      if (criteria.query?.trim()) {
+        const customQuery = criteria.query.trim().toLowerCase();
+        const customText = [
+          result.prompt,
+          result.modelId,
+          result.providerId,
+          providerName,
+          result.status,
+          referenceText,
+          result.error ?? '',
+          getRecordFileName(result),
+          getRecordPrimaryPath(result),
+          meta?.favorite ? 'favorite 收藏 starred 星标 已收藏' : '',
+          ...(meta?.colorFamilies?.map((family) => getLibraryColorLabel(family)) ?? []),
+          ...(meta?.tags ?? [])
+        ].join(' ').toLowerCase();
+        if (!customText.includes(customQuery)) return false;
+      }
+      if (criteria.providerFilter && criteria.providerFilter !== 'all' && result.providerId !== criteria.providerFilter) return false;
+      if (criteria.statusFilter && criteria.statusFilter !== 'all' && result.status !== criteria.statusFilter) return false;
+      if (criteria.statusFilter === 'all' && result.status === 'failed') return false;
+      if (criteria.modeFilter && criteria.modeFilter !== 'all' && generationMode !== criteria.modeFilter && !(criteria.modeFilter === 'with-references' && Boolean(result.referenceImages?.length))) return false;
+      if (criteria.timeFilter === 'today' && recordTime < todayStart.getTime()) return false;
+      if (criteria.timeFilter === '7d' && recordTime < nowMs - 7 * 24 * 60 * 60 * 1000) return false;
+      if (criteria.timeFilter === '30d' && recordTime < nowMs - 30 * 24 * 60 * 60 * 1000) return false;
+      if (criteria.colorFilter && !libraryColorMatchesFilter(meta, criteria.colorFilter)) return false;
+      if (criteria.shapeFilter && criteria.shapeFilter !== 'all' && !shapeTokens.includes(criteria.shapeFilter)) return false;
+      if (criteria.formatFilter && criteria.formatFilter !== 'all' && format !== criteria.formatFilter) return false;
+      if (criteria.ratingFilter === 'unrated' && rating) return false;
+      if (criteria.ratingFilter && criteria.ratingFilter !== 'all' && criteria.ratingFilter !== 'unrated' && rating !== Number(criteria.ratingFilter)) return false;
+      return true;
+    });
+    const statusText = generationStatusLabel(result);
+    const modeSearchText = generationMode === 'image-to-image' ? '图生图 image-to-image img2img' : '文生图 text-to-image txt2img';
+    const haystack = [
+      result.prompt,
+      result.modelId,
+      result.providerId,
+      providerName,
+      statusText,
+      result.status,
+      modeSearchText,
+      referenceText,
+      result.error ?? '',
+      getRecordFileName(result),
+      getRecordPrimaryPath(result),
+      meta?.favorite ? 'favorite 收藏 starred 星标 已收藏' : '',
+      ...(meta?.colorFamilies?.map((family) => getLibraryColorLabel(family)) ?? []),
+      result.localImagePaths?.[0] ? 'local 本地 已落盘 文件存在' : '',
+      result.referenceImages?.length ? 'reference 参考图 有参考图' : '',
+      ...(meta?.tags ?? [])
+    ]
       .join(' ')
       .toLowerCase();
     const matchesQuery = !normalizedQuery || haystack.includes(normalizedQuery);
-    return matchesProvider && matchesStatus && matchesMode && matchesTime && matchesQuery;
+    return matchesProvider && matchesStatus && matchesMode && matchesTime && matchesShape && matchesFormat && matchesRating && matchesColor && matchesQuickFilters && matchesLibraryScope && matchesCustomQuickFilters && matchesQuery;
+  }), sortMode, libraryMeta, providerNameMap);
+  const selectedRecord = selectedRecordId ? libraryItems.find((result) => result.id === selectedRecordId) ?? null : null;
+  const filteredIds = filteredItems.map((result) => result.id);
+  const selectedIdSet = new Set(selectedRecordIds);
+  const selectedRecords = selectedRecordIds
+    .map((recordId) => libraryItems.find((result) => result.id === recordId) ?? null)
+    .filter((result): result is GenerationRecord => Boolean(result));
+  const contextRecord = contextMenu ? libraryItems.find((result) => result.id === contextMenu.recordId) ?? null : null;
+  const contextSelection = selectedRecords.length ? selectedRecords : contextRecord ? [contextRecord] : [];
+  const selectedRecordMeta = selectedRecord ? libraryMeta[selectedRecord.id] : undefined;
+  const selectedRecordFileName = selectedRecord ? getRecordFileName(selectedRecord) || selectedRecord.id : '';
+  const selectedRecordDetailMeta = selectedRecord
+    ? [selectedRecord.modelId || '-', getRecordSizeLabel(selectedRecord, selectedRecordMeta), getRecordFileSizeLabel(selectedRecord), getRecordFormatLabel(selectedRecord)]
+    : [];
+  const selectedRecordFolder = selectedRecordMeta?.folderId
+    ? libraryOrganization.folders.find((folder) => folder.id === selectedRecordMeta.folderId)
+    : undefined;
+  const selectedRecordCollections = selectedRecordMeta?.collectionIds?.length
+    ? libraryOrganization.collections.filter((collection) => selectedRecordMeta.collectionIds?.includes(collection.id))
+    : [];
+  const folderCounts = new Map<string, number>();
+  const collectionCounts = new Map<string, number>();
+  libraryItems.forEach((record) => {
+    const meta = libraryMeta[record.id];
+    if (meta?.folderId) folderCounts.set(meta.folderId, (folderCounts.get(meta.folderId) ?? 0) + 1);
+    meta?.collectionIds?.forEach((collectionId) => {
+      collectionCounts.set(collectionId, (collectionCounts.get(collectionId) ?? 0) + 1);
+    });
   });
+  const favoriteScopeCount = libraryItems.filter((record) => libraryMeta[record.id]?.favorite).length;
+  const recentScopeCount = libraryItems.filter((record) => getRecordTimeMs(record.createdAt) >= nowMs - 7 * 24 * 60 * 60 * 1000).length;
+  const localScopeCount = libraryItems.filter((record) => record.localImagePaths?.[0]).length;
+  const selectedScopeTitle =
+    libraryScope.type === 'all' ? '全部作品'
+      : libraryScope.type === 'favorites' ? '收藏'
+      : libraryScope.type === 'recent7d' ? '最近 7 天'
+      : libraryScope.type === 'local' ? '本地已落盘'
+      : libraryScope.type === 'folder' ? libraryOrganization.folders.find((folder) => folder.id === libraryScope.id)?.name ?? '文件夹'
+      : libraryOrganization.collections.find((collection) => collection.id === libraryScope.id)?.name ?? '收藏集';
 
   useEffect(() => {
     function focusSearch() {
+      setSearchVisible(true);
       searchInputRef.current?.focus();
       searchInputRef.current?.select();
     }
     window.addEventListener(libraryFocusSearchEvent, focusSearch);
     return () => window.removeEventListener(libraryFocusSearchEvent, focusSearch);
   }, []);
+  useEffect(() => {
+    if (selectedRecordId && !libraryItems.some((result) => result.id === selectedRecordId)) {
+      setSelectedRecordId(null);
+    }
+    setSelectedRecordIds((current) => {
+      const next = current.filter((recordId) => libraryItems.some((result) => result.id === recordId));
+      return next.length === current.length ? current : next;
+    });
+  }, [libraryItems, selectedRecordId]);
+
+  useEffect(() => {
+    if (!activePanel) return;
+    function closePanelOnOutsidePointer(event: globalThis.PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (dockRef.current?.contains(target)) return;
+      setActivePanel(null);
+    }
+    window.addEventListener('pointerdown', closePanelOnOutsidePointer);
+    return () => window.removeEventListener('pointerdown', closePanelOnOutsidePointer);
+  }, [activePanel]);
+
+  useEffect(() => {
+    if (!colorMenuOpen) return;
+    function closeColorMenu(event: globalThis.PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (colorFilterRef.current?.contains(target)) return;
+      setColorMenuOpen(false);
+    }
+    window.addEventListener('pointerdown', closeColorMenu);
+    return () => window.removeEventListener('pointerdown', closeColorMenu);
+  }, [colorMenuOpen]);
+
+  useEffect(() => {
+    if (!quickFilterEditorOpen) return;
+    function closeQuickFilterEditor(event: globalThis.PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (quickFilterEditorRef.current?.contains(target)) return;
+      setQuickFilterEditorOpen(false);
+    }
+    window.addEventListener('pointerdown', closeQuickFilterEditor);
+    return () => window.removeEventListener('pointerdown', closeQuickFilterEditor);
+  }, [quickFilterEditorOpen]);
+
+  useEffect(() => {
+    if (!libraryOrganizerOpen) return;
+    function closeOrganizerOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setLibraryOrganizerOpen(false);
+    }
+    window.addEventListener('keydown', closeOrganizerOnEscape);
+    return () => window.removeEventListener('keydown', closeOrganizerOnEscape);
+  }, [libraryOrganizerOpen]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    function closeContextMenu(event: globalThis.PointerEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest('.libraryContextMenu')) return;
+      setContextMenu(null);
+    }
+    function closeContextMenuOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setContextMenu(null);
+    }
+    window.addEventListener('pointerdown', closeContextMenu);
+    window.addEventListener('keydown', closeContextMenuOnEscape);
+    return () => {
+      window.removeEventListener('pointerdown', closeContextMenu);
+      window.removeEventListener('keydown', closeContextMenuOnEscape);
+    };
+  }, [contextMenu]);
 
   async function copyText(label: string, value?: string) {
     if (!value) return;
@@ -2818,17 +4469,610 @@ function LibraryPage(props: {
     }
   }
 
+  function updateLibraryMeta(recordId: string, patch: Partial<LibraryMetaEntry>) {
+    setLibraryMeta((current) => {
+      const next = {
+        ...current,
+        [recordId]: {
+          ...current[recordId],
+          ...patch
+        }
+      };
+      saveLibraryMeta(next);
+      return next;
+    });
+  }
+
+  function toggleFavorite(recordId: string) {
+    const isFavorite = Boolean(libraryMeta[recordId]?.favorite);
+    updateLibraryMeta(recordId, { favorite: !isFavorite });
+    setCopyMessage(isFavorite ? '已取消收藏' : '已加入收藏');
+  }
+
+  function setRecordRating(recordId: string, rating: number) {
+    const currentRating = libraryMeta[recordId]?.rating;
+    updateLibraryMeta(recordId, { rating: currentRating === rating ? undefined : rating });
+  }
+
+  function analyzeRecordColors(recordId: string, image: HTMLImageElement) {
+    const current = libraryMeta[recordId];
+    const imageSize = image.naturalWidth && image.naturalHeight ? `${image.naturalWidth}x${image.naturalHeight}` : undefined;
+    const shouldAnalyzeColors = !current?.colorPalette?.length || current.colorPalette.length < 10 || current.colorAnalysisFailed;
+    if (!shouldAnalyzeColors) {
+      if (imageSize && current?.imageSize !== imageSize) updateLibraryMeta(recordId, { imageSize });
+      return;
+    }
+    try {
+      const result = analyzeImageColors(image);
+      if (!result) {
+        updateLibraryMeta(recordId, { imageSize, colorAnalysisFailed: true });
+        return;
+      }
+      updateLibraryMeta(recordId, {
+        imageSize,
+        colorPalette: result.palette,
+        colorFamilies: result.families,
+        colorAnalyzedAt: new Date().toISOString(),
+        colorAnalysisFailed: false
+      });
+    } catch {
+      updateLibraryMeta(recordId, { colorAnalysisFailed: true });
+    }
+  }
+
+  function setRecordsFavorite(recordIds: string[], favorite: boolean) {
+    const uniqueIds = Array.from(new Set(recordIds)).filter((recordId) => libraryItems.some((result) => result.id === recordId));
+    if (!uniqueIds.length) return;
+    setLibraryMeta((current) => {
+      const next = { ...current };
+      uniqueIds.forEach((recordId) => {
+        next[recordId] = {
+          ...next[recordId],
+          favorite
+        };
+      });
+      saveLibraryMeta(next);
+      return next;
+    });
+    setContextMenu(null);
+    setCopyMessage(favorite ? `已收藏 ${uniqueIds.length} 项` : `已取消收藏 ${uniqueIds.length} 项`);
+  }
+
+  function updateDisplaySettings(patch: Partial<LibraryDisplaySettings>) {
+    setDisplaySettings((current) => {
+      const next = saveLibraryDisplaySettings({ ...current, ...patch });
+      return next;
+    });
+  }
+
+  function selectRecord(recordId: string, event?: MouseEvent<HTMLElement>) {
+    setContextMenu(null);
+    const primaryModifier = Boolean(event?.ctrlKey || event?.metaKey);
+    const shiftModifier = Boolean(event?.shiftKey);
+    if (shiftModifier && selectionAnchorId) {
+      const anchorIndex = filteredIds.indexOf(selectionAnchorId);
+      const targetIndex = filteredIds.indexOf(recordId);
+      if (anchorIndex >= 0 && targetIndex >= 0) {
+        const [start, end] = anchorIndex < targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
+        setSelectedRecordIds(filteredIds.slice(start, end + 1));
+        return;
+      }
+    }
+    if (primaryModifier) {
+      setSelectedRecordIds((current) => (
+        current.includes(recordId)
+          ? current.filter((item) => item !== recordId)
+          : [...current, recordId]
+      ));
+      setSelectionAnchorId(recordId);
+      return;
+    }
+    setSelectedRecordIds([recordId]);
+    setSelectionAnchorId(recordId);
+  }
+
+  function selectAllFilteredRecords() {
+    setSelectedRecordIds(filteredIds);
+    setSelectionAnchorId(filteredIds[0] ?? null);
+    setContextMenu(null);
+  }
+
+  function clearSelection() {
+    setSelectedRecordIds([]);
+    setSelectionAnchorId(null);
+    setContextMenu(null);
+  }
+
+  function openLibraryContextMenu(recordId: string, event: MouseEvent<HTMLElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!selectedIdSet.has(recordId)) {
+      setSelectedRecordIds([recordId]);
+      setSelectionAnchorId(recordId);
+    }
+    const menuWidth = 176;
+    const menuHeight = 260;
+    setContextMenu({
+      x: Math.min(event.clientX, Math.max(12, window.innerWidth - menuWidth - 12)),
+      y: Math.min(event.clientY, Math.max(12, window.innerHeight - menuHeight - 12)),
+      recordId
+    });
+  }
+
+  function openRecordDetails(record: GenerationRecord) {
+    setSelectedRecordId(record.id);
+    updateLibraryMeta(record.id, { lastViewedAt: new Date().toISOString() });
+  }
+
+  function previewRecord(record: GenerationRecord, imageUrl?: string) {
+    if (!imageUrl) return;
+    updateLibraryMeta(record.id, { lastViewedAt: new Date().toISOString() });
+    props.onPreview(imageUrl);
+  }
+
+  function useRecordAsReference(record: GenerationRecord) {
+    updateLibraryMeta(record.id, { lastUsedAsReferenceAt: new Date().toISOString() });
+    props.onUseAsReference(record);
+  }
 
   async function deleteRecord(recordId: string) {
-    const confirmed = window.confirm('确定删除这条图册记录吗？这只会从 VisionHub 图册中移除记录，不会删除磁盘上的图片文件。');
-    if (!confirmed) return;
+    props.onRequestConfirm({
+      title: '删除图册记录',
+      message: '确定删除这条图册记录吗？这只会从 VisionHub 图册中移除记录，不会删除磁盘上的图片文件。',
+      confirmLabel: '删除',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await props.onDelete(recordId);
+          setSelectedRecordId((current) => (current === recordId ? null : current));
+          setSelectedRecordIds((current) => current.filter((item) => item !== recordId));
+          setCopyMessage('已删除图册记录');
+        } catch (error) {
+          setCopyMessage(error instanceof Error ? error.message : String(error));
+          throw error;
+        }
+      }
+    });
+  }
+
+  async function deleteRecords(recordIds: string[]) {
+    const uniqueIds = Array.from(new Set(recordIds)).filter((recordId) => libraryItems.some((result) => result.id === recordId));
+    if (!uniqueIds.length) return;
+    if (uniqueIds.length === 1) {
+      await deleteRecord(uniqueIds[0]);
+      return;
+    }
+    props.onRequestConfirm({
+      title: '批量删除图册记录',
+      message: `确定删除选中的 ${uniqueIds.length} 条图册记录吗？这只会从 VisionHub 图册中移除记录，不会删除磁盘上的图片文件。`,
+      confirmLabel: '删除',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          for (const recordId of uniqueIds) {
+            await props.onDelete(recordId);
+          }
+          setSelectedRecordIds((current) => current.filter((recordId) => !uniqueIds.includes(recordId)));
+          setSelectedRecordId((current) => (current && uniqueIds.includes(current) ? null : current));
+          setSelectionAnchorId(null);
+          setContextMenu(null);
+          setCopyMessage(`已删除 ${uniqueIds.length} 条图册记录`);
+        } catch (error) {
+          setCopyMessage(error instanceof Error ? error.message : String(error));
+          throw error;
+        }
+      }
+    });
+  }
+
+  async function copySelectedPrompts(records: GenerationRecord[]) {
+    const prompts = records.map((record, index) => `${records.length > 1 ? `${index + 1}. ` : ''}${record.prompt}`).join('\n\n');
+    await copyText(records.length > 1 ? 'Prompts' : 'Prompt', prompts);
+    setContextMenu(null);
+  }
+
+  function openContextDetails(records: GenerationRecord[]) {
+    if (records.length !== 1) return;
+    openRecordDetails(records[0]);
+    setContextMenu(null);
+  }
+
+  function useContextRecordAsReference(records: GenerationRecord[]) {
+    if (records.length !== 1) return;
+    useRecordAsReference(records[0]);
+    setContextMenu(null);
+  }
+
+  function handleAddAction(action: LibraryAddAction) {
+    setActivePanel(null);
+    if (action === 'folder') {
+      openCreateOrganizerDialog('folder');
+      return;
+    }
+    if (action === 'collection') {
+      openCreateOrganizerDialog('collection');
+      return;
+    }
+    if (action === 'import-file') {
+      void importLibraryFiles();
+      return;
+    }
+    if (action === 'batch-folder') {
+      void importLibraryFolder();
+    }
+  }
+
+  function selectLibraryScope(scope: LibraryScope) {
+    setLibraryScope(scope);
+    setLibraryOrganizerOpen(false);
+  }
+
+  function updateLibraryOrganization(next: LibraryOrganization) {
+    setLibraryOrganization(next);
+    saveLibraryOrganization(next);
+  }
+
+  function openCreateOrganizerDialog(type: LibraryOrganizerDialogState['type']) {
+    setOrganizerDialog({
+      type,
+      mode: 'create',
+      defaultName: type === 'folder'
+        ? `文件夹 ${libraryOrganization.folders.length + 1}`
+        : `收藏集 ${libraryOrganization.collections.length + 1}`
+    });
+  }
+
+  function openRenameOrganizerDialog(type: LibraryOrganizerDialogState['type'], targetId: string, defaultName: string) {
+    setOrganizerDialog({
+      type,
+      mode: 'rename',
+      targetId,
+      defaultName
+    });
+  }
+
+  function createLibraryFolder(name: string) {
+    const folder: LibraryFolder = {
+      id: `folder-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      color: libraryFolderColors[libraryOrganization.folders.length % libraryFolderColors.length],
+      createdAt: new Date().toISOString()
+    };
+    updateLibraryOrganization({
+      ...libraryOrganization,
+      folders: [...libraryOrganization.folders, folder]
+    });
+    if (selectedRecordIds.length) {
+      setLibraryMeta((current) => {
+        const next = { ...current };
+        selectedRecordIds.forEach((recordId) => {
+          next[recordId] = { ...next[recordId], folderId: folder.id };
+        });
+        saveLibraryMeta(next);
+        return next;
+      });
+    }
+    selectLibraryScope({ type: 'folder', id: folder.id });
+    setCopyMessage(selectedRecordIds.length ? `已创建文件夹并归入 ${selectedRecordIds.length} 项` : `已创建文件夹：${name}`);
+  }
+
+  function createLibraryCollection(name: string) {
+    const collection: LibraryCollection = {
+      id: `collection-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      coverRecordId: selectedRecordIds[0],
+      createdAt: new Date().toISOString()
+    };
+    updateLibraryOrganization({
+      ...libraryOrganization,
+      collections: [...libraryOrganization.collections, collection]
+    });
+    if (selectedRecordIds.length) {
+      setLibraryMeta((current) => {
+        const next = { ...current };
+        selectedRecordIds.forEach((recordId) => {
+          const ids = next[recordId]?.collectionIds ?? [];
+          next[recordId] = {
+            ...next[recordId],
+            collectionIds: ids.includes(collection.id) ? ids : [...ids, collection.id]
+          };
+        });
+        saveLibraryMeta(next);
+        return next;
+      });
+    }
+    selectLibraryScope({ type: 'collection', id: collection.id });
+    setCopyMessage(selectedRecordIds.length ? `已创建收藏集并加入 ${selectedRecordIds.length} 项` : `已创建收藏集：${name}`);
+  }
+
+  function deleteLibraryFolder(folder: LibraryFolder) {
+    props.onRequestConfirm({
+      title: '删除文件夹',
+      message: `确定删除“${folder.name}”吗？图片记录和磁盘文件都会保留，只会移除这个画廊文件夹分类。`,
+      confirmLabel: '删除',
+      tone: 'danger',
+      onConfirm: async () => {
+        const nextOrganization = {
+          ...libraryOrganization,
+          folders: libraryOrganization.folders.filter((item) => item.id !== folder.id)
+        };
+        updateLibraryOrganization(nextOrganization);
+        setLibraryMeta((current) => {
+          const next = { ...current };
+          Object.entries(next).forEach(([recordId, meta]) => {
+            if (meta.folderId === folder.id) {
+              next[recordId] = { ...meta, folderId: undefined };
+            }
+          });
+          saveLibraryMeta(next);
+          return next;
+        });
+        if (libraryScope.type === 'folder' && libraryScope.id === folder.id) selectLibraryScope({ type: 'all' });
+        setCopyMessage(`已删除文件夹：${folder.name}`);
+      }
+    });
+  }
+
+  function deleteLibraryCollection(collection: LibraryCollection) {
+    props.onRequestConfirm({
+      title: '删除收藏集',
+      message: `确定删除“${collection.name}”吗？图片记录和磁盘文件都会保留，只会移除这个收藏集。`,
+      confirmLabel: '删除',
+      tone: 'danger',
+      onConfirm: async () => {
+        const nextOrganization = {
+          ...libraryOrganization,
+          collections: libraryOrganization.collections.filter((item) => item.id !== collection.id)
+        };
+        updateLibraryOrganization(nextOrganization);
+        setLibraryMeta((current) => {
+          const next = { ...current };
+          Object.entries(next).forEach(([recordId, meta]) => {
+            if (meta.collectionIds?.includes(collection.id)) {
+              next[recordId] = {
+                ...meta,
+                collectionIds: meta.collectionIds.filter((id) => id !== collection.id)
+              };
+            }
+          });
+          saveLibraryMeta(next);
+          return next;
+        });
+        if (libraryScope.type === 'collection' && libraryScope.id === collection.id) selectLibraryScope({ type: 'all' });
+        setCopyMessage(`已删除收藏集：${collection.name}`);
+      }
+    });
+  }
+
+  function renameLibraryOrganizerItem(dialog: LibraryOrganizerDialogState, name: string) {
+    if (!dialog.targetId) return;
+    const nextOrganization = dialog.type === 'folder'
+      ? {
+          ...libraryOrganization,
+          folders: libraryOrganization.folders.map((folder) => (
+            folder.id === dialog.targetId ? { ...folder, name } : folder
+          ))
+        }
+      : {
+          ...libraryOrganization,
+          collections: libraryOrganization.collections.map((collection) => (
+            collection.id === dialog.targetId ? { ...collection, name } : collection
+          ))
+        };
+    updateLibraryOrganization(nextOrganization);
+    setCopyMessage(`已重命名：${name}`);
+  }
+
+  function assignRecordsToFolder(recordIds: string[], folderId: string) {
+    if (!recordIds.length) return;
+    setLibraryMeta((current) => {
+      const next = { ...current };
+      recordIds.forEach((recordId) => {
+        next[recordId] = { ...next[recordId], folderId };
+      });
+      saveLibraryMeta(next);
+      return next;
+    });
+    setAssignDialog(null);
+    setContextMenu(null);
+    setCopyMessage(`已移动 ${recordIds.length} 项到文件夹`);
+  }
+
+  function assignRecordsToCollection(recordIds: string[], collectionId: string) {
+    if (!recordIds.length) return;
+    setLibraryMeta((current) => {
+      const next = { ...current };
+      recordIds.forEach((recordId) => {
+        const ids = next[recordId]?.collectionIds ?? [];
+        next[recordId] = {
+          ...next[recordId],
+          collectionIds: ids.includes(collectionId) ? ids : [...ids, collectionId]
+        };
+      });
+      saveLibraryMeta(next);
+      return next;
+    });
+    setAssignDialog(null);
+    setContextMenu(null);
+    setCopyMessage(`已加入 ${recordIds.length} 项到收藏集`);
+  }
+
+  function removeRecordsFromCurrentScope(recordIds: string[]) {
+    if (!recordIds.length || (libraryScope.type !== 'folder' && libraryScope.type !== 'collection')) return;
+    setLibraryMeta((current) => {
+      const next = { ...current };
+      recordIds.forEach((recordId) => {
+        const meta = next[recordId] ?? {};
+        if (libraryScope.type === 'folder' && meta.folderId === libraryScope.id) {
+          next[recordId] = { ...meta, folderId: undefined };
+        } else if (libraryScope.type === 'collection' && meta.collectionIds?.includes(libraryScope.id)) {
+          next[recordId] = {
+            ...meta,
+            collectionIds: meta.collectionIds.filter((id) => id !== libraryScope.id)
+          };
+        }
+      });
+      saveLibraryMeta(next);
+      return next;
+    });
+    setContextMenu(null);
+    setCopyMessage(`已从当前分类移出 ${recordIds.length} 项`);
+  }
+
+  async function importLibraryFiles() {
     try {
-      await props.onDelete(recordId);
-      setCopyMessage('已删除图册记录');
+      const result = await importLibraryImagesFromFiles();
+      const records = result.records;
+      records.forEach(props.onAddResult);
+      attachImportedRecordsToCurrentScope(records);
+      setCopyMessage(importLibrarySummary('导入图片', records.length, result.skippedDuplicates, result.skippedUnsupported));
     } catch (error) {
       setCopyMessage(error instanceof Error ? error.message : String(error));
     }
   }
+
+  async function importLibraryFolder() {
+    try {
+      const result = await importLibraryImagesFromFolder();
+      const records = result.records;
+      records.forEach(props.onAddResult);
+      attachImportedRecordsToCurrentScope(records);
+      setCopyMessage(importLibrarySummary('导入文件夹', records.length, result.skippedDuplicates, result.skippedUnsupported));
+    } catch (error) {
+      setCopyMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function importLibrarySummary(label: string, imported: number, skippedDuplicates: number, skippedUnsupported: number) {
+    if (!imported && !skippedDuplicates && !skippedUnsupported) return '未选择图片或没有新增图片';
+    const parts = [`${label}：新增 ${imported}`];
+    if (skippedDuplicates) parts.push(`跳过重复 ${skippedDuplicates}`);
+    if (skippedUnsupported) parts.push(`跳过不支持 ${skippedUnsupported}`);
+    return parts.join('，');
+  }
+
+  function attachImportedRecordsToCurrentScope(records: GenerationRecord[]) {
+    if (!records.length || (libraryScope.type !== 'folder' && libraryScope.type !== 'collection')) return;
+    setLibraryMeta((current) => {
+      const next = { ...current };
+      records.forEach((record) => {
+        if (libraryScope.type === 'folder') {
+          next[record.id] = { ...next[record.id], folderId: libraryScope.id };
+          return;
+        }
+        const ids = next[record.id]?.collectionIds ?? [];
+        next[record.id] = {
+          ...next[record.id],
+          collectionIds: ids.includes(libraryScope.id) ? ids : [...ids, libraryScope.id]
+        };
+      });
+      saveLibraryMeta(next);
+      return next;
+    });
+  }
+
+  function clearLibraryFilters() {
+    setQuery('');
+    setProviderFilter('all');
+    setStatusFilter('all');
+    setModeFilter('all');
+    setTimeFilter('all');
+    setColorFilter('all');
+    setShapeFilter('all');
+    setFormatFilter('all');
+    setRatingFilter('all');
+    setQuickFilters([]);
+    setActiveCustomQuickFilterIds([]);
+  }
+
+  function toggleQuickFilter(filter: LibraryQuickFilter) {
+    setQuickFilters((current) => (
+      current.includes(filter)
+        ? current.filter((item) => item !== filter)
+        : [...current, filter]
+    ));
+  }
+
+  function currentCustomQuickFilterCriteria(): LibraryCustomQuickFilterCriteria {
+    return {
+      query: query.trim() || undefined,
+      providerFilter,
+      statusFilter,
+      modeFilter,
+      timeFilter,
+      colorFilter,
+      shapeFilter,
+      formatFilter,
+      ratingFilter
+    };
+  }
+
+  function customQuickFilterHasCriteria(criteria: LibraryCustomQuickFilterCriteria) {
+    return Boolean(
+      criteria.query ||
+      criteria.providerFilter !== 'all' ||
+      criteria.statusFilter !== 'all' ||
+      criteria.modeFilter !== 'all' ||
+      criteria.timeFilter !== 'all' ||
+      criteria.colorFilter !== 'all' ||
+      criteria.shapeFilter !== 'all' ||
+      criteria.formatFilter !== 'all' ||
+      criteria.ratingFilter !== 'all'
+    );
+  }
+
+  function addCustomQuickFilter() {
+    const criteria = currentCustomQuickFilterCriteria();
+    if (!customQuickFilterHasCriteria(criteria)) {
+      setCopyMessage('请先设置一个筛选条件，再保存快捷筛选。');
+      return;
+    }
+    const label = quickFilterName.trim() || `筛选 ${customQuickFilters.length + 1}`;
+    const nextFilter: LibraryCustomQuickFilter = {
+      id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      label,
+      criteria,
+      createdAt: new Date().toISOString()
+    };
+    const next = [...customQuickFilters, nextFilter];
+    setCustomQuickFilters(next);
+    saveLibraryCustomQuickFilters(next);
+    setActiveCustomQuickFilterIds((current) => [...current, nextFilter.id]);
+    setQuickFilterName('');
+    setQuickFilterEditorOpen(false);
+    setCopyMessage(`已添加快捷筛选：${label}`);
+  }
+
+  function deleteCustomQuickFilter(filterId: string) {
+    const next = customQuickFilters.filter((filter) => filter.id !== filterId);
+    setCustomQuickFilters(next);
+    saveLibraryCustomQuickFilters(next);
+    setActiveCustomQuickFilterIds((current) => current.filter((id) => id !== filterId));
+    setCopyMessage('已删除快捷筛选');
+  }
+
+  function toggleCustomQuickFilter(filterId: string) {
+    setActiveCustomQuickFilterIds((current) => (
+      current.includes(filterId)
+        ? current.filter((id) => id !== filterId)
+        : [...current, filterId]
+    ));
+  }
+
+  const gridStyle = { '--library-thumb-scale': thumbnailScale } as CSSProperties;
+  const activeFilterCount = [
+    providerFilter !== 'all',
+    statusFilter !== 'all',
+    modeFilter !== 'all',
+    timeFilter !== 'all',
+    colorFilter !== 'all',
+    shapeFilter !== 'all',
+    formatFilter !== 'all',
+    ratingFilter !== 'all',
+    quickFilters.length > 0,
+    activeCustomQuickFilterIds.length > 0,
+    Boolean(query.trim())
+  ].filter(Boolean).length;
   return (
     <>
       <header className="topbar libraryTopbar">
@@ -2844,125 +5088,695 @@ function LibraryPage(props: {
         </div>
       </header>
 
-      <section className="libraryToolbar">
-        <div className="libraryFilterRow">
-          <label className="librarySearchBox">
-            <span>{'\u641c\u7d22 Prompt / \u6a21\u578b / Provider'}</span>
-            <input
-              ref={searchInputRef}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search local generations"
-            />
-          </label>
-          <label>
-            <span>Provider</span>
-            <StudioSelect value={providerFilter} onChange={setProviderFilter} options={providerOptions} />
-          </label>
-          <label>
-            <span>{'\u72b6\u6001'}</span>
-            <StudioSelect value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | 'succeeded' | 'failed')} options={statusOptions} />
-          </label>
-          <label>
-            <span>{'\u7c7b\u578b'}</span>
-            <StudioSelect value={modeFilter} onChange={(value) => setModeFilter(value as typeof modeFilter)} options={modeOptions} />
-          </label>
-          <label>
-            <span>{'\u65f6\u95f4'}</span>
-            <StudioSelect value={timeFilter} onChange={(value) => setTimeFilter(value as LibraryTimeFilter)} options={timeOptions} />
-          </label>
-        </div>
-        <div className="libraryInsightGrid compact">
-          <article className="libraryInsightCard primary">
-            <span>{'\u6210\u529f\u7387'}</span>
-            <strong>{props.isHistoryLoaded ? `${successRate}%` : '--'}</strong>
-            <small>{successCount} {'\u6210\u529f'} / {failedCount} {'\u5931\u8d25'}</small>
-          </article>
-          <article className="libraryInsightCard">
-            <span>{'\u5e73\u5747\u8017\u65f6'}</span>
-            <strong>{props.isHistoryLoaded ? averageDuration : '--'}</strong>
-            <small>{durations.length ? `${durations.length} ${'\u6761\u8bb0\u5f55\u53ef\u8ba1\u7b97'}` : '\u7b49\u5f85\u771f\u5b9e Provider \u8fd4\u56de'}</small>
-          </article>
-          <article className="libraryInsightCard">
-            <span>{'\u6700\u5e38\u7528 Provider'}</span>
-            <strong>{topProvider.label}</strong>
-            <small>{topProvider.count ? `${topProvider.count} ${'\u6b21\u751f\u6210'}` : '\u5c1a\u65e0\u6570\u636e'}</small>
-          </article>
-          <article className="libraryInsightCard">
-            <span>{'\u6700\u5e38\u7528\u6a21\u578b'}</span>
-            <strong>{topModel.label}</strong>
-            <small>{recentCount} {'\u6761\u8fd1 7 \u5929\u8bb0\u5f55'}</small>
-          </article>
-        </div>
-      </section>
+      {filtersVisible ? (
+        <section className="libraryInlineFilters" aria-label="作品画廊过滤器">
+          <div className="libraryStructuredFilters">
+            <label><span>平台</span><StudioSelect className="libraryFilterSelect filterIconPlatform" leadingIcon={<Globe2 size={15} />} value={providerFilter} onChange={setProviderFilter} options={providerOptions} /></label>
+            <label><span>状态</span><StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Info size={15} />} value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | 'succeeded' | 'failed')} options={statusOptions} /></label>
+            <label><span>类型</span><StudioSelect className="libraryFilterSelect filterIconType" leadingIcon={<Image size={15} />} value={modeFilter} onChange={(value) => setModeFilter(value as typeof modeFilter)} options={modeOptions} /></label>
+            <label><span>时间</span><StudioSelect className="libraryFilterSelect filterIconTime" leadingIcon={<Clock3 size={15} />} value={timeFilter} onChange={(value) => setTimeFilter(value as LibraryTimeFilter)} options={timeOptions} /></label>
+            <label className="libraryColorFilter" ref={colorFilterRef}>
+              <span>颜色</span>
+              <button
+                className={`libraryColorFilterButton ${colorMenuOpen ? 'active' : ''}`}
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={colorMenuOpen}
+                onClick={() => setColorMenuOpen((value) => !value)}
+              >
+                <span className="libraryColorWheel" />
+                <span>{getLibraryColorLabel(colorFilter) || '颜色'}</span>
+              </button>
+              {colorMenuOpen ? (
+                <div className="libraryColorFilterMenu" role="listbox" aria-label="颜色筛选">
+                  {libraryColorOptions.map((option) => (
+                    <button
+                      className={colorFilter === option.value ? 'active' : ''}
+                      key={option.value}
+                      type="button"
+                      role="option"
+                      aria-selected={colorFilter === option.value}
+                      onClick={() => {
+                        setColorFilter(option.value);
+                        setColorMenuOpen(false);
+                      }}
+                    >
+                      <span style={{ background: option.color }} />
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </label>
+            <label><span>形状</span><StudioSelect className="libraryFilterSelect filterIconShape" leadingIcon={<Grid2X2 size={15} />} value={shapeFilter} onChange={(value) => setShapeFilter(value as LibraryShapeFilter)} options={libraryShapeOptions} /></label>
+            <label><span>格式</span><StudioSelect className="libraryFilterSelect filterIconFormat" leadingIcon={<Database size={15} />} value={formatFilter} onChange={(value) => setFormatFilter(value as LibraryFormatFilter)} options={libraryFormatOptions} /></label>
+            <label><span>评分</span><StudioSelect className="libraryFilterSelect filterIconRating" leadingIcon={<Star size={15} />} value={ratingFilter} onChange={(value) => setRatingFilter(value as LibraryRatingFilter)} options={libraryRatingOptions} /></label>
+            <button className="miniButton libraryClearFiltersButton" type="button" disabled={!activeFilterCount} onClick={clearLibraryFilters}>
+              {activeFilterCount ? `清空 ${activeFilterCount}` : '清空'}
+            </button>
+          </div>
+          <div className="libraryQuickFilters" aria-label="快捷筛选">
+            {libraryQuickFilters.map((filter) => (
+              <button
+                className={`libraryQuickFilterChip ${quickFilters.includes(filter.value) ? 'active' : ''}`}
+                key={filter.value}
+                type="button"
+                onClick={() => toggleQuickFilter(filter.value)}
+              >
+                {filter.label}
+              </button>
+            ))}
+            {customQuickFilters.map((filter) => {
+              const isActive = activeCustomQuickFilterIds.includes(filter.id);
+              return (
+                <span className={`libraryCustomQuickFilter ${isActive ? 'active' : ''}`} key={filter.id}>
+                  <button
+                    className="libraryCustomQuickFilterToggle"
+                    type="button"
+                    onClick={() => toggleCustomQuickFilter(filter.id)}
+                    title={filter.label}
+                  >
+                    {filter.label}
+                  </button>
+                  <button
+                    className="libraryCustomQuickFilterDelete"
+                    type="button"
+                    aria-label={`删除快捷筛选 ${filter.label}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      deleteCustomQuickFilter(filter.id);
+                    }}
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              );
+            })}
+            <div className="libraryQuickFilterAddWrap" ref={quickFilterEditorRef}>
+              <button
+                className={`libraryQuickFilterAddButton ${quickFilterEditorOpen ? 'active' : ''}`}
+                type="button"
+                aria-label="添加自定义快捷筛选"
+                aria-haspopup="dialog"
+                aria-expanded={quickFilterEditorOpen}
+                onClick={() => setQuickFilterEditorOpen((value) => !value)}
+              >
+                <Plus size={14} />
+              </button>
+              {quickFilterEditorOpen ? (
+                <div className="libraryQuickFilterEditor" role="dialog" aria-label="添加快捷筛选">
+                  <div>
+                    <strong>自定义快捷筛选</strong>
+                    <span>保存当前搜索词和上方筛选条件</span>
+                  </div>
+                  <input
+                    value={quickFilterName}
+                    onChange={(event) => setQuickFilterName(event.target.value)}
+                    placeholder={`筛选 ${customQuickFilters.length + 1}`}
+                    maxLength={16}
+                  />
+                  <button className="libraryQuickFilterSave" type="button" onClick={addCustomQuickFilter}>
+                    保存当前筛选
+                  </button>
+                  {customQuickFilters.length ? (
+                    <div className="libraryQuickFilterManage" aria-label="管理自定义快捷筛选">
+                      {customQuickFilters.map((filter) => (
+                        <button
+                          key={filter.id}
+                          type="button"
+                          onClick={() => deleteCustomQuickFilter(filter.id)}
+                          title={`删除 ${filter.label}`}
+                        >
+                          <span>{filter.label}</span>
+                          <X size={12} />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
-      {copyMessage ? <p className="libraryNotice">{copyMessage}</p> : null}
+      {selectedRecords.length > 1 ? (
+        <section className="librarySelectionBar" aria-label="当前选择">
+          <strong>已选 {selectedRecords.length} 项</strong>
+          <span>{selectedRecords.length === filteredItems.length ? '当前结果已全选' : `当前结果 ${filteredItems.length} 项`}</span>
+          <button className="miniButton" type="button" onClick={selectAllFilteredRecords}>全选当前结果</button>
+          <button className="miniButton" type="button" onClick={clearSelection}>取消选择</button>
+          <div className="libraryBatchMenuWrap">
+            <button className="miniButton" type="button"><MoreHorizontal size={13} /> 批量操作</button>
+            <div className="libraryQuickMenu libraryBatchMenu" aria-label="批量操作">
+              <button type="button" onClick={() => setRecordsFavorite(selectedRecordIds, true)}><Star size={13} /> 加入收藏</button>
+              <button type="button" onClick={() => setRecordsFavorite(selectedRecordIds, false)}><Star size={13} /> 取消收藏</button>
+              <span className="libraryMenuDivider" />
+              <button type="button" onClick={() => setAssignDialog({ type: 'folder', recordIds: selectedRecordIds })}><FolderOpen size={13} /> 移至文件夹</button>
+              <button type="button" onClick={() => setAssignDialog({ type: 'collection', recordIds: selectedRecordIds })}><Bookmark size={13} /> 加入收藏集</button>
+              {(libraryScope.type === 'folder' || libraryScope.type === 'collection') ? (
+                <button type="button" onClick={() => removeRecordsFromCurrentScope(selectedRecordIds)}><X size={13} /> 移出当前分类</button>
+              ) : null}
+            </div>
+          </div>
+          <button className="miniButton danger" type="button" onClick={() => void deleteRecords(selectedRecordIds)}><Trash2 size={13} /> 删除</button>
+        </section>
+      ) : null}
 
-      {!props.isHistoryLoaded ? (
-        <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>{'\u6b63\u5728\u52a0\u8f7d\u672c\u5730\u5386\u53f2'}</h3></div>
-      ) : filteredItems.length === 0 ? (
-        <div className="emptyState libraryEmpty">
-          <Sparkles size={42} />
-          <h3>{libraryItems.length === 0 ? '\u8fd8\u6ca1\u6709\u672c\u5730\u56fe\u7247' : '\u6ca1\u6709\u7b26\u5408\u6761\u4ef6\u7684\u8bb0\u5f55'}</h3>
-          <p>{libraryItems.length === 0 ? '\u5148\u5728\u751f\u6210\u5de5\u4f5c\u53f0\u751f\u6210\u4e00\u5f20\u56fe\uff0c\u6210\u529f\u540e\u4f1a\u81ea\u52a8\u8fdb\u5165\u672c\u5730\u56fe\u518c\u3002' : '\u8bd5\u7740\u6e05\u7a7a\u641c\u7d22\u8bcd\u6216\u5207\u6362\u7b5b\u9009\u6761\u4ef6\u3002'}</p>
-        </div>
-      ) : (
-        <section className="libraryGrid">
+      <section className="libraryWorkspace" aria-label="作品画廊内容">
+        {libraryOrganizerOpen ? (
+          <button className="libraryOrganizerBackdrop" type="button" aria-label="关闭画廊分类" onClick={() => setLibraryOrganizerOpen(false)} />
+        ) : null}
+        <aside className={`libraryOrganizer ${libraryOrganizerOpen ? 'open' : ''}`} aria-label="画廊分类" aria-hidden={!libraryOrganizerOpen}>
+          <div className="libraryOrganizerHeader">
+            <div>
+              <strong>画廊分类</strong>
+              <span>{selectedScopeTitle}</span>
+            </div>
+            <button className="iconMiniButton" type="button" data-tooltip="关闭" aria-label="关闭画廊分类" onClick={() => setLibraryOrganizerOpen(false)}><X size={14} /></button>
+          </div>
+          <div className="libraryOrganizerGroup">
+            <button className={libraryScope.type === 'all' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'all' })}>
+              <Image size={14} /><span>全部作品</span><em>{libraryItems.length}</em>
+            </button>
+            <button className={libraryScope.type === 'favorites' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'favorites' })}>
+              <Star size={14} /><span>收藏</span><em>{favoriteScopeCount}</em>
+            </button>
+            <button className={libraryScope.type === 'recent7d' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'recent7d' })}>
+              <Clock3 size={14} /><span>最近 7 天</span><em>{recentScopeCount}</em>
+            </button>
+            <button className={libraryScope.type === 'local' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'local' })}>
+              <HardDrive size={14} /><span>本地已落盘</span><em>{localScopeCount}</em>
+            </button>
+          </div>
+          <div className="libraryOrganizerSection">
+            <div><strong>文件夹</strong><button type="button" aria-label="新建文件夹" onClick={() => openCreateOrganizerDialog('folder')}><Plus size={13} /></button></div>
+            {libraryOrganization.folders.length ? libraryOrganization.folders.map((folder) => (
+              <div className="libraryOrganizerItem" key={folder.id}>
+                <button className={libraryScope.type === 'folder' && libraryScope.id === folder.id ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'folder', id: folder.id })}>
+                  <span className="libraryFolderDot" style={{ background: folder.color }} /><span>{folder.name}</span><em>{folderCounts.get(folder.id) ?? 0}</em>
+                </button>
+                <span className="libraryOrganizerItemActions">
+                  <button
+                    className="libraryOrganizerIconAction"
+                    type="button"
+                    aria-label={`重命名文件夹 ${folder.name}`}
+                    onClick={() => openRenameOrganizerDialog('folder', folder.id, folder.name)}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    className="libraryOrganizerDelete"
+                    type="button"
+                    aria-label={`删除文件夹 ${folder.name}`}
+                    onClick={() => deleteLibraryFolder(folder)}
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              </div>
+            )) : <p>还没有文件夹</p>}
+          </div>
+          <div className="libraryOrganizerSection">
+            <div><strong>收藏集</strong><button type="button" aria-label="新建收藏集" onClick={() => openCreateOrganizerDialog('collection')}><Plus size={13} /></button></div>
+            {libraryOrganization.collections.length ? libraryOrganization.collections.map((collection) => (
+              <div className="libraryOrganizerItem" key={collection.id}>
+                <button className={libraryScope.type === 'collection' && libraryScope.id === collection.id ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'collection', id: collection.id })}>
+                  <Bookmark size={14} /><span>{collection.name}</span><em>{collectionCounts.get(collection.id) ?? 0}</em>
+                </button>
+                <span className="libraryOrganizerItemActions">
+                  <button
+                    className="libraryOrganizerIconAction"
+                    type="button"
+                    aria-label={`重命名收藏集 ${collection.name}`}
+                    onClick={() => openRenameOrganizerDialog('collection', collection.id, collection.name)}
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    className="libraryOrganizerDelete"
+                    type="button"
+                    aria-label={`删除收藏集 ${collection.name}`}
+                    onClick={() => deleteLibraryCollection(collection)}
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              </div>
+            )) : <p>还没有收藏集</p>}
+          </div>
+        </aside>
+
+        <div className="libraryContentPane">
+          <div className="libraryScopeBar">
+            <strong>
+              {libraryScope.type === 'favorites' ? <Star size={15} /> :
+                libraryScope.type === 'recent7d' ? <Clock3 size={15} /> :
+                libraryScope.type === 'local' ? <HardDrive size={15} /> :
+                libraryScope.type === 'folder' ? <FolderOpen size={15} /> :
+                libraryScope.type === 'collection' ? <Bookmark size={15} /> :
+                <Image size={15} />}
+              {selectedScopeTitle}
+            </strong>
+            <span>{filteredItems.length} 项</span>
+            {libraryScope.type !== 'all' ? (
+              <button className="libraryScopeClearButton" type="button" aria-label="返回全部作品" onClick={() => selectLibraryScope({ type: 'all' })}>
+                <X size={13} />
+              </button>
+            ) : null}
+          </div>
+
+          {!props.isHistoryLoaded ? (
+            <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>{'\u6b63\u5728\u52a0\u8f7d\u672c\u5730\u5386\u53f2'}</h3></div>
+          ) : filteredItems.length === 0 ? (
+            <div className="emptyState libraryEmpty">
+              <Sparkles size={42} />
+              <h3>{libraryItems.length === 0 ? '\u8fd8\u6ca1\u6709\u672c\u5730\u56fe\u7247' : '\u6ca1\u6709\u7b26\u5408\u6761\u4ef6\u7684\u8bb0\u5f55'}</h3>
+              <p>{libraryItems.length === 0 ? '\u5148\u5728\u751f\u6210\u5de5\u4f5c\u53f0\u751f\u6210\u4e00\u5f20\u56fe\uff0c\u6210\u529f\u540e\u4f1a\u81ea\u52a8\u8fdb\u5165\u672c\u5730\u56fe\u518c\u3002' : '\u8bd5\u7740\u6e05\u7a7a\u641c\u7d22\u8bcd\u6216\u5207\u6362\u7b5b\u9009\u6761\u4ef6\u3002'}</p>
+            </div>
+          ) : (
+            <section className={`libraryGrid libraryGridV2 view-${viewMode} ${displaySettings.compact ? 'compact' : ''}`} style={gridStyle}>
           {filteredItems.map((result) => {
             const imageUrl = result.imageUrls[0];
-            const localPath = result.localImagePaths?.[0];
-            const providerName = result.providerName ?? providerNameMap.get(result.providerId) ?? result.providerId;
+            const providerName = providerNameMap.get(result.providerId) ?? result.providerName ?? result.providerId;
             const modeLabel = (result.generationMode ?? 'text-to-image') === 'image-to-image' ? '\u56fe\u751f\u56fe' : '\u6587\u751f\u56fe';
             const referenceCount = result.referenceImages?.length ?? 0;
             const referenceSummary = summarizeReferenceSources(result.referenceImages);
-            const savedStatus = result.error ? '' : localPath ? '\u5df2\u4fdd\u5b58\u5230\u672c\u5730' : result.costHint;
+            const isFavorite = Boolean(libraryMeta[result.id]?.favorite);
+            const isSelected = selectedIdSet.has(result.id);
             return (
-              <article className={`libraryCard ${result.status === 'failed' ? 'failed' : ''}`} key={result.id}>
+              <article
+                className={`libraryCard libraryCardV2 ${result.status === 'failed' ? 'failed' : ''} ${isFavorite ? 'favorite' : ''} ${isSelected ? 'selected' : ''}`}
+                key={result.id}
+                aria-selected={isSelected}
+                onClick={(event) => {
+                  const target = event.target;
+                  if (target instanceof Element && target.closest('button, a, input, select, textarea, .libraryQuickMenu')) return;
+                  selectRecord(result.id, event);
+                }}
+                onContextMenu={(event) => openLibraryContextMenu(result.id, event)}
+              >
+                <button
+                  className={`librarySelectMark ${isSelected ? 'active' : ''}`}
+                  type="button"
+                  aria-label={isSelected ? '取消选择' : '选择图片'}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    selectRecord(result.id, event);
+                  }}
+                >
+                  <span />
+                </button>
                 {imageUrl ? (
-                  <button className="libraryThumb" onClick={() => props.onPreview(imageUrl)}>
-                    <img src={imageUrl} alt={result.prompt} />
+                  <button
+                    className="libraryThumb"
+                    onClick={(event) => {
+                      if (event.ctrlKey || event.metaKey || event.shiftKey) {
+                        selectRecord(result.id, event);
+                        return;
+                      }
+                      previewRecord(result, imageUrl);
+                    }}
+                  >
+                    <img src={imageUrl} alt={result.prompt} onLoad={(event) => analyzeRecordColors(result.id, event.currentTarget)} />
                     <span><Maximize2 size={15} /> {'\u9884\u89c8'}</span>
                   </button>
                 ) : (
                   <div className="libraryFailedThumb">{'\u751f\u6210\u5931\u8d25'}</div>
                 )}
-                <div className="libraryCardBody">
-                  <div className="resultTitleRow">
-                    <strong>{providerName}</strong>
-                    <div className="cardTopActions">
-                      <span className="statusBadge modeBadge">{modeLabel}</span>
-                      {referenceCount > 0 ? <span className="statusBadge referenceBadge" title={`\u53c2\u8003\u6765\u6e90\uff1a${referenceSummary}`}>{referenceCount}{'\u53c2\u8003'}</span> : null}
-                      <span className={`statusBadge ${generationStatusClass(result)}`}>{generationStatusLabel(result)}</span>
-                      <button className="iconMiniButton dangerMiniButton" type="button" title="删除记录" onClick={() => void deleteRecord(result.id)}>
-                        <Trash2 size={13} />
-                      </button>
+                <div className="libraryImageOverlay">
+                  <button className={`iconMiniButton favoriteButton ${isFavorite ? 'active' : ''}`} type="button" data-tooltip={isFavorite ? '取消收藏' : '收藏'} aria-label={isFavorite ? '取消收藏' : '收藏'} onClick={() => toggleFavorite(result.id)}>
+                    <Star size={14} fill={isFavorite ? 'currentColor' : 'none'} />
+                  </button>
+                  <div className="libraryMoreMenuWrap">
+                    <button className="iconMiniButton" type="button" data-tooltip="更多操作" aria-label="更多操作">
+                      <MoreHorizontal size={15} />
+                    </button>
+                    <div className="libraryQuickMenu" aria-label="图片操作">
+                      <button type="button" onClick={() => openRecordDetails(result)}><Info size={13} /> 图片详情</button>
+                      <button type="button" disabled={!imageUrl} onClick={() => useRecordAsReference(result)}><ImagePlus size={13} /> 设为参考图</button>
+                      <button type="button" onClick={() => void copyText('Prompt', result.prompt)}><Copy size={13} /> 复制 Prompt</button>
+                      <span className="libraryMenuDivider" />
+                      <button type="button" onClick={() => toggleFavorite(result.id)}><Star size={13} /> {isFavorite ? '取消收藏' : '加入收藏'}</button>
+                      <button type="button" onClick={() => setAssignDialog({ type: 'folder', recordIds: [result.id] })}><FolderOpen size={13} /> 移至文件夹</button>
+                      <button type="button" onClick={() => setAssignDialog({ type: 'collection', recordIds: [result.id] })}><Bookmark size={13} /> 加入收藏集</button>
+                      {(libraryScope.type === 'folder' || libraryScope.type === 'collection') ? (
+                        <button type="button" onClick={() => removeRecordsFromCurrentScope([result.id])}><X size={13} /> 移出当前分类</button>
+                      ) : null}
+                      <span className="libraryMenuDivider" />
+                      <button className="dangerAction" type="button" onClick={() => void deleteRecord(result.id)}><Trash2 size={13} /> 删除记录</button>
                     </div>
                   </div>
-                  <p title={result.prompt}>{result.prompt}</p>
-                  <div className="metadataRow">
-                    <span>{result.modelId}</span>
-                    <span><Clock3 size={12} /> {formatTime(result.createdAt)}</span>
-                    <span>{result.durationMs ?? '-'}ms</span>
+                </div>
+                <div className="libraryCardBody">
+                  <div className="resultTitleRow">
+                    <strong>{displaySettings.showProvider ? providerName : formatTime(result.createdAt)}</strong>
+                    <div className="cardTopActions">
+                      <span className="statusBadge modeBadge">{modeLabel}</span>
+                      {displaySettings.showReferenceBadge && referenceCount > 0 ? <span className="statusBadge referenceBadge" title={`\u53c2\u8003\u6765\u6e90\uff1a${referenceSummary}`}>{referenceCount}{'\u53c2\u8003'}</span> : null}
+                      <span className={`statusBadge ${generationStatusClass(result)}`}>{generationStatusLabel(result)}</span>
+                    </div>
                   </div>
-                  {result.error ? (
-                    <small className="errorText">{generationFailureHint(result)}</small>
-                  ) : (
-                    <small title={referenceSummary ? `\u53c2\u8003\u6765\u6e90\uff1a${referenceSummary}` : undefined}>
-                      {savedStatus}{referenceCount > 0 ? ` / ${referenceCount} \u5f20\u53c2\u8003` : ''}
-                    </small>
-                  )}
-                  <div className="cardActions libraryActions">
-                    <button className="miniButton" disabled={!imageUrl} onClick={() => props.onUseAsReference(result)}><ImagePlus size={13} /> {'\u53c2\u8003'}</button>
-                    <button className="miniButton" onClick={() => void copyText('Prompt', result.prompt)}><Copy size={13} /> Prompt</button>
-                    <button className="miniButton" disabled={!localPath && !imageUrl} onClick={() => void copyText('Path', localPath ?? imageUrl)}><Copy size={13} /> {'\u8def\u5f84'}</button>
-                    <button className="miniButton" disabled={!localPath} onClick={() => localPath && void revealGenerationFile(localPath)}><FolderOpen size={13} /> {'\u6587\u4ef6\u5939'}</button>
+                  {viewMode === 'list' || displaySettings.showPrompt ? <p title={result.prompt}>{result.prompt}</p> : null}
+                  <div className="metadataRow">
+                    {displaySettings.showModel ? <span>{result.modelId}</span> : null}
+                    <span><Clock3 size={12} /> {formatTime(result.createdAt)}</span>
                   </div>
                 </div>
               </article>
             );
           })}
-        </section>
-      )}
+            </section>
+          )}
+        </div>
+      </section>
+
+      {contextMenu && contextSelection.length > 0 ? (
+        <div
+          className="libraryContextMenu"
+          role="menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <div className="libraryContextMenuHeader">
+            <strong>{contextSelection.length > 1 ? `${contextSelection.length} 项已选` : '图片操作'}</strong>
+            <button className="iconMiniButton" type="button" data-tooltip="关闭" aria-label="关闭" onClick={() => setContextMenu(null)}><X size={13} /></button>
+          </div>
+          {contextSelection.length === 1 ? (
+            <>
+              <button type="button" role="menuitem" onClick={() => openContextDetails(contextSelection)}>
+                <Info size={13} /> 打开详情
+              </button>
+              <button type="button" role="menuitem" disabled={!contextSelection[0]?.imageUrls[0]} onClick={() => useContextRecordAsReference(contextSelection)}>
+                <ImagePlus size={13} /> 设为参考图
+              </button>
+            </>
+          ) : null}
+          <button type="button" role="menuitem" onClick={() => void copySelectedPrompts(contextSelection)}>
+            <Copy size={13} /> 复制 Prompt
+          </button>
+          <span className="libraryMenuDivider" />
+          <button type="button" role="menuitem" onClick={() => setAssignDialog({ type: 'folder', recordIds: contextSelection.map((record) => record.id) })}>
+            <FolderOpen size={13} /> 移至文件夹
+          </button>
+          <button type="button" role="menuitem" onClick={() => setAssignDialog({ type: 'collection', recordIds: contextSelection.map((record) => record.id) })}>
+            <Bookmark size={13} /> 加入收藏集
+          </button>
+          {(libraryScope.type === 'folder' || libraryScope.type === 'collection') ? (
+            <button type="button" role="menuitem" onClick={() => removeRecordsFromCurrentScope(contextSelection.map((record) => record.id))}>
+              <X size={13} /> 移出当前分类
+            </button>
+          ) : null}
+          <span className="libraryMenuDivider" />
+          {contextSelection.length === 1 ? (
+            <button type="button" role="menuitem" onClick={() => setRecordsFavorite(contextSelection.map((record) => record.id), !libraryMeta[contextSelection[0].id]?.favorite)}>
+              <Star size={13} /> {libraryMeta[contextSelection[0].id]?.favorite ? '取消收藏' : '加入收藏'}
+            </button>
+          ) : (
+            <>
+              <button type="button" role="menuitem" onClick={() => setRecordsFavorite(contextSelection.map((record) => record.id), true)}>
+                <Star size={13} /> 加入收藏
+              </button>
+              <button type="button" role="menuitem" onClick={() => setRecordsFavorite(contextSelection.map((record) => record.id), false)}>
+                <Star size={13} /> 取消收藏
+              </button>
+            </>
+          )}
+          <button className="dangerAction" type="button" role="menuitem" onClick={() => void deleteRecords(contextSelection.map((record) => record.id))}>
+            <Trash2 size={13} /> {contextSelection.length > 1 ? '删除选中记录' : '删除记录'}
+          </button>
+        </div>
+      ) : null}
+
+      {organizerDialog ? (
+        <LibraryOrganizerDialog
+          type={organizerDialog.type}
+          mode={organizerDialog.mode}
+          defaultName={organizerDialog.defaultName}
+          selectedCount={selectedRecordIds.length}
+          onClose={() => setOrganizerDialog(null)}
+          onSubmit={(name) => {
+            if (organizerDialog.mode === 'rename') renameLibraryOrganizerItem(organizerDialog, name);
+            else if (organizerDialog.type === 'folder') createLibraryFolder(name);
+            else createLibraryCollection(name);
+            setOrganizerDialog(null);
+          }}
+        />
+      ) : null}
+
+      {assignDialog ? (
+        <LibraryAssignDialog
+          type={assignDialog.type}
+          recordCount={assignDialog.recordIds.length}
+          assignedIds={
+            assignDialog.type === 'folder'
+              ? Array.from(new Set(assignDialog.recordIds.map((recordId) => libraryMeta[recordId]?.folderId).filter((id): id is string => Boolean(id))))
+              : Array.from(new Set(assignDialog.recordIds.flatMap((recordId) => libraryMeta[recordId]?.collectionIds ?? [])))
+          }
+          folders={libraryOrganization.folders}
+          collections={libraryOrganization.collections}
+          onClose={() => setAssignDialog(null)}
+          onCreate={() => {
+            setAssignDialog(null);
+            openCreateOrganizerDialog(assignDialog.type);
+          }}
+          onSelect={(targetId) => {
+            if (assignDialog.type === 'folder') assignRecordsToFolder(assignDialog.recordIds, targetId);
+            else assignRecordsToCollection(assignDialog.recordIds, targetId);
+          }}
+        />
+      ) : null}
+
+      <section ref={dockRef} className={`libraryFloatingDock ${searchVisible ? '' : 'collapsed'}`}>
+        {activePanel ? (
+          <div className={`libraryDockPanel dockPanel-${activePanel} ${activePanel === 'add' ? 'dockAlignEnd' : 'dockAlignStart'}`}>
+            <div className="libraryDockPanelHeader">
+              <strong>
+                {activePanel === 'main' ? '画廊菜单' : activePanel === 'view' ? '网格样式' : activePanel === 'display' ? '显示设置' : activePanel === 'sort' ? '排序方式' : '新增'}
+              </strong>
+              <button
+                className="iconMiniButton"
+                type="button"
+                data-tooltip={isDockSubPanel ? '返回菜单' : '关闭面板'}
+                aria-label={isDockSubPanel ? '返回菜单' : '关闭面板'}
+                onClick={() => setActivePanel(isDockSubPanel ? 'main' : null)}
+              >
+                {isDockSubPanel ? <Sidebar size={14} /> : <X size={14} />}
+              </button>
+            </div>
+            {activePanel === 'main' ? (
+              <div className="libraryMainMenuGrid">
+                <button type="button" onClick={() => setSearchVisible((value) => !value)}>
+                  <Sidebar size={15} />
+                  <span>{searchVisible ? '隐藏搜索栏' : '显示搜索栏'}</span>
+                </button>
+                <button type="button" onClick={() => setFiltersVisible((value) => !value)}>
+                  <SlidersHorizontal size={15} />
+                  <span>{filtersVisible ? '隐藏过滤器' : '显示过滤器'}{activeFilterCount ? ` (${activeFilterCount})` : ''}</span>
+                </button>
+                <button className="menuHasChild" type="button" onClick={() => setActivePanel('view')}>
+                  <Grid2X2 size={15} />
+                  <span>网格样式</span>
+                  <ChevronRight className="menuChevron" size={14} />
+                </button>
+                <button className="menuHasChild" type="button" onClick={() => setActivePanel('display')}>
+                  <Settings size={15} />
+                  <span>显示设置</span>
+                  <ChevronRight className="menuChevron" size={14} />
+                </button>
+                <button className="menuHasChild" type="button" onClick={() => setActivePanel('sort')}>
+                  <Clock3 size={15} />
+                  <span>排序方式</span>
+                  <ChevronRight className="menuChevron" size={14} />
+                </button>
+                <button type="button" onClick={() => setThumbnailScale((value) => Math.min(1.28, Number((value + 0.08).toFixed(2))))}>
+                  <ZoomIn size={15} />
+                  <span>放大</span>
+                </button>
+                <button type="button" onClick={() => setThumbnailScale((value) => Math.max(0.78, Number((value - 0.08).toFixed(2))))}>
+                  <ZoomOut size={15} />
+                  <span>缩小</span>
+                </button>
+              </div>
+            ) : null}
+            {activePanel === 'view' ? (
+              <div className="librarySegmentGrid">
+                {libraryViewOptions.map((option) => (
+                  <button className={viewMode === option.value ? 'active' : ''} key={option.value} type="button" onClick={() => setViewMode(option.value)}>{option.label}</button>
+                ))}
+                <button type="button" onClick={() => setThumbnailScale((value) => Math.min(1.28, Number((value + 0.08).toFixed(2))))}><ZoomIn size={14} /> 放大</button>
+                <button type="button" onClick={() => setThumbnailScale((value) => Math.max(0.78, Number((value - 0.08).toFixed(2))))}><ZoomOut size={14} /> 缩小</button>
+              </div>
+            ) : null}
+            {activePanel === 'display' ? (
+              <div className="libraryDisplayList">
+                <label><input type="checkbox" checked={displaySettings.showPrompt} onChange={(event) => updateDisplaySettings({ showPrompt: event.target.checked })} /> 显示卡片 Prompt 摘要</label>
+                <label><input type="checkbox" checked={displaySettings.showProvider} onChange={(event) => updateDisplaySettings({ showProvider: event.target.checked })} /> 显示平台</label>
+                <label><input type="checkbox" checked={displaySettings.showModel} onChange={(event) => updateDisplaySettings({ showModel: event.target.checked })} /> 显示模型名</label>
+                <label><input type="checkbox" checked={displaySettings.showReferenceBadge} onChange={(event) => updateDisplaySettings({ showReferenceBadge: event.target.checked })} /> 显示参考图标记</label>
+                <label><input type="checkbox" checked={displaySettings.compact} onChange={(event) => updateDisplaySettings({ compact: event.target.checked })} /> 紧凑间距</label>
+              </div>
+            ) : null}
+            {activePanel === 'sort' ? (
+              <div className="librarySegmentGrid">
+                {librarySortOptions.map((option) => (
+                  <button className={sortMode === option.value ? 'active' : ''} key={option.value} type="button" onClick={() => setSortMode(option.value)}>{option.label}</button>
+                ))}
+              </div>
+            ) : null}
+            {activePanel === 'add' ? (
+              <div className="libraryAddList">
+                {libraryAddActions.map((action) => (
+                  <button key={action.id} type="button" onClick={() => handleAddAction(action.id)}>
+                    {action.id === 'folder' ? <FolderOpen size={15} /> : action.id === 'collection' ? <Bookmark size={15} /> : action.id === 'import-file' ? <Upload size={15} /> : <Database size={15} />}
+                    <span>{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="libraryDockBar">
+          <button className={`libraryDockIcon ${libraryOrganizerOpen ? 'active' : ''}`} type="button" data-tooltip="画廊分类" aria-label="画廊分类" onClick={() => setLibraryOrganizerOpen((value) => !value)}>
+            <FolderOpen size={18} />
+          </button>
+          <button className="libraryDockIcon" type="button" data-tooltip="菜单" aria-label="菜单" onClick={() => setActivePanel((panel) => panel === 'main' ? null : 'main')}>
+            <SlidersHorizontal size={18} />{activeFilterCount ? <span>{activeFilterCount}</span> : null}
+          </button>
+          {searchVisible ? (
+            <label className="libraryDockSearch">
+              <input ref={searchInputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 Prompt、模型、平台、收藏、路径或错误信息" />
+            </label>
+          ) : (
+            <button className="libraryDockRestore" type="button" onClick={() => setSearchVisible(true)}>显示搜索栏</button>
+          )}
+          <button className="libraryDockAdd" type="button" data-tooltip="新增" aria-label="新增" onClick={() => setActivePanel((panel) => panel === 'add' ? null : 'add')}><Plus size={19} /></button>
+        </div>
+      </section>
+
+      {selectedRecord ? (
+        <>
+          <button
+            className="libraryDetailBackdrop"
+            type="button"
+            aria-label="关闭图片详情"
+            onClick={() => setSelectedRecordId(null)}
+          />
+          <aside className="libraryDetailDrawer" aria-label="图片详情">
+            <div className="libraryDetailHeader">
+              <div className="libraryDetailTitle">
+                <p className="eyebrow">Image Details</p>
+                <h2>{libraryMeta[selectedRecord.id]?.favorite ? '收藏作品' : '图片详情'}</h2>
+                <small title={selectedRecordFileName}>{selectedRecordFileName}</small>
+              </div>
+              <div className="libraryDetailHeaderActions">
+                <button className="iconMiniButton" type="button" data-tooltip="关闭详情" aria-label="关闭详情" onClick={() => setSelectedRecordId(null)}><X size={15} /></button>
+              </div>
+            </div>
+            {selectedRecord.imageUrls[0] ? (
+              <div className="libraryDetailPreview">
+                <button className="libraryDetailPreviewImageButton" type="button" onClick={() => previewRecord(selectedRecord, selectedRecord.imageUrls[0])}>
+                  <img src={selectedRecord.imageUrls[0]} alt={selectedRecord.prompt} onLoad={(event) => analyzeRecordColors(selectedRecord.id, event.currentTarget)} />
+                </button>
+                <div className="libraryRatingControl" aria-label="图片评分">
+                  {libraryRatingValues.map((rating) => (
+                    <button
+                      className={(selectedRecordMeta?.rating ?? 0) >= rating ? 'active' : ''}
+                      key={rating}
+                      type="button"
+                      aria-label={`${rating} 星`}
+                      title={`${rating} 星`}
+                      onClick={() => setRecordRating(selectedRecord.id, rating)}
+                    >
+                      <Star size={15} fill={(selectedRecordMeta?.rating ?? 0) >= rating ? 'currentColor' : 'none'} />
+                    </button>
+                  ))}
+                </div>
+                <span className="libraryDetailImageMetaOverlay" aria-label="图片信息">
+                  {selectedRecordDetailMeta.map((item, index) => (
+                    <span key={`${item}-${index}`}>{item}</span>
+                  ))}
+                </span>
+              </div>
+            ) : (
+              <div className="libraryDetailMissing">没有可预览图片</div>
+            )}
+            <div className="libraryDetailOrganizerSection">
+              <div className="libraryDetailOrganizerHeader">
+                <strong>归类</strong>
+                <div>
+                  <button className="iconMiniButton" type="button" data-tooltip="移至文件夹" aria-label="移至文件夹" onClick={() => setAssignDialog({ type: 'folder', recordIds: [selectedRecord.id] })}><FolderOpen size={14} /></button>
+                  <button className="iconMiniButton" type="button" data-tooltip="加入收藏集" aria-label="加入收藏集" onClick={() => setAssignDialog({ type: 'collection', recordIds: [selectedRecord.id] })}><Bookmark size={14} /></button>
+                  {(libraryScope.type === 'folder' || libraryScope.type === 'collection') ? (
+                    <button className="iconMiniButton" type="button" data-tooltip="移出当前分类" aria-label="移出当前分类" onClick={() => removeRecordsFromCurrentScope([selectedRecord.id])}><X size={14} /></button>
+                  ) : null}
+                </div>
+              </div>
+              <div className="libraryDetailOrganizerChips">
+                {selectedRecordFolder ? (
+                  <button type="button" onClick={() => {
+                    selectLibraryScope({ type: 'folder', id: selectedRecordFolder.id });
+                    setSelectedRecordId(null);
+                  }}>
+                    <span className="libraryFolderDot" style={{ background: selectedRecordFolder.color }} />
+                    <span>{selectedRecordFolder.name}</span>
+                  </button>
+                ) : (
+                  <span><FolderOpen size={13} /> 未归入文件夹</span>
+                )}
+                {selectedRecordCollections.length ? selectedRecordCollections.map((collection) => (
+                  <button key={collection.id} type="button" onClick={() => {
+                    selectLibraryScope({ type: 'collection', id: collection.id });
+                    setSelectedRecordId(null);
+                  }}>
+                    <Bookmark size={13} />
+                    <span>{collection.name}</span>
+                  </button>
+                )) : (
+                  <span><Bookmark size={13} /> 未加入收藏集</span>
+                )}
+              </div>
+            </div>
+            <div className="libraryDetailColorSection">
+              <span>主色</span>
+              {selectedRecordMeta?.colorPalette?.length ? (
+                <div className="libraryAutoColorPalette" aria-label="自动识别主色">
+                  {selectedRecordMeta.colorPalette.map((color) => (
+                    <span key={color} title={color} style={{ background: color }} />
+                  ))}
+                </div>
+              ) : (
+                <small>{selectedRecordMeta?.colorAnalysisFailed ? '未识别' : '分析中'}</small>
+              )}
+            </div>
+            <div className="libraryDetailSection promptDetailSection">
+              <strong>Prompt</strong>
+              <p>{selectedRecord.prompt}</p>
+            </div>
+            <div className="libraryDetailActions">
+              <button className={`miniButton ${libraryMeta[selectedRecord.id]?.favorite ? 'active' : ''}`} onClick={() => toggleFavorite(selectedRecord.id)}><Star size={13} /> {libraryMeta[selectedRecord.id]?.favorite ? '已收藏' : '收藏'}</button>
+              <button className="miniButton" disabled={!selectedRecord.imageUrls[0]} onClick={() => useRecordAsReference(selectedRecord)}><ImagePlus size={13} /> 设为参考图</button>
+              <button className="miniButton" onClick={() => void copyText('Prompt', selectedRecord.prompt)}><Copy size={13} /> Prompt</button>
+              <button className="miniButton" disabled={!getRecordPrimaryPath(selectedRecord)} onClick={() => void copyText('Path', getRecordPrimaryPath(selectedRecord))}><Copy size={13} /> 路径</button>
+              <button className="miniButton" disabled={!selectedRecord.localImagePaths?.[0]} onClick={() => selectedRecord.localImagePaths?.[0] && void revealGenerationFile(selectedRecord.localImagePaths[0])}><FolderOpen size={13} /> 文件夹</button>
+              <button className="miniButton danger" onClick={() => void deleteRecord(selectedRecord.id)}><Trash2 size={13} /> 删除记录</button>
+            </div>
+            {selectedRecord.referenceImages?.length ? (
+              <div className="libraryDetailSection">
+                <strong>参考图来源</strong>
+                <p>{summarizeReferenceSources(selectedRecord.referenceImages)}</p>
+              </div>
+            ) : null}
+            {selectedRecord.error ? (
+              <div className="libraryDetailSection warning">
+                <strong>错误 / 待核查信息</strong>
+                <p>{generationFailureHint(selectedRecord)}</p>
+              </div>
+            ) : null}
+          </aside>
+        </>
+      ) : null}
     </>
   );
 }
@@ -2972,6 +5786,7 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [copyMessage, setCopyMessage] = useState('');
+  useToastMessage(copyMessage, setCopyMessage);
   const normalizedQuery = query.trim().toLowerCase();
   const filteredTemplates = templates.filter((template) => {
     const matchesCategory = category === 'all' || template.category === category;
@@ -3014,8 +5829,6 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
         </label>
       </section>
 
-      {copyMessage ? <p className="libraryNotice">{copyMessage}</p> : null}
-
       {filteredTemplates.length === 0 ? (
         <div className="emptyState templateEmpty">
           <Sparkles size={42} />
@@ -3051,6 +5864,196 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
   );
 }
 
+function LibraryOrganizerDialog(props: {
+  type: 'folder' | 'collection';
+  mode: 'create' | 'rename';
+  defaultName: string;
+  selectedCount: number;
+  onClose: () => void;
+  onSubmit: (name: string) => void;
+}) {
+  const [name, setName] = useState(props.defaultName);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const title = props.mode === 'rename'
+    ? props.type === 'folder' ? '重命名文件夹' : '重命名收藏集'
+    : props.type === 'folder' ? '新建文件夹' : '新建收藏集';
+  const hint = props.mode === 'rename'
+    ? '只修改画廊内显示名称，不影响图片记录和磁盘文件。'
+    : props.selectedCount
+    ? `创建后会自动加入当前选中的 ${props.selectedCount} 项。`
+    : props.type === 'folder'
+      ? '用于把作品归入一个主要分类。'
+      : '用于把作品加入可复用的项目合集。';
+
+  useEffect(() => {
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') props.onClose();
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [props.onClose]);
+
+  function submit() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    props.onSubmit(trimmed);
+  }
+
+  return (
+    <div className="modalBackdrop organizerDialogBackdrop" onClick={props.onClose}>
+      <section className="organizerDialog" role="dialog" aria-modal="true" aria-labelledby="organizer-dialog-title" onClick={(event) => event.stopPropagation()}>
+        <header>
+          <div>
+            <p className="eyebrow">Gallery Organizer</p>
+            <h2 id="organizer-dialog-title">{title}</h2>
+          </div>
+          <button className="iconMiniButton" type="button" data-tooltip="关闭" aria-label="关闭" onClick={props.onClose}><X size={15} /></button>
+        </header>
+        <label>
+          <span>名称</span>
+          <input
+            ref={inputRef}
+            value={name}
+            maxLength={24}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                submit();
+              }
+            }}
+          />
+        </label>
+        <p>{hint}</p>
+        <div className="organizerDialogActions">
+          <button type="button" className="confirmCancelButton" onClick={props.onClose}>取消</button>
+          <button type="button" className="confirmPrimaryButton" disabled={!name.trim()} onClick={submit}>{props.mode === 'rename' ? '保存' : '创建'}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function LibraryAssignDialog(props: {
+  type: 'folder' | 'collection';
+  recordCount: number;
+  assignedIds: string[];
+  folders: LibraryFolder[];
+  collections: LibraryCollection[];
+  onClose: () => void;
+  onCreate: () => void;
+  onSelect: (targetId: string) => void;
+}) {
+  const items: Array<{ id: string; name: string; color?: string }> = props.type === 'folder'
+    ? props.folders.map((folder) => ({ id: folder.id, name: folder.name, color: folder.color }))
+    : props.collections.map((collection) => ({ id: collection.id, name: collection.name }));
+  const title = props.type === 'folder' ? '移至文件夹' : '加入收藏集';
+  const emptyText = props.type === 'folder' ? '还没有文件夹' : '还没有收藏集';
+
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') props.onClose();
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [props.onClose]);
+
+  return (
+    <div className="modalBackdrop organizerDialogBackdrop" onClick={props.onClose}>
+      <section className="assignDialog" role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}>
+        <header>
+          <div>
+            <p className="eyebrow">Gallery Organizer</p>
+            <h2>{title}</h2>
+            <span>{props.recordCount} 项</span>
+          </div>
+          <button className="iconMiniButton" type="button" data-tooltip="关闭" aria-label="关闭" onClick={props.onClose}><X size={15} /></button>
+        </header>
+        <div className="assignDialogList">
+          {items.length ? items.map((item) => {
+            const isAssigned = props.assignedIds.includes(item.id);
+            const disabled = isAssigned && props.recordCount === 1;
+            return (
+            <button className={isAssigned ? 'assigned' : ''} key={item.id} type="button" disabled={disabled} onClick={() => props.onSelect(item.id)}>
+              {props.type === 'folder'
+                ? <span className="libraryFolderDot" style={{ background: item.color ?? libraryFolderColors[0] }} />
+                : <Bookmark size={14} />}
+              <span>{item.name}</span>
+              {isAssigned ? <em>{props.recordCount === 1 ? '已在此处' : '部分已在'}</em> : null}
+            </button>
+            );
+          }) : (
+            <p>{emptyText}</p>
+          )}
+        </div>
+        <button className="assignDialogCreate" type="button" onClick={props.onCreate}>
+          <Plus size={14} /> {props.type === 'folder' ? '新建文件夹' : '新建收藏集'}
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function ConfirmDialog(props: {
+  request: ConfirmDialogState;
+  onClose: () => void;
+  onError: (error: string) => void;
+}) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const confirmLabel = props.request.confirmLabel ?? '确认';
+  const cancelLabel = props.request.cancelLabel ?? '取消';
+  const tone = props.request.tone ?? 'default';
+
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !isSubmitting) props.onClose();
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isSubmitting, props.onClose]);
+
+  async function handleConfirm() {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    props.onError('');
+    try {
+      await props.request.onConfirm();
+      props.onClose();
+    } catch (error) {
+      props.onError(error instanceof Error ? error.message : String(error));
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="modalBackdrop confirmBackdrop" onClick={() => !isSubmitting && props.onClose()}>
+      <section className={`confirmDialog ${tone}`} role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message" onClick={(event) => event.stopPropagation()}>
+        <div className="confirmIconWrap">
+          <Trash2 size={22} />
+        </div>
+        <div className="confirmContent">
+          <p className="eyebrow">Confirm Action</p>
+          <h2 id="confirm-dialog-title">{props.request.title}</h2>
+          <p id="confirm-dialog-message">{props.request.message}</p>
+          {props.request.error ? <small className="confirmError">{props.request.error}</small> : null}
+        </div>
+        <div className="confirmActions">
+          <button type="button" className="confirmCancelButton" disabled={isSubmitting} onClick={props.onClose}>
+            {cancelLabel}
+          </button>
+          <button type="button" className={`confirmPrimaryButton ${tone}`} disabled={isSubmitting} onClick={() => void handleConfirm()}>
+            {isSubmitting ? '处理中…' : confirmLabel}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 
 function UtilityModalShell(props: { title: string; eyebrow?: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
@@ -3069,7 +6072,7 @@ function UtilityModalShell(props: { title: string; eyebrow?: string; onClose: ()
             {props.eyebrow ? <p className="eyebrow">{props.eyebrow}</p> : null}
             <h2>{props.title}</h2>
           </div>
-          <button type="button" title="关闭" aria-label="关闭" onClick={props.onClose}>
+          <button type="button" data-tooltip="关闭" aria-label="关闭" onClick={props.onClose}>
             <X size={18} />
           </button>
         </header>
@@ -3236,17 +6239,17 @@ function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
     <div ref={modalRef} className="modalBackdrop" onClick={props.onClose} onKeyDown={handlePreviewKeyDown} tabIndex={-1}>
       <div className="previewModal">
         <div className="previewToolbar" onClick={(event) => event.stopPropagation()}>
-          <button type="button" title="缩小" aria-label="缩小" onClick={() => zoomBy(-0.2)}>
+          <button type="button" data-tooltip="缩小" aria-label="缩小" onClick={() => zoomBy(-0.2)}>
             <ZoomOut size={16} />
           </button>
           <span>{Math.round(scale * 100)}%</span>
-          <button type="button" title="放大" aria-label="放大" onClick={() => zoomBy(0.2)}>
+          <button type="button" data-tooltip="放大" aria-label="放大" onClick={() => zoomBy(0.2)}>
             <ZoomIn size={16} />
           </button>
-          <button type="button" title="适配窗口" aria-label="适配窗口" onClick={resetView}>
+          <button type="button" data-tooltip="适配窗口" aria-label="适配窗口" onClick={resetView}>
             <Maximize2 size={16} />
           </button>
-          <button type="button" title="关闭预览" aria-label="关闭预览" onClick={props.onClose}>
+          <button type="button" data-tooltip="关闭预览" aria-label="关闭预览" onClick={props.onClose}>
             <X size={18} />
           </button>
         </div>
@@ -3275,24 +6278,6 @@ function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
   );
 }
 
-function getTopLibraryValue(values: string[]) {
-  const counts = new Map<string, number>();
-  for (const value of values) {
-    const key = value.trim();
-    if (!key) continue;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  let label = '\u5c1a\u65e0\u6570\u636e';
-  let count = 0;
-  for (const [key, value] of counts) {
-    if (value > count) {
-      label = key;
-      count = value;
-    }
-  }
-  return { label, count };
-}
-
 function getRecordTimeMs(value: string) {
   const numeric = Number(value);
   if (Number.isFinite(numeric) && numeric > 0) return numeric;
@@ -3318,18 +6303,56 @@ function summarizeReferenceSources(references?: ReferenceImage[]) {
 }
 
 function createEmptyProviderDraftConfig(
-  provider: ReturnType<typeof listProviders>[number]
+  provider: ReturnType<typeof listProviders>[number],
+  serviceTemplate?: ProviderServiceTemplate
 ): OpenAICompatibleConfig {
+  const isOfficialOpenAI = provider.id === 'openai-gpt-image';
+  const firstModel = provider.models[0]?.id ?? '';
   return {
     ...defaultOpenAICompatibleConfig,
-    displayName: '',
-    baseUrl: '',
-    modelId: '',
+    displayName: serviceTemplate?.defaultDisplayName ?? '',
+    baseUrl: isOfficialOpenAI ? OFFICIAL_OPENAI_BASE_URL : '',
+    modelId: firstModel,
     protocol: 'images',
     endpointPath: defaultEndpointForProtocol('images'),
     extraHeadersJson: '{}',
     modelOptions: provider.models.map((model) => model.id)
   };
+}
+
+function getProviderServiceTemplatesForPlatform(platformType: ProviderPlatformType) {
+  return providerServiceTemplates.filter((template) => template.platformType === platformType);
+}
+
+function getProviderServiceTemplate(templateId: string) {
+  return providerServiceTemplates.find((template) => template.id === templateId);
+}
+
+function isProviderServiceTemplateConfigurable(template: ProviderServiceTemplate) {
+  return Boolean(template.providerId) && (template.status === 'connected' || template.status === 'configurable');
+}
+
+function getDefaultProviderServiceTemplateForProvider(providerId: string) {
+  if (providerId === 'custom-http-provider') return getProviderServiceTemplate('aggregator-openai-compatible');
+  if (providerId === 'openai-gpt-image') return getProviderServiceTemplate('official-openai');
+  return providerServiceTemplates.find((template) => template.providerId === providerId);
+}
+
+function providerProfileBelongsToTemplate(
+  profile: ProviderConnectionProfile,
+  template: ProviderServiceTemplate
+) {
+  if (!template.providerId || profile.providerId !== template.providerId) return false;
+  if (profile.serviceTemplateId) return profile.serviceTemplateId === template.id;
+  return template.id === 'aggregator-openai-compatible' || template.id === 'official-openai';
+}
+
+function providerGenerationLabel(provider: ReturnType<typeof listProviders>[number]) {
+  const template = getDefaultProviderServiceTemplateForProvider(provider.id);
+  const platform = template
+    ? providerPlatformOptions.find((item) => item.id === template.platformType)
+    : undefined;
+  return template && platform ? `${platform.label} · ${template.label}` : provider.name;
 }
 
 function profileLabel(status: ProviderConnectionProfile['lastTestStatus']) {
@@ -3422,6 +6445,9 @@ function mapProviderErrorMessage(error: unknown) {
   }
   if (lower.includes('404') || lower.includes('not found')) {
     return `接口路径可能不匹配：请检查 Base URL、协议类型和接口路径。原始错误：${message}`;
+  }
+  if (lower.includes('billing hard limit')) {
+    return `OpenAI 账单硬限制：当前官方项目已达到 Billing hard limit。请到 OpenAI 控制台检查付款方式、余额、项目用量上限或组织额度。原始错误：${message}`;
   }
   if (lower.includes('429') || lower.includes('rate limit') || lower.includes('quota')) {
     return `额度或频率受限：请稍后重试，或检查账户额度/中转站限流。原始错误：${message}`;

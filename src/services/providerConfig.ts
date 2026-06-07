@@ -27,9 +27,11 @@ const STORAGE_KEY = 'visionhub.provider.configs';
 
 type ProviderConfigMap = Record<string, Partial<OpenAICompatibleConfig>>;
 
+export const OFFICIAL_OPENAI_BASE_URL = 'https://api.openai.com';
+
 export const defaultOpenAICompatibleConfig: OpenAICompatibleConfig = {
-  displayName: 'GPT Image',
-  baseUrl: 'https://api.openai.com',
+  displayName: '聚合站 / OpenAI 兼容',
+  baseUrl: '',
   modelId: 'gpt-image-1',
   protocol: 'images',
   endpointPath: '/v1/images/generations',
@@ -45,7 +47,7 @@ export const PROVIDER_CONFIG_PRESETS: ProviderConfigPreset[] = [
     config: {
       ...defaultOpenAICompatibleConfig,
       displayName: 'OpenAI Images',
-      baseUrl: 'https://api.openai.com',
+      baseUrl: OFFICIAL_OPENAI_BASE_URL,
       modelId: 'gpt-image-1',
       protocol: 'images',
       endpointPath: '/v1/images/generations'
@@ -58,7 +60,7 @@ export const PROVIDER_CONFIG_PRESETS: ProviderConfigPreset[] = [
     config: {
       ...defaultOpenAICompatibleConfig,
       displayName: 'OpenAI Responses',
-      baseUrl: 'https://api.openai.com',
+      baseUrl: OFFICIAL_OPENAI_BASE_URL,
       modelId: 'gpt-image-1',
       protocol: 'responses',
       endpointPath: '/v1/responses'
@@ -66,11 +68,11 @@ export const PROVIDER_CONFIG_PRESETS: ProviderConfigPreset[] = [
   },
   {
     id: 'relay-images',
-    label: 'AiMaMi / 中转站',
-    description: 'OpenAI-compatible 中转站；替换 Base URL 后即可保存使用。',
+    label: '聚合站 / 中转站',
+    description: 'OpenAI-compatible 聚合站；替换 Base URL、模型 ID 后即可保存使用。',
     config: {
       ...defaultOpenAICompatibleConfig,
-      displayName: 'OpenAI-compatible Relay',
+      displayName: '聚合站中转',
       baseUrl: 'https://your-relay.example.com',
       modelId: 'gpt-image-1',
       protocol: 'images',
@@ -102,6 +104,17 @@ export function defaultEndpointForProtocol(protocol: OpenAICompatibleProtocol) {
     case 'images':
     default:
       return '/v1/images/generations';
+  }
+}
+
+export function isOfficialOpenAIBaseUrl(baseUrl: string) {
+  const trimmed = baseUrl.trim();
+  if (!trimmed) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'https:' && parsed.hostname === 'api.openai.com';
+  } catch {
+    return false;
   }
 }
 
@@ -204,14 +217,14 @@ export function serializeProviderConfig(config: OpenAICompatibleConfig) {
 export function parseProviderConfigImport(jsonText: string): OpenAICompatibleConfig {
   const parsed = JSON.parse(jsonText) as unknown;
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Provider 配置必须是 JSON 对象。');
+    throw new Error('平台配置必须是 JSON 对象。');
   }
 
   const config = normalizeProviderConfig(parsed as Partial<OpenAICompatibleConfig>);
   // Validate fields that can fail at runtime.
   new URL(config.baseUrl);
   parseExtraHeaders(config.extraHeadersJson);
-  if (!config.modelId) throw new Error('Provider 配置缺少 modelId。');
+  if (!config.modelId) throw new Error('平台配置缺少 modelId。');
   if (!config.endpointPath.startsWith('/')) throw new Error('接口路径必须以 / 开头。');
   return config;
 }

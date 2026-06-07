@@ -5,6 +5,8 @@ node_modules/
 # Frontend build output
 dist/
 .vite-cache/
+output/
+.codex-browser-profile/
 
 # Tauri / Rust generated output
 src-tauri/target/

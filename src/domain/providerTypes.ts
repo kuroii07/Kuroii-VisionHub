@@ -70,7 +70,7 @@ export interface ProviderManifest {
   notes: string[];
 }
 
-export type GenerationMode = 'text-to-image' | 'image-to-image';
+export type GenerationMode = 'text-to-image' | 'image-to-image' | 'imported';
 
 export interface ReferenceImage {
   id: string;
@@ -90,6 +90,8 @@ export interface ImageGenerationRequest {
   negativePrompt?: string;
   size: string;
   quality?: string;
+  outputFormat?: 'PNG' | 'JPEG' | 'WebP';
+  outputCompression?: number;
   count: number;
   generationMode?: GenerationMode;
   references?: ReferenceImage[];

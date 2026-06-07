@@ -1,18 +1,22 @@
 import { Copy, History, Wand2, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { GenerationRecord } from '../domain/providerTypes';
-import type { PromptHistorySettings, PromptPolishSettings } from '../services/appSettings';
+import { PROMPT_POLISH_SECRET_ID, type PromptHistorySettings, type PromptPolishSettings } from '../services/appSettings';
 import { polishPromptWithProvider } from '../services/desktopApi';
-import { loadProviderConfig, parseExtraHeaders } from '../services/providerConfig';
+import { parseExtraHeaders } from '../services/providerConfig';
 import {
   INSPIRATION_TEMPLATES,
   POLISH_MODES,
+  getDefaultPolishMode,
+  getPolishModesForEngine,
   polishPrompt,
   renderInspirationPrompt,
+  resolvePolishMode,
   type InspirationTemplate,
   type PromptAssistMode
 } from '../services/promptAssist';
 import { StudioSelect } from './StudioSelect';
+import { useToastMessage } from './toast';
 
 interface PromptAssistModalProps {
   mode: PromptAssistMode;
@@ -25,20 +29,88 @@ interface PromptAssistModalProps {
 }
 
 export function PromptAssistModal(props: PromptAssistModalProps) {
+  function resolveInitialPolishConfigId() {
+    const selectedModelId = props.promptPolishSettings.modelId.trim();
+    const matchedConfig = props.promptPolishSettings.savedConfigs.find(
+      (config) => config.modelId === selectedModelId || config.modelOptions.includes(selectedModelId)
+    );
+    return matchedConfig?.id ?? props.promptPolishSettings.savedConfigs[0]?.id ?? '__current__';
+  }
+
   const [selectedTemplateId, setSelectedTemplateId] = useState(INSPIRATION_TEMPLATES[0].id);
   const [templateValues, setTemplateValues] = useState<Record<string, string>>({});
-  const [polishMode, setPolishMode] = useState(props.promptHistorySettings.defaultPolishMode || POLISH_MODES[0].id);
+  const [polishMode, setPolishMode] = useState(() =>
+    resolvePolishMode(
+      props.promptHistorySettings.defaultPolishMode || getDefaultPolishMode(props.promptPolishSettings.engine),
+      props.promptPolishSettings.engine
+    ).id
+  );
   const [reuseQuery, setReuseQuery] = useState('');
   const [copiedMessage, setCopiedMessage] = useState('');
   const [modelPolishedPrompt, setModelPolishedPrompt] = useState('');
+  const [selectedPolishConfigId, setSelectedPolishConfigId] = useState(resolveInitialPolishConfigId);
+  const [selectedPolishModelId, setSelectedPolishModelId] = useState(props.promptPolishSettings.modelId.trim());
   const [polishMessage, setPolishMessage] = useState('');
   const [isPolishing, setIsPolishing] = useState(false);
+  useToastMessage(copiedMessage, setCopiedMessage);
+  useToastMessage(polishMessage, setPolishMessage);
 
   const selectedTemplate =
     INSPIRATION_TEMPLATES.find((template) => template.id === selectedTemplateId) ?? INSPIRATION_TEMPLATES[0];
   const inspirationPrompt = renderInspirationPrompt(selectedTemplate, templateValues);
   const localPolishedPrompt = polishPrompt(props.prompt, polishMode);
   const polishedPrompt = modelPolishedPrompt || localPolishedPrompt;
+  const polishConfigOptions = useMemo(() => {
+    const configs = props.promptPolishSettings.savedConfigs.length > 0
+      ? props.promptPolishSettings.savedConfigs
+      : [{
+          id: '__current__',
+          displayName: props.promptPolishSettings.displayName,
+          baseUrl: props.promptPolishSettings.baseUrl,
+          modelId: props.promptPolishSettings.modelId,
+          modelOptions: props.promptPolishSettings.modelOptions,
+          extraHeadersJson: props.promptPolishSettings.extraHeadersJson,
+          protocol: props.promptPolishSettings.protocol
+        }];
+    return configs;
+  }, [props.promptPolishSettings]);
+  const selectedPolishConfig = polishConfigOptions.find((config) => config.id === selectedPolishConfigId) ?? polishConfigOptions[0];
+  const effectivePolishSettings = {
+    ...props.promptPolishSettings,
+    displayName: selectedPolishConfig?.displayName ?? props.promptPolishSettings.displayName,
+    baseUrl: selectedPolishConfig?.baseUrl ?? props.promptPolishSettings.baseUrl,
+    modelId: selectedPolishConfig?.modelId ?? props.promptPolishSettings.modelId,
+    modelOptions: selectedPolishConfig?.modelOptions ?? props.promptPolishSettings.modelOptions,
+    extraHeadersJson: selectedPolishConfig?.extraHeadersJson ?? props.promptPolishSettings.extraHeadersJson,
+    protocol: selectedPolishConfig?.protocol ?? props.promptPolishSettings.protocol
+  };
+  const polishBaseUrl = effectivePolishSettings.baseUrl.trim();
+  const polishModelOptions = useMemo(
+    () => Array.from(new Set([effectivePolishSettings.modelId, ...effectivePolishSettings.modelOptions].filter((item) => item.trim()).map((item) => item.trim()))),
+    [effectivePolishSettings.modelId, effectivePolishSettings.modelOptions]
+  );
+  const polishModelId = selectedPolishModelId.trim() || effectivePolishSettings.modelId.trim();
+  const modelPolishEnabled = props.promptPolishSettings.engine === 'provider';
+  const polishReady = modelPolishEnabled && Boolean(polishBaseUrl && polishModelId);
+  const availablePolishModes = useMemo(
+    () => getPolishModesForEngine(props.promptPolishSettings.engine),
+    [props.promptPolishSettings.engine]
+  );
+
+  useEffect(() => {
+    const nextConfigId = resolveInitialPolishConfigId();
+    setSelectedPolishConfigId(nextConfigId);
+    setSelectedPolishModelId(props.promptPolishSettings.modelId.trim());
+    setModelPolishedPrompt('');
+  }, [props.promptPolishSettings.engine, props.promptPolishSettings.modelId, props.promptPolishSettings.savedConfigs]);
+
+  useEffect(() => {
+    const resolvedMode = resolvePolishMode(polishMode, props.promptPolishSettings.engine);
+    if (resolvedMode.id !== polishMode) {
+      setPolishMode(resolvedMode.id);
+      setModelPolishedPrompt('');
+    }
+  }, [polishMode, props.promptPolishSettings.engine]);
   const normalizedQuery = reuseQuery.trim().toLowerCase();
   const promptRecords = useMemo(() => {
     const seen = new Set<string>();
@@ -74,28 +146,32 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
   }
 
   async function runModelPolish() {
-    if (props.promptPolishSettings.engine !== 'provider') {
-      setPolishMessage('当前偏好设置使用本地规则润色；如需模型润色，请到「偏好设置」切换润色引擎。');
+    if (!modelPolishEnabled) {
+      setModelPolishedPrompt('');
+      setPolishMessage('当前使用本地规则润色，未调用模型。');
       return;
     }
-
-    if (!['openai-gpt-image', 'custom-http-provider'].includes(props.promptPolishSettings.providerId)) {
-      setPolishMessage('当前版本的模型润色先支持 GPT Image 和 OpenAI 兼容中转；已显示本地规则润色结果。');
+    if (!polishBaseUrl) {
+      setPolishMessage('请先到偏好设置填写提示词润色专用 Base URL。');
+      return;
+    }
+    if (!polishModelId) {
+      setPolishMessage('请先到偏好设置填写提示词润色专用模型 ID。');
       return;
     }
 
     setIsPolishing(true);
     setPolishMessage('');
     try {
-      const providerConfig = loadProviderConfig(props.promptPolishSettings.providerId);
       const result = await polishPromptWithProvider({
-        providerId: props.promptPolishSettings.providerId,
-        modelId: props.promptPolishSettings.modelId || providerConfig.modelId,
+        providerId: 'prompt-polish',
+        modelId: polishModelId,
         prompt: props.prompt.trim() || '一个清晰明确的画面主体',
         modeId: polishMode,
-        settings: props.promptPolishSettings,
-        baseUrl: providerConfig.baseUrl,
-        extraHeaders: parseExtraHeaders(providerConfig.extraHeadersJson)
+        settings: { ...effectivePolishSettings, modelId: polishModelId },
+        baseUrl: polishBaseUrl,
+        extraHeaders: parseExtraHeaders(effectivePolishSettings.extraHeadersJson),
+        secretId: PROMPT_POLISH_SECRET_ID
       });
       setModelPolishedPrompt(result.polishedPrompt);
       setPolishMessage(`模型润色完成：${result.modelId}`);
@@ -113,7 +189,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
   }
 
   const title =
-    props.mode === 'inspiration' ? '灵感库' : props.mode === 'polish' ? '提示词润色' : '复用记录';
+    props.mode === 'inspiration' ? '模板灵感' : props.mode === 'polish' ? '提示词润色' : '复用记录';
 
   return (
     <div className="promptAssistBackdrop" onClick={props.onClose}>
@@ -121,7 +197,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
         <header className="promptAssistHeader">
           <div>
             <span>{title}</span>
-            <strong>{props.mode === 'inspiration' ? '选择模板并填写关键词' : props.mode === 'polish' ? '把简单提示词扩写得更完整' : '从历史记录里找回好用的 Prompt'}</strong>
+            <strong>{props.mode === 'inspiration' ? '选择模板并回填到创作台' : props.mode === 'polish' ? '本地或模型润色后回填提示词' : '从历史记录里找回好用的 Prompt'}</strong>
           </div>
           <button className="promptAssistClose" onClick={props.onClose} aria-label="关闭">
             <X size={18} />
@@ -147,11 +223,27 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
           <PolishPanel
             sourcePrompt={props.prompt}
             polishMode={polishMode}
+            polishModes={availablePolishModes}
             resultPrompt={polishedPrompt}
             engine={props.promptPolishSettings.engine}
+            configId={selectedPolishConfigId}
+            configOptions={polishConfigOptions.map((config) => ({ value: config.id, label: config.displayName }))}
+            polishModelId={polishModelId}
+            polishModelOptions={polishModelOptions}
+            polishReady={polishReady}
             isPolishing={isPolishing}
             polishMessage={polishMessage}
             onModeChange={setPolishMode}
+            onConfigChange={(configId) => {
+              const nextConfig = polishConfigOptions.find((config) => config.id === configId);
+              setSelectedPolishConfigId(configId);
+              setSelectedPolishModelId((nextConfig?.modelId ?? '').trim());
+              setModelPolishedPrompt('');
+            }}
+            onModelChange={(modelId) => {
+              setSelectedPolishModelId(modelId);
+              setModelPolishedPrompt('');
+            }}
             onRunModelPolish={runModelPolish}
             onApplyPrompt={props.onApplyPrompt}
             onCopy={copyText}
@@ -170,7 +262,6 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
           />
         ) : null}
 
-        {copiedMessage ? <p className="promptAssistMessage">{copiedMessage}</p> : null}
       </section>
     </div>
   );
@@ -224,11 +315,19 @@ function InspirationPanel(props: {
 function PolishPanel(props: {
   sourcePrompt: string;
   polishMode: string;
+  polishModes: typeof POLISH_MODES;
   resultPrompt: string;
   engine: PromptPolishSettings['engine'];
+  configId: string;
+  configOptions: Array<{ value: string; label: string }>;
+  polishModelId: string;
+  polishModelOptions: string[];
+  polishReady: boolean;
   isPolishing: boolean;
   polishMessage: string;
   onModeChange: (mode: string) => void;
+  onConfigChange: (configId: string) => void;
+  onModelChange: (modelId: string) => void;
   onRunModelPolish: () => void;
   onApplyPrompt: (prompt: string, placement: 'replace' | 'append') => void;
   onCopy: (prompt: string) => void;
@@ -239,24 +338,46 @@ function PolishPanel(props: {
         <StudioSelect
           value={props.polishMode}
           onChange={props.onModeChange}
-          options={POLISH_MODES.map((mode) => ({ value: mode.id, label: mode.label }))}
+          options={props.polishModes.map((mode) => ({ value: mode.id, label: mode.label }))}
         />
-        <small>{POLISH_MODES.find((mode) => mode.id === props.polishMode)?.description}</small>
+        <small>{props.polishModes.find((mode) => mode.id === props.polishMode)?.description}</small>
       </div>
       <div className="polishEngineBar">
         <div>
-          <strong>{props.engine === 'provider' ? '模型润色已启用' : '本地规则润色'}</strong>
-          <small>{props.engine === 'provider' ? '点击后会调用偏好设置中选择的文本模型。' : '不消耗 API 额度，适合离线快速补全。'}</small>
+          <strong>{props.engine === 'provider' ? '模型润色已启用' : '本地规则已启用'}</strong>
+          <small>{props.engine === 'provider' ? '可切换偏好设置里保存的文本模型。' : '当前按本地规则生成预览，不会调用模型。'}</small>
         </div>
-        <button onClick={props.onRunModelPolish} disabled={props.isPolishing || props.engine !== 'provider'}>
-          <Wand2 size={13} /> {props.isPolishing ? '润色中…' : '开始模型润色'}
+        <div className="polishModelPicker">
+          <StudioSelect
+            className="polishConfigSelect noSelectCheck"
+            value={props.configId}
+            onChange={props.onConfigChange}
+            placeholder="润色配置"
+            options={props.configOptions}
+          />
+          {props.engine === 'provider' ? (
+            <StudioSelect
+              className="polishModelSelect noSelectCheck"
+              value={props.polishModelId}
+              onChange={props.onModelChange}
+              placeholder="选择润色模型"
+              options={props.polishModelOptions.map((modelId) => ({ value: modelId, label: modelId }))}
+            />
+          ) : (
+            <span className="polishModelTag">本地规则</span>
+          )}
+        </div>
+        <button className="polishRunButton" onClick={props.onRunModelPolish} disabled={props.isPolishing || (props.engine === 'provider' && !props.polishReady)}>
+          <Wand2 size={13} /> {props.engine === 'provider' ? (props.isPolishing ? '润色中…' : '开始模型润色') : '使用本地规则'}
         </button>
       </div>
+      {props.engine === 'provider' && !props.polishReady ? (
+        <p className="polishConfigHint">请先到偏好设置填写润色专用 Base URL、模型 ID，并保存润色专用 API Key。</p>
+      ) : null}
       <div className="polishCompareGrid">
         <PromptPreview title="原提示词" prompt={props.sourcePrompt || '当前提示词为空，将使用默认主体进行润色。'} />
         <PromptPreview title="润色结果" prompt={props.resultPrompt} />
       </div>
-      {props.polishMessage ? <p className="promptAssistMessage inline">{props.polishMessage}</p> : null}
       <AssistActions prompt={props.resultPrompt} onApplyPrompt={props.onApplyPrompt} onCopy={props.onCopy} />
     </div>
   );
@@ -277,7 +398,7 @@ function ReusePanel(props: {
         搜索记录
         <input
           value={props.query}
-          placeholder="搜索 Prompt / Provider / 模型"
+          placeholder="搜索 Prompt / 平台 / 模型"
           onChange={(event) => props.onQueryChange(event.target.value)}
         />
       </label>
@@ -330,7 +451,7 @@ function AssistActions(props: {
   return (
     <div className="assistActionRow">
       <button onClick={() => props.onApplyPrompt(props.prompt, 'replace')}>
-        <Wand2 size={13} /> 应用
+        <Wand2 size={13} /> 回填
       </button>
       <button onClick={() => props.onApplyPrompt(props.prompt, 'append')}>追加</button>
       <button onClick={() => props.onCopy(props.prompt)}>

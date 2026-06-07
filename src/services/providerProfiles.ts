@@ -3,17 +3,21 @@ import {
   defaultEndpointForProtocol,
   defaultOpenAICompatibleConfig,
   exportProviderConfigMap,
+  isOfficialOpenAIBaseUrl,
   normalizeProviderConfig
 } from './providerConfig';
 import { readStorageValue, writeStorageValue } from './safeStorage';
 
 const STORAGE_KEY = 'visionhub.provider.profiles';
+const OFFICIAL_OPENAI_PROVIDER_ID = 'openai-gpt-image';
+const RELAY_PROVIDER_ID = 'custom-http-provider';
 
 export type ProviderProfileTestStatus = 'untested' | 'passed' | 'warning' | 'failed';
 
 export interface ProviderConnectionProfile extends OpenAICompatibleConfig {
   id: string;
   providerId: string;
+  serviceTemplateId?: string;
   enabled: boolean;
   lastTestStatus: ProviderProfileTestStatus;
   lastLatencyMs?: number;
@@ -65,13 +69,18 @@ export function createProviderProfile(
 }
 
 export function normalizeProviderProfile(profile: Partial<ProviderConnectionProfile>): ProviderConnectionProfile {
-  const providerId = String(profile.providerId || 'openai-gpt-image');
-  const base = createProviderProfile(providerId, profile);
+  const normalizedConfig = normalizeProviderConfig(profile);
+  const originalProviderId = String(profile.providerId || RELAY_PROVIDER_ID);
+  const providerId = normalizeProfileProviderId(originalProviderId, normalizedConfig.baseUrl);
+  const base = createProviderProfile(providerId, normalizedConfig);
   return {
     ...base,
-    ...normalizeProviderConfig(profile),
+    ...normalizedConfig,
     id: String(profile.id || base.id),
     providerId,
+    serviceTemplateId: typeof profile.serviceTemplateId === 'string' && profile.serviceTemplateId.trim()
+      ? profile.serviceTemplateId
+      : undefined,
     enabled: Boolean(profile.enabled),
     lastTestStatus: profile.lastTestStatus ?? 'untested',
     lastLatencyMs: typeof profile.lastLatencyMs === 'number' ? profile.lastLatencyMs : undefined,
@@ -82,13 +91,26 @@ export function normalizeProviderProfile(profile: Partial<ProviderConnectionProf
   };
 }
 
+export function normalizeProfileProviderId(providerId: string, baseUrl: string) {
+  if (providerId === OFFICIAL_OPENAI_PROVIDER_ID && !isOfficialOpenAIBaseUrl(baseUrl)) {
+    return RELAY_PROVIDER_ID;
+  }
+  return providerId || RELAY_PROVIDER_ID;
+}
+
 export function loadProviderProfiles(): ProviderConnectionProfile[] {
   const raw = readStorageValue(STORAGE_KEY);
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as unknown;
       if (Array.isArray(parsed)) {
-        return parsed.map((item) => normalizeProviderProfile(item as Partial<ProviderConnectionProfile>));
+        const profiles = parsed.map((item) => normalizeProviderProfile(item as Partial<ProviderConnectionProfile>));
+        const migrated = profiles.some((profile, index) => {
+          const original = parsed[index] as Partial<ProviderConnectionProfile>;
+          return profile.providerId !== original.providerId;
+        });
+        if (migrated) saveProviderProfiles(profiles);
+        return profiles;
       }
     } catch (error) {
       console.warn('[VisionHub] provider profiles parse failed; migrating from legacy configs', error);
@@ -146,15 +168,17 @@ export function getActiveProviderProfile(providerId: string) {
 function migrateLegacyProviderConfigs() {
   const map = exportProviderConfigMap();
   const entries = Object.entries(map);
-  const profiles = entries.map(([providerId, config], index) => ({
-    ...createProviderProfile(providerId, config),
-    enabled: index === 0
-  }));
+  const profiles = entries.map(([providerId, config], index) =>
+    normalizeProviderProfile({
+      ...createProviderProfile(providerId, config),
+      enabled: index === 0
+    })
+  );
 
   if (profiles.length === 0) {
     profiles.push({
-      ...createProviderProfile('openai-gpt-image', {
-        displayName: 'GPT Image 默认配置',
+      ...createProviderProfile(RELAY_PROVIDER_ID, {
+        displayName: '聚合站默认配置',
         modelOptions: ['gpt-image-1']
       }),
       enabled: true

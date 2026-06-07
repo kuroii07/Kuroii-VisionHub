@@ -10,6 +10,8 @@ export type PromptPolishLanguage = 'zh' | 'en' | 'bilingual';
 export type PromptPolishProtocol = 'chat-completions' | 'responses';
 export type PromptPolishStrength = 'concise' | 'detailed' | 'professional' | 'cinematic' | 'commercial';
 
+export const PROMPT_POLISH_SECRET_ID = 'prompt-polish:default';
+
 export interface ColorOption {
   value: string;
   label: string;
@@ -38,12 +40,26 @@ export interface PromptHistorySettings {
 
 export interface PromptPolishSettings {
   engine: PromptPolishEngine;
-  providerId: string;
+  displayName: string;
+  baseUrl: string;
   modelId: string;
+  modelOptions: string[];
+  savedConfigs: PromptPolishConfig[];
+  extraHeadersJson: string;
   language: PromptPolishLanguage;
   strength: PromptPolishStrength;
   protocol: PromptPolishProtocol;
   fallbackToLocal: boolean;
+}
+
+export interface PromptPolishConfig {
+  id: string;
+  displayName: string;
+  baseUrl: string;
+  modelId: string;
+  modelOptions: string[];
+  extraHeadersJson: string;
+  protocol: PromptPolishProtocol;
 }
 
 export interface AppSettings {
@@ -81,11 +97,14 @@ export function getRecommendedGlobalAccent(primaryAccent: string): string {
   );
 }
 
-const LEGACY_COLOR_MIGRATIONS: Record<string, string> = {
+const LEGACY_PRIMARY_COLOR_MIGRATIONS: Record<string, string> = {
   '#3b82f6': '#2563eb',
   '#22c55e': '#16a34a',
   '#f97316': '#ea580c',
-  '#64748b': '#475569',
+  '#64748b': '#475569'
+};
+
+const LEGACY_GENERATOR_COLOR_MIGRATIONS: Record<string, string> = {
   '#34d399': '#10b981',
   '#38bdf8': '#0ea5e9',
   '#facc15': '#f59e0b',
@@ -187,7 +206,7 @@ export const defaultAppSettings: AppSettings = {
   refreshIntervalSeconds: 60,
   generationDefaults: {
     defaultMode: 'text',
-    defaultProviderId: 'openai-gpt-image',
+    defaultProviderId: 'custom-http-provider',
     defaultModelId: 'gpt-image-1',
     defaultSize: '1024x1024',
     defaultCount: 1,
@@ -205,8 +224,12 @@ export const defaultAppSettings: AppSettings = {
   },
   promptPolish: {
     engine: 'local',
-    providerId: 'openai-gpt-image',
-    modelId: 'gpt-4o-mini',
+    displayName: '提示词润色专用配置',
+    baseUrl: '',
+    modelId: '',
+    modelOptions: [],
+    savedConfigs: [],
+    extraHeadersJson: '{}',
     language: 'zh',
     strength: 'professional',
     protocol: 'chat-completions',
@@ -222,9 +245,9 @@ function isThemeMode(value: unknown): value is ThemeMode {
   return value === 'dark' || value === 'light' || value === 'system';
 }
 
-function pickColor(value: unknown, options: ColorOption[], fallback: string) {
+function pickColor(value: unknown, options: ColorOption[], fallback: string, migrations: Record<string, string> = {}) {
   if (typeof value !== 'string') return fallback;
-  const migratedValue = LEGACY_COLOR_MIGRATIONS[value] ?? value;
+  const migratedValue = migrations[value] ?? value;
   return options.some((option) => option.value === migratedValue) ? migratedValue : fallback;
 }
 
@@ -280,18 +303,88 @@ function normalizePromptHistory(value: Partial<PromptHistorySettings> | null | u
 
 function normalizePromptPolish(value: Partial<PromptPolishSettings> | null | undefined): PromptPolishSettings {
   const fallback = defaultAppSettings.promptPolish;
+  const displayName = typeof value?.displayName === 'string' && value.displayName.trim()
+    ? value.displayName.trim()
+    : fallback.displayName;
+  const baseUrl = typeof value?.baseUrl === 'string' ? value.baseUrl.trim() : fallback.baseUrl;
+  const modelId = typeof value?.modelId === 'string' && value.modelId.trim()
+    ? value.modelId.trim()
+    : '';
+  const modelOptions = Array.isArray(value?.modelOptions)
+    ? Array.from(new Set(value.modelOptions.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map((item) => item.trim()))).slice(0, 200)
+    : fallback.modelOptions;
+  const extraHeadersJson = typeof value?.extraHeadersJson === 'string' && value.extraHeadersJson.trim()
+    ? value.extraHeadersJson
+    : fallback.extraHeadersJson;
+  const protocol = pickStringOption(value?.protocol, PROMPT_POLISH_PROTOCOL_OPTIONS, fallback.protocol);
+  const savedConfigs = normalizePromptPolishConfigs(value?.savedConfigs, {
+    id: promptPolishConfigId(displayName, baseUrl),
+    displayName,
+    baseUrl,
+    modelId,
+    modelOptions,
+    extraHeadersJson,
+    protocol
+  });
   return {
     engine: pickStringOption(value?.engine, PROMPT_POLISH_ENGINE_OPTIONS, fallback.engine),
-    providerId: typeof value?.providerId === 'string' && value.providerId.trim()
-      ? value.providerId
-      : fallback.providerId,
-    modelId: typeof value?.modelId === 'string' && value.modelId.trim()
-      ? value.modelId.trim()
-      : fallback.modelId,
+    displayName,
+    baseUrl,
+    modelId,
+    modelOptions,
+    savedConfigs,
+    extraHeadersJson,
     language: pickStringOption(value?.language, PROMPT_POLISH_LANGUAGE_OPTIONS, fallback.language),
     strength: pickStringOption(value?.strength, PROMPT_POLISH_STRENGTH_OPTIONS, fallback.strength),
-    protocol: pickStringOption(value?.protocol, PROMPT_POLISH_PROTOCOL_OPTIONS, fallback.protocol),
+    protocol,
     fallbackToLocal: typeof value?.fallbackToLocal === 'boolean' ? value.fallbackToLocal : fallback.fallbackToLocal
+  };
+}
+
+export function promptPolishConfigId(displayName: string, baseUrl: string) {
+  const slug = `${displayName.trim() || 'prompt-polish'}:${baseUrl.trim() || 'local'}`;
+  return slug.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'prompt-polish';
+}
+
+function normalizePromptPolishConfigs(value: unknown, currentConfig: PromptPolishConfig): PromptPolishConfig[] {
+  const configs = Array.isArray(value)
+    ? value
+        .map((item) => normalizePromptPolishConfig(item))
+        .filter((item): item is PromptPolishConfig => Boolean(item))
+    : [];
+  const merged = new Map<string, PromptPolishConfig>();
+  [...configs, currentConfig].forEach((config) => {
+    if (!config.displayName.trim()) return;
+    merged.set(config.id || promptPolishConfigId(config.displayName, config.baseUrl), {
+      ...config,
+      id: config.id || promptPolishConfigId(config.displayName, config.baseUrl)
+    });
+  });
+  return Array.from(merged.values()).slice(0, 30);
+}
+
+function normalizePromptPolishConfig(value: unknown): PromptPolishConfig | null {
+  if (!value || typeof value !== 'object') return null;
+  const item = value as Partial<PromptPolishConfig>;
+  const displayName = typeof item.displayName === 'string' && item.displayName.trim()
+    ? item.displayName.trim()
+    : '';
+  if (!displayName) return null;
+  const baseUrl = typeof item.baseUrl === 'string' ? item.baseUrl.trim() : '';
+  const modelId = typeof item.modelId === 'string' && item.modelId.trim()
+    ? item.modelId.trim()
+    : '';
+  const modelOptions = Array.isArray(item.modelOptions)
+    ? Array.from(new Set(item.modelOptions.filter((model): model is string => typeof model === 'string' && Boolean(model.trim())).map((model) => model.trim()))).slice(0, 200)
+    : [modelId];
+  return {
+    id: typeof item.id === 'string' && item.id.trim() ? item.id.trim() : promptPolishConfigId(displayName, baseUrl),
+    displayName,
+    baseUrl,
+    modelId,
+    modelOptions: Array.from(new Set([modelId, ...modelOptions].filter(Boolean))),
+    extraHeadersJson: typeof item.extraHeadersJson === 'string' && item.extraHeadersJson.trim() ? item.extraHeadersJson : '{}',
+    protocol: pickStringOption(item.protocol, PROMPT_POLISH_PROTOCOL_OPTIONS, defaultAppSettings.promptPolish.protocol)
   };
 }
 
@@ -309,8 +402,8 @@ export function normalizeAppSettings(value: Partial<AppSettings> | null | undefi
       typeof value?.sidebarCollapsed === 'boolean'
         ? value.sidebarCollapsed
         : defaultAppSettings.sidebarCollapsed,
-    primaryAccent: pickColor(value?.primaryAccent, PRIMARY_ACCENT_OPTIONS, defaultAppSettings.primaryAccent),
-    generatorAccent: pickColor(value?.generatorAccent, GENERATOR_ACCENT_OPTIONS, defaultAppSettings.generatorAccent),
+    primaryAccent: pickColor(value?.primaryAccent, PRIMARY_ACCENT_OPTIONS, defaultAppSettings.primaryAccent, LEGACY_PRIMARY_COLOR_MIGRATIONS),
+    generatorAccent: pickColor(value?.generatorAccent, GENERATOR_ACCENT_OPTIONS, defaultAppSettings.generatorAccent, LEGACY_GENERATOR_COLOR_MIGRATIONS),
     refreshIntervalSeconds: pickRefreshInterval(value?.refreshIntervalSeconds),
     generationDefaults: normalizeGenerationDefaults(value?.generationDefaults),
     promptHistory: normalizePromptHistory(value?.promptHistory),

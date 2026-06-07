@@ -30,6 +30,12 @@ interface BackendGenerationRecord extends BackendImageGenerationResult {
   saved_at?: string;
 }
 
+interface BackendImportLibraryImagesResult {
+  records: BackendGenerationRecord[];
+  skipped_duplicates?: number;
+  skipped_unsupported?: number;
+}
+
 interface BackendReferenceImage {
   id: string;
   name?: string;
@@ -63,6 +69,7 @@ export interface PromptPolishRequest {
   settings: PromptPolishSettings;
   baseUrl?: string;
   extraHeaders?: Record<string, string>;
+  secretId?: string;
 }
 
 export interface PromptPolishResult {
@@ -177,6 +184,8 @@ export async function generateOpenAIImage(request: ImageGenerationRequest) {
       prompt: request.prompt,
       size: request.size,
       quality: request.quality,
+      output_format: request.outputFormat,
+      output_compression: request.outputCompression,
       count: request.count,
       base_url: request.baseUrl,
       protocol: request.protocol,
@@ -223,7 +232,8 @@ export async function polishPromptWithProvider(request: PromptPolishRequest): Pr
       strength: request.settings.strength,
       protocol: request.settings.protocol,
       base_url: request.baseUrl,
-      extra_headers: request.extraHeaders
+      extra_headers: request.extraHeaders,
+      secret_id: request.secretId
     }
   });
 
@@ -275,6 +285,27 @@ export async function deleteGenerationRecord(recordId: string) {
   if (!isTauriRuntime()) return { id: recordId, deleted: true };
   return invoke<{ id: string; deleted: boolean }>('delete_generation_record', { recordId });
 }
+
+export async function importLibraryImagesFromFiles() {
+  if (!isTauriRuntime()) return { records: [], skippedDuplicates: 0, skippedUnsupported: 0 };
+  const result = await invoke<BackendImportLibraryImagesResult>('import_library_images_from_files');
+  return {
+    records: result.records.map(mapBackendRecord),
+    skippedDuplicates: result.skipped_duplicates ?? 0,
+    skippedUnsupported: result.skipped_unsupported ?? 0
+  };
+}
+
+export async function importLibraryImagesFromFolder() {
+  if (!isTauriRuntime()) return { records: [], skippedDuplicates: 0, skippedUnsupported: 0 };
+  const result = await invoke<BackendImportLibraryImagesResult>('import_library_images_from_folder');
+  return {
+    records: result.records.map(mapBackendRecord),
+    skippedDuplicates: result.skipped_duplicates ?? 0,
+    skippedUnsupported: result.skipped_unsupported ?? 0
+  };
+}
+
 export async function revealGenerationFile(path: string) {
   if (!isTauriRuntime()) return;
   await invoke('reveal_generation_file', { path });
