@@ -418,9 +418,13 @@ export function ModernGeneratePage(props: {
       .filter(isReferenceImageFile)
       .slice(0, slots);
     if (selectedFiles.length === 0) return;
-    const references = await Promise.all(selectedFiles.map((file) => fileToReferenceImage(file, source)));
-    updateReferences([...props.referenceImages, ...references]);
-    setMode('image');
+    try {
+      const references = await Promise.all(selectedFiles.map((file) => fileToReferenceImage(file, source)));
+      updateReferences([...props.referenceImages, ...references]);
+      setMode('image');
+    } catch {
+      return;
+    }
   }
 
   async function addReferencePaths(paths: string[]) {
@@ -496,7 +500,14 @@ export function ModernGeneratePage(props: {
   }
 
   function handleReferenceDrag(event: DragEvent<HTMLElement>) {
-    if (props.isGenerating || props.referenceImages.length >= 4) return;
+    if (props.isGenerating) return;
+    if (props.referenceImages.length >= 4) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'none';
+      setReferenceDragState('unsupported');
+      return;
+    }
     const nextDragState = referenceTransferState(event.dataTransfer, referenceDragState);
     if (!nextDragState) return;
     event.preventDefault();
@@ -506,9 +517,13 @@ export function ModernGeneratePage(props: {
   }
 
   function handleReferenceDrop(event: DragEvent<HTMLElement>) {
-    if (props.isGenerating || props.referenceImages.length >= 4) return;
+    if (props.isGenerating) return;
     event.preventDefault();
     event.stopPropagation();
+    if (props.referenceImages.length >= 4) {
+      setReferenceDragState(null);
+      return;
+    }
     const nextDragState = referenceTransferState(event.dataTransfer, referenceDragState);
     setReferenceDragState(null);
     if (nextDragState !== 'supported') return;
@@ -517,7 +532,10 @@ export function ModernGeneratePage(props: {
   }
 
   function handleReferencePaste(event: ClipboardEvent<HTMLDivElement>) {
-    if (props.isGenerating || props.referenceImages.length >= 4) return;
+    if (props.isGenerating) return;
+    if (props.referenceImages.length >= 4) {
+      return;
+    }
     const files = Array.from(event.clipboardData.items)
       .map((item) => (item.kind === 'file' ? item.getAsFile() : null))
       .filter((file): file is File => Boolean(file && isReferenceImageFile(file)));
@@ -755,7 +773,10 @@ export function ModernGeneratePage(props: {
                 <strong>参考图</strong>
                 <span>{props.referenceImages.length}/4</span>
               </div>
-              <small>支持 PNG/JPG/WebP、拖拽、粘贴和最近生成图</small>
+              <small>
+                <span>支持 PNG/JPG/WebP</span>
+                <span>拖拽、粘贴和最近生成图</span>
+              </small>
             </div>
             <input
               ref={fileInputRef}

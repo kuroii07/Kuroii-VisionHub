@@ -7335,16 +7335,28 @@ body {
   color: #064f4c;
 }
 
-.workspaceGenerate .referenceInfo span {
+.workspaceGenerate .referenceInfo > div > span {
   color: #075f5b;
   background: rgba(255, 255, 255, 0.76);
 }
 
 .workspaceGenerate .referenceInfo small {
+  display: grid;
+  justify-self: start;
+  justify-items: start;
+  gap: 1px;
+  margin: 0;
   color: #355f70;
-  max-width: 260px;
+  max-width: 168px;
   text-align: left;
   line-height: 1.35;
+}
+
+.workspaceGenerate .referenceInfo small span {
+  display: block;
+  padding: 0;
+  color: inherit;
+  background: transparent !important;
 }
 
 .workspaceGenerate .referenceDock p {
@@ -7440,7 +7452,7 @@ body {
 
 .appShell.theme-dark .workspaceGenerate .referenceInfo,
 .appShell.theme-dark .workspaceGenerate .referenceInfo strong,
-.appShell.theme-dark .workspaceGenerate .referenceInfo span {
+.appShell.theme-dark .workspaceGenerate .referenceInfo > div > span {
   color: #ecfffb;
 }
 
@@ -7448,7 +7460,7 @@ body {
   color: #b8f7ee;
 }
 
-.appShell.theme-dark .workspaceGenerate .referenceInfo span {
+.appShell.theme-dark .workspaceGenerate .referenceInfo > div > span {
   background: rgba(6, 78, 72, 0.74);
 }
 
@@ -12203,9 +12215,10 @@ body {
 }
 
 .workspaceGenerate .referenceStrip {
-  flex-wrap: wrap;
-  align-items: flex-start;
-  overflow: visible;
+  flex-wrap: nowrap;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: visible;
   padding: 8px 2px 20px;
 }
 
