@@ -15,6 +15,7 @@
   Wand2,
   XCircle
 } from 'lucide-react';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClipboardEvent, DragEvent } from 'react';
 import { listProviders } from '../providers/registry';
@@ -27,7 +28,7 @@ import type {
 } from '../services/appSettings';
 import type { GenerationMode, ReferenceImage } from '../domain/providerTypes';
 import { getDefaultPolishMode, polishPrompt, resolvePolishMode, type PromptAssistMode } from '../services/promptAssist';
-import { polishPromptWithProvider } from '../services/desktopApi';
+import { isTauriRuntime, polishPromptWithProvider, referenceImagesFromPaths } from '../services/desktopApi';
 import { PROMPT_POLISH_SECRET_ID } from '../services/appSettings';
 import { parseExtraHeaders, type OpenAICompatibleConfig } from '../services/providerConfig';
 import { useStudioStore } from '../store/useStudioStore';
@@ -103,6 +104,11 @@ const REFERENCE_ROLE_OPTIONS = [
   { value: 'character', label: '角色' },
   { value: 'color', label: '颜色' }
 ];
+
+type ReferenceDragState = 'supported' | 'unsupported' | null;
+
+const SUPPORTED_REFERENCE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const SUPPORTED_REFERENCE_PATH_PATTERN = /\.(png|jpe?g|webp)$/i;
 
 const RATIO_OPTIONS = [
   { label: '1:1', size: '1024x1024', w: 18, h: 18 },
@@ -245,7 +251,7 @@ export function ModernGeneratePage(props: {
     props.promptPolishSettings.engine === 'local' ? '__local__' : props.promptPolishSettings.modelId
   );
   const [isQuickPolishing, setIsQuickPolishing] = useState(false);
-  const [isReferenceDragActive, setIsReferenceDragActive] = useState(false);
+  const [referenceDragState, setReferenceDragState] = useState<ReferenceDragState>(null);
   const [draggingReferenceId, setDraggingReferenceId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -379,7 +385,15 @@ export function ModernGeneratePage(props: {
   }
 
   function updateReferences(nextReferences: ReferenceImage[]) {
-    props.onReferenceImagesChange(nextReferences.slice(0, 4));
+    const uniqueReferences: ReferenceImage[] = [];
+    const seen = new Set<string>();
+    for (const reference of nextReferences) {
+      const key = referenceDedupKey(reference);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      uniqueReferences.push(reference);
+    }
+    props.onReferenceImagesChange(uniqueReferences.slice(0, 4));
   }
 
   async function addReferenceFiles(files: FileList | File[] | null, source: Extract<ReferenceImage['source'], 'upload' | 'clipboard' | 'drag-drop'> = 'upload') {
@@ -387,10 +401,20 @@ export function ModernGeneratePage(props: {
     const slots = Math.max(0, 4 - props.referenceImages.length);
     if (slots === 0) return;
     const selectedFiles = Array.from(files)
-      .filter((file) => file.type.startsWith('image/'))
+      .filter(isReferenceImageFile)
       .slice(0, slots);
     if (selectedFiles.length === 0) return;
     const references = await Promise.all(selectedFiles.map((file) => fileToReferenceImage(file, source)));
+    updateReferences([...props.referenceImages, ...references]);
+    setMode('image');
+  }
+
+  async function addReferencePaths(paths: string[]) {
+    if (!paths.length || props.isGenerating) return;
+    const slots = Math.max(0, 4 - props.referenceImages.length);
+    if (slots === 0) return;
+    const references = await referenceImagesFromPaths(paths, slots);
+    if (!references.length) return;
     updateReferences([...props.referenceImages, ...references]);
     setMode('image');
   }
@@ -457,30 +481,32 @@ export function ModernGeneratePage(props: {
     )));
   }
 
-  function hasImageTransfer(dataTransfer: DataTransfer) {
-    const items = Array.from(dataTransfer.items ?? []);
-    if (items.length === 0) return Array.from(dataTransfer.files ?? []).some((file) => file.type.startsWith('image/'));
-    return items.some((item) => item.kind === 'file' && (item.type.startsWith('image/') || item.type === ''));
+  function handleReferenceDrag(event: DragEvent<HTMLElement>) {
+    if (props.isGenerating || props.referenceImages.length >= 4) return;
+    const nextDragState = referenceTransferState(event.dataTransfer, referenceDragState);
+    if (!nextDragState) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = nextDragState === 'supported' ? 'copy' : 'none';
+    setReferenceDragState(nextDragState);
   }
 
-  function handleReferenceDrag(event: DragEvent<HTMLDivElement>) {
-    if (props.isGenerating || props.referenceImages.length >= 4 || !hasImageTransfer(event.dataTransfer)) return;
+  function handleReferenceDrop(event: DragEvent<HTMLElement>) {
+    if (props.isGenerating || props.referenceImages.length >= 4) return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
-    setIsReferenceDragActive(true);
-  }
-
-  function handleReferenceDrop(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    setIsReferenceDragActive(false);
-    void addReferenceFiles(event.dataTransfer.files, 'drag-drop');
+    event.stopPropagation();
+    const nextDragState = referenceTransferState(event.dataTransfer, referenceDragState);
+    setReferenceDragState(null);
+    if (nextDragState !== 'supported') return;
+    const files = referenceFilesFromTransfer(event.dataTransfer);
+    if (files.length > 0) void addReferenceFiles(files, 'drag-drop');
   }
 
   function handleReferencePaste(event: ClipboardEvent<HTMLDivElement>) {
     if (props.isGenerating || props.referenceImages.length >= 4) return;
     const files = Array.from(event.clipboardData.items)
       .map((item) => (item.kind === 'file' ? item.getAsFile() : null))
-      .filter((file): file is File => Boolean(file && file.type.startsWith('image/')));
+      .filter((file): file is File => Boolean(file && isReferenceImageFile(file)));
     if (files.length === 0) return;
     event.preventDefault();
     void addReferenceFiles(files, 'clipboard');
@@ -543,6 +569,39 @@ export function ModernGeneratePage(props: {
     return () => window.removeEventListener('visionhub:generate-submit', runGenerate);
   });
 
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    void getCurrentWebview().onDragDropEvent((event) => {
+      const payload = event.payload;
+      if (payload.type === 'leave') {
+        setReferenceDragState(null);
+        return;
+      }
+      if (payload.type === 'enter') {
+        if (props.isGenerating || props.referenceImages.length >= 4 || payload.paths.length === 0) return;
+        setReferenceDragState(pathsContainSupportedReference(payload.paths) ? 'supported' : 'unsupported');
+        return;
+      }
+      if (payload.type === 'drop') {
+        setReferenceDragState(null);
+        if (props.isGenerating || props.referenceImages.length >= 4) return;
+        const supportedPaths = payload.paths.filter(isSupportedReferencePath);
+        if (supportedPaths.length > 0) void addReferencePaths(supportedPaths);
+      }
+    }).then((cleanup) => {
+      if (cancelled) cleanup();
+      else unlisten = cleanup;
+    }).catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [props.isGenerating, props.referenceImages]);
+
   function runGenerate() {
     const trimmedCompression = compression.trim();
     const parsedCompression = trimmedCompression ? Number(trimmedCompression) : Number.NaN;
@@ -576,7 +635,14 @@ export function ModernGeneratePage(props: {
   }
 
   return (
-    <div className="generatorStudio" onPaste={handleReferencePaste}>
+    <div
+      className={`generatorStudio ${referenceDragState ? `isReferenceDragActive ${referenceDragState}` : ''}`}
+      onPaste={handleReferencePaste}
+      onDragEnter={handleReferenceDrag}
+      onDragOver={handleReferenceDrag}
+      onDragLeave={() => setReferenceDragState(null)}
+      onDrop={handleReferenceDrop}
+    >
       <section className={`canvasPane ${mode === 'image' ? 'withReferenceRow' : 'textOnlyRow'}`}>
         <header className="generatorTopbar">
           <div className="workspaceTitleBlock">
@@ -664,10 +730,10 @@ export function ModernGeneratePage(props: {
 
         {mode === 'image' ? (
           <div
-            className={`referenceDock ${isReferenceDragActive ? 'isDragActive' : ''}`}
+            className={`referenceDock ${referenceDragState === 'supported' ? 'isDragActive' : referenceDragState === 'unsupported' ? 'isDragRejected' : ''}`}
             onDragEnter={handleReferenceDrag}
             onDragOver={handleReferenceDrag}
-            onDragLeave={() => setIsReferenceDragActive(false)}
+            onDragLeave={() => setReferenceDragState(null)}
             onDrop={handleReferenceDrop}
           >
             <div className="referenceInfo">
@@ -675,7 +741,7 @@ export function ModernGeneratePage(props: {
                 <strong>参考图</strong>
                 <span>{props.referenceImages.length}/4</span>
               </div>
-              <small>支持本地、拖拽、粘贴和最近生成图</small>
+              <small>支持 PNG/JPG/WebP、拖拽、粘贴和最近生成图</small>
             </div>
             <input
               ref={fileInputRef}
@@ -839,7 +905,6 @@ export function ModernGeneratePage(props: {
                 <Sparkles size={17} /> {props.isGenerating ? '生成中…' : mode === 'image' ? '启动参考生成' : '启动生成'}
               </button>
               {mode === 'image' && !canAttemptImageToImage ? <small className="generateHint">当前平台暂不支持图生图</small> : null}
-              {mode === 'image' && canAttemptImageToImage && !props.referenceImages.length ? <small className="generateHint">请先添加参考图</small> : null}
             </div>
           </div>
         </div>
@@ -1004,6 +1069,72 @@ function statusLabel(status: ReturnType<typeof listProviders>[number]['capabilit
     unsupported: '不支持'
   };
   return labels[status] ?? status;
+}
+
+function isReferenceImageFile(file: File) {
+  if (file.type) return isSupportedReferenceMime(file.type);
+  return isSupportedReferencePath(file.name);
+}
+
+function isSupportedReferenceMime(mimeType: string) {
+  return SUPPORTED_REFERENCE_MIME_TYPES.has(mimeType.toLowerCase());
+}
+
+function isSupportedReferencePath(path: string) {
+  return SUPPORTED_REFERENCE_PATH_PATTERN.test(path);
+}
+
+function pathsContainSupportedReference(paths: string[]) {
+  return paths.some(isSupportedReferencePath);
+}
+
+function referenceTransferState(dataTransfer: DataTransfer, nativeDragState: ReferenceDragState): ReferenceDragState {
+  const files = Array.from(dataTransfer.files ?? []);
+  if (files.length > 0) return files.some(isReferenceImageFile) ? 'supported' : 'unsupported';
+
+  const fileItems = Array.from(dataTransfer.items ?? []).filter((item) => item.kind === 'file');
+  if (fileItems.length === 0) return null;
+
+  const itemNames = fileItems.map(fileNameFromTransferItem).filter((name): name is string => Boolean(name));
+  if (itemNames.length > 0) {
+    return itemNames.some(isSupportedReferencePath) ? 'supported' : 'unsupported';
+  }
+
+  const typedItems = fileItems.filter((item) => item.type);
+  if (typedItems.length > 0) {
+    return typedItems.some((item) => isSupportedReferenceMime(item.type)) ? 'supported' : 'unsupported';
+  }
+
+  return nativeDragState ?? 'unsupported';
+}
+
+function fileNameFromTransferItem(item: DataTransferItem) {
+  const entry = (item as DataTransferItem & {
+    webkitGetAsEntry?: () => { name?: string; isFile?: boolean } | null;
+  }).webkitGetAsEntry?.();
+  if (entry?.isFile && entry.name) return entry.name;
+  const file = item.getAsFile();
+  return file?.name || null;
+}
+
+function referenceFilesFromTransfer(dataTransfer: DataTransfer) {
+  const files = Array.from(dataTransfer.files ?? []);
+  const itemFiles = Array.from(dataTransfer.items ?? [])
+    .map((item) => (item.kind === 'file' ? item.getAsFile() : null))
+    .filter((file): file is File => Boolean(file));
+  const unique = new Map<string, File>();
+  for (const file of [...files, ...itemFiles]) {
+    if (!isReferenceImageFile(file)) continue;
+    unique.set(`${file.name}-${file.size}-${file.lastModified}`, file);
+  }
+  return Array.from(unique.values());
+}
+
+function referenceDedupKey(reference: ReferenceImage) {
+  if (reference.localPath) return `path:${reference.localPath.toLowerCase()}`;
+  if (reference.dataUrl) return `data:${reference.dataUrl}`;
+  if (reference.previewUrl) return `preview:${reference.previewUrl}`;
+  return `id:${reference.id}`;
 }
 
 function fileToReferenceImage(file: File, source: Extract<ReferenceImage['source'], 'upload' | 'clipboard' | 'drag-drop'> = 'upload'): Promise<ReferenceImage> {

@@ -24,6 +24,18 @@ export interface PolishMode {
   scope: 'local' | 'provider';
 }
 
+interface LocalPolishRecipe {
+  intent: string;
+  subject: string;
+  scene: string;
+  composition: string;
+  lighting: string;
+  texture: string;
+  color: string;
+  quality: string;
+  constraints: string;
+}
+
 export const INSPIRATION_TEMPLATES: InspirationTemplate[] = [
   {
     id: 'cinematic-character',
@@ -86,38 +98,87 @@ export const INSPIRATION_TEMPLATES: InspirationTemplate[] = [
 export const LOCAL_POLISH_MODES: PolishMode[] = [
   {
     id: 'standard',
-    label: '标准补全',
-    description: '快速补全主体、场景和画质关键词。',
+    label: '标准重写',
+    description: '把原始想法整理成主体、场景、构图和光影完整的 Prompt。',
     scope: 'local',
-    additions: ['主体明确', '场景清晰', '构图稳定', '光线自然', '画面干净', '适合 AI 图像生成']
+    additions: []
   },
   {
     id: 'detail',
-    label: '更详细',
-    description: '补充主体、场景、材质、光线、构图。',
+    label: '细节扩写',
+    description: '显著扩展主体细节、场景层次、材质、光线和画质。',
     scope: 'local',
-    additions: ['主体细节清晰', '场景层次丰富', '材质真实', '光影自然', '构图稳定', '高细节']
+    additions: []
+  },
+  {
+    id: 'conservative',
+    label: '保守润色',
+    description: '尽量不改变原意，只补齐生成模型需要的关键画面信息。',
+    scope: 'local',
+    additions: []
   },
   {
     id: 'cinematic',
     label: '电影感',
     description: '强化镜头、光影、氛围和画面叙事。',
     scope: 'local',
-    additions: ['电影级构图', '体积光', '浅景深', '高对比光影', '氛围感强', '视觉焦点明确']
+    additions: []
+  },
+  {
+    id: 'poster-kv',
+    label: '商业海报',
+    description: '适合活动 KV、封面、品牌海报和社媒传播图。',
+    scope: 'local',
+    additions: []
   },
   {
     id: 'commercial',
     label: '商业视觉',
-    description: '适合产品图、海报和品牌视觉。',
+    description: '兼容旧设置，适合产品图、海报和品牌宣传视觉。',
     scope: 'local',
-    additions: ['商业级质感', '主体突出', '干净背景', '高级配色', '可用于宣传物料', '精致细节']
+    additions: []
+  },
+  {
+    id: 'character-design',
+    label: '角色设定',
+    description: '补全角色身份、外观、服装、姿态、气质和场景关系。',
+    scope: 'local',
+    additions: []
+  },
+  {
+    id: 'product-photo',
+    label: '电商主图',
+    description: '强化商品主体、材质、棚拍光、干净背景和商业质感。',
+    scope: 'local',
+    additions: []
+  },
+  {
+    id: 'image-to-image',
+    label: '图生图改写',
+    description: '适合配合参考图，明确保留内容和需要改变的方向。',
+    scope: 'local',
+    additions: []
+  },
+  {
+    id: 'game-asset',
+    label: '游戏资产',
+    description: '适合图标、道具、角色素材、场景素材等可落地资产。',
+    scope: 'local',
+    additions: []
+  },
+  {
+    id: 'social-cover',
+    label: '社媒封面',
+    description: '强化封面焦点、移动端识别度、色彩和传播感。',
+    scope: 'local',
+    additions: []
   },
   {
     id: 'platform-cn',
     label: '中文平台',
-    description: '更适合中文生图平台理解。',
+    description: '使用更清晰的中文短句，适合中文生图平台理解。',
     scope: 'local',
-    additions: ['中文提示词清晰', '避免含混描述', '画面主体明确', '风格关键词完整', '构图要求明确']
+    additions: []
   }
 ];
 
@@ -126,6 +187,13 @@ export const MODEL_POLISH_MODES: PolishMode[] = [
     id: 'smart-expand',
     label: '智能扩写',
     description: '适合很短、笼统的想法，扩写成完整生图提示词。',
+    scope: 'provider',
+    additions: []
+  },
+  {
+    id: 'conservative',
+    label: '保守润色',
+    description: '尽量不改变原意，只补齐主体、场景、构图、光影和质量信息。',
     scope: 'provider',
     additions: []
   },
@@ -152,8 +220,22 @@ export const MODEL_POLISH_MODES: PolishMode[] = [
   },
   {
     id: 'product-photo',
-    label: '产品摄影',
+    label: '产品摄影/电商',
     description: '强化产品材质、棚拍灯光、背景和商业质感。',
+    scope: 'provider',
+    additions: []
+  },
+  {
+    id: 'image-to-image',
+    label: '图生图改写',
+    description: '围绕参考图进行改写，明确保留结构和变化方向。',
+    scope: 'provider',
+    additions: []
+  },
+  {
+    id: 'game-asset',
+    label: '游戏资产',
+    description: '适合图标、道具、角色素材、场景素材和可用资产提示词。',
     scope: 'provider',
     additions: []
   },
@@ -205,6 +287,162 @@ export function renderInspirationPrompt(template: InspirationTemplate, values: R
 export function polishPrompt(source: string, modeId: string) {
   const base = source.trim();
   const mode = resolvePolishMode(modeId, 'local');
-  const normalized = base || '一个清晰明确的画面主体';
-  return `${normalized}，${mode.additions.join('，')}，画面干净，主题明确，适合 AI 图像生成。`;
+  const subject = normalizePromptSubject(base);
+  const recipe = localPolishRecipe(mode.id);
+  return [
+    `主体：${subject}，${recipe.subject}`,
+    `场景：${recipe.scene}`,
+    `构图：${recipe.composition}`,
+    `光影：${recipe.lighting}`,
+    `材质：${recipe.texture}`,
+    `色彩：${recipe.color}`,
+    `质量：${recipe.quality}`,
+    `约束：${recipe.constraints}`
+  ].join('；');
+}
+
+function normalizePromptSubject(source: string) {
+  const cleaned = source
+    .replace(/\s+/g, ' ')
+    .replace(/[。；;]+$/g, '')
+    .trim();
+  return cleaned || '一个清晰明确的画面主体';
+}
+
+function localPolishRecipe(modeId: string): LocalPolishRecipe {
+  const recipes: Record<string, LocalPolishRecipe> = {
+    standard: {
+      intent: 'standard',
+      subject: '主体轮廓清楚，动作或状态明确，避免含混指代',
+      scene: '放在与主题匹配的真实环境中，背景有层次但不抢主体',
+      composition: '中心或三分法构图，视觉焦点稳定，主体占画面主要位置',
+      lighting: '自然主光配合柔和辅光，明暗关系清楚',
+      texture: '关键材质和表面细节可见，边缘清晰',
+      color: '整体色彩协调，主色和辅助色有区分',
+      quality: '高细节，画面干净，适合 AI 图像生成',
+      constraints: '保留原始主体和核心意图，不加入冲突元素'
+    },
+    detail: {
+      intent: 'detail',
+      subject: '补全外观、姿态、表情或结构细节，让主体更具体可见',
+      scene: '前景、中景、远景都有可辨识层次，环境服务主题',
+      composition: '明确镜头距离和视角，主体与背景形成清晰空间关系',
+      lighting: '主光方向明确，加入高光、阴影和环境光变化',
+      texture: '材质纹理、细节边缘、局部装饰和真实质感充分呈现',
+      color: '色彩有主次和冷暖关系，氛围统一',
+      quality: '精细渲染，高分辨率细节，专业生图提示词',
+      constraints: '保留用户指定内容，避免过度添加无关设定'
+    },
+    conservative: {
+      intent: 'conservative',
+      subject: '只明确原文已经表达的主体，不改变身份、数量和关键属性',
+      scene: '补充最必要的背景信息，让画面成立但不过度扩写',
+      composition: '稳定构图，主体清楚，避免夸张镜头',
+      lighting: '自然光或柔和棚拍光，保证主体可见',
+      texture: '补充基础材质和清晰边缘，不添加复杂装饰',
+      color: '保持原文色彩倾向，整体干净统一',
+      quality: '清晰、干净、可生成，避免关键词堆砌',
+      constraints: '不改变原意，不添加未要求的角色、品牌和文字'
+    },
+    cinematic: {
+      intent: 'cinematic',
+      subject: '主体具有明确情绪和叙事动作，画面像电影剧照',
+      scene: '环境有故事线索、空气透视和空间纵深',
+      composition: '电影镜头语言，低角度或中近景/广角远景可选，视觉焦点强',
+      lighting: '体积光、轮廓光、明暗对比和浅景深营造氛围',
+      texture: '服装、皮肤、金属、玻璃或环境材质具有真实触感',
+      color: '电影级调色，冷暖对比或统一色调，氛围浓郁',
+      quality: 'cinematic lighting, depth of field, high detail, dramatic composition',
+      constraints: '保留原始主体，不引入具体导演、演员或受版权保护角色'
+    },
+    'poster-kv': {
+      intent: 'poster',
+      subject: '主体像主视觉核心元素，轮廓强、识别度高',
+      scene: '背景简洁但有层次，能衬托主题并预留标题空间',
+      composition: '海报/KV 构图，主体突出，画面上下或侧边可留文案区域',
+      lighting: '商业级布光，主体边缘高光清晰，背景不过曝',
+      texture: '细节精致，有印刷级或品牌视觉质感',
+      color: '高级配色，主色明确，适合传播和封面展示',
+      quality: '商业海报质感，高级视觉，清晰焦点，高完成度',
+      constraints: '不生成具体文字，不加入真实品牌 Logo'
+    },
+    commercial: {
+      intent: 'commercial',
+      subject: '主体突出，展示感明确，适合宣传物料或商业视觉',
+      scene: '背景干净、有品牌感，能衬托主体并保持高级质感',
+      composition: '商业广告式构图，主体占比清晰，留出干净边距',
+      lighting: '棚拍质感主光，轮廓高光和柔和阴影控制清楚',
+      texture: '主体材质、皮肤、服装或产品表面细节精致',
+      color: '高级配色，主色明确，整体统一',
+      quality: '商业级视觉，高完成度，高细节，可用于宣传物料',
+      constraints: '不加入未经要求的品牌 Logo、真实商标和小字'
+    },
+    'character-design': {
+      intent: 'character',
+      subject: '补全角色身份、年龄感、气质、服装、发型、表情和姿态',
+      scene: '背景体现角色世界观，但保持角色为第一视觉焦点',
+      composition: '半身或全身角色展示，姿态自然，轮廓易读',
+      lighting: '角色轮廓光和面部主光清晰，突出表情与服装细节',
+      texture: '服饰面料、配件、道具和皮肤/装甲质感细致',
+      color: '角色主色统一，服装与背景形成对比',
+      quality: '角色设定图质感，高细节，适合后续图生图或资产延展',
+      constraints: '不套用具体 IP 角色，不改变用户指定角色设定'
+    },
+    'product-photo': {
+      intent: 'product',
+      subject: '产品形态清晰，卖点区域和轮廓完整可见',
+      scene: '干净棚拍或电商主图背景，少量道具衬托产品定位',
+      composition: '产品居中或黄金分割摆放，留出干净边距',
+      lighting: '柔和棚拍主光，边缘高光、接触阴影和反射控制清楚',
+      texture: '材质纹理、金属/玻璃/布料/塑料表面真实可见',
+      color: '品牌感配色，背景与产品形成清晰对比',
+      quality: '商业摄影，高清细节，干净背景，高级电商主图质感',
+      constraints: '不添加未经要求的品牌标识和宣传文字'
+    },
+    'image-to-image': {
+      intent: 'image-to-image',
+      subject: '以参考图主体为基础，保留核心轮廓、构图关系和关键身份特征',
+      scene: '根据用户描述调整场景、风格或氛围，避免完全偏离参考图',
+      composition: '保持参考图主要构图和视角，只优化画面层次与视觉焦点',
+      lighting: '在参考图光影基础上增强明暗、轮廓光和整体氛围',
+      texture: '保留参考图重要材质特征，同时提升细节和质感',
+      color: '延续参考图主色关系，按需求进行风格化或统一调色',
+      quality: '图生图改写提示词，参考一致性强，细节更完整',
+      constraints: '明确保留参考图核心特征，只改变用户要求改变的部分'
+    },
+    'game-asset': {
+      intent: 'game-asset',
+      subject: '主体轮廓适合游戏资产使用，形状清晰、识别度高',
+      scene: '背景简洁或透明感构图，便于后续切图、图标或素材复用',
+      composition: '居中展示，轮廓完整，避免被裁切，适合小尺寸识别',
+      lighting: '高对比边缘光和清晰阴影，增强体积感',
+      texture: '材质风格统一，细节可读但不过度杂乱',
+      color: '颜色分组明确，适合游戏 UI 或资产库管理',
+      quality: 'game asset, clean silhouette, high readability, polished details',
+      constraints: '不要文字、Logo、水印，不要复杂背景抢主体'
+    },
+    'social-cover': {
+      intent: 'social',
+      subject: '主体第一眼可识别，表情、动作或产品卖点突出',
+      scene: '背景信息简洁，移动端缩略图下仍能看清主题',
+      composition: '封面式构图，强视觉焦点，预留标题或头像遮挡区域',
+      lighting: '明亮清晰，高对比但不过曝',
+      texture: '关键细节锐利，背景适度简化',
+      color: '醒目但协调，适合社媒流中快速抓住注意力',
+      quality: '社媒封面质感，移动端可读，高辨识度，画面干净',
+      constraints: '不生成难以阅读的小字，不堆叠过多元素'
+    },
+    'platform-cn': {
+      intent: 'platform-cn',
+      subject: '主体明确，身份、动作、外观用清晰中文短句描述',
+      scene: '场景、时间、背景元素分开描述，避免抽象空话',
+      composition: '构图、景别、视角直接写清楚',
+      lighting: '光线方向、氛围、明暗关系明确',
+      texture: '材质、细节、画质关键词完整',
+      color: '主色、辅助色、整体氛围明确',
+      quality: '高清，细节丰富，画面干净，适合中文 AI 生图平台',
+      constraints: '逗号分隔，避免长句绕弯，保留原始要求'
+    }
+  };
+  return recipes[modeId] ?? recipes.detail;
 }

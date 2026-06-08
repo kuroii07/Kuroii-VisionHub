@@ -3260,7 +3260,8 @@ function ProviderSettingsPage(props: {
   ];
   const imageToImageAdapterOptions = IMAGE_TO_IMAGE_ADAPTERS.map((adapter) => ({
     value: adapter,
-    label: imageToImageAdapterLabel(adapter)
+    label: imageToImageAdapterLabel(adapter),
+    description: imageToImageAdapterDescription(adapter)
   }));
 
   return (
@@ -4292,7 +4293,7 @@ function SettingsPage(props: {
           <div className="settingsRowMain">
             <strong>版本</strong>
           </div>
-          <span className="settingsValue">0.2.3</span>
+          <span className="settingsValue">0.2.4</span>
         </div>
         <div className="settingsListRow">
           <div className="settingsRowMain">
@@ -6396,7 +6397,7 @@ function SystemInfoModal(props: {
   onClose: () => void;
 }) {
   const rows = [
-    { label: '版本', value: '0.2.3' },
+    { label: '版本', value: '0.2.4' },
     { label: '运行环境', value: props.desktopRuntime ? 'Tauri 桌面端' : 'Web 预览模式' },
     { label: '作品画廊目录', value: props.storageSettings?.resolved_library_dir ?? (props.desktopRuntime ? '正在读取…' : '桌面端可用') },
     { label: '默认图库目录', value: props.storageSettings?.default_library_dir ?? '—' },
@@ -6693,6 +6694,17 @@ function imageToImageAdapterLabel(adapter: ImageToImageAdapter) {
     'json-image-array': 'JSON image/images'
   };
   return labels[adapter];
+}
+
+function imageToImageAdapterDescription(adapter: ImageToImageAdapter) {
+  const descriptions: Record<ImageToImageAdapter, string> = {
+    auto: '按当前平台和协议自动选择，日常优先用这个。',
+    'openai-images-edit': '官方 Images 图生图，使用 multipart 上传参考图。',
+    'responses-input-image': 'Responses 协议，把参考图作为 input_image 发送。',
+    'chat-image-url': '聊天接口包装图生图，把参考图放进 image_url。',
+    'json-image-array': '自定义中转常用，发送 image 首图和 images 数组。'
+  };
+  return descriptions[adapter];
 }
 
 function resolveImageToImageAdapterForDisplay(

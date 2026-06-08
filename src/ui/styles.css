@@ -5300,8 +5300,19 @@ kbd {
 }
 
 .promptPreviewBox strong {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   color: var(--app-text);
   font-size: 13px;
+}
+
+.promptPreviewBox strong span {
+  flex: 0 0 auto;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .promptPreviewBox p {
@@ -6995,6 +7006,32 @@ body {
   border-color: color-mix(in srgb, var(--app-accent-strong) 45%, var(--app-line));
   background: color-mix(in srgb, var(--app-accent-strong) 7%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-accent-strong) 18%, transparent);
+  cursor: copy;
+}
+
+.workspaceGenerate .referenceDock.isDragRejected {
+  border-color: color-mix(in srgb, #ef4444 62%, var(--app-line));
+  background: color-mix(in srgb, #ef4444 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #ef4444 22%, transparent);
+  cursor: not-allowed;
+}
+
+.workspaceGenerate .generatorStudio.isReferenceDragActive.supported {
+  cursor: copy;
+}
+
+.workspaceGenerate .generatorStudio.isReferenceDragActive.unsupported {
+  cursor: not-allowed;
+}
+
+.workspaceGenerate .generatorStudio.isReferenceDragActive .previewStage {
+  outline: 2px dashed color-mix(in srgb, var(--app-accent-strong) 62%, transparent);
+  outline-offset: -10px;
+}
+
+.workspaceGenerate .generatorStudio.isReferenceDragActive.unsupported .previewStage {
+  outline-color: color-mix(in srgb, #ef4444 68%, transparent);
+  cursor: not-allowed;
 }
 
 .workspaceGenerate .referenceClear {

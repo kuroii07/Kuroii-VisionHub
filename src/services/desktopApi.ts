@@ -313,6 +313,14 @@ export async function importLibraryImagesFromFolder() {
   };
 }
 
+export async function referenceImagesFromPaths(paths: string[], limit = 4) {
+  if (!isTauriRuntime() || paths.length === 0) return [];
+  const references = await invoke<BackendReferenceImage[]>('reference_images_from_paths', {
+    request: { paths, limit }
+  });
+  return references.map(mapBackendReference);
+}
+
 export async function revealGenerationFile(path: string) {
   if (!isTauriRuntime()) return;
   await invoke('reveal_generation_file', { path });

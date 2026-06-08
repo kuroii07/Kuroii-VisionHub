@@ -122,6 +122,12 @@ struct StorageSettingsRequest {
     library_dir_override: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ReferenceImagesFromPathsRequest {
+    paths: Vec<String>,
+    limit: Option<usize>,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 struct StoredStorageSettings {
     library_dir_override: Option<String>,
@@ -764,6 +770,43 @@ fn import_library_images_from_folder(app: tauri::AppHandle) -> Result<ImportLibr
     };
     let paths = scan_image_files_in_folder(&folder)?;
     import_library_image_paths(app, paths)
+}
+
+#[tauri::command]
+fn reference_images_from_paths(request: ReferenceImagesFromPathsRequest) -> Result<Vec<ReferenceImage>, String> {
+    let limit = request.limit.unwrap_or(4).clamp(1, 4);
+    let mut references = Vec::new();
+    for path in request.paths.iter() {
+        if references.len() >= limit {
+            break;
+        }
+        let file_path = PathBuf::from(path);
+        if !file_path.is_file() || !is_supported_reference_image_path(&file_path) {
+            continue;
+        }
+        let canonical = file_path
+            .canonicalize()
+            .map_err(|error| format!("Cannot resolve dropped image path: {error}"))?;
+        let data_url = image_path_to_data_url(&canonical, "dropped reference")?;
+        let file_name = canonical
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("拖拽参考图")
+            .to_string();
+        references.push(ReferenceImage {
+            id: format!("drag-drop-{}-{}", chrono_like_timestamp_millis(), references.len()),
+            name: Some(file_name),
+            mime_type: Some(image_mime_from_path(&canonical).to_string()),
+            data_url: Some(data_url.clone()),
+            local_path: Some(path_to_user_string(&canonical)),
+            preview_url: Some(data_url),
+            source: "drag-drop".to_string(),
+            source_generation_id: None,
+            role: Some("auto".to_string()),
+            added_at: Some(chrono_like_timestamp()),
+        });
+    }
+    Ok(references)
 }
 
 fn import_library_image_paths(
@@ -1495,7 +1538,7 @@ fn build_prompt_polish_instruction(request: &PromptPolishRequest) -> String {
     let mode = prompt_polish_mode_rules(&request.mode_id);
 
     format!(
-        "你是专业 AI 图像提示词编辑器，不是普通文本改写助手。你的任务是把用户原始提示词改写成更适合文生图/图生图的可执行提示词。硬性要求：{language}{strength}当前模式规则：{mode} 如果原始提示词很短、笼统或只是关键词，要主动扩写成完整画面方案，而不是询问用户。必须明显扩写或重组原提示词，不能只同义替换，不能只调整语序。优先补充主体细节、场景/背景、动作/姿态、材质、光线、构图、镜头视角、色彩氛围、画质风格中的多个维度。保留用户明确指定的主体、人物特征、服装、颜色、物体和限制，不要编造冲突信息，不要引入具体艺术家、真实品牌或版权角色，除非原文已经明确要求。只输出润色后的提示词，不要解释，不要 Markdown，不要加标题，不要复述规则。"
+        "你是专业 AI 图像提示词编辑器，不是普通文本改写助手。你的任务是把用户原始提示词重写成更适合文生图/图生图的可执行提示词。硬性要求：{language}{strength}当前模式规则：{mode} 必须重组原提示词，形成完整画面方案，禁止只在原句后面追加一句泛泛的质量词。输出必须覆盖主体、场景、构图/镜头、光线、材质、色彩、画质、约束中的至少 6 类信息；短提示词要主动扩展到可直接生成的画面描述。保留用户明确指定的主体、人物特征、服装、颜色、物体和限制，不要编造冲突信息，不要引入具体艺术家、真实品牌或版权角色，除非原文已经明确要求。只输出最终提示词正文，不要解释，不要 Markdown，不要加标题，不要复述规则。"
     )
 }
 
@@ -1503,7 +1546,7 @@ fn build_prompt_polish_payload(request: &PromptPolishRequest, protocol: &str, in
     let mode_rules = prompt_polish_mode_rules(&request.mode_id);
     let strength_rules = prompt_polish_strength_rules(&request.strength);
     let user_content = format!(
-        "请按以下规则润色原始提示词。\n\n当前润色模式：{}\n模式规则：{}\n强度规则：{}\n输出要求：只输出一段完整的最终生图提示词；如果原文少于 20 个字，要扩写到可直接用于生成的丰富画面描述；相对原文至少增加主体细节、场景背景、光线构图、材质质感、色彩氛围、画质风格中的 4 类信息；不要输出说明文字。\n\n原始提示词：\n{}",
+        "请按以下规则重写原始提示词。\n\n当前润色模式：{}\n模式规则：{}\n强度规则：{}\n输出要求：只输出一段完整的最终生图提示词；不要把原文原样放在开头再追加一句；必须把原文拆解并重组为主体、场景、构图/镜头、光线、材质、色彩、画质、约束明确的画面方案；如果原文少于 20 个字，要扩写到可直接用于生成的丰富画面描述；不要输出说明文字。\n\n原始提示词：\n{}",
         prompt_polish_mode_label(&request.mode_id),
         mode_rules,
         strength_rules,
@@ -1543,19 +1586,26 @@ fn ensure_prompt_polish_changed(source: &str, polished: &str, mode_id: &str) -> 
 
     let fallback_additions = match mode_id {
         "smart-expand" => "主体设定更完整，场景背景清晰，动作姿态自然，镜头视角明确，光线氛围丰富，色彩层次协调，细节充足，适合 AI 图像生成",
+        "conservative" => "保留原始主体和核心意图，补齐必要场景、稳定构图、自然光线、清晰材质和干净画质，不添加冲突元素",
         "pro-image-prompt" => "主体、环境、构图、镜头、光线、材质、色彩和画质要求完整，提示词结构清晰，可直接用于专业 AI 图像生成",
         "poster-kv" => "主视觉构图，主体突出，背景层次丰富，适合海报和封面，预留文字空间，商业级光影，高级配色，传播感强",
         "character-design" => "角色外观清晰，服装材质细节丰富，姿态有表现力，性格气质明确，背景服务角色设定，电影感灯光，高细节",
         "product-photo" => "产品主体突出，材质真实，棚拍灯光，干净背景，边缘高光清晰，柔和阴影，高级商业摄影质感",
+        "image-to-image" => "以参考图为基础，保留主体轮廓、核心身份、主要构图和关键材质，只改变用户要求调整的风格、场景、光影或细节",
+        "game-asset" => "主体轮廓清晰，居中展示，适合游戏资产，材质统一，高可读性，干净背景，无文字、无 Logo、无水印",
         "world-scene" => "宏观场景层次丰富，前景中景远景明确，世界观细节充足，空间纵深强，氛围光影明确，电影级概念图",
         "ecommerce-detail" => "商品卖点突出，材质纹理清晰，局部特写细节，干净构图，电商详情页视觉，高级质感，信息表达明确",
         "social-cover" => "封面视觉焦点明确，构图抓人，色彩醒目但协调，适合社媒传播，画面干净，高辨识度，高质量细节",
         "cinematic" => "电影级构图，镜头感明确，浅景深，体积光，高对比光影，氛围感强，视觉焦点清晰，画面层次丰富",
-        "commercial" => "主体突出，商业级质感，干净背景，高级配色，棚拍灯光，精致细节，可用于宣传物料",
+        "commercial" | "poster-kv-local" => "主体突出，商业级质感，干净背景，高级配色，棚拍灯光，精致细节，可用于宣传物料",
         "platform-cn" => "画面主体明确，场景描述清晰，风格关键词完整，构图要求明确，光线自然，高清细节，适合中文 AI 图像生成平台",
         _ => "主体细节清晰，场景层次丰富，材质真实，光影自然，构图稳定，高细节，画面干净，主题明确，适合 AI 图像生成",
     };
-    format!("{}, {}", source.trim(), fallback_additions)
+    format!(
+        "主体：{}，核心特征明确；画面：{}；构图：视觉焦点稳定，主体与背景层次清楚；光影：主光方向明确，明暗关系自然；材质：关键纹理和边缘细节可见；色彩：主色协调，氛围统一；质量：高清细节，画面干净，适合 AI 图像生成。",
+        source.trim(),
+        fallback_additions
+    )
 }
 
 fn normalize_prompt_for_similarity(value: &str) -> String {
@@ -1851,14 +1901,18 @@ fn pick_folder_with_system_dialog(initial_dir: &Path) -> Result<Option<PathBuf>,
 fn prompt_polish_mode_label(mode_id: &str) -> &'static str {
     match mode_id {
         "smart-expand" => "智能扩写",
+        "conservative" => "保守润色",
         "pro-image-prompt" => "生图专业版",
         "poster-kv" => "海报/KV",
         "character-design" => "角色设定",
-        "product-photo" => "产品摄影",
+        "product-photo" => "产品摄影/电商",
+        "image-to-image" => "图生图改写",
+        "game-asset" => "游戏资产",
         "world-scene" => "场景概念图",
         "ecommerce-detail" => "电商详情图",
         "social-cover" => "社媒封面",
-        "standard" => "标准补全",
+        "standard" => "标准重写",
+        "detail" => "细节扩写",
         "cinematic" => "电影感",
         "commercial" => "商业视觉",
         "platform-cn" => "中文平台",
@@ -1869,14 +1923,18 @@ fn prompt_polish_mode_label(mode_id: &str) -> &'static str {
 fn prompt_polish_mode_rules(mode_id: &str) -> &'static str {
     match mode_id {
         "smart-expand" => "适合短句和笼统想法。主动补全画面主体、场景、动作、镜头、光线、色彩、质感和画质，不要停留在关键词堆砌。",
+        "conservative" => "保守补全原意。不得改变主体、数量、身份、关键颜色和用户限制；只补齐必要的场景、构图、光线、材质和画质信息。",
         "pro-image-prompt" => "整理成专业生图提示词，结构应覆盖主体、环境、构图、镜头、光线、材质、色彩、氛围和质量要求，可直接复制到文生图或图生图模型。",
         "poster-kv" => "面向海报、活动 KV、封面和品牌主视觉。强化主体层级、视觉焦点、背景空间、商业质感、传播感和可放标题的构图空间。",
         "character-design" => "面向人物或角色。扩写身份气质、外观特征、服装材质、姿态动作、表情、场景关系、镜头距离和氛围光。",
         "product-photo" => "面向产品摄影和商品主图。扩写产品形态、材质纹理、棚拍布光、阴影、高光、背景、摆放方式和高级商业质感。",
+        "image-to-image" => "面向图生图。围绕参考图改写，明确哪些要保留、哪些要改变；优先写清参考一致性、构图保留、风格迁移、局部变化和质量提升。",
+        "game-asset" => "面向游戏资产。强调清晰轮廓、居中展示、小尺寸可读性、材质统一、干净背景、可切图复用，并避免文字、Logo、水印。",
         "world-scene" => "面向场景概念图。扩写空间层次、前中远景、地貌/建筑/道具、时间天气、氛围光、尺度感和世界观细节。",
         "ecommerce-detail" => "面向电商详情图。扩写商品卖点、局部特写、材质细节、使用场景、干净背景、信息表达和高转化视觉。",
         "social-cover" => "面向社媒封面。扩写强视觉焦点、清晰主体、醒目色彩、简洁背景、动态感、封面辨识度和移动端可读性。",
-        "standard" => "快速补全主体、场景、构图、光线和画质关键词，保持原意清晰。",
+        "standard" => "重写为标准生图提示词，补全主体、场景、构图、光线、材质、色彩和画质，保持原意清晰。",
+        "detail" => "显著扩写主体细节、场景层次、材质纹理、光影关系、镜头视角、色彩氛围和质量要求。",
         "cinematic" => "强化电影级构图、镜头焦段、景深、光影对比、氛围叙事和视觉焦点，可加入 cinematic lighting、depth of field、wide shot/close-up 等等效描述。",
         "commercial" => "强化主体质感、干净背景、产品/人物展示感、商业棚拍灯光、高级配色、可用于宣传物料的清晰构图。",
         "platform-cn" => "使用清晰中文短句和逗号分隔的关键词，避免抽象空泛词，明确主体、动作、场景、风格、构图、光线和画质要求。",
@@ -2024,6 +2082,16 @@ fn is_supported_image_path(path: &Path) -> bool {
             .map(|extension| extension.to_ascii_lowercase())
             .as_deref(),
         Some("png" | "jpg" | "jpeg" | "webp" | "gif" | "svg")
+    )
+}
+
+fn is_supported_reference_image_path(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| extension.to_ascii_lowercase())
+            .as_deref(),
+        Some("png" | "jpg" | "jpeg" | "webp")
     )
 }
 
@@ -2913,6 +2981,7 @@ pub fn run() {
             delete_generation_record,
             import_library_images_from_files,
             import_library_images_from_folder,
+            reference_images_from_paths,
             load_inspirations,
             save_inspiration_source,
             delete_inspiration_source,

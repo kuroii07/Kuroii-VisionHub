@@ -197,7 +197,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
         <header className="promptAssistHeader">
           <div>
             <span>{title}</span>
-            <strong>{props.mode === 'inspiration' ? '选择模板并回填到创作台' : props.mode === 'polish' ? '本地或模型润色后回填提示词' : '从历史记录里找回好用的 Prompt'}</strong>
+            <strong>{props.mode === 'inspiration' ? '选择模板并回填到创作台' : props.mode === 'polish' ? '本地或模型结构化重写后回填提示词' : '从历史记录里找回好用的 Prompt'}</strong>
           </div>
           <button className="promptAssistClose" onClick={props.onClose} aria-label="关闭">
             <X size={18} />
@@ -338,14 +338,14 @@ function PolishPanel(props: {
         <StudioSelect
           value={props.polishMode}
           onChange={props.onModeChange}
-          options={props.polishModes.map((mode) => ({ value: mode.id, label: mode.label }))}
+          options={props.polishModes.map((mode) => ({ value: mode.id, label: mode.label, description: mode.description }))}
         />
         <small>{props.polishModes.find((mode) => mode.id === props.polishMode)?.description}</small>
       </div>
       <div className="polishEngineBar">
         <div>
-          <strong>{props.engine === 'provider' ? '模型润色已启用' : '本地规则已启用'}</strong>
-          <small>{props.engine === 'provider' ? '可切换偏好设置里保存的文本模型。' : '当前按本地规则生成预览，不会调用模型。'}</small>
+          <strong>{props.engine === 'provider' ? '模型结构化重写已启用' : '本地结构化重写已启用'}</strong>
+          <small>{props.engine === 'provider' ? '可切换偏好设置里保存的文本模型。' : '当前按本地规则生成结构化预览，不会调用模型。'}</small>
         </div>
         <div className="polishModelPicker">
           <StudioSelect
@@ -368,7 +368,7 @@ function PolishPanel(props: {
           )}
         </div>
         <button className="polishRunButton" onClick={props.onRunModelPolish} disabled={props.isPolishing || (props.engine === 'provider' && !props.polishReady)}>
-          <Wand2 size={13} /> {props.engine === 'provider' ? (props.isPolishing ? '润色中…' : '开始模型润色') : '使用本地规则'}
+          <Wand2 size={13} /> {props.engine === 'provider' ? (props.isPolishing ? '重写中…' : '开始模型重写') : '应用本地重写'}
         </button>
       </div>
       {props.engine === 'provider' && !props.polishReady ? (
@@ -435,9 +435,13 @@ function ReusePanel(props: {
 }
 
 function PromptPreview(props: { title?: string; prompt: string }) {
+  const length = props.prompt.trim().length;
   return (
     <div className="promptPreviewBox">
-      <strong>{props.title ?? 'Prompt 预览'}</strong>
+      <strong>
+        {props.title ?? 'Prompt 预览'}
+        <span>{length} 字符</span>
+      </strong>
       <p>{props.prompt}</p>
     </div>
   );
