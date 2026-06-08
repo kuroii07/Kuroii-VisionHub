@@ -42,11 +42,12 @@ const initialModel =
   initialGenerationDefaults.defaultModelId ||
   initialProvider.models.find((model) => model.id === initialGenerationDefaults.defaultModelId)?.id ||
   initialProvider.models[0].id;
+const initialPrompt = readSearchParam('prompt') ?? '';
 
 export const useStudioStore = create<StudioState>((set, get) => ({
   selectedProviderId: initialProvider.id,
   selectedModelId: initialModel,
-  prompt: '',
+  prompt: initialPrompt,
   count: initialGenerationDefaults.defaultCount,
   size: initialGenerationDefaults.defaultSize,
   quality: initialGenerationDefaults.defaultQuality,
@@ -79,7 +80,10 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   loadHistory: async () => {
     if (get().isHistoryLoaded) return;
     if (!isTauriRuntime()) {
-      set({ isHistoryLoaded: true });
+      set({
+        results: shouldUseVisualQaFixtures() ? createVisualQaRecords() : [],
+        isHistoryLoaded: true
+      });
       return;
     }
     try {
@@ -178,6 +182,103 @@ function resolveInitialProviderId(providerId: string) {
   const officialProfile = getActiveProviderProfile('openai-gpt-image');
   const relayProfile = getActiveProviderProfile('custom-http-provider');
   return !officialProfile && relayProfile ? 'custom-http-provider' : providerId;
+}
+
+function readSearchParam(name: string) {
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+function shouldUseVisualQaFixtures() {
+  return readSearchParam('qa') === 'visual';
+}
+
+function qaImageUrl(title: string, accent: string, shape: 'wide' | 'portrait' | 'square') {
+  const width = shape === 'portrait' ? 720 : shape === 'wide' ? 1280 : 900;
+  const height = shape === 'portrait' ? 1080 : shape === 'wide' ? 720 : 900;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop stop-color="#111827"/>
+          <stop offset="1" stop-color="${accent}"/>
+        </linearGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#bg)"/>
+      <circle cx="${width * 0.72}" cy="${height * 0.25}" r="${Math.min(width, height) * 0.16}" fill="rgba(255,255,255,0.16)"/>
+      <rect x="${width * 0.13}" y="${height * 0.18}" width="${width * 0.44}" height="${height * 0.52}" rx="34" fill="rgba(255,255,255,0.18)" stroke="rgba(255,255,255,0.42)" stroke-width="4"/>
+      <text x="${width * 0.13}" y="${height * 0.82}" fill="white" font-family="Segoe UI, Arial" font-size="${Math.max(32, width * 0.045)}" font-weight="700">${title}</text>
+    </svg>
+  `;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function createVisualQaRecords(): GenerationRecord[] {
+  const now = Date.now();
+  const longPrompt = '超长 Prompt 视觉验收：一个拥有复杂镜头语言、丰富材质、柔和边缘光、多个主体层级、精细背景道具和大量风格约束的图生图任务，用来检查卡片摘要、详情抽屉、筛选栏和底部悬浮搜索在桌面端窗口中是否发生挤压、遮挡、换行失控或视觉噪音。';
+
+  return [
+    {
+      id: 'qa-wide-success',
+      providerId: 'custom-http-provider',
+      providerName: '聚合站 / OpenAI 兼容中转',
+      modelId: 'gpt-image-qa-wide',
+      status: 'succeeded',
+      prompt: longPrompt,
+      imageUrls: [qaImageUrl('Wide / Reference', '#25d9cf', 'wide')],
+      localImagePaths: ['D:\\VisionHub\\library\\qa-wide-reference.png'],
+      durationMs: 18200,
+      createdAt: new Date(now - 1000 * 60 * 18).toISOString(),
+      savedAt: new Date(now - 1000 * 60 * 17).toISOString(),
+      generationMode: 'image-to-image',
+      referenceImages: [
+        { id: 'qa-ref-1', name: '构图参考.png', source: 'upload' },
+        { id: 'qa-ref-2', name: '色彩参考.png', source: 'clipboard' }
+      ]
+    },
+    {
+      id: 'qa-portrait-success',
+      providerId: 'openai-gpt-image',
+      providerName: 'OpenAI GPT Image',
+      modelId: 'gpt-image-1',
+      status: 'succeeded',
+      prompt: '竖图卡片验收，检查瀑布流和完整宽高比模式的图片显示、收藏按钮、更多菜单以及详情预览。',
+      imageUrls: [qaImageUrl('Portrait', '#8468ff', 'portrait')],
+      localImagePaths: ['D:\\VisionHub\\library\\qa-portrait.png'],
+      durationMs: 9200,
+      createdAt: new Date(now - 1000 * 60 * 60 * 4).toISOString(),
+      savedAt: new Date(now - 1000 * 60 * 60 * 4).toISOString(),
+      generationMode: 'text-to-image'
+    },
+    {
+      id: 'qa-square-failed',
+      providerId: 'custom-http-provider',
+      providerName: '聚合站 / OpenAI 兼容中转',
+      modelId: 'nano-banana-test',
+      status: 'failed',
+      prompt: '失败记录验收：用于检查错误信息、失败筛选、待核查提示和空图片占位不会把卡片撑坏。',
+      imageUrls: [],
+      error: 'HTTP 524: 中转后台可能仍在继续生成，稍后可以重查历史或到图册目录检查落盘结果。',
+      raw: { status: 524, background: true },
+      durationMs: 60000,
+      createdAt: new Date(now - 1000 * 60 * 60 * 26).toISOString(),
+      generationMode: 'text-to-image'
+    },
+    {
+      id: 'qa-square-success',
+      providerId: 'custom-http-provider',
+      providerName: '聚合站 / OpenAI 兼容中转',
+      modelId: 'seedream-qa-square',
+      status: 'succeeded',
+      prompt: '方图验收，检查紧凑间距、收藏状态、颜色筛选和底部 dock 的遮挡情况。',
+      imageUrls: [qaImageUrl('Square', '#0ea5e9', 'square')],
+      localImagePaths: ['D:\\VisionHub\\library\\qa-square.png'],
+      durationMs: 6400,
+      createdAt: new Date(now - 1000 * 60 * 60 * 48).toISOString(),
+      savedAt: new Date(now - 1000 * 60 * 60 * 48).toISOString(),
+      generationMode: 'text-to-image'
+    }
+  ];
 }
 
 function validateGenerationRequest(request: ImageGenerationRequest, useOpenAICompatibleConfig: boolean) {

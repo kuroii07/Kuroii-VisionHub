@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-- 项目路径：`H:\AIGC\Codex\Projects\软件开发\VisionHub-Studio`
+- 项目路径：`D:\AIGC\codex\Projects\软件开发\visionhub-studio`
 - 技术栈：Tauri v2 + React + TypeScript + Vite
 - 默认语言：简体中文
 - 当前核心方向：本地优先的 AI 图像创作工作台，重点服务中转站 / 聚合 API 工作流。
@@ -47,7 +47,7 @@
 npm.cmd run build
 python .\scripts\smoke_check.py
 cargo check
-git -c safe.directory="H:/AIGC/Codex/Projects/软件开发/VisionHub-Studio" diff --check
+git -c safe.directory="D:/AIGC/codex/Projects/软件开发/visionhub-studio" diff --check
 ```
 
 如果只改前端 UI，可先跑：

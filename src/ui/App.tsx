@@ -1104,10 +1104,50 @@ const shortcutGroups: Array<{ title: string; items: Array<{ keys: string[]; acti
   }
 ];
 
+function readInitialAppSettings(): AppSettings {
+  const settings = loadAppSettings();
+  if (typeof window === 'undefined') return settings;
+
+  const theme = readUrlSearchParam('theme');
+  const mode = readUrlSearchParam('mode');
+  let nextSettings = settings;
+  if (theme === 'dark' || theme === 'light' || theme === 'system') {
+    nextSettings = { ...nextSettings, themeMode: theme as ThemeMode };
+  }
+  if (mode === 'text' || mode === 'image') {
+    nextSettings = {
+      ...nextSettings,
+      generationDefaults: {
+        ...nextSettings.generationDefaults,
+        defaultMode: mode
+      }
+    };
+  }
+  return nextSettings;
+}
+
+function readInitialPage(fallback: Page): Page {
+  if (typeof window === 'undefined') return fallback;
+  const page = readUrlSearchParam('page');
+  return STARTUP_PAGE_OPTIONS.some((option) => option.value === page) ? page as Page : fallback;
+}
+
+function readUrlSearchParam(name: string) {
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+function readUrlSearchList(name: string) {
+  return (readUrlSearchParam(name) ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 export function App() {
   const providers = useMemo(() => listProviders(), []);
-  const [appSettings, setAppSettings] = useState<AppSettings>(() => loadAppSettings());
-  const [page, setPage] = useState<Page>(() => appSettings.startupPage);
+  const [appSettings, setAppSettings] = useState<AppSettings>(() => readInitialAppSettings());
+  const [page, setPage] = useState<Page>(() => readInitialPage(appSettings.startupPage));
   const [secretDraft, setSecretDraft] = useState('');
   const [secretAvailable, setSecretAvailable] = useState(false);
   const [secretMessage, setSecretMessage] = useState('');
@@ -2487,8 +2527,8 @@ export function App() {
     >
       <aside className="sidebar">
         <div className="brand">
-          <div className="brandMark">
-            <Sparkles size={22} />
+          <div className="brandMark" aria-hidden="true">
+            <span className="brandGlyph">VH</span>
           </div>
           <div className="brandText">
             <strong>VisionHub Studio</strong>
@@ -4168,7 +4208,10 @@ function LibraryPage(props: {
 }) {
   const [query, setQuery] = useState('');
   const [providerFilter, setProviderFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'succeeded' | 'failed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'succeeded' | 'failed'>(() => {
+    const status = readUrlSearchParam('status');
+    return status === 'all' || status === 'succeeded' || status === 'failed' ? status : 'all';
+  });
   const [modeFilter, setModeFilter] = useState<LibraryModeFilter>('all');
   const [timeFilter, setTimeFilter] = useState<LibraryTimeFilter>('all');
   const [colorFilter, setColorFilter] = useState<LibraryColorFilter>('all');
@@ -4181,7 +4224,7 @@ function LibraryPage(props: {
   const [activeCustomQuickFilterIds, setActiveCustomQuickFilterIds] = useState<string[]>([]);
   const [libraryOrganization, setLibraryOrganization] = useState<LibraryOrganization>(() => loadLibraryOrganization());
   const [libraryScope, setLibraryScope] = useState<LibraryScope>({ type: 'all' });
-  const [libraryOrganizerOpen, setLibraryOrganizerOpen] = useState(false);
+  const [libraryOrganizerOpen, setLibraryOrganizerOpen] = useState(() => readUrlSearchParam('organizer') === '1');
   const [organizerDialog, setOrganizerDialog] = useState<LibraryOrganizerDialogState | null>(null);
   const [assignDialog, setAssignDialog] = useState<LibraryAssignDialogState | null>(null);
   const [quickFilterEditorOpen, setQuickFilterEditorOpen] = useState(false);
@@ -4192,8 +4235,8 @@ function LibraryPage(props: {
   const [searchVisible, setSearchVisible] = useState(true);
   const [filtersVisible, setFiltersVisible] = useState(true);
   const [activePanel, setActivePanel] = useState<'main' | 'view' | 'display' | 'sort' | 'add' | null>(null);
-  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
-  const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(() => readUrlSearchParam('record'));
+  const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>(() => readUrlSearchList('selected'));
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<LibraryContextMenuState | null>(null);
   const [libraryMeta, setLibraryMeta] = useState<LibraryMetaMap>(() => loadLibraryMeta());
@@ -4387,6 +4430,7 @@ function LibraryPage(props: {
     return () => window.removeEventListener(libraryFocusSearchEvent, focusSearch);
   }, []);
   useEffect(() => {
+    if (!props.isHistoryLoaded) return;
     if (selectedRecordId && !libraryItems.some((result) => result.id === selectedRecordId)) {
       setSelectedRecordId(null);
     }
@@ -4394,7 +4438,7 @@ function LibraryPage(props: {
       const next = current.filter((recordId) => libraryItems.some((result) => result.id === recordId));
       return next.length === current.length ? current : next;
     });
-  }, [libraryItems, selectedRecordId]);
+  }, [libraryItems, props.isHistoryLoaded, selectedRecordId]);
 
   useEffect(() => {
     if (!activePanel) return;

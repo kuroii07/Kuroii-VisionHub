@@ -3323,6 +3323,17 @@ select option {
   box-shadow: 0 20px 52px color-mix(in srgb, var(--app-purple) 28%, transparent);
 }
 
+.brandGlyph {
+  display: inline-grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0;
+  color: #f7fbff;
+}
+
 .navItem,
 .ghostButton,
 .dockCard,
@@ -5971,12 +5982,18 @@ body {
 }
 
 .appShell .brandMark {
-  background: var(--app-primary);
+  background:
+    radial-gradient(circle at 72% 24%, rgba(47, 232, 219, 0.95), transparent 13%),
+    radial-gradient(circle at 23% 74%, rgba(145, 118, 255, 0.9), transparent 12%),
+    linear-gradient(135deg, #111827 0%, var(--app-primary) 52%, #25d9cf 100%);
   border: 1px solid color-mix(in srgb, #ffffff 22%, transparent);
 }
 
 .appShell.theme-light .brandMark {
-  background: var(--app-primary);
+  background:
+    radial-gradient(circle at 72% 24%, rgba(13, 148, 136, 0.95), transparent 13%),
+    radial-gradient(circle at 23% 74%, rgba(124, 92, 255, 0.9), transparent 12%),
+    linear-gradient(135deg, #111827 0%, var(--app-primary) 52%, #25d9cf 100%);
   border-color: rgba(15, 23, 42, 0.12);
 }
 
