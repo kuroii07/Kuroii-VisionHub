@@ -1,5 +1,7 @@
 # VisionHub Studio Roadmap
 
+> 详细版本节奏、执行清单和验收标准见 `docs/visionhub-development-plan.md`。本文保留高层路线。
+
 ## v0.1 MVP
 
 - GPT Image Provider slot

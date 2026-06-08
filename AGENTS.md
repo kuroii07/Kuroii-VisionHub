@@ -32,6 +32,7 @@
 
 ## 开发习惯
 
+- 计划性开发、版本开发或较大优化前，先读 `docs/visionhub-development-plan.md`，再进入具体模块。
 - 修改前先读相关代码，优先使用 `rg` 搜索。
 - 使用 `npm.cmd`，避免 PowerShell 执行策略拦截 `npm.ps1`。
 - 手动文件修改优先使用 `apply_patch`。
@@ -79,3 +80,4 @@ cargo check
 - 明确列出已运行的验证命令和结果。
 - 没跑的检查要说明原因。
 - 不要声称视觉问题已修复，除非已通过实际运行或截图检查确认。
+- 大优化 / 大修改按 `docs/visionhub-development-plan.md` 更新细版本号、验证、构建、打开 release 版并提交推送；小优化默认不更新版本号、不提交推送。

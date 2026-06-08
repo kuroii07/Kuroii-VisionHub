@@ -396,6 +396,8 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 后续路线
 
+详细执行计划、版本号节奏和验收规则见 [VisionHub Studio 后续开发总控计划](docs/visionhub-development-plan.md)。后续计划性开发先读 `AGENTS.md` 和该文档，再进入对应专项文档。
+
 - 平台能力矩阵 V2
   - 把“已接入 / 可配置 / 待接入 / 本地规划”状态做成更清晰的能力矩阵。
   - 区分文生图、图生图、多参考图、Responses、Images、OpenAI-compatible、官方协议和本地服务能力。
