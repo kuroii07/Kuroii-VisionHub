@@ -450,6 +450,11 @@ export function ModernGeneratePage(props: {
 
   function setReferenceRole(referenceId: string, role: string) {
     setReferenceRoles((current) => ({ ...current, [referenceId]: role }));
+    updateReferences(props.referenceImages.map((reference) => (
+      reference.id === referenceId
+        ? { ...reference, role: role as ReferenceImage['role'] }
+        : reference
+    )));
   }
 
   function hasImageTransfer(dataTransfer: DataTransfer) {
@@ -492,7 +497,8 @@ export function ModernGeneratePage(props: {
       localPath: latestImage.localImagePaths?.[0],
       previewUrl: imageUrl,
       source: 'generated-result',
-      sourceGenerationId: latestImage.id
+      sourceGenerationId: latestImage.id,
+      addedAt: new Date().toISOString()
     };
     updateReferences([nextReference, ...props.referenceImages.filter((reference) => reference.sourceGenerationId !== latestImage.id)]);
     setMode('image');
@@ -544,6 +550,10 @@ export function ModernGeneratePage(props: {
       ? Math.max(75, Math.min(100, Math.round(parsedCompression)))
       : undefined;
     if (mode === 'image') {
+      const referenceRoleMap = Object.fromEntries(props.referenceImages.map((reference) => [
+        reference.id,
+        referenceRoles[reference.id] ?? reference.role ?? 'auto'
+      ]));
       props.onGenerate({
         mode: 'image-to-image',
         references: props.referenceImages,
@@ -556,7 +566,7 @@ export function ModernGeneratePage(props: {
             styleTransfer,
             capabilityStatus: imageToImageStatus,
             multiReferenceStatus,
-            referenceRoles
+            referenceRoles: referenceRoleMap
           }
         }
       });
@@ -717,7 +727,7 @@ export function ModernGeneratePage(props: {
                       </span>
                       <StudioSelect
                         className="referenceRoleSelect"
-                        value={referenceRoles[reference.id] ?? 'auto'}
+                        value={referenceRoles[reference.id] ?? reference.role ?? 'auto'}
                         options={REFERENCE_ROLE_OPTIONS}
                         disabled={props.isGenerating}
                         onChange={(value) => setReferenceRole(reference.id, value)}
@@ -1007,7 +1017,9 @@ function fileToReferenceImage(file: File, source: Extract<ReferenceImage['source
         mimeType: file.type || 'image/png',
         dataUrl,
         previewUrl: dataUrl,
-        source
+        source,
+        role: 'auto',
+        addedAt: new Date().toISOString()
       });
     };
     reader.onerror = () => reject(reader.error ?? new Error('无法读取参考图。'));

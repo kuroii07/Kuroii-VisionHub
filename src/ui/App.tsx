@@ -1555,7 +1555,9 @@ export function App() {
       localPath: record.localImagePaths?.[0],
       previewUrl: imageUrl,
       source: 'generated-result',
-      sourceGenerationId: record.id
+      sourceGenerationId: record.id,
+      role: 'auto',
+      addedAt: new Date().toISOString()
     };
   }
 
@@ -1572,6 +1574,15 @@ export function App() {
     navigateTo('generate');
   }
 
+  function retryRecordGeneration(record: GenerationRecord) {
+    setPrompt(record.prompt);
+    setReferenceImages((record.referenceImages ?? []).slice(0, 4));
+    setGeneratePreviewUrl(null);
+    setLibraryPreviewUrl(null);
+    setInspirationPreviewUrl(null);
+    navigateTo('generate');
+  }
+
   function useInspirationAssetAsReference(asset: InspirationAsset) {
     if (!asset.imageUrl) return;
     const reference: ReferenceImage = {
@@ -1581,7 +1592,9 @@ export function App() {
       dataUrl: asset.imageUrl.startsWith('data:image/') ? asset.imageUrl : undefined,
       localPath: asset.imagePath,
       previewUrl: asset.imageUrl,
-      source: 'inspiration'
+      source: 'inspiration',
+      role: 'auto',
+      addedAt: new Date().toISOString()
     };
     setReferenceImages((current) => [
       reference,
@@ -2719,6 +2732,7 @@ export function App() {
               onAddResult={addResult}
               onPreview={setLibraryPreviewUrl}
               onUseAsReference={useRecordAsReference}
+              onRetryRecord={retryRecordGeneration}
               onRequestConfirm={requestConfirm}
               onDelete={async (recordId) => {
                 setLibraryPreviewUrl(null);
@@ -4082,7 +4096,7 @@ function SettingsPage(props: {
           <div className="settingsRowMain">
             <strong>版本</strong>
           </div>
-          <span className="settingsValue">0.1.0-dev</span>
+          <span className="settingsValue">0.2.1</span>
         </div>
         <div className="settingsListRow">
           <div className="settingsRowMain">
@@ -4203,6 +4217,7 @@ function LibraryPage(props: {
   onAddResult: (record: GenerationRecord) => void;
   onPreview: (imageUrl: string) => void;
   onUseAsReference: (record: GenerationRecord) => void;
+  onRetryRecord: (record: GenerationRecord) => void;
   onRequestConfirm: (request: ConfirmDialogRequest) => void;
   onDelete: (recordId: string) => Promise<void>;
 }) {
@@ -5801,21 +5816,49 @@ function LibraryPage(props: {
             <div className="libraryDetailActions">
               <button className={`miniButton ${libraryMeta[selectedRecord.id]?.favorite ? 'active' : ''}`} onClick={() => toggleFavorite(selectedRecord.id)}><Star size={13} /> {libraryMeta[selectedRecord.id]?.favorite ? '已收藏' : '收藏'}</button>
               <button className="miniButton" disabled={!selectedRecord.imageUrls[0]} onClick={() => useRecordAsReference(selectedRecord)}><ImagePlus size={13} /> 设为参考图</button>
+              <button className="miniButton" onClick={() => props.onRetryRecord(selectedRecord)}><RefreshCcw size={13} /> 重新生成</button>
               <button className="miniButton" onClick={() => void copyText('Prompt', selectedRecord.prompt)}><Copy size={13} /> Prompt</button>
               <button className="miniButton" disabled={!getRecordPrimaryPath(selectedRecord)} onClick={() => void copyText('Path', getRecordPrimaryPath(selectedRecord))}><Copy size={13} /> 路径</button>
               <button className="miniButton" disabled={!selectedRecord.localImagePaths?.[0]} onClick={() => selectedRecord.localImagePaths?.[0] && void revealGenerationFile(selectedRecord.localImagePaths[0])}><FolderOpen size={13} /> 文件夹</button>
               <button className="miniButton danger" onClick={() => void deleteRecord(selectedRecord.id)}><Trash2 size={13} /> 删除记录</button>
             </div>
             {selectedRecord.referenceImages?.length ? (
-              <div className="libraryDetailSection">
+              <div className="libraryDetailSection libraryReferenceDetailSection">
                 <strong>参考图来源</strong>
                 <p>{summarizeReferenceSources(selectedRecord.referenceImages)}</p>
+                <div className="libraryReferenceDetailList">
+                  {selectedRecord.referenceImages.map((reference, index) => {
+                    const previewUrl = getReferencePreviewUrl(reference);
+                    return (
+                      <article className="libraryReferenceDetailItem" key={reference.id || `${reference.source}-${index}`}>
+                        <button
+                          className="libraryReferenceDetailThumb"
+                          type="button"
+                          disabled={!previewUrl}
+                          onClick={() => previewUrl && props.onPreview(previewUrl)}
+                        >
+                          {previewUrl ? <img src={previewUrl} alt={reference.name ?? `参考图 ${index + 1}`} /> : <ImagePlus size={16} />}
+                        </button>
+                        <div>
+                          <strong>{reference.name || `参考图 ${index + 1}`}</strong>
+                          <span>{referenceSourceDisplayLabel(reference.source)} · {referenceRoleLabel(reference.role)}</span>
+                          {reference.localPath ? <small title={reference.localPath}>{reference.localPath}</small> : null}
+                          {reference.sourceGenerationId ? <small>来源记录：{reference.sourceGenerationId}</small> : null}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
               </div>
             ) : null}
             {selectedRecord.error ? (
               <div className="libraryDetailSection warning">
                 <strong>错误 / 待核查信息</strong>
                 <p>{generationFailureHint(selectedRecord)}</p>
+                <div className="libraryDetailInlineActions">
+                  <button className="miniButton" type="button" onClick={() => props.onRetryRecord(selectedRecord)}><RefreshCcw size={13} /> 重新生成</button>
+                  <button className="miniButton" type="button" onClick={() => void copyText('错误信息', generationFailureHint(selectedRecord))}><Copy size={13} /> 复制错误</button>
+                </div>
               </div>
             ) : null}
           </aside>
@@ -6157,7 +6200,7 @@ function SystemInfoModal(props: {
   onClose: () => void;
 }) {
   const rows = [
-    { label: '版本', value: '0.1.0-dev' },
+    { label: '版本', value: '0.2.1' },
     { label: '运行环境', value: props.desktopRuntime ? 'Tauri 桌面端' : 'Web 预览模式' },
     { label: '作品画廊目录', value: props.storageSettings?.resolved_library_dir ?? (props.desktopRuntime ? '正在读取…' : '桌面端可用') },
     { label: '默认图库目录', value: props.storageSettings?.default_library_dir ?? '—' },
@@ -6344,6 +6387,32 @@ function summarizeReferenceSources(references?: ReferenceImage[]) {
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
   return Array.from(counts.entries()).map(([label, count]) => `${label} ${count}`).join('\u3001');
+}
+
+function referenceRoleLabel(role?: ReferenceImage['role']) {
+  const labels: Record<NonNullable<ReferenceImage['role']>, string> = {
+    auto: '自动',
+    composition: '构图',
+    style: '风格',
+    character: '角色',
+    color: '颜色'
+  };
+  return role ? labels[role] ?? role : '自动';
+}
+
+function referenceSourceDisplayLabel(source: ReferenceImage['source']) {
+  const labels: Record<ReferenceImage['source'], string> = {
+    upload: '本地',
+    'generated-result': '作品',
+    clipboard: '剪贴板',
+    'drag-drop': '拖拽',
+    inspiration: '灵感'
+  };
+  return labels[source] ?? source;
+}
+
+function getReferencePreviewUrl(reference: ReferenceImage) {
+  return reference.previewUrl || reference.dataUrl || reference.localPath || '';
 }
 
 function createEmptyProviderDraftConfig(

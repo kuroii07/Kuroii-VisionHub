@@ -45,6 +45,8 @@ interface BackendReferenceImage {
   preview_url?: string;
   source: ReferenceImage['source'];
   source_generation_id?: string;
+  role?: ReferenceImage['role'];
+  added_at?: string;
 }
 
 interface BackendModelInfo {
@@ -113,7 +115,9 @@ function mapReferenceToBackend(reference: ReferenceImage): BackendReferenceImage
     local_path: reference.localPath,
     preview_url: reference.previewUrl,
     source: reference.source,
-    source_generation_id: reference.sourceGenerationId
+    source_generation_id: reference.sourceGenerationId,
+    role: reference.role,
+    added_at: reference.addedAt
   };
 }
 
@@ -126,7 +130,9 @@ function mapBackendReference(reference: BackendReferenceImage): ReferenceImage {
     localPath: reference.local_path,
     previewUrl: reference.preview_url,
     source: reference.source,
-    sourceGenerationId: reference.source_generation_id
+    sourceGenerationId: reference.source_generation_id,
+    role: reference.role,
+    addedAt: reference.added_at
   };
 }
 

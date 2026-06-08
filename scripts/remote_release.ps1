@@ -81,8 +81,9 @@ try {
     throw "VisionHub Studio process not found after launch."
   }
 
-  $nsisInstaller = Join-Path $projectRoot "src-tauri\target\release\bundle\nsis\VisionHub Studio_0.1.0_x64-setup.exe"
-  $msiInstaller = Join-Path $projectRoot "src-tauri\target\release\bundle\msi\VisionHub Studio_0.1.0_x64_en-US.msi"
+  $appVersion = (Get-Content -LiteralPath (Join-Path $projectRoot "package.json") -Raw | ConvertFrom-Json).version
+  $nsisInstaller = Join-Path $projectRoot "src-tauri\target\release\bundle\nsis\VisionHub Studio_$($appVersion)_x64-setup.exe"
+  $msiInstaller = Join-Path $projectRoot "src-tauri\target\release\bundle\msi\VisionHub Studio_$($appVersion)_x64_en-US.msi"
   $finishedAt = Get-Date
   $content = @(
     "# VisionHub Studio remote run report",

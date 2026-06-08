@@ -53,6 +53,8 @@ struct ReferenceImage {
     preview_url: Option<String>,
     source: String,
     source_generation_id: Option<String>,
+    role: Option<String>,
+    added_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1079,7 +1081,7 @@ fn export_settings_backup(
     let path = backups_dir.join(filename);
     let payload = serde_json::json!({
         "schema": "visionhub-settings-backup/v1",
-        "version": "0.1.0",
+        "version": "0.2.1",
         "created_at": created_at,
         "app_settings": request.app_settings,
         "provider_configs": request.provider_configs,

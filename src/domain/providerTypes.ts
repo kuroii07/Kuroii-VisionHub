@@ -81,6 +81,8 @@ export interface ReferenceImage {
   previewUrl?: string;
   source: 'upload' | 'generated-result' | 'clipboard' | 'drag-drop' | 'inspiration';
   sourceGenerationId?: string;
+  role?: 'auto' | 'composition' | 'style' | 'character' | 'color';
+  addedAt?: string;
 }
 
 export interface ImageGenerationRequest {

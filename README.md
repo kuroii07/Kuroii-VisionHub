@@ -389,7 +389,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.1.0
+- 版本：0.2.1
 - 平台：Windows 优先
 - 发布形态：本地自用 release exe / MSI / NSIS 安装包
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。
