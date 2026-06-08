@@ -24,6 +24,13 @@ export interface PolishMode {
   scope: 'local' | 'provider';
 }
 
+export interface PromptStylePreset {
+  id: string;
+  label: string;
+  description: string;
+  promptPrefix: string;
+}
+
 interface LocalPolishRecipe {
   intent: string;
   subject: string;
@@ -262,6 +269,129 @@ export const MODEL_POLISH_MODES: PolishMode[] = [
   }
 ];
 
+export const PROMPT_STYLE_PRESETS: PromptStylePreset[] = [
+  {
+    id: 'auto',
+    label: '自动/不限定',
+    description: '不额外指定画风，按提示词内容和润色模式处理。',
+    promptPrefix: ''
+  },
+  {
+    id: 'photorealistic',
+    label: '写实摄影',
+    description: '真实摄影、自然光、真实材质，适合人物、场景和通用需求。',
+    promptPrefix: '写实摄影风格，真实镜头感，自然光线，真实材质，高可信度细节'
+  },
+  {
+    id: 'cinematic',
+    label: '电影感',
+    description: '电影镜头、叙事氛围、体积光和高完成度画面。',
+    promptPrefix: '电影感视觉风格，cinematic lighting，镜头叙事，体积光，浅景深，高级调色'
+  },
+  {
+    id: 'commercial',
+    label: '商业广告',
+    description: '高级商业视觉、主体突出、干净背景，适合宣传物料。',
+    promptPrefix: '商业广告视觉风格，主体突出，干净高级背景，精致布光，品牌质感'
+  },
+  {
+    id: 'product-photo',
+    label: '产品摄影',
+    description: '棚拍产品图、电商主图、材质和边缘高光清晰。',
+    promptPrefix: '产品摄影风格，棚拍布光，干净背景，清晰边缘高光，真实材质，柔和阴影'
+  },
+  {
+    id: 'anime',
+    label: '二次元动漫',
+    description: '动漫角色、明快线条和高辨识色彩。',
+    promptPrefix: '二次元动漫画风，清晰线条，精致角色设计，明快色彩，高完成度插画'
+  },
+  {
+    id: 'chinese-illustration',
+    label: '国风插画',
+    description: '东方审美、传统纹样、古风角色和国潮视觉。',
+    promptPrefix: '国风插画风格，东方审美，传统纹样，细腻线条，雅致配色，国潮视觉'
+  },
+  {
+    id: 'ink-wash',
+    label: '水墨国风',
+    description: '水墨晕染、留白、宣纸质感和东方意境。',
+    promptPrefix: '水墨国风，宣纸质感，墨色层次，留白构图，东方意境，淡雅色彩'
+  },
+  {
+    id: 'watercolor',
+    label: '水彩插画',
+    description: '轻盈透明、柔和边缘和手绘质感。',
+    promptPrefix: '水彩插画风格，透明叠色，柔和边缘，手绘纸张质感，轻盈氛围'
+  },
+  {
+    id: 'oil-painting',
+    label: '油画质感',
+    description: '厚重笔触、颜料质感和艺术画布效果。',
+    promptPrefix: '油画质感，厚重笔触，画布纹理，丰富色层，艺术绘画感'
+  },
+  {
+    id: 'concept-art',
+    label: '厚涂概念',
+    description: '适合角色、场景、道具和世界观概念图。',
+    promptPrefix: '厚涂概念设计风格，体积感强，材质清晰，概念艺术完成度，适合设定图'
+  },
+  {
+    id: 'three-d-render',
+    label: '3D 渲染',
+    description: '三维建模、真实材质、可控灯光和产品展示感。',
+    promptPrefix: '高质量 3D 渲染风格，真实材质，精致模型，干净灯光，清晰体积感'
+  },
+  {
+    id: 'flat-vector',
+    label: '扁平矢量',
+    description: '简洁图形、清晰边界，适合图标、运营图和信息图。',
+    promptPrefix: '扁平矢量插画风格，几何形状，干净边界，简洁配色，高可读性'
+  },
+  {
+    id: 'ui-icon',
+    label: 'UI 图标',
+    description: '适合软件图标、功能图标和小尺寸识别。',
+    promptPrefix: '现代 UI 图标风格，居中构图，简洁轮廓，小尺寸可读，无文字，无水印'
+  },
+  {
+    id: 'game-asset',
+    label: '游戏资产',
+    description: '适合道具、角色素材、图标和可复用游戏美术。',
+    promptPrefix: '游戏资产美术风格，清晰轮廓，居中展示，高可读性，材质统一，干净背景'
+  },
+  {
+    id: 'pixel-art',
+    label: '像素艺术',
+    description: '像素角色、道具、场景和复古游戏视觉。',
+    promptPrefix: '像素艺术风格，清晰像素块，复古游戏视觉，有限色板，高辨识轮廓'
+  },
+  {
+    id: 'line-art',
+    label: '线稿漫画',
+    description: '黑白线稿、漫画分镜和可上色草图。',
+    promptPrefix: '线稿漫画风格，清晰黑白线条，干净轮廓，漫画构图，适合后续上色'
+  },
+  {
+    id: 'cyberpunk',
+    label: '赛博朋克',
+    description: '霓虹、未来城市、高对比光影和科技感。',
+    promptPrefix: '赛博朋克视觉风格，霓虹灯光，未来城市，高对比色彩，科技氛围'
+  },
+  {
+    id: 'retro-film',
+    label: '复古胶片',
+    description: '胶片颗粒、怀旧色彩和生活化摄影。',
+    promptPrefix: '复古胶片摄影风格，柔和颗粒，怀旧色调，自然曝光，真实生活感'
+  },
+  {
+    id: 'minimal-premium',
+    label: '极简高级',
+    description: '留白、克制配色和高级品牌感。',
+    promptPrefix: '极简高级视觉风格，大面积留白，克制配色，干净构图，高级品牌感'
+  }
+];
+
 export const POLISH_MODES: PolishMode[] = [...LOCAL_POLISH_MODES, ...MODEL_POLISH_MODES];
 
 export function getPolishModesForEngine(engine: 'local' | 'provider') {
@@ -284,12 +414,25 @@ export function renderInspirationPrompt(template: InspirationTemplate, values: R
   });
 }
 
-export function polishPrompt(source: string, modeId: string) {
+export function resolvePromptStyle(styleId: string) {
+  return PROMPT_STYLE_PRESETS.find((style) => style.id === styleId) ?? PROMPT_STYLE_PRESETS[0];
+}
+
+export function applyPromptStyle(source: string, styleId: string) {
+  const style = resolvePromptStyle(styleId);
+  const base = source.trim();
+  if (!style.promptPrefix) return base;
+  return `画风/风格：${style.promptPrefix}；原始需求：${base || '一个清晰明确的画面主体'}`;
+}
+
+export function polishPrompt(source: string, modeId: string, styleId = 'auto') {
   const base = source.trim();
   const mode = resolvePolishMode(modeId, 'local');
   const subject = normalizePromptSubject(base);
   const recipe = localPolishRecipe(mode.id);
+  const style = resolvePromptStyle(styleId);
   return [
+    style.promptPrefix ? `风格：${style.promptPrefix}` : null,
     `主体：${subject}，${recipe.subject}`,
     `场景：${recipe.scene}`,
     `构图：${recipe.composition}`,
@@ -298,7 +441,7 @@ export function polishPrompt(source: string, modeId: string) {
     `色彩：${recipe.color}`,
     `质量：${recipe.quality}`,
     `约束：${recipe.constraints}`
-  ].join('；');
+  ].filter(Boolean).join('；');
 }
 
 function normalizePromptSubject(source: string) {

@@ -1,12 +1,14 @@
 import { Copy, History, Wand2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { GenerationRecord } from '../domain/providerTypes';
-import { PROMPT_POLISH_SECRET_ID, type PromptHistorySettings, type PromptPolishSettings } from '../services/appSettings';
+import { PROMPT_POLISH_SECRET_ID, promptPolishConfigId, type PromptHistorySettings, type PromptPolishSettings } from '../services/appSettings';
 import { polishPromptWithProvider } from '../services/desktopApi';
 import { parseExtraHeaders } from '../services/providerConfig';
 import {
   INSPIRATION_TEMPLATES,
   POLISH_MODES,
+  PROMPT_STYLE_PRESETS,
+  applyPromptStyle,
   getDefaultPolishMode,
   getPolishModesForEngine,
   polishPrompt,
@@ -30,11 +32,9 @@ interface PromptAssistModalProps {
 
 export function PromptAssistModal(props: PromptAssistModalProps) {
   function resolveInitialPolishConfigId() {
-    const selectedModelId = props.promptPolishSettings.modelId.trim();
-    const matchedConfig = props.promptPolishSettings.savedConfigs.find(
-      (config) => config.modelId === selectedModelId || config.modelOptions.includes(selectedModelId)
-    );
-    return matchedConfig?.id ?? props.promptPolishSettings.savedConfigs[0]?.id ?? '__current__';
+    const currentConfigId = promptPolishConfigId(props.promptPolishSettings.displayName, props.promptPolishSettings.baseUrl);
+    const exactConfig = props.promptPolishSettings.savedConfigs.find((config) => config.id === currentConfigId);
+    return exactConfig?.id ?? props.promptPolishSettings.savedConfigs[0]?.id ?? '__current__';
   }
 
   const [selectedTemplateId, setSelectedTemplateId] = useState(INSPIRATION_TEMPLATES[0].id);
@@ -50,6 +50,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
   const [modelPolishedPrompt, setModelPolishedPrompt] = useState('');
   const [selectedPolishConfigId, setSelectedPolishConfigId] = useState(resolveInitialPolishConfigId);
   const [selectedPolishModelId, setSelectedPolishModelId] = useState(props.promptPolishSettings.modelId.trim());
+  const [selectedPromptStyleId, setSelectedPromptStyleId] = useState('auto');
   const [polishMessage, setPolishMessage] = useState('');
   const [isPolishing, setIsPolishing] = useState(false);
   useToastMessage(copiedMessage, setCopiedMessage);
@@ -58,7 +59,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
   const selectedTemplate =
     INSPIRATION_TEMPLATES.find((template) => template.id === selectedTemplateId) ?? INSPIRATION_TEMPLATES[0];
   const inspirationPrompt = renderInspirationPrompt(selectedTemplate, templateValues);
-  const localPolishedPrompt = polishPrompt(props.prompt, polishMode);
+  const localPolishedPrompt = polishPrompt(props.prompt, polishMode, selectedPromptStyleId);
   const polishedPrompt = modelPolishedPrompt || localPolishedPrompt;
   const polishConfigOptions = useMemo(() => {
     const configs = props.promptPolishSettings.savedConfigs.length > 0
@@ -99,10 +100,11 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
 
   useEffect(() => {
     const nextConfigId = resolveInitialPolishConfigId();
+    const nextConfig = polishConfigOptions.find((config) => config.id === nextConfigId);
     setSelectedPolishConfigId(nextConfigId);
-    setSelectedPolishModelId(props.promptPolishSettings.modelId.trim());
+    setSelectedPolishModelId((nextConfig?.modelId ?? props.promptPolishSettings.modelId).trim());
     setModelPolishedPrompt('');
-  }, [props.promptPolishSettings.engine, props.promptPolishSettings.modelId, props.promptPolishSettings.savedConfigs]);
+  }, [props.promptPolishSettings.engine, props.promptPolishSettings.displayName, props.promptPolishSettings.baseUrl, props.promptPolishSettings.modelId, props.promptPolishSettings.savedConfigs]);
 
   useEffect(() => {
     const resolvedMode = resolvePolishMode(polishMode, props.promptPolishSettings.engine);
@@ -166,7 +168,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
       const result = await polishPromptWithProvider({
         providerId: 'prompt-polish',
         modelId: polishModelId,
-        prompt: props.prompt.trim() || '一个清晰明确的画面主体',
+        prompt: applyPromptStyle(props.prompt.trim() || '一个清晰明确的画面主体', selectedPromptStyleId),
         modeId: polishMode,
         settings: { ...effectivePolishSettings, modelId: polishModelId },
         baseUrl: polishBaseUrl,
@@ -224,6 +226,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
             sourcePrompt={props.prompt}
             polishMode={polishMode}
             polishModes={availablePolishModes}
+            promptStyleId={selectedPromptStyleId}
             resultPrompt={polishedPrompt}
             engine={props.promptPolishSettings.engine}
             configId={selectedPolishConfigId}
@@ -233,7 +236,14 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
             polishReady={polishReady}
             isPolishing={isPolishing}
             polishMessage={polishMessage}
-            onModeChange={setPolishMode}
+            onModeChange={(modeId) => {
+              setPolishMode(modeId);
+              setModelPolishedPrompt('');
+            }}
+            onStyleChange={(styleId) => {
+              setSelectedPromptStyleId(styleId);
+              setModelPolishedPrompt('');
+            }}
             onConfigChange={(configId) => {
               const nextConfig = polishConfigOptions.find((config) => config.id === configId);
               setSelectedPolishConfigId(configId);
@@ -316,6 +326,7 @@ function PolishPanel(props: {
   sourcePrompt: string;
   polishMode: string;
   polishModes: typeof POLISH_MODES;
+  promptStyleId: string;
   resultPrompt: string;
   engine: PromptPolishSettings['engine'];
   configId: string;
@@ -326,6 +337,7 @@ function PolishPanel(props: {
   isPolishing: boolean;
   polishMessage: string;
   onModeChange: (mode: string) => void;
+  onStyleChange: (styleId: string) => void;
   onConfigChange: (configId: string) => void;
   onModelChange: (modelId: string) => void;
   onRunModelPolish: () => void;
@@ -340,6 +352,12 @@ function PolishPanel(props: {
           onChange={props.onModeChange}
           options={props.polishModes.map((mode) => ({ value: mode.id, label: mode.label, description: mode.description }))}
         />
+        <StudioSelect
+          value={props.promptStyleId}
+          onChange={props.onStyleChange}
+          placeholder="画风/风格"
+          options={PROMPT_STYLE_PRESETS.map((style) => ({ value: style.id, label: style.label, description: style.description }))}
+        />
         <small>{props.polishModes.find((mode) => mode.id === props.polishMode)?.description}</small>
       </div>
       <div className="polishEngineBar">
@@ -349,11 +367,12 @@ function PolishPanel(props: {
         </div>
         <div className="polishModelPicker">
           <StudioSelect
-            className="polishConfigSelect noSelectCheck"
+            className={`polishConfigSelect noSelectCheck ${props.engine === 'local' ? 'mutedSelect' : ''}`}
             value={props.configId}
             onChange={props.onConfigChange}
             placeholder="润色配置"
             options={props.configOptions}
+            disabled={props.engine === 'local'}
           />
           {props.engine === 'provider' ? (
             <StudioSelect
@@ -364,7 +383,7 @@ function PolishPanel(props: {
               options={props.polishModelOptions.map((modelId) => ({ value: modelId, label: modelId }))}
             />
           ) : (
-            <span className="polishModelTag">本地规则</span>
+            <span className="polishModelTag active">本地规则</span>
           )}
         </div>
         <button className="polishRunButton" onClick={props.onRunModelPolish} disabled={props.isPolishing || (props.engine === 'provider' && !props.polishReady)}>

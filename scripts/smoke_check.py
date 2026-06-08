@@ -21,6 +21,7 @@ required = [
     "src/providers/tauriOpenAIAdapter.ts",
     "src/store/useStudioStore.ts",
     "src/services/desktopApi.ts",
+    "src/ui/GeneratePage.tsx",
     "src/ui/PromptAssistModal.tsx",
     "src-tauri/tauri.conf.json",
     "src-tauri/Cargo.toml",
@@ -140,6 +141,8 @@ for term in [
     "POLISH_MODES",
     "renderInspirationPrompt",
     "polishPrompt",
+    "PROMPT_STYLE_PRESETS",
+    "applyPromptStyle",
 ]:
     assert term in prompt_assist_src, f"Prompt assist service missing: {term}"
 
@@ -161,10 +164,22 @@ for term in [
     "showThumbnails",
     "maxItems",
     "PromptPreview",
+    "PROMPT_STYLE_PRESETS",
+    "promptPolishConfigId",
+    "画风/风格",
     "AssistActions",
     "reuseRecordList",
 ]:
     assert term in prompt_assist_modal_src, f"Prompt assist modal missing: {term}"
+
+generate_page_src = (ROOT / "src/ui/GeneratePage.tsx").read_text(encoding="utf-8")
+for term in [
+    "resolveActivePromptPolishConfigId",
+    "quickPolishConfigId",
+    "promptPolishConfigId",
+    "promptPolishConfigOptions",
+]:
+    assert term in generate_page_src, f"Generate page prompt polish sync missing: {term}"
 
 for term in [
     "PromptTemplatesPage",

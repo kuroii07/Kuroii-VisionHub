@@ -29,7 +29,7 @@ import type {
 import type { GenerationMode, ReferenceImage } from '../domain/providerTypes';
 import { getDefaultPolishMode, polishPrompt, resolvePolishMode, type PromptAssistMode } from '../services/promptAssist';
 import { isTauriRuntime, polishPromptWithProvider, referenceImagesFromPaths } from '../services/desktopApi';
-import { PROMPT_POLISH_SECRET_ID } from '../services/appSettings';
+import { PROMPT_POLISH_SECRET_ID, promptPolishConfigId } from '../services/appSettings';
 import { parseExtraHeaders, type OpenAICompatibleConfig } from '../services/providerConfig';
 import { useStudioStore } from '../store/useStudioStore';
 import { PromptAssistModal } from './PromptAssistModal';
@@ -191,6 +191,12 @@ function compactModelLabel(modelId: string) {
     .slice(0, 20);
 }
 
+function resolveActivePromptPolishConfigId(settings: PromptPolishSettings) {
+  const currentConfigId = promptPolishConfigId(settings.displayName, settings.baseUrl);
+  const exactConfig = settings.savedConfigs.find((config) => config.id === currentConfigId);
+  return exactConfig?.id ?? settings.savedConfigs[0]?.id ?? '__current__';
+}
+
 function referenceSourceLabel(source: ReferenceImage['source']) {
   const labels: Record<ReferenceImage['source'], string> = {
     upload: '本地',
@@ -247,8 +253,8 @@ export function ModernGeneratePage(props: {
   const [customWidth, setCustomWidth] = useState(() => parseSize(props.size)[0]);
   const [customHeight, setCustomHeight] = useState(() => parseSize(props.size)[1]);
   const [assistMode, setAssistMode] = useState<PromptAssistMode | null>(null);
-  const [quickPolishModelId, setQuickPolishModelId] = useState(() =>
-    props.promptPolishSettings.engine === 'local' ? '__local__' : props.promptPolishSettings.modelId
+  const [quickPolishConfigId, setQuickPolishConfigId] = useState(() =>
+    props.promptPolishSettings.engine === 'local' ? '__local__' : resolveActivePromptPolishConfigId(props.promptPolishSettings)
   );
   const [isQuickPolishing, setIsQuickPolishing] = useState(false);
   const [referenceDragState, setReferenceDragState] = useState<ReferenceDragState>(null);
@@ -260,23 +266,31 @@ export function ModernGeneratePage(props: {
       ? props.providerConfig.modelOptions
       : [props.providerConfig.modelId]
     : props.selectedProvider.models.map((model) => model.id);
+  const promptPolishConfigOptions = props.promptPolishSettings.savedConfigs.length > 0
+    ? props.promptPolishSettings.savedConfigs
+    : [{
+        id: '__current__',
+        displayName: props.promptPolishSettings.displayName,
+        baseUrl: props.promptPolishSettings.baseUrl,
+        modelId: props.promptPolishSettings.modelId,
+        modelOptions: props.promptPolishSettings.modelOptions,
+        extraHeadersJson: props.promptPolishSettings.extraHeadersJson,
+        protocol: props.promptPolishSettings.protocol
+      }];
   const quickPolishOptions = [
-    { value: '__local__', label: '本地规则' },
-    ...Array.from(new Set([
-      props.promptPolishSettings.modelId,
-      ...props.promptPolishSettings.savedConfigs.map((config) => config.modelId)
-    ].filter((item) => item.trim()).map((item) => item.trim())))
-      .slice(0, 3)
-      .map((modelId) => ({ value: modelId, label: compactModelLabel(modelId) }))
+    { value: '__local__', label: '本地规则', description: '不调用模型' },
+    ...promptPolishConfigOptions.slice(0, 6).map((config) => ({
+      value: config.id,
+      label: compactModelLabel(config.modelId || config.displayName) || config.displayName,
+      description: config.displayName
+    }))
   ];
-  const selectedQuickPolishValue = quickPolishOptions.some((option) => option.value === quickPolishModelId)
-    ? quickPolishModelId
+  const selectedQuickPolishValue = quickPolishOptions.some((option) => option.value === quickPolishConfigId)
+    ? quickPolishConfigId
     : props.promptPolishSettings.engine === 'local'
       ? '__local__'
-      : props.promptPolishSettings.modelId;
-  const selectedQuickPolishConfig =
-    props.promptPolishSettings.savedConfigs.find((config) => config.modelId === selectedQuickPolishValue || config.modelOptions.includes(selectedQuickPolishValue)) ??
-    props.promptPolishSettings.savedConfigs[0];
+      : resolveActivePromptPolishConfigId(props.promptPolishSettings);
+  const selectedQuickPolishConfig = promptPolishConfigOptions.find((config) => config.id === selectedQuickPolishValue);
   const effectivePromptPolishSettings: PromptPolishSettings =
     selectedQuickPolishValue === '__local__'
       ? { ...props.promptPolishSettings, engine: 'local' }
@@ -285,7 +299,7 @@ export function ModernGeneratePage(props: {
           engine: 'provider',
           displayName: selectedQuickPolishConfig?.displayName ?? props.promptPolishSettings.displayName,
           baseUrl: selectedQuickPolishConfig?.baseUrl ?? props.promptPolishSettings.baseUrl,
-          modelId: selectedQuickPolishValue,
+          modelId: selectedQuickPolishConfig?.modelId ?? props.promptPolishSettings.modelId,
           modelOptions: selectedQuickPolishConfig?.modelOptions ?? props.promptPolishSettings.modelOptions,
           extraHeadersJson: selectedQuickPolishConfig?.extraHeadersJson ?? props.promptPolishSettings.extraHeadersJson,
           protocol: selectedQuickPolishConfig?.protocol ?? props.promptPolishSettings.protocol
@@ -315,8 +329,8 @@ export function ModernGeneratePage(props: {
   }, [props.defaultMode]);
 
   useEffect(() => {
-    setQuickPolishModelId(props.promptPolishSettings.engine === 'local' ? '__local__' : props.promptPolishSettings.modelId);
-  }, [props.promptPolishSettings.engine, props.promptPolishSettings.modelId]);
+    setQuickPolishConfigId(props.promptPolishSettings.engine === 'local' ? '__local__' : resolveActivePromptPolishConfigId(props.promptPolishSettings));
+  }, [props.promptPolishSettings.engine, props.promptPolishSettings.displayName, props.promptPolishSettings.baseUrl, props.promptPolishSettings.modelId, props.promptPolishSettings.savedConfigs]);
 
   useEffect(() => {
     setOutputFormat(props.defaultOutputFormat);
@@ -719,7 +733,7 @@ export function ModernGeneratePage(props: {
             </div>
           ) : null}
           {props.isGenerating && latestImage?.imageUrls[0] ? (
-            <div className="generationOverlay">
+            <div className="generationOverlay centerGenerationOverlay">
               <span>
                 <Sparkles size={16} /> 正在生成画面
               </span>
@@ -828,7 +842,7 @@ export function ModernGeneratePage(props: {
                 <StudioSelect
                   className="promptPolishQuickSelect noSelectCheck"
                   value={selectedQuickPolishValue}
-                  onChange={(value) => setQuickPolishModelId(value)}
+                  onChange={(value) => setQuickPolishConfigId(value)}
                   options={quickPolishOptions}
                 />
                 <button type="button" className="promptPolishDetailButton" data-tooltip="打开详细润色窗口" aria-label="打开详细润色窗口" onClick={() => setAssistMode('polish')}>

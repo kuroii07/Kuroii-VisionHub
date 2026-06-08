@@ -4119,7 +4119,7 @@ kbd {
   border-radius: 14px;
   padding: 0 18px;
   color: #042f2e;
-  background: linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--app-accent-strong) 42%, #ffffff));
+  background: color-mix(in srgb, var(--app-accent-strong) 30%, #ffffff);
   font-size: 12px;
   font-weight: 900;
 }
@@ -5357,7 +5357,7 @@ kbd {
 
 .polishModeRow {
   display: grid;
-  grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+  grid-template-columns: minmax(190px, 230px) minmax(190px, 230px) minmax(0, 1fr);
   gap: 12px;
   align-items: center;
 }
@@ -5432,6 +5432,7 @@ kbd {
   min-width: 0;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: 0 10px;
   overflow: hidden;
   color: var(--app-text-2);
@@ -5441,6 +5442,21 @@ kbd {
   font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.polishModelPicker .polishModelTag.active {
+  color: #042f2e;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 50%, transparent);
+  background: color-mix(in srgb, var(--app-accent-strong) 30%, #ffffff);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--app-accent-strong) 14%, transparent);
+}
+
+.polishModelPicker .mutedSelect .studioSelectButton:disabled {
+  color: var(--app-muted);
+  border-color: var(--app-line);
+  background: color-mix(in srgb, var(--app-surface-2) 76%, transparent);
+  box-shadow: none;
+  opacity: 0.58;
 }
 
 .polishModelPicker .studioSelect {
@@ -5477,6 +5493,10 @@ kbd {
   background: transparent;
   box-shadow: none;
   color: inherit;
+}
+
+.appShell .workspaceGenerate .promptPolishQuickSelect .studioSelectValue small {
+  display: none;
 }
 
 .polishModelPicker .studioSelectMenu {
@@ -5544,6 +5564,11 @@ kbd {
 }
 
 @media (max-width: 1180px) {
+  .polishModeRow {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
   .polishEngineBar {
     grid-template-columns: 1fr;
   }
@@ -6763,6 +6788,16 @@ body {
 .workspaceGenerate .previewStage > .generationOverlay,
 .appShell.theme-light .workspaceGenerate .previewStage > .generationOverlay,
 .appShell.theme-dark .workspaceGenerate .previewStage > .generationOverlay {
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.workspaceGenerate .previewStage > .centerGenerationOverlay,
+.appShell.theme-light .workspaceGenerate .previewStage > .centerGenerationOverlay,
+.appShell.theme-dark .workspaceGenerate .previewStage > .centerGenerationOverlay {
   top: 50%;
   right: auto;
   bottom: auto;
