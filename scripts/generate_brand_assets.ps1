@@ -76,8 +76,8 @@ function New-InstallerBitmap {
 
   if ($Sidebar) {
     Draw-ContainedImage -Graphics $graphics -Image $SourceImage -X 24 -Y 22 -Width 116 -Height 116
-    $smallFont = [System.Drawing.Font]::new("Segoe UI", 15, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
-    $graphics.DrawString("VisionHub`nStudio", $smallFont, [System.Drawing.Brushes]::White, 24, 150)
+    $smallFont = [System.Drawing.Font]::new("Segoe UI", 13, [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
+    $graphics.DrawString("VisionHub Studio", $smallFont, [System.Drawing.Brushes]::White, 18, 152)
     $smallFont.Dispose()
   } else {
     Draw-ContainedImage -Graphics $graphics -Image $SourceImage -X 10 -Y 10 -Width 38 -Height 38

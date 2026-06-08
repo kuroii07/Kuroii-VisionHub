@@ -35,7 +35,9 @@
         "uninstallerIcon": "icons/icon.ico",
         "headerImage": "icons/installer-header.bmp",
         "sidebarImage": "icons/installer-sidebar.bmp",
-        "uninstallerHeaderImage": "icons/installer-header.bmp"
+        "uninstallerHeaderImage": "icons/installer-header.bmp",
+        "languages": ["SimpChinese"],
+        "displayLanguageSelector": false
       }
     }
   }
