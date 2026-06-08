@@ -10233,6 +10233,191 @@ body {
   background: rgba(124, 58, 237, 0.13);
 }
 
+.providerAccessLayout .providerCapabilityPanel {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--app-surface-2) 74%, transparent);
+}
+
+.providerAccessLayout .providerCapabilityHeaderBlock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.providerAccessLayout .providerCapabilityHeaderBlock strong {
+  display: block;
+  color: var(--app-text);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.providerAccessLayout .providerCapabilityHeaderBlock small {
+  display: block;
+  max-width: 560px;
+  margin-top: 4px;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.providerAccessLayout .providerCapabilityLegend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 360px;
+}
+
+.providerAccessLayout .providerCapabilityScroll {
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.providerAccessLayout .providerCapabilityGrid {
+  min-width: 940px;
+  display: grid;
+  grid-template-columns: minmax(188px, 1.38fr) repeat(8, minmax(84px, 0.74fr));
+  gap: 7px;
+  align-items: stretch;
+}
+
+.providerAccessLayout .providerCapabilityTableHead {
+  margin-bottom: 7px;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.providerAccessLayout .providerCapabilityTableHead span {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.providerAccessLayout .providerCapabilityTableHead span:first-child {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.providerAccessLayout .providerCapabilityRows {
+  display: grid;
+  gap: 7px;
+}
+
+.providerAccessLayout .providerCapabilityRow {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid var(--app-line);
+  border-radius: 14px;
+  padding: 7px;
+  color: var(--app-text);
+  background: var(--app-surface);
+  text-align: left;
+}
+
+.providerAccessLayout .providerCapabilityRow:hover,
+.providerAccessLayout .providerCapabilityRow.selected {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 42%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 8%, var(--app-surface));
+}
+
+.providerAccessLayout .providerCapabilityRow.selected {
+  box-shadow: inset 3px 0 0 var(--app-accent-strong) !important;
+}
+
+.providerAccessLayout .providerCapabilityService {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  padding: 0 8px 0 10px;
+}
+
+.providerAccessLayout .providerCapabilityService strong {
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.providerAccessLayout .providerCapabilityService small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.providerAccessLayout .capabilityCell {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: stretch;
+  align-self: center;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.providerAccessLayout .capabilityCell.live {
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.28);
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.providerAccessLayout .capabilityCell.configurable {
+  color: #2563eb;
+  border-color: rgba(59, 130, 246, 0.24);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.providerAccessLayout .capabilityCell.partial {
+  color: #0f766e;
+  border-color: rgba(20, 184, 166, 0.24);
+  background: rgba(20, 184, 166, 0.12);
+}
+
+.providerAccessLayout .capabilityCell.planned {
+  color: #92400e;
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.providerAccessLayout .capabilityCell.localPlan {
+  color: #6d28d9;
+  border-color: rgba(124, 58, 237, 0.24);
+  background: rgba(124, 58, 237, 0.12);
+}
+
+.providerAccessLayout .capabilityCell.unsupported {
+  color: var(--app-muted);
+  border-color: var(--app-line);
+  background: color-mix(in srgb, var(--app-surface-2) 70%, transparent);
+}
+
+.providerAccessLayout .capabilityCell.unknown {
+  color: #64748b;
+  border-color: rgba(100, 116, 139, 0.22);
+  background: rgba(100, 116, 139, 0.1);
+}
+
 .providerAccessLayout .serviceTemplateNotes {
   display: flex;
   flex-wrap: wrap;
@@ -10821,6 +11006,56 @@ body {
   background: color-mix(in srgb, var(--app-accent-strong) 18%, rgba(255, 255, 255, 0.06));
 }
 
+.appShell.theme-dark .providerAccessLayout .providerCapabilityPanel,
+.theme-dark .providerAccessLayout .providerCapabilityPanel {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.appShell.theme-dark .providerAccessLayout .providerCapabilityRow,
+.theme-dark .providerAccessLayout .providerCapabilityRow {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.appShell.theme-dark .providerAccessLayout .providerCapabilityRow:hover,
+.appShell.theme-dark .providerAccessLayout .providerCapabilityRow.selected,
+.theme-dark .providerAccessLayout .providerCapabilityRow:hover,
+.theme-dark .providerAccessLayout .providerCapabilityRow.selected {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 46%, rgba(255, 255, 255, 0.12));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, rgba(255, 255, 255, 0.05));
+}
+
+.appShell.theme-dark .providerAccessLayout .capabilityCell.live,
+.theme-dark .providerAccessLayout .capabilityCell.live {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.appShell.theme-dark .providerAccessLayout .capabilityCell.configurable,
+.theme-dark .providerAccessLayout .capabilityCell.configurable {
+  color: #bfdbfe;
+  background: rgba(59, 130, 246, 0.17);
+}
+
+.appShell.theme-dark .providerAccessLayout .capabilityCell.partial,
+.theme-dark .providerAccessLayout .capabilityCell.partial {
+  color: #99f6e4;
+  background: rgba(20, 184, 166, 0.16);
+}
+
+.appShell.theme-dark .providerAccessLayout .capabilityCell.planned,
+.theme-dark .providerAccessLayout .capabilityCell.planned {
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.appShell.theme-dark .providerAccessLayout .capabilityCell.localPlan,
+.theme-dark .providerAccessLayout .capabilityCell.localPlan {
+  color: #ddd6fe;
+  background: rgba(124, 58, 237, 0.2);
+}
+
 .appShell.theme-dark .providerAccessLayout .diagnosticsSummary .pass,
 .appShell.theme-dark .providerAccessLayout .diagnosticsItem.pass > span,
 .theme-dark .providerAccessLayout .diagnosticsSummary .pass,
@@ -10883,6 +11118,15 @@ body {
 @media (max-width: 720px) {
   .providerAccessLayout .matrix.compact {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .providerAccessLayout .providerCapabilityHeaderBlock {
+    grid-template-columns: 1fr;
+  }
+
+  .providerAccessLayout .providerCapabilityLegend {
+    justify-content: flex-start;
+    max-width: none;
   }
 
   .providerAccessLayout .profileCard {

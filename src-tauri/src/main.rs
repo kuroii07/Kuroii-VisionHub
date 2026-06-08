@@ -1081,7 +1081,7 @@ fn export_settings_backup(
     let path = backups_dir.join(filename);
     let payload = serde_json::json!({
         "schema": "visionhub-settings-backup/v1",
-        "version": "0.2.1",
+        "version": "0.2.2",
         "created_at": created_at,
         "app_settings": request.app_settings,
         "provider_configs": request.provider_configs,

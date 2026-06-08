@@ -135,6 +135,16 @@ type Page = AppPage;
 type ProviderDiagnosticLevel = 'pass' | 'warn' | 'fail' | 'info';
 type ProviderPlatformType = 'aggregator' | 'official' | 'local';
 type ProviderServiceTemplateStatus = 'connected' | 'configurable' | 'planned' | 'local-plan';
+type ProviderMatrixStatus = 'live' | 'configurable' | 'partial' | 'planned' | 'localPlan' | 'unsupported' | 'unknown';
+type ProviderMatrixCapabilityKey =
+  | 'textToImage'
+  | 'imageToImage'
+  | 'multiReferenceImage'
+  | 'imagesApi'
+  | 'responsesApi'
+  | 'openAICompatible'
+  | 'officialProtocol'
+  | 'localService';
 type LibraryTimeFilter = 'all' | 'today' | '7d' | '30d';
 type LibraryViewMode = 'masonry' | 'adaptive' | 'square' | 'contain' | 'list';
 type LibrarySortMode = 'newest' | 'oldest' | 'favorites' | 'provider' | 'model' | 'duration' | 'size' | 'filename';
@@ -164,6 +174,11 @@ type ProviderServiceTemplate = {
   providerId?: string;
   defaultDisplayName?: string;
   notes: string[];
+};
+type ProviderCapabilityMatrixCell = {
+  status: ProviderMatrixStatus;
+  label: string;
+  detail: string;
 };
 type LibraryMetaEntry = {
   favorite?: boolean;
@@ -493,6 +508,27 @@ const providerServiceStatusLabel: Record<ProviderServiceTemplateStatus, string> 
   planned: '待接入',
   'local-plan': '本地规划'
 };
+
+const providerMatrixStatusLabel: Record<ProviderMatrixStatus, string> = {
+  live: '已接入',
+  configurable: '可配置',
+  partial: '部分',
+  planned: '待接入',
+  localPlan: '本地规划',
+  unsupported: '不支持',
+  unknown: '待确认'
+};
+
+const providerMatrixColumns: Array<{ key: ProviderMatrixCapabilityKey; label: string }> = [
+  { key: 'textToImage', label: '文生图' },
+  { key: 'imageToImage', label: '图生图' },
+  { key: 'multiReferenceImage', label: '多参考' },
+  { key: 'imagesApi', label: 'Images' },
+  { key: 'responsesApi', label: 'Responses' },
+  { key: 'openAICompatible', label: '兼容中转' },
+  { key: 'officialProtocol', label: '官方协议' },
+  { key: 'localService', label: '本地服务' }
+];
 
 const defaultLibraryDisplaySettings: LibraryDisplaySettings = {
   showPrompt: true,
@@ -1029,13 +1065,74 @@ function sortLibraryRecords(records: GenerationRecord[], sortMode: LibrarySortMo
   });
 }
 
-const statusLabel: Record<ProviderCapabilityStatus, string> = {
-  supported: '支持',
-  partial: '部分',
-  planned: '规划',
-  unknown: '待确认',
-  unsupported: '不支持'
-};
+function mapProviderCapabilityToMatrixStatus(
+  template: ProviderServiceTemplate,
+  capabilityStatus: ProviderCapabilityStatus
+): ProviderMatrixStatus {
+  if (capabilityStatus === 'supported') {
+    return template.status === 'connected' ? 'live' : template.status === 'configurable' ? 'configurable' : template.status === 'local-plan' ? 'localPlan' : 'planned';
+  }
+  if (capabilityStatus === 'partial') return 'partial';
+  if (capabilityStatus === 'planned') return template.status === 'local-plan' ? 'localPlan' : 'planned';
+  if (capabilityStatus === 'unsupported') return 'unsupported';
+  return 'unknown';
+}
+
+function matrixStatusDetail(template: ProviderServiceTemplate, status: ProviderMatrixStatus, columnLabel: string) {
+  if (status === 'live') return `${columnLabel} 已有真实调用入口，可在当前版本使用。`;
+  if (status === 'configurable') return `${columnLabel} 可保存配置，实际可用性以服务商模型和协议为准。`;
+  if (status === 'partial') return `${columnLabel} 有入口或部分映射，仍需要按服务商协议验证。`;
+  if (status === 'planned') return `${columnLabel} 仅路线展示，当前不会开放保存、启用或试生图。`;
+  if (status === 'localPlan') return `${columnLabel} 属于本地模型规划，不影响在线平台主流程。`;
+  if (status === 'unsupported') return `${template.label} 当前不支持 ${columnLabel}。`;
+  return `${columnLabel} 需要结合服务商文档确认。`;
+}
+
+function resolveProtocolMatrixStatus(template: ProviderServiceTemplate, capability: ProviderMatrixCapabilityKey): ProviderMatrixStatus {
+  if (capability === 'localService') {
+    return template.platformType === 'local' ? 'localPlan' : 'unsupported';
+  }
+  if (capability === 'officialProtocol') {
+    if (template.platformType !== 'official') return 'unsupported';
+    return template.status === 'connected' ? 'live' : 'planned';
+  }
+  if (capability === 'openAICompatible') {
+    if (template.platformType !== 'aggregator') return 'unsupported';
+    return template.status === 'connected' ? 'live' : template.status === 'configurable' ? 'configurable' : 'planned';
+  }
+  if (capability === 'imagesApi' || capability === 'responsesApi') {
+    if (template.status === 'connected') return 'live';
+    if (template.status === 'configurable') return 'configurable';
+    if (template.status === 'local-plan') return 'unsupported';
+    return 'planned';
+  }
+  return 'unknown';
+}
+
+function getProviderCapabilityMatrixCell(
+  template: ProviderServiceTemplate,
+  column: { key: ProviderMatrixCapabilityKey; label: string },
+  providers: ReturnType<typeof listProviders>
+): ProviderCapabilityMatrixCell {
+  const provider = template.providerId ? providers.find((item) => item.id === template.providerId) : undefined;
+  let status: ProviderMatrixStatus;
+
+  if (column.key === 'textToImage' || column.key === 'imageToImage' || column.key === 'multiReferenceImage') {
+    if (provider) {
+      status = mapProviderCapabilityToMatrixStatus(template, provider.capabilities[column.key]);
+    } else {
+      status = template.status === 'local-plan' ? 'localPlan' : 'planned';
+    }
+  } else {
+    status = resolveProtocolMatrixStatus(template, column.key);
+  }
+
+  return {
+    status,
+    label: providerMatrixStatusLabel[status],
+    detail: matrixStatusDetail(template, status, column.label)
+  };
+}
 
 
 const GITHUB_REPOSITORY_URL = 'https://github.com/BlueSummer2333/VisionHub-Studio';
@@ -3097,14 +3194,6 @@ function ProviderSettingsPage(props: {
   isRunningTestGeneration: boolean;
   diagnostics: ProviderDiagnosticItem[];
 }) {
-  const capabilityRows = [
-    ['文生图', 'textToImage'],
-    ['图生图', 'imageToImage'],
-    ['编辑', 'editImage'],
-    ['多参考图', 'multiReferenceImage'],
-    ['系列图', 'generateSeries'],
-    ['图生视频', 'imageToVideo']
-  ] as const;
   const diagnosticsSummary = {
     pass: props.diagnostics.filter((item) => item.level === 'pass').length,
     warn: props.diagnostics.filter((item) => item.level === 'warn').length,
@@ -3116,6 +3205,10 @@ function ProviderSettingsPage(props: {
     value: template.id,
     label: `${template.label} · ${providerServiceStatusLabel[template.status]}`,
     description: template.description
+  }));
+  const providerMatrixRows = props.serviceTemplates.map((template) => ({
+    template,
+    cells: providerMatrixColumns.map((column) => getProviderCapabilityMatrixCell(template, column, props.providers))
   }));
   const protocolOptions = [
     {
@@ -3278,18 +3371,52 @@ function ProviderSettingsPage(props: {
             </span>
           </div>
 
-          {props.isSelectedServiceConfigurable ? (
-            <div className="matrix compact">
-              {capabilityRows.map(([label, key]) => (
-                <div className="matrixRow" key={key}>
-                  <span>{label}</span>
-                  <strong className={props.selectedProvider.capabilities[key]}>
-                    {statusLabel[props.selectedProvider.capabilities[key]]}
-                  </strong>
-                </div>
-              ))}
+          <section className="providerCapabilityPanel" aria-label="平台能力矩阵 V2">
+            <div className="providerCapabilityHeaderBlock">
+              <div>
+                <strong>能力矩阵 V2</strong>
+                <small>区分真实接入、可配置、待接入和本地规划，避免把路线模板误认为可直接生成。</small>
+              </div>
+              <div className="providerCapabilityLegend" aria-label="能力状态说明">
+                {(['live', 'configurable', 'partial', 'planned', 'localPlan'] as ProviderMatrixStatus[]).map((status) => (
+                  <span className={`capabilityCell ${status}`} key={status}>{providerMatrixStatusLabel[status]}</span>
+                ))}
+              </div>
             </div>
-          ) : null}
+            <div className="providerCapabilityScroll">
+              <div className="providerCapabilityGrid providerCapabilityTableHead" role="row">
+                <span>服务模板</span>
+                {providerMatrixColumns.map((column) => (
+                  <span key={column.key}>{column.label}</span>
+                ))}
+              </div>
+              <div className="providerCapabilityRows">
+                {providerMatrixRows.map((row) => (
+                  <button
+                    type="button"
+                    className={`providerCapabilityGrid providerCapabilityRow ${row.template.id === props.selectedServiceTemplate.id ? 'selected' : ''}`}
+                    key={row.template.id}
+                    onClick={() => props.onServiceTemplateChange(row.template.id)}
+                    aria-pressed={row.template.id === props.selectedServiceTemplate.id}
+                  >
+                    <span className="providerCapabilityService">
+                      <strong>{row.template.label}</strong>
+                      <small>{providerServiceStatusLabel[row.template.status]} · {row.template.description}</small>
+                    </span>
+                    {row.cells.map((cell, index) => (
+                      <span
+                        className={`capabilityCell ${cell.status}`}
+                        title={`${providerMatrixColumns[index].label}：${cell.label}。${cell.detail}`}
+                        key={providerMatrixColumns[index].key}
+                      >
+                        {cell.label}
+                      </span>
+                    ))}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
 
           {props.isSelectedServiceConfigurable && props.supportsOpenAICompatible ? (
             <div className="relayBox standalone">
@@ -4096,7 +4223,7 @@ function SettingsPage(props: {
           <div className="settingsRowMain">
             <strong>版本</strong>
           </div>
-          <span className="settingsValue">0.2.1</span>
+          <span className="settingsValue">0.2.2</span>
         </div>
         <div className="settingsListRow">
           <div className="settingsRowMain">
@@ -6200,7 +6327,7 @@ function SystemInfoModal(props: {
   onClose: () => void;
 }) {
   const rows = [
-    { label: '版本', value: '0.2.1' },
+    { label: '版本', value: '0.2.2' },
     { label: '运行环境', value: props.desktopRuntime ? 'Tauri 桌面端' : 'Web 预览模式' },
     { label: '作品画廊目录', value: props.storageSettings?.resolved_library_dir ?? (props.desktopRuntime ? '正在读取…' : '桌面端可用') },
     { label: '默认图库目录', value: props.storageSettings?.default_library_dir ?? '—' },

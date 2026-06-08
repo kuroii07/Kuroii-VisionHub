@@ -115,6 +115,7 @@ visionhub-studio/
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
+- 平台接入页已加入能力矩阵 V2，可横向区分文生图、图生图、多参考图、Images、Responses、兼容中转、官方协议和本地服务状态。
 - 旧中转站配置迁移会保留 profile id，避免丢失 `profile:${profileId}` 系统凭据绑定。
 - 作品画廊 V2 已完成一轮可用化：隐藏式分类、文件夹、收藏集、评分、颜色取样、详情信息和筛选栏都已接入。
 - 图生图工作台已支持参考图拖拽、粘贴、排序、角色标记和最近生成图复用。
@@ -124,6 +125,13 @@ visionhub-studio/
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.2.2 平台能力矩阵 V2
+
+- 平台接入页新增能力矩阵 V2，按服务模板横向展示“已接入 / 可配置 / 部分 / 待接入 / 本地规划”等状态。
+- 矩阵覆盖文生图、图生图、多参考图、Images、Responses、兼容中转、官方协议和本地服务，减少用户误把路线模板当成可直接生成入口。
+- 待接入和本地模型模板继续保持只读规划，不开放保存、启用或试生图。
+- 能力矩阵补齐浅色 / 深色模式样式，并对长服务名和长说明做截断与横向滚动保护。
 
 ### 平台接入与生成稳定性
 
@@ -389,7 +397,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.2.1
+- 版本：0.2.2
 - 平台：Windows 优先
 - 发布形态：本地自用 release exe / MSI / NSIS 安装包
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。
@@ -398,10 +406,6 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 详细执行计划、版本号节奏和验收规则见 [VisionHub Studio 后续开发总控计划](docs/visionhub-development-plan.md)。后续计划性开发先读 `AGENTS.md` 和该文档，再进入对应专项文档。
 
-- 平台能力矩阵 V2
-  - 把“已接入 / 可配置 / 待接入 / 本地规划”状态做成更清晰的能力矩阵。
-  - 区分文生图、图生图、多参考图、Responses、Images、OpenAI-compatible、官方协议和本地服务能力。
-  - 待接入模板继续保持只读规划状态，避免误导用户以为可以直接生成。
 - 图生图协议适配
   - 针对聚合站 / OpenAI 兼容中转继续细化图生图请求映射。
   - 支持不同服务商对参考图字段、图片数组、endpoint path、Responses input_image 的差异配置。
