@@ -10233,6 +10233,74 @@ body {
   background: rgba(124, 58, 237, 0.13);
 }
 
+.providerAccessLayout .providerCapabilitySummary {
+  display: grid;
+  grid-template-columns: minmax(116px, 0.5fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--app-surface-2) 70%, transparent);
+}
+
+.providerAccessLayout .providerCapabilitySummaryText {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.providerAccessLayout .providerCapabilitySummaryText strong {
+  color: var(--app-text);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.providerAccessLayout .providerCapabilitySummaryText small {
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.providerAccessLayout .providerCapabilitySummaryCells {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.providerAccessLayout .capabilityMatrixToggle {
+  min-width: 104px;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--app-line);
+  border-radius: 14px;
+  padding: 0 12px;
+  color: var(--app-text-2);
+  background: var(--app-surface);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.providerAccessLayout .capabilityMatrixToggle:hover {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 38%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 9%, var(--app-surface));
+}
+
+.providerAccessLayout .capabilityMatrixToggle svg {
+  transition: transform 0.16s ease;
+}
+
+.providerAccessLayout .capabilityMatrixToggle.open svg {
+  transform: rotate(90deg);
+}
+
 .providerAccessLayout .providerCapabilityPanel {
   display: grid;
   gap: 12px;
@@ -10241,6 +10309,10 @@ body {
   border: 1px solid var(--app-line);
   border-radius: 18px;
   background: color-mix(in srgb, var(--app-surface-2) 74%, transparent);
+}
+
+.providerAccessLayout .providerCapabilityPanel.expanded {
+  margin-top: 12px;
 }
 
 .providerAccessLayout .providerCapabilityHeaderBlock {
@@ -10532,6 +10604,12 @@ body {
   margin-top: 14px;
   padding: 14px;
   border-radius: 18px;
+}
+
+.providerAccessLayout .providerFieldHint {
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .providerAccessLayout .profileCard {
@@ -11006,6 +11084,19 @@ body {
   background: color-mix(in srgb, var(--app-accent-strong) 18%, rgba(255, 255, 255, 0.06));
 }
 
+.appShell.theme-dark .providerAccessLayout .providerCapabilitySummary,
+.theme-dark .providerAccessLayout .providerCapabilitySummary {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.appShell.theme-dark .providerAccessLayout .capabilityMatrixToggle,
+.theme-dark .providerAccessLayout .capabilityMatrixToggle {
+  color: #dbeafe;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+}
+
 .appShell.theme-dark .providerAccessLayout .providerCapabilityPanel,
 .theme-dark .providerAccessLayout .providerCapabilityPanel {
   border-color: rgba(255, 255, 255, 0.1);
@@ -11127,6 +11218,14 @@ body {
   .providerAccessLayout .providerCapabilityLegend {
     justify-content: flex-start;
     max-width: none;
+  }
+
+  .providerAccessLayout .providerCapabilitySummary {
+    grid-template-columns: 1fr;
+  }
+
+  .providerAccessLayout .capabilityMatrixToggle {
+    width: 100%;
   }
 
   .providerAccessLayout .profileCard {

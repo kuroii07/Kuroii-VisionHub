@@ -41,7 +41,7 @@
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 import type { InspirationAsset } from '../domain/inspirationTypes';
-import type { GenerationRecord, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
+import type { GenerationRecord, ImageToImageAdapter, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
 import { listProviders } from '../providers/registry';
 import {
   chooseLibraryDir,
@@ -66,6 +66,7 @@ import {
 import {
   defaultEndpointForProtocol,
   defaultOpenAICompatibleConfig,
+  IMAGE_TO_IMAGE_ADAPTERS,
   exportProviderConfigMap,
   loadProviderConfig,
   normalizeProviderConfig,
@@ -2442,6 +2443,13 @@ export function App() {
         detail: `当前协议：${targetConfig.protocol}；目标接口：${endpointPreview || targetConfig.endpointPath}`
       });
 
+      push({
+        id: 'image-to-image-adapter',
+        label: '图生图映射',
+        level: targetConfig.imageToImageAdapter === 'auto' ? 'info' : 'pass',
+        detail: imageToImageAdapterDiagnosticDetail(targetConfig, targetProviderId)
+      });
+
       if (targetConfig.protocol === 'responses') {
         push({
           id: 'responses-background',
@@ -3210,6 +3218,24 @@ function ProviderSettingsPage(props: {
     template,
     cells: providerMatrixColumns.map((column) => getProviderCapabilityMatrixCell(template, column, props.providers))
   }));
+  const [isCapabilityMatrixOpen, setIsCapabilityMatrixOpen] = useState(false);
+  const summaryColumnKeys: ProviderMatrixCapabilityKey[] = [
+    'textToImage',
+    'imageToImage',
+    'multiReferenceImage',
+    props.selectedPlatformType === 'aggregator'
+      ? 'openAICompatible'
+      : props.selectedPlatformType === 'official'
+        ? 'officialProtocol'
+        : 'localService'
+  ];
+  const selectedCapabilitySummary = summaryColumnKeys.map((key) => {
+    const column = providerMatrixColumns.find((item) => item.key === key) ?? providerMatrixColumns[0];
+    return {
+      column,
+      cell: getProviderCapabilityMatrixCell(props.selectedServiceTemplate, column, props.providers)
+    };
+  });
   const protocolOptions = [
     {
       value: 'images',
@@ -3232,6 +3258,10 @@ function ProviderSettingsPage(props: {
       description: '适合非标准图片接口，可手动填写 endpoint path。'
     }
   ];
+  const imageToImageAdapterOptions = IMAGE_TO_IMAGE_ADAPTERS.map((adapter) => ({
+    value: adapter,
+    label: imageToImageAdapterLabel(adapter)
+  }));
 
   return (
     <>
@@ -3371,52 +3401,31 @@ function ProviderSettingsPage(props: {
             </span>
           </div>
 
-          <section className="providerCapabilityPanel" aria-label="平台能力矩阵 V2">
-            <div className="providerCapabilityHeaderBlock">
-              <div>
-                <strong>能力矩阵 V2</strong>
-                <small>区分真实接入、可配置、待接入和本地规划，避免把路线模板误认为可直接生成。</small>
-              </div>
-              <div className="providerCapabilityLegend" aria-label="能力状态说明">
-                {(['live', 'configurable', 'partial', 'planned', 'localPlan'] as ProviderMatrixStatus[]).map((status) => (
-                  <span className={`capabilityCell ${status}`} key={status}>{providerMatrixStatusLabel[status]}</span>
-                ))}
-              </div>
+          <div className="providerCapabilitySummary">
+            <div className="providerCapabilitySummaryText">
+              <strong>当前能力</strong>
+              <small>完整矩阵按需展开，配置详情保持优先。</small>
             </div>
-            <div className="providerCapabilityScroll">
-              <div className="providerCapabilityGrid providerCapabilityTableHead" role="row">
-                <span>服务模板</span>
-                {providerMatrixColumns.map((column) => (
-                  <span key={column.key}>{column.label}</span>
-                ))}
-              </div>
-              <div className="providerCapabilityRows">
-                {providerMatrixRows.map((row) => (
-                  <button
-                    type="button"
-                    className={`providerCapabilityGrid providerCapabilityRow ${row.template.id === props.selectedServiceTemplate.id ? 'selected' : ''}`}
-                    key={row.template.id}
-                    onClick={() => props.onServiceTemplateChange(row.template.id)}
-                    aria-pressed={row.template.id === props.selectedServiceTemplate.id}
-                  >
-                    <span className="providerCapabilityService">
-                      <strong>{row.template.label}</strong>
-                      <small>{providerServiceStatusLabel[row.template.status]} · {row.template.description}</small>
-                    </span>
-                    {row.cells.map((cell, index) => (
-                      <span
-                        className={`capabilityCell ${cell.status}`}
-                        title={`${providerMatrixColumns[index].label}：${cell.label}。${cell.detail}`}
-                        key={providerMatrixColumns[index].key}
-                      >
-                        {cell.label}
-                      </span>
-                    ))}
-                  </button>
-                ))}
-              </div>
+            <div className="providerCapabilitySummaryCells" aria-label="当前服务模板关键能力">
+              {selectedCapabilitySummary.map(({ column, cell }) => (
+                <span
+                  className={`capabilityCell ${cell.status}`}
+                  title={`${column.label}：${cell.label}。${cell.detail}`}
+                  key={column.key}
+                >
+                  {column.label} · {cell.label}
+                </span>
+              ))}
             </div>
-          </section>
+            <button
+              type="button"
+              className={`capabilityMatrixToggle ${isCapabilityMatrixOpen ? 'open' : ''}`}
+              onClick={() => setIsCapabilityMatrixOpen((value) => !value)}
+              aria-expanded={isCapabilityMatrixOpen}
+            >
+              <ChevronRight size={15} /> {isCapabilityMatrixOpen ? '收起矩阵' : '查看矩阵'}
+            </button>
+          </div>
 
           {props.isSelectedServiceConfigurable && props.supportsOpenAICompatible ? (
             <div className="relayBox standalone">
@@ -3495,6 +3504,17 @@ function ProviderSettingsPage(props: {
                   onChange={(value) => props.onConfigChange('protocol', value as OpenAICompatibleConfig['protocol'])}
                   options={protocolOptions}
                 />
+              </label>
+              <label>
+                图生图映射
+                <StudioSelect
+                  value={props.providerConfig.imageToImageAdapter}
+                  onChange={(value) => props.onConfigChange('imageToImageAdapter', value as ImageToImageAdapter)}
+                  options={imageToImageAdapterOptions}
+                />
+                <small className="providerFieldHint">
+                  {imageToImageAdapterDiagnosticDetail(props.providerConfig, props.selectedProviderId)}
+                </small>
               </label>
               <label>
                 接口路径
@@ -3590,6 +3610,55 @@ function ProviderSettingsPage(props: {
               </div>
             </div>
           )}
+
+          {isCapabilityMatrixOpen ? (
+            <section className="providerCapabilityPanel expanded" aria-label="平台能力矩阵 V2">
+              <div className="providerCapabilityHeaderBlock">
+                <div>
+                  <strong>能力矩阵 V2</strong>
+                  <small>按服务模板横向查看真实接入、可配置、待接入和本地规划状态。</small>
+                </div>
+                <div className="providerCapabilityLegend" aria-label="能力状态说明">
+                  {(['live', 'configurable', 'partial', 'planned', 'localPlan'] as ProviderMatrixStatus[]).map((status) => (
+                    <span className={`capabilityCell ${status}`} key={status}>{providerMatrixStatusLabel[status]}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="providerCapabilityScroll">
+                <div className="providerCapabilityGrid providerCapabilityTableHead" role="row">
+                  <span>服务模板</span>
+                  {providerMatrixColumns.map((column) => (
+                    <span key={column.key}>{column.label}</span>
+                  ))}
+                </div>
+                <div className="providerCapabilityRows">
+                  {providerMatrixRows.map((row) => (
+                    <button
+                      type="button"
+                      className={`providerCapabilityGrid providerCapabilityRow ${row.template.id === props.selectedServiceTemplate.id ? 'selected' : ''}`}
+                      key={row.template.id}
+                      onClick={() => props.onServiceTemplateChange(row.template.id)}
+                      aria-pressed={row.template.id === props.selectedServiceTemplate.id}
+                    >
+                      <span className="providerCapabilityService">
+                        <strong>{row.template.label}</strong>
+                        <small>{providerServiceStatusLabel[row.template.status]} · {row.template.description}</small>
+                      </span>
+                      {row.cells.map((cell, index) => (
+                        <span
+                          className={`capabilityCell ${cell.status}`}
+                          title={`${providerMatrixColumns[index].label}：${cell.label}。${cell.detail}`}
+                          key={providerMatrixColumns[index].key}
+                        >
+                          {cell.label}
+                        </span>
+                      ))}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+          ) : null}
         </div>
       </section>
     </>
@@ -4223,7 +4292,7 @@ function SettingsPage(props: {
           <div className="settingsRowMain">
             <strong>版本</strong>
           </div>
-          <span className="settingsValue">0.2.2</span>
+          <span className="settingsValue">0.2.3</span>
         </div>
         <div className="settingsListRow">
           <div className="settingsRowMain">
@@ -6327,7 +6396,7 @@ function SystemInfoModal(props: {
   onClose: () => void;
 }) {
   const rows = [
-    { label: '版本', value: '0.2.2' },
+    { label: '版本', value: '0.2.3' },
     { label: '运行环境', value: props.desktopRuntime ? 'Tauri 桌面端' : 'Web 预览模式' },
     { label: '作品画廊目录', value: props.storageSettings?.resolved_library_dir ?? (props.desktopRuntime ? '正在读取…' : '桌面端可用') },
     { label: '默认图库目录', value: props.storageSettings?.default_library_dir ?? '—' },
@@ -6613,6 +6682,42 @@ function protocolLabel(protocol: OpenAICompatibleConfig['protocol']) {
     'custom-images': 'Custom'
   };
   return labels[protocol];
+}
+
+function imageToImageAdapterLabel(adapter: ImageToImageAdapter) {
+  const labels: Record<ImageToImageAdapter, string> = {
+    auto: '自动选择',
+    'openai-images-edit': 'OpenAI Images edits',
+    'responses-input-image': 'Responses input_image',
+    'chat-image-url': 'Chat image_url',
+    'json-image-array': 'JSON image/images'
+  };
+  return labels[adapter];
+}
+
+function resolveImageToImageAdapterForDisplay(
+  config: OpenAICompatibleConfig,
+  providerId: string
+): Exclude<ImageToImageAdapter, 'auto'> {
+  if (config.imageToImageAdapter !== 'auto') return config.imageToImageAdapter;
+  if (providerId === 'openai-gpt-image' && config.protocol === 'images') return 'openai-images-edit';
+  if (config.protocol === 'responses') return 'responses-input-image';
+  if (config.protocol === 'chat-completions') return 'chat-image-url';
+  return 'json-image-array';
+}
+
+function imageToImageAdapterDiagnosticDetail(config: OpenAICompatibleConfig, providerId: string) {
+  const resolved = resolveImageToImageAdapterForDisplay(config, providerId);
+  const prefix = config.imageToImageAdapter === 'auto'
+    ? `自动：${imageToImageAdapterLabel(resolved)}`
+    : `固定：${imageToImageAdapterLabel(resolved)}`;
+  const fieldSummary: Record<Exclude<ImageToImageAdapter, 'auto'>, string> = {
+    'openai-images-edit': 'multipart 字段 image / image[]，官方 Images 图生图优先。',
+    'responses-input-image': 'JSON content[] 使用 input_text + input_image。',
+    'chat-image-url': 'JSON messages[] 使用 text + image_url。',
+    'json-image-array': 'JSON 使用 image 首图 + images 数组，适合自定义中转。'
+  };
+  return `${prefix}；${fieldSummary[resolved]}`;
 }
 
 function formatTime(value: string) {

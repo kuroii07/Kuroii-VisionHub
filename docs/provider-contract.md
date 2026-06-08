@@ -35,6 +35,18 @@ VisionHub Studio treats every online or local image platform as a Provider Adapt
 - Keep provider raw responses in task details only after masking credentials.
 - Show clear errors for quota, moderation, network, auth, and provider parameter mismatch.
 
+## Image-to-image mapping V2
+
+Provider profiles can set `imageToImageAdapter` to control how reference images are sent:
+
+- `auto`: resolve from provider and protocol.
+- `openai-images-edit`: multipart `/v1/images/edits` with `image` and `image[]`.
+- `responses-input-image`: Responses JSON `content[]` with `input_text` and `input_image`.
+- `chat-image-url`: Chat Completions JSON `content[]` with `text` and `image_url`.
+- `json-image-array`: custom JSON with first `image` plus `images` array.
+
+Generation results include `raw.visionhub_protocol_mapping` so failed records can show the resolved adapter, endpoint path, request shape, reference count, roles, and field names without exposing credentials.
+
 ## Current implementation note
 
 The UI uses `MockProviderAdapter` by default so the prototype can be reviewed without API keys.

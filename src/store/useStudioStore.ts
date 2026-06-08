@@ -135,6 +135,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         metadata,
         baseUrl: useOpenAICompatibleConfig ? providerConfig.baseUrl : undefined,
         protocol: useOpenAICompatibleConfig ? providerConfig.protocol : undefined,
+        imageToImageAdapter: useOpenAICompatibleConfig ? providerConfig.imageToImageAdapter : undefined,
         endpointPath: useOpenAICompatibleConfig ? providerConfig.endpointPath : undefined,
         extraHeaders: useOpenAICompatibleConfig
           ? parseExtraHeaders(providerConfig.extraHeadersJson)

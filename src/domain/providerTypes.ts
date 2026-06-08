@@ -72,6 +72,13 @@ export interface ProviderManifest {
 
 export type GenerationMode = 'text-to-image' | 'image-to-image' | 'imported';
 
+export type ImageToImageAdapter =
+  | 'auto'
+  | 'openai-images-edit'
+  | 'responses-input-image'
+  | 'chat-image-url'
+  | 'json-image-array';
+
 export interface ReferenceImage {
   id: string;
   name?: string;
@@ -100,6 +107,7 @@ export interface ImageGenerationRequest {
   seed?: number;
   baseUrl?: string;
   protocol?: 'images' | 'responses' | 'chat-completions' | 'custom-images';
+  imageToImageAdapter?: ImageToImageAdapter;
   endpointPath?: string;
   extraHeaders?: Record<string, string>;
   secretId?: string;

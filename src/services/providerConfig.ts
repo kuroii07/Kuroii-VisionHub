@@ -1,14 +1,26 @@
+import type { ImageToImageAdapter } from '../domain/providerTypes';
+import { readStorageValue, writeStorageValue } from './safeStorage';
+
 export type OpenAICompatibleProtocol =
   | 'images'
   | 'responses'
   | 'chat-completions'
   | 'custom-images';
 
+export const IMAGE_TO_IMAGE_ADAPTERS: ImageToImageAdapter[] = [
+  'auto',
+  'openai-images-edit',
+  'responses-input-image',
+  'chat-image-url',
+  'json-image-array'
+];
+
 export interface OpenAICompatibleConfig {
   displayName: string;
   baseUrl: string;
   modelId: string;
   protocol: OpenAICompatibleProtocol;
+  imageToImageAdapter: ImageToImageAdapter;
   endpointPath: string;
   extraHeadersJson: string;
   modelOptions: string[];
@@ -21,8 +33,6 @@ export interface ProviderConfigPreset {
   config: OpenAICompatibleConfig;
 }
 
-import { readStorageValue, writeStorageValue } from './safeStorage';
-
 const STORAGE_KEY = 'visionhub.provider.configs';
 
 type ProviderConfigMap = Record<string, Partial<OpenAICompatibleConfig>>;
@@ -34,6 +44,7 @@ export const defaultOpenAICompatibleConfig: OpenAICompatibleConfig = {
   baseUrl: '',
   modelId: 'gpt-image-1',
   protocol: 'images',
+  imageToImageAdapter: 'auto',
   endpointPath: '/v1/images/generations',
   extraHeadersJson: '{}',
   modelOptions: []
@@ -50,6 +61,7 @@ export const PROVIDER_CONFIG_PRESETS: ProviderConfigPreset[] = [
       baseUrl: OFFICIAL_OPENAI_BASE_URL,
       modelId: 'gpt-image-1',
       protocol: 'images',
+      imageToImageAdapter: 'openai-images-edit',
       endpointPath: '/v1/images/generations'
     }
   },
@@ -63,6 +75,7 @@ export const PROVIDER_CONFIG_PRESETS: ProviderConfigPreset[] = [
       baseUrl: OFFICIAL_OPENAI_BASE_URL,
       modelId: 'gpt-image-1',
       protocol: 'responses',
+      imageToImageAdapter: 'responses-input-image',
       endpointPath: '/v1/responses'
     }
   },
@@ -76,6 +89,7 @@ export const PROVIDER_CONFIG_PRESETS: ProviderConfigPreset[] = [
       baseUrl: 'https://your-relay.example.com',
       modelId: 'gpt-image-1',
       protocol: 'images',
+      imageToImageAdapter: 'auto',
       endpointPath: '/v1/images/generations'
     }
   },
@@ -89,6 +103,7 @@ export const PROVIDER_CONFIG_PRESETS: ProviderConfigPreset[] = [
       baseUrl: 'https://your-provider.example.com',
       modelId: 'image-model-id',
       protocol: 'custom-images',
+      imageToImageAdapter: 'json-image-array',
       endpointPath: '/v1/images/generations'
     }
   }
@@ -105,6 +120,12 @@ export function defaultEndpointForProtocol(protocol: OpenAICompatibleProtocol) {
     default:
       return '/v1/images/generations';
   }
+}
+
+export function normalizeImageToImageAdapter(value: unknown): ImageToImageAdapter {
+  return IMAGE_TO_IMAGE_ADAPTERS.includes(value as ImageToImageAdapter)
+    ? (value as ImageToImageAdapter)
+    : defaultOpenAICompatibleConfig.imageToImageAdapter;
 }
 
 export function isOfficialOpenAIBaseUrl(baseUrl: string) {
@@ -163,6 +184,8 @@ export function normalizeProviderConfig(config: Partial<OpenAICompatibleConfig>)
     displayName: String(merged.displayName || defaultOpenAICompatibleConfig.displayName),
     baseUrl: String(merged.baseUrl || defaultOpenAICompatibleConfig.baseUrl).trim(),
     modelId: String(merged.modelId || defaultOpenAICompatibleConfig.modelId).trim(),
+    protocol: merged.protocol,
+    imageToImageAdapter: normalizeImageToImageAdapter(merged.imageToImageAdapter),
     endpointPath:
       merged.protocol === 'custom-images'
         ? String(merged.endpointPath || defaultEndpointForProtocol('images')).trim()
@@ -205,6 +228,7 @@ export function serializeProviderConfig(config: OpenAICompatibleConfig) {
       baseUrl: exportable.baseUrl,
       modelId: exportable.modelId,
       protocol: exportable.protocol,
+      imageToImageAdapter: exportable.imageToImageAdapter,
       endpointPath: exportable.endpointPath,
       extraHeadersJson: exportable.extraHeadersJson,
       modelOptions: exportable.modelOptions

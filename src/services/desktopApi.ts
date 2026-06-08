@@ -195,6 +195,7 @@ export async function generateOpenAIImage(request: ImageGenerationRequest) {
       count: request.count,
       base_url: request.baseUrl,
       protocol: request.protocol,
+      image_to_image_adapter: request.imageToImageAdapter,
       endpoint_path: request.endpointPath,
       extra_headers: request.extraHeaders,
       secret_id: request.secretId,

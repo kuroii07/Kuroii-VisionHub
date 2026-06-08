@@ -38,6 +38,7 @@ struct OpenAIImageRequest {
     reference_images: Option<Vec<ReferenceImage>>,
     base_url: Option<String>,
     protocol: Option<String>,
+    image_to_image_adapter: Option<String>,
     endpoint_path: Option<String>,
     extra_headers: Option<std::collections::HashMap<String, String>>,
     secret_id: Option<String>,
@@ -55,6 +56,19 @@ struct ReferenceImage {
     source_generation_id: Option<String>,
     role: Option<String>,
     added_at: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ImageToImageProtocolMapping {
+    generation_mode: String,
+    image_to_image_adapter: String,
+    protocol: String,
+    endpoint_path: String,
+    request_shape: String,
+    reference_count: usize,
+    reference_roles: Vec<String>,
+    reference_fields: Vec<String>,
+    is_image_to_image: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -324,11 +338,19 @@ async fn generate_openai_image(
         request.endpoint_path.as_deref(),
         protocol.as_str(),
     )?;
-    let use_openai_images_edit =
-        request.provider_id == "openai-gpt-image" && protocol == "images" && is_image_to_image;
+    let mut protocol_mapping = resolve_image_to_image_protocol_mapping(
+        &request,
+        protocol.as_str(),
+        &endpoint_path,
+        &generation_mode,
+        &reference_images,
+    );
+    let use_openai_images_edit = is_image_to_image
+        && protocol_mapping.image_to_image_adapter == "openai-images-edit";
     if use_openai_images_edit && endpoint_path == "/v1/images/generations" {
         endpoint_path = "/v1/images/edits".to_string();
     }
+    protocol_mapping.endpoint_path = endpoint_path.clone();
 
     let base_url = normalize_base_url(
         request
@@ -349,7 +371,7 @@ async fn generate_openai_image(
         let form = build_openai_images_edit_form(&client, &request, &reference_images, &api_size).await?;
         builder = builder.multipart(form);
     } else {
-        let payload = build_openai_compatible_payload(&request, protocol.as_str(), &api_size);
+        let payload = build_openai_compatible_payload(&request, protocol.as_str(), &api_size, &protocol_mapping);
         responses_background_requested = protocol == "responses";
         request_payload = Some(payload.clone());
         builder = builder.json(&payload);
@@ -419,11 +441,13 @@ async fn generate_openai_image(
                     None,
                     Some(&preview),
                     Some(&parse_error.to_string()),
+                    Some(&protocol_mapping),
                 )),
                 raw: serde_json::json!({
                     "http_status": status.as_u16(),
                     "parse_error": parse_error.to_string(),
-                    "body_preview": preview
+                    "body_preview": preview,
+                    "visionhub_protocol_mapping": protocol_mapping_raw(&protocol_mapping)
                 }),
                 created_at: chrono_like_timestamp(),
                 generation_mode: Some(generation_mode),
@@ -457,7 +481,7 @@ async fn generate_openai_image(
                     cost_hint: Some("已创建后台任务但未取回有效图片；以中转站/供应商账单为准".to_string()),
                     duration_ms: Some(started.elapsed().as_millis()),
                     error: Some(error),
-                    raw,
+                    raw: with_protocol_mapping_raw(raw, &protocol_mapping),
                     created_at: chrono_like_timestamp(),
                     generation_mode: Some(generation_mode),
                     reference_images: Some(reference_images),
@@ -486,8 +510,10 @@ async fn generate_openai_image(
             extract_error_message(&raw).as_deref(),
             None,
             None,
+            Some(&protocol_mapping),
         ))
     };
+    raw = with_protocol_mapping_raw(raw, &protocol_mapping);
 
     Ok(ImageGenerationResult {
         id: format!("openai-{}", chrono_like_timestamp_millis()),
@@ -1081,7 +1107,7 @@ fn export_settings_backup(
     let path = backups_dir.join(filename);
     let payload = serde_json::json!({
         "schema": "visionhub-settings-backup/v1",
-        "version": "0.2.2",
+        "version": "0.2.3",
         "created_at": created_at,
         "app_settings": request.app_settings,
         "provider_configs": request.provider_configs,
@@ -1113,6 +1139,103 @@ fn normalize_base_url(base_url: &str) -> Result<String, String> {
         );
     }
     Ok(base_url)
+}
+
+fn resolve_image_to_image_protocol_mapping(
+    request: &OpenAIImageRequest,
+    protocol: &str,
+    endpoint_path: &str,
+    generation_mode: &str,
+    references: &[ReferenceImage],
+) -> ImageToImageProtocolMapping {
+    let is_image_to_image = generation_mode == "image-to-image" && !references.is_empty();
+    let requested_adapter = request
+        .image_to_image_adapter
+        .as_deref()
+        .unwrap_or("auto")
+        .trim();
+    let adapter = if !is_image_to_image {
+        "text-to-image".to_string()
+    } else if requested_adapter != "auto" && is_supported_image_to_image_adapter(requested_adapter) {
+        requested_adapter.to_string()
+    } else if request.provider_id == "openai-gpt-image" && protocol == "images" {
+        "openai-images-edit".to_string()
+    } else {
+        match protocol {
+            "responses" => "responses-input-image".to_string(),
+            "chat-completions" => "chat-image-url".to_string(),
+            _ => "json-image-array".to_string(),
+        }
+    };
+    let reference_fields = match adapter.as_str() {
+        "openai-images-edit" => {
+            if references.len() > 1 {
+                vec!["image".to_string(), "image[]".to_string()]
+            } else {
+                vec!["image".to_string()]
+            }
+        }
+        "responses-input-image" => vec!["input_text".to_string(), "input_image".to_string()],
+        "chat-image-url" => vec!["text".to_string(), "image_url".to_string()],
+        "json-image-array" => vec!["image".to_string(), "images".to_string()],
+        _ => Vec::new(),
+    };
+    let request_shape = if adapter == "openai-images-edit" {
+        "multipart"
+    } else {
+        "json"
+    };
+
+    ImageToImageProtocolMapping {
+        generation_mode: generation_mode.to_string(),
+        image_to_image_adapter: adapter,
+        protocol: protocol.to_string(),
+        endpoint_path: endpoint_path.to_string(),
+        request_shape: request_shape.to_string(),
+        reference_count: references.len(),
+        reference_roles: references
+            .iter()
+            .filter_map(|reference| reference.role.clone())
+            .collect(),
+        reference_fields,
+        is_image_to_image,
+    }
+}
+
+fn is_supported_image_to_image_adapter(adapter: &str) -> bool {
+    matches!(
+        adapter,
+        "openai-images-edit" | "responses-input-image" | "chat-image-url" | "json-image-array"
+    )
+}
+
+fn protocol_mapping_raw(mapping: &ImageToImageProtocolMapping) -> Value {
+    serde_json::json!({
+        "generation_mode": &mapping.generation_mode,
+        "image_to_image_adapter": &mapping.image_to_image_adapter,
+        "protocol": &mapping.protocol,
+        "endpoint_path": &mapping.endpoint_path,
+        "reference_count": mapping.reference_count,
+        "reference_roles": &mapping.reference_roles,
+        "request_shape": &mapping.request_shape,
+        "reference_fields": &mapping.reference_fields
+    })
+}
+
+fn with_protocol_mapping_raw(raw: Value, mapping: &ImageToImageProtocolMapping) -> Value {
+    match raw {
+        Value::Object(mut map) => {
+            map.insert(
+                "visionhub_protocol_mapping".to_string(),
+                protocol_mapping_raw(mapping),
+            );
+            Value::Object(map)
+        }
+        other => serde_json::json!({
+            "response": other,
+            "visionhub_protocol_mapping": protocol_mapping_raw(mapping)
+        }),
+    }
 }
 
 fn normalize_openai_image_size_for_base_url(base_url: &str, requested_size: &str) -> String {
@@ -1194,6 +1317,7 @@ async fn poll_background_response(
             return Err(format_openai_compatible_error(
                 status.as_u16(),
                 extract_error_message(&raw).as_deref(),
+                None,
                 None,
                 None,
             ));
@@ -1312,6 +1436,7 @@ fn format_openai_compatible_error(
     json_message: Option<&str>,
     body_preview: Option<&str>,
     parse_error: Option<&str>,
+    protocol_mapping: Option<&ImageToImageProtocolMapping>,
 ) -> String {
     let lower_message = json_message.unwrap_or("").to_ascii_lowercase();
     let prefix = if lower_message.contains("billing hard limit") {
@@ -1340,6 +1465,16 @@ fn format_openai_compatible_error(
     }
     if matches!(status_code, 408 | 524) {
         parts.push("这通常不是配置错误；如果中转站记录显示后续成功，说明同步连接先超时了。建议重启新版程序后重试后台轮询，或降低尺寸/数量后再试。".to_string());
+    }
+    if matches!(status_code, 400 | 404 | 422) {
+        if let Some(mapping) = protocol_mapping.filter(|mapping| mapping.is_image_to_image) {
+            parts.push(format!(
+                "当前图生图映射为 {}，请求形态 {}，参考图字段 {}；如果服务商不支持这种字段结构，请在平台接入里切换“图生图映射”或调整协议/接口路径。",
+                mapping.image_to_image_adapter,
+                mapping.request_shape,
+                mapping.reference_fields.join(", ")
+            ));
+        }
     }
     parts.join(" ")
 }
@@ -2574,7 +2709,12 @@ fn mime_from_output_format(output_format: Option<&str>) -> &'static str {
     }
 }
 
-fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str, api_size: &str) -> Value {
+fn build_openai_compatible_payload(
+    request: &OpenAIImageRequest,
+    protocol: &str,
+    api_size: &str,
+    mapping: &ImageToImageProtocolMapping,
+) -> Value {
     let reference_data_urls: Vec<String> = request
         .reference_images
         .as_ref()
@@ -2592,16 +2732,11 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str,
                 .collect()
         })
         .unwrap_or_default();
-    let is_image_to_image = request
-        .generation_mode
-        .as_deref()
-        .map(|mode| mode == "image-to-image")
-        .unwrap_or(false)
-        && !reference_data_urls.is_empty();
+    let is_image_to_image = mapping.is_image_to_image && !reference_data_urls.is_empty();
 
-    match protocol {
-        "responses" => {
-            if is_image_to_image {
+    if is_image_to_image {
+        return match mapping.image_to_image_adapter.as_str() {
+            "responses-input-image" => {
                 let mut content = vec![serde_json::json!({
                     "type": "input_text",
                     "text": request.prompt
@@ -2621,20 +2756,8 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str,
                     "size": api_size,
                     "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string())
                 })
-            } else {
-                serde_json::json!({
-                    "model": request.model_id,
-                    "input": request.prompt,
-                    "tools": [{ "type": "image_generation" }],
-                    "background": true,
-                    "store": true,
-                    "size": api_size,
-                    "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string())
-                })
             }
-        }
-        "chat-completions" => {
-            if is_image_to_image {
+            "chat-image-url" => {
                 let mut content = vec![serde_json::json!({
                     "type": "text",
                     "text": request.prompt
@@ -2652,41 +2775,53 @@ fn build_openai_compatible_payload(request: &OpenAIImageRequest, protocol: &str,
                     "size": api_size,
                     "n": request.count.max(1).min(4)
                 })
-            } else {
-                serde_json::json!({
-                    "model": request.model_id,
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": request.prompt
-                        }
-                    ],
-                    "modalities": ["text", "image"],
-                    "size": api_size,
-                    "n": request.count.max(1).min(4)
-                })
             }
+            _ => serde_json::json!({
+                "model": request.model_id,
+                "prompt": request.prompt,
+                "image": reference_data_urls.first(),
+                "images": reference_data_urls,
+                "size": api_size,
+                "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string()),
+                "n": request.count.max(1).min(4)
+            }),
+        };
+    }
+
+    match protocol {
+        "responses" => {
+            serde_json::json!({
+                "model": request.model_id,
+                "input": request.prompt,
+                "tools": [{ "type": "image_generation" }],
+                "background": true,
+                "store": true,
+                "size": api_size,
+                "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string())
+            })
+        }
+        "chat-completions" => {
+            serde_json::json!({
+                "model": request.model_id,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": request.prompt
+                    }
+                ],
+                "modalities": ["text", "image"],
+                "size": api_size,
+                "n": request.count.max(1).min(4)
+            })
         }
         _ => {
-            if is_image_to_image {
-                serde_json::json!({
-                    "model": request.model_id,
-                    "prompt": request.prompt,
-                    "image": reference_data_urls.first(),
-                    "images": reference_data_urls,
-                    "size": api_size,
-                    "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string()),
-                    "n": request.count.max(1).min(4)
-                })
-            } else {
-                serde_json::json!({
-                    "model": request.model_id,
-                    "prompt": request.prompt,
-                    "size": api_size,
-                    "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string()),
-                    "n": request.count.max(1).min(4)
-                })
-            }
+            serde_json::json!({
+                "model": request.model_id,
+                "prompt": request.prompt,
+                "size": api_size,
+                "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string()),
+                "n": request.count.max(1).min(4)
+            })
         }
     }
 }

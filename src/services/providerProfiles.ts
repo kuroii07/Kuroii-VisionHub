@@ -37,6 +37,7 @@ export function profileToProviderConfig(profile: ProviderConnectionProfile): Ope
     baseUrl: profile.baseUrl,
     modelId: profile.modelId,
     protocol: profile.protocol,
+    imageToImageAdapter: profile.imageToImageAdapter,
     endpointPath: profile.endpointPath,
     extraHeadersJson: profile.extraHeadersJson,
     modelOptions: profile.modelOptions
