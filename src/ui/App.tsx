@@ -52,6 +52,7 @@ import {
   getStorageSettings,
   importLibraryImagesFromFiles,
   importLibraryImagesFromFolder,
+  loadLibraryData,
   revealAppDataDir,
   isTauriRuntime,
   listOpenAICompatibleModels,
@@ -59,8 +60,11 @@ import {
   revealGenerationFile,
   revealLibraryDir,
   saveGenerationRecord,
+  saveLibraryData,
   saveProviderSecret,
+  saveTextFileWithDialog,
   saveStorageSettings,
+  type LibraryDataPayload,
   type StorageSettings
 } from '../services/desktopApi';
 import {
@@ -663,12 +667,38 @@ function loadLibraryMeta(): LibraryMetaMap {
   const raw = readStorageValue(LIBRARY_META_STORAGE_KEY);
   if (!raw) return {};
   try {
-    const parsed = JSON.parse(raw) as LibraryMetaMap;
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    return normalizeLibraryMeta(JSON.parse(raw));
   } catch (error) {
     console.warn('[VisionHub] library meta parse failed; using empty meta', error);
     return {};
   }
+}
+
+function normalizeLibraryMeta(value: unknown): LibraryMetaMap {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const normalized: LibraryMetaMap = {};
+  Object.entries(value as Record<string, unknown>).forEach(([recordId, entry]) => {
+    if (!recordId || !entry || typeof entry !== 'object' || Array.isArray(entry)) return;
+    const source = entry as Record<string, unknown>;
+    const next: LibraryMetaEntry = {};
+    if (typeof source.favorite === 'boolean') next.favorite = source.favorite;
+    if (Array.isArray(source.tags)) next.tags = source.tags.filter((tag): tag is string => typeof tag === 'string').map((tag) => tag.trim()).filter(Boolean);
+    if (typeof source.folderId === 'string' && source.folderId.trim()) next.folderId = source.folderId.trim();
+    if (Array.isArray(source.collectionIds)) next.collectionIds = source.collectionIds.filter((id): id is string => typeof id === 'string').map((id) => id.trim()).filter(Boolean);
+    if (typeof source.note === 'string' && source.note.trim()) next.note = source.note;
+    if (typeof source.rating === 'number' && Number.isFinite(source.rating) && source.rating >= 1 && source.rating <= 5) next.rating = source.rating;
+    if (Array.isArray(source.colorPalette)) next.colorPalette = source.colorPalette.filter((color): color is string => typeof color === 'string');
+    if (Array.isArray(source.colorFamilies)) next.colorFamilies = source.colorFamilies.filter((family): family is LibraryColorFilter => (
+      typeof family === 'string' && ['all', 'red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink', 'mono'].includes(family)
+    ));
+    if (typeof source.imageSize === 'string' && source.imageSize.trim()) next.imageSize = source.imageSize.trim();
+    if (typeof source.colorAnalyzedAt === 'string' && source.colorAnalyzedAt.trim()) next.colorAnalyzedAt = source.colorAnalyzedAt;
+    if (typeof source.colorAnalysisFailed === 'boolean') next.colorAnalysisFailed = source.colorAnalysisFailed;
+    if (typeof source.lastViewedAt === 'string' && source.lastViewedAt.trim()) next.lastViewedAt = source.lastViewedAt;
+    if (typeof source.lastUsedAsReferenceAt === 'string' && source.lastUsedAsReferenceAt.trim()) next.lastUsedAsReferenceAt = source.lastUsedAsReferenceAt;
+    if (Object.keys(next).length) normalized[recordId] = next;
+  });
+  return normalized;
 }
 
 function saveLibraryMeta(meta: LibraryMetaMap) {
@@ -757,6 +787,32 @@ function loadLibraryOrganization(): LibraryOrganization {
 
 function saveLibraryOrganization(organization: LibraryOrganization) {
   writeStorageValue(LIBRARY_ORGANIZATION_STORAGE_KEY, JSON.stringify(organization));
+}
+
+function normalizeLibraryCustomQuickFilters(value: unknown): LibraryCustomQuickFilter[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is LibraryCustomQuickFilter => Boolean(
+    item && typeof item === 'object' && !Array.isArray(item) &&
+    typeof (item as LibraryCustomQuickFilter).id === 'string' &&
+    typeof (item as LibraryCustomQuickFilter).label === 'string' &&
+    (item as LibraryCustomQuickFilter).criteria &&
+    typeof (item as LibraryCustomQuickFilter).criteria === 'object'
+  ));
+}
+
+function buildLibraryDataPayload(
+  meta: LibraryMetaMap,
+  organization: LibraryOrganization,
+  displaySettings: LibraryDisplaySettings,
+  customQuickFilters: LibraryCustomQuickFilter[]
+): LibraryDataPayload {
+  return {
+    version: 1,
+    meta,
+    organization,
+    display_settings: displaySettings,
+    custom_quick_filters: customQuickFilters
+  };
 }
 
 function getRecordPrimaryPath(record: GenerationRecord) {
@@ -4459,7 +4515,60 @@ function LibraryPage(props: {
   const colorFilterRef = useRef<HTMLLabelElement | null>(null);
   const quickFilterEditorRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const libraryDataHydratedRef = useRef(!isTauriRuntime());
   useToastMessage(copyMessage, setCopyMessage);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    let cancelled = false;
+
+    async function hydrateLibraryData() {
+      try {
+        const data = await loadLibraryData();
+        if (cancelled) return;
+
+        if (data?.exists) {
+          const nextMeta = normalizeLibraryMeta(data.meta);
+          const nextOrganization = normalizeLibraryOrganization(data.organization as Partial<LibraryOrganization>);
+          const nextDisplaySettings = normalizeLibraryDisplaySettings(data.display_settings as Partial<LibraryDisplaySettings>);
+          const nextCustomQuickFilters = normalizeLibraryCustomQuickFilters(data.custom_quick_filters);
+
+          setLibraryMeta(nextMeta);
+          setLibraryOrganization(nextOrganization);
+          setDisplaySettings(nextDisplaySettings);
+          setCustomQuickFilters(nextCustomQuickFilters);
+
+          saveLibraryMeta(nextMeta);
+          saveLibraryOrganization(nextOrganization);
+          saveLibraryDisplaySettings(nextDisplaySettings);
+          saveLibraryCustomQuickFilters(nextCustomQuickFilters);
+        } else {
+          void saveLibraryData(buildLibraryDataPayload(libraryMeta, libraryOrganization, displaySettings, customQuickFilters));
+        }
+      } catch (error) {
+        console.warn('[VisionHub] library metadata file sync failed; local cache is still available', error);
+        if (!cancelled) setCopyMessage('画廊元数据文件读取失败，已暂用本地缓存');
+      } finally {
+        if (!cancelled) libraryDataHydratedRef.current = true;
+      }
+    }
+
+    void hydrateLibraryData();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!libraryDataHydratedRef.current || !isTauriRuntime()) return;
+    const timer = window.setTimeout(() => {
+      void saveLibraryData(buildLibraryDataPayload(libraryMeta, libraryOrganization, displaySettings, customQuickFilters))
+        .catch((error) => {
+          console.warn('[VisionHub] library metadata file save failed; local cache is still available', error);
+        });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [libraryMeta, libraryOrganization, displaySettings, customQuickFilters]);
   const isDockSubPanel = activePanel !== null && activePanel !== 'main' && activePanel !== 'add';
   const providerNameMap = new Map(props.providers.map((provider) => [provider.id, providerGenerationLabel(provider)]));
   const libraryItems = props.results.filter((result) => result.imageUrls.length > 0 || result.status === 'failed');
@@ -4728,13 +4837,19 @@ function LibraryPage(props: {
 
   function updateLibraryMeta(recordId: string, patch: Partial<LibraryMetaEntry>) {
     setLibraryMeta((current) => {
-      const next = {
-        ...current,
-        [recordId]: {
-          ...current[recordId],
-          ...patch
-        }
+      const entry: LibraryMetaEntry = {
+        ...current[recordId],
+        ...patch
       };
+      Object.keys(entry).forEach((key) => {
+        const value = entry[key as keyof LibraryMetaEntry];
+        if (value === undefined || (Array.isArray(value) && value.length === 0)) {
+          delete entry[key as keyof LibraryMetaEntry];
+        }
+      });
+      const next = { ...current };
+      if (Object.keys(entry).length) next[recordId] = entry;
+      else delete next[recordId];
       saveLibraryMeta(next);
       return next;
     });
@@ -4926,6 +5041,87 @@ function LibraryPage(props: {
     const prompts = records.map((record, index) => `${records.length > 1 ? `${index + 1}. ` : ''}${record.prompt}`).join('\n\n');
     await copyText(records.length > 1 ? 'Prompts' : 'Prompt', prompts);
     setContextMenu(null);
+  }
+
+  async function copySelectedPaths(records: GenerationRecord[]) {
+    const paths = records
+      .map((record) => getRecordPrimaryPath(record))
+      .filter(Boolean);
+    if (!paths.length) {
+      setCopyMessage('选中记录没有可复制路径');
+      setContextMenu(null);
+      return;
+    }
+    await copyText(paths.length > 1 ? 'Paths' : 'Path', paths.join('\n'));
+    setContextMenu(null);
+  }
+
+  function buildLibraryRecordList(records: GenerationRecord[]) {
+    const exportedAt = new Date().toLocaleString('zh-CN');
+    return [
+      '# VisionHub Studio 作品画廊记录清单',
+      '',
+      `- 导出时间：${exportedAt}`,
+      `- 记录数量：${records.length}`,
+      '',
+      ...records.flatMap((record, index) => {
+        const providerName = providerNameMap.get(record.providerId) ?? record.providerName ?? record.providerId;
+        const primaryPath = getRecordPrimaryPath(record) || '-';
+        const fileName = getRecordFileName(record) || record.id;
+        const meta = libraryMeta[record.id];
+        return [
+          `## ${index + 1}. ${fileName}`,
+          '',
+          `- ID：${record.id}`,
+          `- 状态：${generationStatusLabel(record)}`,
+          `- 平台：${providerName}`,
+          `- 模型：${record.modelId || '-'}`,
+          `- 类型：${(record.generationMode ?? 'text-to-image') === 'image-to-image' ? '图生图' : '文生图'}`,
+          `- 生成时间：${formatTime(record.createdAt)}`,
+          `- 文件 / 图片路径：${primaryPath}`,
+          `- 收藏：${meta?.favorite ? '是' : '否'}`,
+          `- 尺寸：${getRecordSizeLabel(record, meta)}`,
+          '',
+          'Prompt：',
+          '',
+          '```text',
+          record.prompt || '',
+          '```',
+          ''
+        ];
+      })
+    ].join('\n');
+  }
+
+  async function exportSelectedRecordList(records: GenerationRecord[]) {
+    if (!records.length) return;
+    try {
+      const content = buildLibraryRecordList(records);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const suggestedFileName = `visionhub-library-records-${timestamp}.md`;
+      if (isTauriRuntime()) {
+        const result = await saveTextFileWithDialog({ suggestedFileName, content });
+        if (!result.saved) {
+          setCopyMessage('已取消导出清单');
+          return;
+        }
+        setCopyMessage(result.path ? `已导出：${result.path}` : `已导出 ${records.length} 条记录清单`);
+      } else {
+        const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = suggestedFileName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 800);
+        setCopyMessage(`已导出 ${records.length} 条记录清单`);
+      }
+      setContextMenu(null);
+    } catch (error) {
+      setCopyMessage(error instanceof Error ? error.message : String(error));
+    }
   }
 
   function openContextDetails(records: GenerationRecord[]) {
@@ -5477,7 +5673,7 @@ function LibraryPage(props: {
         </section>
       ) : null}
 
-      {selectedRecords.length > 1 ? (
+      {selectedRecords.length > 0 ? (
         <section className="librarySelectionBar" aria-label="当前选择">
           <strong>已选 {selectedRecords.length} 项</strong>
           <span>{selectedRecords.length === filteredItems.length ? '当前结果已全选' : `当前结果 ${filteredItems.length} 项`}</span>
@@ -5488,6 +5684,10 @@ function LibraryPage(props: {
             <div className="libraryQuickMenu libraryBatchMenu" aria-label="批量操作">
               <button type="button" onClick={() => setRecordsFavorite(selectedRecordIds, true)}><Star size={13} /> 加入收藏</button>
               <button type="button" onClick={() => setRecordsFavorite(selectedRecordIds, false)}><Star size={13} /> 取消收藏</button>
+              <span className="libraryMenuDivider" />
+              <button type="button" onClick={() => void copySelectedPrompts(selectedRecords)}><Copy size={13} /> 复制 Prompt</button>
+              <button type="button" onClick={() => void copySelectedPaths(selectedRecords)}><Copy size={13} /> 复制路径</button>
+              <button type="button" onClick={() => exportSelectedRecordList(selectedRecords)}><Download size={13} /> 导出清单</button>
               <span className="libraryMenuDivider" />
               <button type="button" onClick={() => setAssignDialog({ type: 'folder', recordIds: selectedRecordIds })}><FolderOpen size={13} /> 移至文件夹</button>
               <button type="button" onClick={() => setAssignDialog({ type: 'collection', recordIds: selectedRecordIds })}><Bookmark size={13} /> 加入收藏集</button>
@@ -5673,6 +5873,8 @@ function LibraryPage(props: {
                       <button type="button" onClick={() => openRecordDetails(result)}><Info size={13} /> 图片详情</button>
                       <button type="button" disabled={!imageUrl} onClick={() => useRecordAsReference(result)}><ImagePlus size={13} /> 设为参考图</button>
                       <button type="button" onClick={() => void copyText('Prompt', result.prompt)}><Copy size={13} /> 复制 Prompt</button>
+                      <button type="button" disabled={!getRecordPrimaryPath(result)} onClick={() => void copyText('Path', getRecordPrimaryPath(result))}><Copy size={13} /> 复制路径</button>
+                      <button type="button" onClick={() => exportSelectedRecordList([result])}><Download size={13} /> 导出清单</button>
                       <span className="libraryMenuDivider" />
                       <button type="button" onClick={() => toggleFavorite(result.id)}><Star size={13} /> {isFavorite ? '取消收藏' : '加入收藏'}</button>
                       <button type="button" onClick={() => setAssignDialog({ type: 'folder', recordIds: [result.id] })}><FolderOpen size={13} /> 移至文件夹</button>
@@ -5732,6 +5934,12 @@ function LibraryPage(props: {
           ) : null}
           <button type="button" role="menuitem" onClick={() => void copySelectedPrompts(contextSelection)}>
             <Copy size={13} /> 复制 Prompt
+          </button>
+          <button type="button" role="menuitem" onClick={() => void copySelectedPaths(contextSelection)}>
+            <Copy size={13} /> 复制路径
+          </button>
+          <button type="button" role="menuitem" onClick={() => exportSelectedRecordList(contextSelection)}>
+            <Download size={13} /> 导出清单
           </button>
           <span className="libraryMenuDivider" />
           <button type="button" role="menuitem" onClick={() => setAssignDialog({ type: 'folder', recordIds: contextSelection.map((record) => record.id) })}>

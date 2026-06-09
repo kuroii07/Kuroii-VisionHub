@@ -88,6 +88,7 @@ export interface AppPaths {
   library_dir: string;
   backups_dir: string;
   history_file: string;
+  library_meta_file?: string;
 }
 
 export interface SettingsBackupResult {
@@ -95,11 +96,26 @@ export interface SettingsBackupResult {
   created_at: string;
 }
 
+export interface SaveTextFileResult {
+  path?: string | null;
+  saved: boolean;
+}
+
 export interface StorageSettings {
   library_dir_override?: string | null;
   default_library_dir: string;
   resolved_library_dir: string;
   settings_file: string;
+}
+
+export interface LibraryDataPayload {
+  version?: number;
+  exists?: boolean;
+  meta?: unknown;
+  organization?: unknown;
+  display_settings?: unknown;
+  custom_quick_filters?: unknown;
+  updated_at?: string | null;
 }
 
 export function isTauriRuntime() {
@@ -260,6 +276,16 @@ export async function loadGenerationHistory() {
   return records.map(mapBackendRecord);
 }
 
+export async function loadLibraryData() {
+  if (!isTauriRuntime()) return null;
+  return invoke<LibraryDataPayload>('load_library_data');
+}
+
+export async function saveLibraryData(data: LibraryDataPayload) {
+  if (!isTauriRuntime()) return data;
+  return invoke<LibraryDataPayload>('save_library_data', { data });
+}
+
 export async function saveGenerationRecord(record: ImageGenerationResult, providerName?: string) {
   if (!isTauriRuntime()) return record;
   const hasLocalImages = (record.localImagePaths ?? []).length > 0;
@@ -375,6 +401,15 @@ export async function exportSettingsBackup(request: {
     request: {
       app_settings: request.appSettings,
       provider_configs: request.providerConfigs
+    }
+  });
+}
+
+export async function saveTextFileWithDialog(request: { suggestedFileName: string; content: string }) {
+  return invoke<SaveTextFileResult>('save_text_file_with_dialog', {
+    request: {
+      suggested_file_name: request.suggestedFileName,
+      content: request.content
     }
   });
 }

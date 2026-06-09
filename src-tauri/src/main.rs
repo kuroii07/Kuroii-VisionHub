@@ -18,6 +18,18 @@ struct SaveSecretRequest {
     secret: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct SaveTextFileRequest {
+    suggested_file_name: String,
+    content: String,
+}
+
+#[derive(Debug, Serialize)]
+struct SaveTextFileResult {
+    path: Option<String>,
+    saved: bool,
+}
+
 #[derive(Debug, Serialize)]
 struct SecretStatus {
     provider_id: String,
@@ -115,6 +127,7 @@ struct AppPaths {
     library_dir: String,
     backups_dir: String,
     history_file: String,
+    library_meta_file: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -164,6 +177,23 @@ struct ImportLibraryImagesResult {
     records: Vec<GenerationRecord>,
     skipped_duplicates: usize,
     skipped_unsupported: usize,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct LibraryData {
+    #[serde(default = "library_data_version")]
+    version: u32,
+    #[serde(default)]
+    exists: bool,
+    #[serde(default = "empty_json_object")]
+    meta: Value,
+    #[serde(default = "empty_library_organization")]
+    organization: Value,
+    #[serde(default = "empty_json_object")]
+    display_settings: Value,
+    #[serde(default = "empty_json_array")]
+    custom_quick_filters: Value,
+    updated_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -717,6 +747,88 @@ fn read_generation_history_records(app: &tauri::AppHandle) -> Result<Vec<Generat
 }
 
 #[tauri::command]
+fn load_library_data(app: tauri::AppHandle) -> Result<LibraryData, String> {
+    read_library_data(&app)
+}
+
+#[tauri::command]
+fn save_library_data(
+    app: tauri::AppHandle,
+    mut data: LibraryData,
+) -> Result<LibraryData, String> {
+    data.version = library_data_version();
+    data.exists = true;
+    data.updated_at = Some(chrono_like_timestamp());
+    write_library_data(&app, &data)?;
+    Ok(data)
+}
+
+fn read_library_data(app: &tauri::AppHandle) -> Result<LibraryData, String> {
+    let path = library_meta_file_path(app)?;
+    if !path.exists() {
+        return Ok(default_library_data(false));
+    }
+
+    let text = std::fs::read_to_string(&path)
+        .map_err(|error| format!("Cannot read library metadata: {error}"))?;
+    if text.trim().is_empty() {
+        return Ok(default_library_data(true));
+    }
+
+    let mut data: LibraryData = serde_json::from_str(&text)
+        .map_err(|error| format!("Cannot parse library metadata: {error}"))?;
+    data.exists = true;
+    Ok(data)
+}
+
+fn write_library_data(app: &tauri::AppHandle, data: &LibraryData) -> Result<(), String> {
+    let path = library_meta_file_path(app)?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Cannot resolve library metadata directory.".to_string())?;
+    std::fs::create_dir_all(parent)
+        .map_err(|error| format!("Cannot create library metadata directory: {error}"))?;
+    let tmp_path = path.with_extension("json.tmp");
+    let text = serde_json::to_string_pretty(data)
+        .map_err(|error| format!("Cannot serialize library metadata: {error}"))?;
+    std::fs::write(&tmp_path, text)
+        .map_err(|error| format!("Cannot write temporary library metadata: {error}"))?;
+    std::fs::rename(&tmp_path, &path)
+        .map_err(|error| format!("Cannot replace library metadata: {error}"))
+}
+
+fn default_library_data(exists: bool) -> LibraryData {
+    LibraryData {
+        version: library_data_version(),
+        exists,
+        meta: empty_json_object(),
+        organization: empty_library_organization(),
+        display_settings: empty_json_object(),
+        custom_quick_filters: empty_json_array(),
+        updated_at: None,
+    }
+}
+
+fn library_data_version() -> u32 {
+    1
+}
+
+fn empty_json_object() -> Value {
+    serde_json::json!({})
+}
+
+fn empty_json_array() -> Value {
+    serde_json::json!([])
+}
+
+fn empty_library_organization() -> Value {
+    serde_json::json!({
+        "folders": [],
+        "collections": []
+    })
+}
+
+#[tauri::command]
 fn save_generation_record(
     app: tauri::AppHandle,
     mut record: GenerationRecord,
@@ -1068,6 +1180,7 @@ fn get_app_paths(app: tauri::AppHandle) -> Result<AppPaths, String> {
         library_dir: path_to_user_string(&library_dir),
         backups_dir: path_to_user_string(&backups_dir),
         history_file: path_to_user_string(&history_file),
+        library_meta_file: path_to_user_string(&library_meta_file_path(&app)?),
     })
 }
 
@@ -1167,6 +1280,32 @@ fn export_settings_backup(
     Ok(SettingsBackupResult {
         path: path_to_user_string(&path),
         created_at,
+    })
+}
+
+#[tauri::command]
+fn save_text_file_with_dialog(request: SaveTextFileRequest) -> Result<SaveTextFileResult, String> {
+    let suggested_file_name = sanitize_save_file_name(&request.suggested_file_name, "visionhub-export.md");
+    let Some(path) = pick_save_markdown_file_with_system_dialog(&suggested_file_name)? else {
+        return Ok(SaveTextFileResult {
+            path: None,
+            saved: false,
+        });
+    };
+
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| format!("Cannot create export folder: {error}"))?;
+        }
+    }
+
+    std::fs::write(&path, request.content)
+        .map_err(|error| format!("Cannot write export file: {error}"))?;
+
+    Ok(SaveTextFileResult {
+        path: Some(path_to_user_string(&path)),
+        saved: true,
     })
 }
 
@@ -1709,6 +1848,10 @@ fn history_file_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir(app)?.join("generation-history.json"))
 }
 
+fn library_meta_file_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(app_data_dir(app)?.join("library-meta.json"))
+}
+
 fn inspirations_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app_data_dir(app)?.join("inspirations");
     std::fs::create_dir_all(&dir)
@@ -2057,6 +2200,123 @@ fn pick_image_files_with_system_dialog() -> Result<Vec<PathBuf>, String> {
     #[cfg(not(target_os = "windows"))]
     {
         Err("当前平台暂未接入系统图片选择窗口。".to_string())
+    }
+}
+
+fn pick_save_markdown_file_with_system_dialog(suggested_file_name: &str) -> Result<Option<PathBuf>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        const MAX_FILE_BUFFER: usize = 32768;
+        const OFN_OVERWRITEPROMPT: u32 = 0x00000002;
+        const OFN_PATHMUSTEXIST: u32 = 0x00000800;
+        const OFN_EXPLORER: u32 = 0x00080000;
+
+        #[repr(C)]
+        struct OpenFileNameW {
+            l_struct_size: u32,
+            hwnd_owner: *mut c_void,
+            h_instance: *mut c_void,
+            lpstr_filter: *const u16,
+            lpstr_custom_filter: *mut u16,
+            n_max_cust_filter: u32,
+            n_filter_index: u32,
+            lpstr_file: *mut u16,
+            n_max_file: u32,
+            lpstr_file_title: *mut u16,
+            n_max_file_title: u32,
+            lpstr_initial_dir: *const u16,
+            lpstr_title: *const u16,
+            flags: u32,
+            n_file_offset: u16,
+            n_file_extension: u16,
+            lpstr_def_ext: *const u16,
+            l_cust_data: isize,
+            lpfn_hook: Option<unsafe extern "system" fn()>,
+            lp_template_name: *const u16,
+            pv_reserved: *mut c_void,
+            dw_reserved: u32,
+            flags_ex: u32,
+        }
+
+        #[link(name = "comdlg32")]
+        unsafe extern "system" {
+            fn GetSaveFileNameW(param: *mut OpenFileNameW) -> i32;
+        }
+
+        let filter: Vec<u16> = "Markdown 文件\0*.md\0文本文件\0*.txt\0所有文件\0*.*\0\0"
+            .encode_utf16()
+            .collect();
+        let title: Vec<u16> = "导出 VisionHub 作品画廊记录清单\0"
+            .encode_utf16()
+            .collect();
+        let default_ext: Vec<u16> = "md\0".encode_utf16().collect();
+        let mut file_buffer = vec![0u16; MAX_FILE_BUFFER];
+        for (index, code_unit) in suggested_file_name.encode_utf16().take(MAX_FILE_BUFFER - 1).enumerate() {
+            file_buffer[index] = code_unit;
+        }
+
+        let mut open_file_name = OpenFileNameW {
+            l_struct_size: std::mem::size_of::<OpenFileNameW>() as u32,
+            hwnd_owner: std::ptr::null_mut(),
+            h_instance: std::ptr::null_mut(),
+            lpstr_filter: filter.as_ptr(),
+            lpstr_custom_filter: std::ptr::null_mut(),
+            n_max_cust_filter: 0,
+            n_filter_index: 1,
+            lpstr_file: file_buffer.as_mut_ptr(),
+            n_max_file: file_buffer.len() as u32,
+            lpstr_file_title: std::ptr::null_mut(),
+            n_max_file_title: 0,
+            lpstr_initial_dir: std::ptr::null(),
+            lpstr_title: title.as_ptr(),
+            flags: OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_EXPLORER,
+            n_file_offset: 0,
+            n_file_extension: 0,
+            lpstr_def_ext: default_ext.as_ptr(),
+            l_cust_data: 0,
+            lpfn_hook: None,
+            lp_template_name: std::ptr::null(),
+            pv_reserved: std::ptr::null_mut(),
+            dw_reserved: 0,
+            flags_ex: 0,
+        };
+
+        let ok = unsafe { GetSaveFileNameW(&mut open_file_name) };
+        if ok == 0 {
+            return Ok(None);
+        }
+
+        let end = file_buffer.iter().position(|code_unit| *code_unit == 0).unwrap_or(file_buffer.len());
+        if end == 0 {
+            return Ok(None);
+        }
+
+        Ok(Some(PathBuf::from(String::from_utf16_lossy(&file_buffer[..end]))))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = suggested_file_name;
+        Err("当前平台暂未接入保存位置选择窗口。".to_string())
+    }
+}
+
+fn sanitize_save_file_name(file_name: &str, fallback: &str) -> String {
+    let sanitized: String = file_name
+        .trim()
+        .chars()
+        .map(|ch| match ch {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '-',
+            _ => ch,
+        })
+        .collect();
+    let trimmed = sanitized.trim_matches(&[' ', '.'][..]).to_string();
+    if trimmed.is_empty() {
+        fallback.to_string()
+    } else if Path::new(&trimmed).extension().is_none() {
+        format!("{trimmed}.md")
+    } else {
+        trimmed
     }
 }
 
@@ -2977,6 +3237,8 @@ pub fn run() {
             list_openai_compatible_models,
             polish_prompt_with_provider,
             load_generation_history,
+            load_library_data,
+            save_library_data,
             save_generation_record,
             delete_generation_record,
             import_library_images_from_files,
@@ -2996,7 +3258,8 @@ pub fn run() {
             save_storage_settings,
             choose_library_dir,
             open_external_url,
-            export_settings_backup
+            export_settings_backup,
+            save_text_file_with_dialog
         ])
         .run(tauri::generate_context!())
         .expect("error while running VisionHub Studio");

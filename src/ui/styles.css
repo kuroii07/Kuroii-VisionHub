@@ -8731,7 +8731,7 @@ body {
   left: 0;
   right: auto;
   top: calc(100% + 6px);
-  width: 134px;
+  width: 164px;
   z-index: 245;
   border-color: var(--app-line-strong);
   background: color-mix(in srgb, var(--app-surface) 94%, transparent);
@@ -12565,4 +12565,106 @@ body {
     width: calc(100vw - 28px);
     max-width: calc(100vw - 28px);
   }
+}
+
+/* 0.2.6 clipping repair: keep card/reference popovers outside thumbnails. */
+.appShell .libraryGridV2,
+.appShell .libraryGridV2.view-masonry,
+.appShell .libraryGridV2.view-adaptive,
+.appShell .libraryGridV2.view-square,
+.appShell .libraryGridV2.view-contain,
+.appShell .libraryGridV2.view-list {
+  overflow: visible !important;
+}
+
+.appShell .libraryCardV2 {
+  overflow: visible !important;
+  isolation: isolate;
+}
+
+.appShell .libraryCardV2:hover,
+.appShell .libraryCardV2:focus-within {
+  z-index: 80;
+}
+
+.appShell .libraryCardV2 .libraryThumb,
+.appShell .libraryCardV2 .libraryFailedThumb {
+  overflow: hidden;
+}
+
+.appShell .libraryImageOverlay,
+.appShell .libraryMoreMenuWrap {
+  overflow: visible !important;
+}
+
+.appShell .libraryMoreMenuWrap {
+  position: relative;
+  z-index: 90;
+}
+
+.appShell .libraryQuickMenu {
+  z-index: 2200 !important;
+  overflow: visible !important;
+  max-height: none !important;
+  clip-path: none !important;
+}
+
+.appShell .libraryGridV2.view-list .libraryQuickMenu {
+  top: calc(100% + 8px);
+  right: 0;
+}
+
+.workspaceGenerate .canvasPane,
+.workspaceGenerate .canvasPane.withReferenceRow,
+.workspaceGenerate .referenceDock,
+.workspaceGenerate .referenceStrip {
+  overflow: visible !important;
+}
+
+.workspaceGenerate .referenceTile {
+  overflow: visible !important;
+  isolation: isolate;
+}
+
+.workspaceGenerate .referenceTile:hover,
+.workspaceGenerate .referenceTile:focus-within {
+  z-index: 2300;
+}
+
+.workspaceGenerate .referenceThumb {
+  overflow: hidden;
+}
+
+.workspaceGenerate .referenceRemove {
+  z-index: 2310;
+}
+
+.workspaceGenerate .referenceRoleSelect {
+  z-index: 2330;
+}
+
+.workspaceGenerate .referenceRoleSelect.open {
+  z-index: 2450;
+}
+
+.workspaceGenerate .referenceRoleSelect .studioSelectMenu {
+  z-index: 2460 !important;
+}
+
+.workspaceGenerate .referenceTile:has(.referenceRoleSelect.open) {
+  z-index: 2450;
+}
+
+.workspaceGenerate .referenceTile:has(.referenceRoleSelect.open) .referenceRemove {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+.workspaceGenerate .referenceTile .studioSelectMenu,
+.workspaceGenerate .referenceTile .studioSelectOptions,
+.workspaceGenerate .referenceTile [role="listbox"] {
+  z-index: 2400 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  clip-path: none !important;
 }
