@@ -1,6 +1,6 @@
 [package]
 name = "visionhub-studio"
-version = "0.2.4"
+version = "0.2.5"
 description = "Desktop-first multi-provider AI image generation workspace"
 authors = ["VisionHub Studio"]
 license = "MIT"

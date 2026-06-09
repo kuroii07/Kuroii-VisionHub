@@ -2741,6 +2741,7 @@ export function App() {
               onPreview={setGeneratePreviewUrl}
               onReloadHistory={loadHistory}
               onOpenLibrary={() => navigateTo('library')}
+              onDeleteResult={removeResult}
               referenceImages={referenceImages}
               onReferenceImagesChange={setReferenceImages}
             />

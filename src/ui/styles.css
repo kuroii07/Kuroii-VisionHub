@@ -5212,7 +5212,50 @@ kbd {
   padding-right: 4px;
 }
 
-.assistTemplateList button {
+.assistTemplateFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0 0 4px;
+  background: color-mix(in srgb, var(--app-bg) 72%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.assistTemplateFilters button {
+  min-height: 30px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  padding: 0 10px;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.assistTemplateFilters button.active {
+  color: color-mix(in srgb, var(--app-accent-strong) 76%, var(--app-text));
+  border-color: color-mix(in srgb, var(--app-accent-strong) 42%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 13%, var(--app-surface-2));
+}
+
+.assistTemplateCount {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 0 2px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.assistTemplateCount strong {
+  color: var(--app-text);
+  font-size: 14px;
+}
+
+.assistTemplateCard {
   display: grid;
   gap: 6px;
   border: 1px solid var(--app-line);
@@ -5223,24 +5266,34 @@ kbd {
   background: var(--app-surface-2);
 }
 
-.assistTemplateList button span {
+.assistTemplateCard span {
   color: var(--app-accent);
   font-size: 12px;
   font-weight: 900;
 }
 
-.assistTemplateList button strong {
+.assistTemplateCard strong {
   font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.assistTemplateList button small,
+.assistTemplateCard small,
 .polishModeRow small,
 .reuseRecordCard small {
   color: var(--app-muted);
   line-height: 1.5;
 }
 
-.assistTemplateList button.active {
+.assistTemplateCard small {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.assistTemplateCard.active {
   border-color: color-mix(in srgb, var(--app-accent-strong) 48%, var(--app-line));
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--app-accent-strong) 13%, transparent), color-mix(in srgb, var(--app-purple) 9%, transparent)),
@@ -5250,9 +5303,51 @@ kbd {
 
 .assistDetailPanel {
   display: grid;
-  grid-template-rows: auto minmax(150px, 1fr) auto;
+  grid-template-rows: auto auto minmax(150px, 1fr) auto;
   gap: 14px;
   overflow: hidden;
+}
+
+.assistTemplateSummary {
+  display: grid;
+  gap: 7px;
+  padding: 13px 14px;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: var(--app-surface-2);
+}
+
+.assistTemplateSummary > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.assistTemplateSummary span {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--app-accent-strong) 84%, var(--app-text));
+  background: color-mix(in srgb, var(--app-accent-strong) 12%, transparent);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.assistTemplateSummary strong {
+  min-width: 0;
+  color: var(--app-text);
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assistTemplateSummary p {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .assistFieldGrid {
@@ -5262,7 +5357,8 @@ kbd {
 }
 
 .assistFieldGrid label,
-.reuseSearch {
+.reuseSearch,
+.reuseFilterPanel label {
   display: grid;
   gap: 7px;
   color: var(--app-accent);
@@ -5271,7 +5367,8 @@ kbd {
 }
 
 .assistFieldGrid input,
-.reuseSearch input {
+.reuseSearch input,
+.reuseFilterPanel select {
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--app-line-strong);
@@ -5283,7 +5380,8 @@ kbd {
 }
 
 .assistFieldGrid input:focus,
-.reuseSearch input:focus {
+.reuseSearch input:focus,
+.reuseFilterPanel select:focus {
   border-color: color-mix(in srgb, var(--app-accent-strong) 44%, var(--app-line));
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-accent-strong) 10%, transparent);
 }
@@ -5322,6 +5420,69 @@ kbd {
   white-space: pre-wrap;
 }
 
+.promptEditorBox {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(220px, 1fr);
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: var(--app-surface-2);
+  overflow: hidden;
+}
+
+.promptEditorBox > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.promptEditorBox strong {
+  min-width: 0;
+  color: var(--app-text);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.promptEditorBox small {
+  flex: 0 0 auto;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.promptEditorBox textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 220px;
+  height: 100%;
+  resize: vertical;
+  border: 1px solid color-mix(in srgb, var(--app-line) 72%, transparent);
+  border-radius: 14px;
+  padding: 12px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface) 78%, transparent);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.68;
+  outline: none;
+  white-space: pre-wrap;
+}
+
+.promptEditorBox textarea:focus {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 46%, var(--app-line));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-accent-strong) 10%, transparent);
+}
+
+.promptEditorBox textarea::placeholder {
+  color: var(--app-muted);
+}
+
 .assistActionRow {
   display: flex;
   flex-wrap: wrap;
@@ -5353,6 +5514,18 @@ kbd {
 .assistActionRow button:hover {
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+}
+
+.assistActionRow button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+  transform: none;
+}
+
+.assistActionRow button.dangerText {
+  color: #f97373;
+  border-color: color-mix(in srgb, #ef4444 30%, var(--app-line));
+  background: color-mix(in srgb, #ef4444 8%, var(--app-surface-2));
 }
 
 .polishModeRow {
@@ -5585,8 +5758,67 @@ kbd {
   gap: 14px;
 }
 
-.reuseSearch {
-  max-width: 460px;
+.reuseSummaryBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.reuseSummaryBar strong {
+  color: var(--app-text);
+  font-weight: 900;
+}
+
+.reuseSummaryBar button {
+  min-height: 30px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  padding: 0 11px;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.reuseSummaryBar button:disabled {
+  cursor: not-allowed;
+  opacity: .52;
+}
+
+.reuseFilterPanel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(5, minmax(120px, 1fr));
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: var(--app-surface-2);
+}
+
+.reuseFilterPanel select {
+  appearance: none;
+  padding: 0 34px 0 12px;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--app-muted) 50%) calc(100% - 18px) 18px / 5px 5px no-repeat,
+    linear-gradient(135deg, var(--app-muted) 50%, transparent 50%) calc(100% - 13px) 18px / 5px 5px no-repeat,
+    color-mix(in srgb, var(--app-surface) 84%, transparent);
+}
+
+@media (max-width: 1180px) {
+  .reuseFilterPanel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .reuseFilterPanel {
+    grid-template-columns: 1fr;
+  }
 }
 
 .reuseRecordList {
@@ -6068,7 +6300,7 @@ body {
 .appShell .workspaceGenerate .resolutionList button.active,
 .appShell .workspaceGenerate .primaryGenerate,
 .appShell .workspaceGenerate .chipButton:not(.ghostSoon),
-.appShell .assistTemplateList button.active,
+.appShell .assistTemplateCard.active,
 .appShell .assistActionRow button:first-child,
 .appShell .polishEngineBar .polishRunButton,
 .appShell .integrationBox,
@@ -6091,7 +6323,7 @@ body {
 .appShell.theme-light .workspaceGenerate .ratioGrid button.active,
 .appShell.theme-light .workspaceGenerate .resolutionList button.active,
 .appShell.theme-light .workspaceGenerate .chipButton:not(.ghostSoon),
-.appShell.theme-light .assistTemplateList button.active,
+.appShell.theme-light .assistTemplateCard.active,
 .appShell.theme-light .assistActionRow button:first-child,
 .appShell.theme-light .polishEngineBar .polishRunButton,
 .appShell.theme-light .integrationBox,
@@ -6138,7 +6370,7 @@ body {
 .appShell.theme-dark .workspaceGenerate .ratioGrid button.active,
 .appShell.theme-dark .workspaceGenerate .resolutionList button.active,
 .appShell.theme-dark .workspaceGenerate .chipButton:not(.ghostSoon),
-.appShell.theme-dark .assistTemplateList button.active,
+.appShell.theme-dark .assistTemplateCard.active,
 .appShell.theme-dark .assistActionRow button:first-child,
 .appShell.theme-dark .polishEngineBar .polishRunButton,
 .appShell.theme-dark .integrationBox,

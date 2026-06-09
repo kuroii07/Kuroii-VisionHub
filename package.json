@@ -1,7 +1,7 @@
 {
   "name": "visionhub-studio",
   "private": true,
-  "version": "0.2.4",
+  "version": "0.2.5",
   "type": "module",
   "description": "Desktop-first multi-provider AI image generation workspace.",
   "scripts": {

@@ -7,11 +7,23 @@ export interface InspirationField {
   defaultValue: string;
 }
 
+export type InspirationTemplateGroup =
+  | 'commercial'
+  | 'character'
+  | 'product'
+  | 'game'
+  | 'social'
+  | 'image-to-image'
+  | 'cn-platform'
+  | 'scene';
+
 export interface InspirationTemplate {
   id: string;
+  group: InspirationTemplateGroup;
   category: string;
   title: string;
   description: string;
+  bestFor: string;
   fields: InspirationField[];
   template: string;
 }
@@ -43,12 +55,26 @@ interface LocalPolishRecipe {
   constraints: string;
 }
 
+export const INSPIRATION_TEMPLATE_FILTERS: Array<{ id: 'all' | InspirationTemplateGroup; label: string }> = [
+  { id: 'all', label: '全部' },
+  { id: 'commercial', label: '商业 / 海报' },
+  { id: 'character', label: '角色' },
+  { id: 'product', label: '产品 / 电商' },
+  { id: 'game', label: '游戏资产' },
+  { id: 'social', label: '社媒' },
+  { id: 'image-to-image', label: '图生图' },
+  { id: 'cn-platform', label: '中文平台' },
+  { id: 'scene', label: '场景' }
+];
+
 export const INSPIRATION_TEMPLATES: InspirationTemplate[] = [
   {
     id: 'cinematic-character',
+    group: 'character',
     category: '人物肖像',
     title: '电影感角色海报',
     description: '适合角色展示、游戏人物、社媒竖图。',
+    bestFor: '角色半身海报、游戏人物 PV 封面、社媒竖图首图。',
     fields: [
       { id: 'subject', label: '主体', placeholder: '例如：赛博女战士', defaultValue: '赛博风格女战士' },
       { id: 'scene', label: '场景', placeholder: '例如：雨夜未来城市', defaultValue: '霓虹闪烁的未来城市街道' },
@@ -60,9 +86,11 @@ export const INSPIRATION_TEMPLATES: InspirationTemplate[] = [
   },
   {
     id: 'premium-product',
+    group: 'product',
     category: '产品海报',
     title: '高级产品主图',
     description: '适合电商主图、官网首屏、产品视觉。',
+    bestFor: '电商主图、官网 hero、产品发布海报和干净商业物料。',
     fields: [
       { id: 'product', label: '产品', placeholder: '例如：智能耳机', defaultValue: '一款高端智能耳机' },
       { id: 'material', label: '材质', placeholder: '例如：磨砂金属', defaultValue: '磨砂金属与玻璃材质' },
@@ -74,9 +102,11 @@ export const INSPIRATION_TEMPLATES: InspirationTemplate[] = [
   },
   {
     id: 'chinese-poster',
+    group: 'cn-platform',
     category: '国风视觉',
     title: '国风活动 KV',
     description: '适合节日海报、活动图、中文视觉。',
+    bestFor: '中文活动主视觉、节日海报、小红书 / 公众号配图。',
     fields: [
       { id: 'subject', label: '主题', placeholder: '例如：中秋灯会', defaultValue: '中秋主题活动主视觉' },
       { id: 'element', label: '元素', placeholder: '例如：月亮、灯笼', defaultValue: '圆月、灯笼、云纹和山水' },
@@ -88,9 +118,11 @@ export const INSPIRATION_TEMPLATES: InspirationTemplate[] = [
   },
   {
     id: 'world-scene',
+    group: 'scene',
     category: '场景概念',
     title: '世界观场景概念',
     description: '适合游戏场景、分镜概念、背景设定。',
+    bestFor: '游戏世界观、影视分镜、远景概念图和背景设定。',
     fields: [
       { id: 'place', label: '地点', placeholder: '例如：废土港口', defaultValue: '巨大的废土港口城市' },
       { id: 'time', label: '时间', placeholder: '例如：黄昏', defaultValue: '黄昏时刻' },
@@ -99,6 +131,134 @@ export const INSPIRATION_TEMPLATES: InspirationTemplate[] = [
     ],
     template:
       '{place}，{time}，{detail}，{camera}，前景有丰富地貌，中景有建筑群，远景有宏大天际线，电影级构图，沉浸式世界观概念图。'
+  },
+  {
+    id: 'commercial-launch-kv',
+    group: 'commercial',
+    category: '商业海报',
+    title: '新品发布 KV',
+    description: '适合品牌发布、活动 banner、首屏视觉。',
+    bestFor: '品牌新品发布、官网首屏、活动预热和发布会主视觉。',
+    fields: [
+      { id: 'subject', label: '主视觉', placeholder: '例如：AI 创作软件发布', defaultValue: 'AI 创作软件新品发布主视觉' },
+      { id: 'symbol', label: '核心符号', placeholder: '例如：发光窗口、流体图像', defaultValue: '发光窗口与流体图像碎片' },
+      { id: 'palette', label: '配色', placeholder: '例如：青绿、深蓝、银白', defaultValue: '青绿、深蓝与银白高光' },
+      { id: 'layout', label: '版式', placeholder: '例如：中心构图、留标题区', defaultValue: '中心构图，顶部和右侧预留标题区域' }
+    ],
+    template:
+      '{subject}，核心视觉符号为{symbol}，{palette}，{layout}，高级商业海报设计，层次清晰，主次明确，适合品牌发布 KV，高清，干净专业。'
+  },
+  {
+    id: 'character-design-sheet',
+    group: 'character',
+    category: '角色设定',
+    title: '角色设定三视图',
+    description: '适合角色概念、立绘设定和外观探索。',
+    bestFor: '角色设定稿、游戏立绘前期、IP 形象探索。',
+    fields: [
+      { id: 'character', label: '角色', placeholder: '例如：机械猫侦探', defaultValue: '机械猫侦探' },
+      { id: 'outfit', label: '服装 / 装备', placeholder: '例如：复古风衣、微型无人机', defaultValue: '复古风衣、机械义眼和微型无人机' },
+      { id: 'personality', label: '性格', placeholder: '例如：冷静、聪明', defaultValue: '冷静、聪明、略带神秘感' },
+      { id: 'style', label: '画风', placeholder: '例如：游戏美术设定稿', defaultValue: '高质量游戏美术设定稿' }
+    ],
+    template:
+      '{character}角色设定图，展示正面、侧面和背面，{outfit}，体现{personality}，{style}，白色或浅灰背景，结构清晰，比例准确，便于后续建模和立绘制作。'
+  },
+  {
+    id: 'ecommerce-main-image',
+    group: 'product',
+    category: '电商主图',
+    title: '高转化电商主图',
+    description: '适合商品详情、平台首图和促销主视觉。',
+    bestFor: '淘宝 / 京东 / 小红书商品图、促销首图、产品卖点图。',
+    fields: [
+      { id: 'product', label: '商品', placeholder: '例如：便携咖啡机', defaultValue: '便携式胶囊咖啡机' },
+      { id: 'sellingPoint', label: '卖点', placeholder: '例如：小巧、快速萃取', defaultValue: '小巧便携、快速萃取、金属质感' },
+      { id: 'scene', label: '使用场景', placeholder: '例如：办公桌、露营', defaultValue: '现代办公桌与轻户外露营场景' },
+      { id: 'tone', label: '调性', placeholder: '例如：干净、高级', defaultValue: '干净高级、可信赖、轻奢商业感' }
+    ],
+    template:
+      '{product}电商主图，突出{sellingPoint}，结合{scene}，整体{tone}，产品占画面主体，背景简洁，光线柔和，阴影自然，适合高转化商品首图。'
+  },
+  {
+    id: 'studio-product-photo',
+    group: 'product',
+    category: '产品摄影',
+    title: '棚拍产品摄影',
+    description: '适合写实产品照、材质展示和官网详情。',
+    bestFor: '产品摄影、材质细节、官网详情页和品牌物料。',
+    fields: [
+      { id: 'product', label: '产品', placeholder: '例如：香水瓶', defaultValue: '透明玻璃香水瓶' },
+      { id: 'surface', label: '承托面', placeholder: '例如：黑色亚克力台面', defaultValue: '黑色亚克力反光台面' },
+      { id: 'light', label: '布光', placeholder: '例如：侧逆光、柔光箱', defaultValue: '侧逆光和大面积柔光箱' },
+      { id: 'detail', label: '细节', placeholder: '例如：水珠、金属盖', defaultValue: '瓶身水珠、金属瓶盖和清晰高光边缘' }
+    ],
+    template:
+      '专业棚拍产品摄影，主体为{product}，放置在{surface}，使用{light}，突出{detail}，真实材质，干净背景，浅景深，高级商业摄影，超清细节。'
+  },
+  {
+    id: 'game-item-icon',
+    group: 'game',
+    category: '游戏资产',
+    title: '游戏道具图标',
+    description: '适合背包图标、技能图标和装备道具。',
+    bestFor: '游戏 UI 图标、背包道具、技能物品、商店图标。',
+    fields: [
+      { id: 'item', label: '道具', placeholder: '例如：火焰水晶剑', defaultValue: '火焰水晶剑' },
+      { id: 'shape', label: '轮廓', placeholder: '例如：清晰剪影', defaultValue: '清晰强识别剪影' },
+      { id: 'effect', label: '特效', placeholder: '例如：火焰粒子', defaultValue: '火焰粒子和能量光环' },
+      { id: 'background', label: '背景', placeholder: '例如：深色圆角底板', defaultValue: '深色圆角图标底板' }
+    ],
+    template:
+      '{item}游戏道具图标，{shape}，带有{effect}，置于{background}，居中构图，边缘高光清晰，适合游戏背包和商店 UI，高清，干净透明感。'
+  },
+  {
+    id: 'social-cover',
+    group: 'social',
+    category: '社媒封面',
+    title: '社媒内容封面',
+    description: '适合小红书、B 站、抖音和公众号首图。',
+    bestFor: '社媒封面、教程首图、内容栏目图和短视频封面。',
+    fields: [
+      { id: 'topic', label: '主题', placeholder: '例如：AI 绘图工作流', defaultValue: 'AI 绘图工作流教程' },
+      { id: 'visual', label: '视觉元素', placeholder: '例如：软件界面、图片网格', defaultValue: '软件界面、图片网格和提示词卡片' },
+      { id: 'mood', label: '情绪', placeholder: '例如：清晰、专业', defaultValue: '清晰、专业、有学习价值' },
+      { id: 'layout', label: '版式', placeholder: '例如：左文右图', defaultValue: '左侧预留标题区，右侧展示视觉主体' }
+    ],
+    template:
+      '{topic}社媒封面，包含{visual}，整体情绪{mood}，{layout}，强视觉焦点，高可读性，适合小红书、B站、抖音和公众号首图，现代设计感。'
+  },
+  {
+    id: 'image-to-image-redesign',
+    group: 'image-to-image',
+    category: '图生图改写',
+    title: '保留结构重新设计',
+    description: '适合基于参考图进行风格重绘和局部升级。',
+    bestFor: '图生图改写、参考图风格转换、构图保留的二次设计。',
+    fields: [
+      { id: 'keep', label: '保留', placeholder: '例如：人物姿态和构图', defaultValue: '保留参考图的主体姿态、构图和空间关系' },
+      { id: 'change', label: '改写', placeholder: '例如：改成赛博风', defaultValue: '改写为高级赛博未来风格' },
+      { id: 'quality', label: '提升', placeholder: '例如：细节、光影', defaultValue: '提升材质细节、光影层次和画面清晰度' },
+      { id: 'avoid', label: '避免', placeholder: '例如：不要改变五官', defaultValue: '避免改变主体身份和核心比例' }
+    ],
+    template:
+      '基于参考图进行图生图改写，{keep}，{change}，{quality}，{avoid}，画面自然统一，保留原始识别度，细节更精致，适合二次创作和风格升级。'
+  },
+  {
+    id: 'cn-platform-natural',
+    group: 'cn-platform',
+    category: '中文平台',
+    title: '中文平台通用自然描述',
+    description: '适合即梦、豆包、可灵等中文描述型工作流。',
+    bestFor: '中文生图平台、自然语言提示词、快速试图和日常创作。',
+    fields: [
+      { id: 'subject', label: '画面主体', placeholder: '例如：一只橘猫厨师', defaultValue: '一只橘猫厨师' },
+      { id: 'action', label: '动作', placeholder: '例如：正在做甜点', defaultValue: '正在温暖的厨房里制作草莓蛋糕' },
+      { id: 'style', label: '风格', placeholder: '例如：温馨插画', defaultValue: '温馨治愈的高质量插画风格' },
+      { id: 'detail', label: '补充细节', placeholder: '例如：柔和阳光', defaultValue: '柔和阳光、干净背景、细节丰富' }
+    ],
+    template:
+      '画面中是{subject}，{action}，整体为{style}，加入{detail}。构图清晰，主体突出，画面干净，光影自然，适合中文 AI 生图平台直接使用。'
   }
 ];
 

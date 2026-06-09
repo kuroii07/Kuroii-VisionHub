@@ -239,6 +239,7 @@ export function ModernGeneratePage(props: {
   onPreview: (imageUrl: string) => void;
   onReloadHistory: () => void | Promise<void>;
   onOpenLibrary: () => void;
+  onDeleteResult: (recordId: string) => Promise<void>;
   referenceImages: ReferenceImage[];
   onReferenceImagesChange: (references: ReferenceImage[]) => void;
 }) {
@@ -1088,6 +1089,7 @@ export function ModernGeneratePage(props: {
           promptPolishSettings={effectivePromptPolishSettings}
           onClose={() => setAssistMode(null)}
           onApplyPrompt={applyAssistedPrompt}
+          onDeleteRecord={props.onDeleteResult}
         />
       ) : null}
     </div>
