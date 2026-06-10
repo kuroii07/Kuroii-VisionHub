@@ -39,6 +39,7 @@ export interface InspirationAsset {
   tags: string[];
   note?: string;
   licenseStatus: InspirationLicenseStatus;
+  rating?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,4 +60,5 @@ export interface InspirationAssetImportRequest {
   tags?: string[];
   note?: string;
   licenseStatus?: InspirationLicenseStatus;
+  rating?: number;
 }

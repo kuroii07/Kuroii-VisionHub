@@ -36,6 +36,7 @@ interface BackendInspirationAsset {
   tags: string[];
   note?: string;
   license_status: InspirationAsset['licenseStatus'];
+  rating?: number;
   created_at: string;
   updated_at: string;
 }
@@ -96,6 +97,7 @@ function mapAssetFromBackend(asset: BackendInspirationAsset): InspirationAsset {
     tags: asset.tags ?? [],
     note: asset.note,
     licenseStatus: asset.license_status,
+    rating: asset.rating,
     createdAt: asset.created_at,
     updatedAt: asset.updated_at
   };
@@ -116,6 +118,7 @@ function mapAssetToBackend(asset: InspirationAsset): BackendInspirationAsset {
     tags: asset.tags ?? [],
     note: asset.note,
     license_status: asset.licenseStatus,
+    rating: asset.rating,
     created_at: asset.createdAt,
     updated_at: asset.updatedAt
   };
@@ -195,6 +198,7 @@ export async function importInspirationAsset(request: InspirationAssetImportRequ
       tags: request.tags ?? [],
       note: request.note,
       licenseStatus: request.licenseStatus ?? 'reference-only',
+      rating: request.rating,
       createdAt: timestamp,
       updatedAt: timestamp
     };
@@ -212,7 +216,8 @@ export async function importInspirationAsset(request: InspirationAssetImportRequ
       original_prompt: request.originalPrompt,
       tags: request.tags ?? [],
       note: request.note,
-      license_status: request.licenseStatus ?? 'reference-only'
+      license_status: request.licenseStatus ?? 'reference-only',
+      rating: request.rating
     }
   });
   return mapAssetFromBackend(saved);

@@ -229,6 +229,7 @@ struct InspirationAsset {
     tags: Vec<String>,
     note: Option<String>,
     license_status: String,
+    rating: Option<u8>,
     created_at: String,
     updated_at: String,
 }
@@ -252,6 +253,7 @@ struct InspirationAssetImportRequest {
     tags: Vec<String>,
     note: Option<String>,
     license_status: Option<String>,
+    rating: Option<u8>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1086,6 +1088,7 @@ fn import_inspiration_asset(
             .license_status
             .filter(|value| !value.trim().is_empty())
             .unwrap_or_else(|| "reference-only".to_string()),
+        rating: request.rating.filter(|value| (1..=5).contains(value)),
         created_at: now.clone(),
         updated_at: now,
     };
@@ -1120,6 +1123,7 @@ fn save_inspiration_asset(
     asset.original_prompt = optional_trimmed_string(asset.original_prompt);
     asset.inferred_prompt = optional_trimmed_string(asset.inferred_prompt);
     asset.note = optional_trimmed_string(asset.note);
+    asset.rating = asset.rating.filter(|value| (1..=5).contains(value));
     if asset.image_path.is_some() || asset.image_url.as_deref().is_some_and(|url| url.starts_with("data:image/")) {
         asset.image_url = None;
     }
