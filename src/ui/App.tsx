@@ -67,6 +67,7 @@ import {
   type LibraryDataPayload,
   type StorageSettings
 } from '../services/desktopApi';
+import { diagnoseGenerationFailure } from '../services/generationErrorDiagnostics';
 import {
   defaultEndpointForProtocol,
   defaultOpenAICompatibleConfig,
@@ -629,17 +630,7 @@ const libraryAddActions: Array<{ id: LibraryAddAction; label: string; detail: st
 const libraryFolderColors = ['#14b8a6', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#22c55e'];
 
 function isPotentialBackgroundCompletion(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
-  if (record.status !== 'failed') return false;
-  const message = `${record.error ?? ''} ${JSON.stringify(record.raw ?? {})}`.toLowerCase();
-  return (
-    message.includes('524') ||
-    message.includes('408') ||
-    message.includes('同步连接超时') ||
-    message.includes('background task') ||
-    message.includes('poll_error') ||
-    message.includes('poll_url') ||
-    message.includes('轮询')
-  );
+  return diagnoseGenerationFailure(record).isPotentialBackgroundCompletion;
 }
 
 function generationStatusLabel(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
@@ -656,11 +647,26 @@ function generationStatusClass(record: Pick<GenerationRecord, 'status' | 'error'
 }
 
 function generationFailureHint(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
-  if (!isPotentialBackgroundCompletion(record)) return record.error;
-  const raw = record.raw as { poll_url?: string; poll_error?: string } | undefined;
-  const pollUrl = raw?.poll_url ? ` 轮询地址：${raw.poll_url}` : '';
-  const pollError = raw?.poll_error ? ` 轮询错误：${raw.poll_error}` : '';
-  return `同步连接先断开，但中转或上游可能仍在后台继续生成。建议稍后重新加载历史，或查看中转后台任务状态。${pollUrl}${pollError}`;
+  const diagnosis = diagnoseGenerationFailure(record);
+  return `${diagnosis.title}：${diagnosis.summary}`;
+}
+
+function generationFailureActions(record: Pick<GenerationRecord, 'status' | 'error' | 'raw' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>) {
+  return diagnoseGenerationFailure(record).actions;
+}
+
+function generationFailureDetails(record: Pick<GenerationRecord, 'status' | 'error' | 'raw' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>) {
+  return diagnoseGenerationFailure(record).details;
+}
+
+function generationFailureCopyText(record: Pick<GenerationRecord, 'status' | 'error' | 'raw' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>) {
+  const diagnosis = diagnoseGenerationFailure(record);
+  return [
+    `${diagnosis.title}：${diagnosis.summary}`,
+    diagnosis.actions.length ? `建议：\n${diagnosis.actions.map((action, index) => `${index + 1}. ${action}`).join('\n')}` : '',
+    diagnosis.details.length ? `细节：${diagnosis.details.join(' · ')}` : '',
+    diagnosis.rawMessage ? `原始错误：${diagnosis.rawMessage}` : ''
+  ].filter(Boolean).join('\n\n');
 }
 
 function loadLibraryMeta(): LibraryMetaMap {
@@ -6259,11 +6265,17 @@ function LibraryPage(props: {
             ) : null}
             {selectedRecord.error ? (
               <div className="libraryDetailSection warning">
-                <strong>错误 / 待核查信息</strong>
+                <strong>{diagnoseGenerationFailure(selectedRecord).title}</strong>
                 <p>{generationFailureHint(selectedRecord)}</p>
+                <ul className="generationErrorActionsList libraryErrorActionsList">
+                  {generationFailureActions(selectedRecord).map((action) => <li key={action}>{action}</li>)}
+                </ul>
+                {generationFailureDetails(selectedRecord).length ? (
+                  <small>{generationFailureDetails(selectedRecord).join(' · ')}</small>
+                ) : null}
                 <div className="libraryDetailInlineActions">
                   <button className="miniButton" type="button" onClick={() => props.onRetryRecord(selectedRecord)}><RefreshCcw size={13} /> 重新生成</button>
-                  <button className="miniButton" type="button" onClick={() => void copyText('错误信息', generationFailureHint(selectedRecord))}><Copy size={13} /> 复制错误</button>
+                  <button className="miniButton" type="button" onClick={() => void copyText('错误诊断', generationFailureCopyText(selectedRecord))}><Copy size={13} /> 复制诊断</button>
                 </div>
               </div>
             ) : null}

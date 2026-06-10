@@ -3013,7 +3013,7 @@ async fn build_openai_images_edit_form(
             .file_name(file_name)
             .mime_str(mime_from_extension(&extension))
             .map_err(|error| format!("Cannot attach reference image: {error}"))?;
-        let field_name = if index == 0 { "image" } else { "image[]" };
+        let field_name = if references.len() > 1 { "image[]" } else { "image" };
         form = form.part(field_name, part);
     }
 

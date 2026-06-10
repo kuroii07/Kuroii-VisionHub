@@ -31,6 +31,7 @@ import { getDefaultPolishMode, polishPrompt, resolvePolishMode, type PromptAssis
 import { isTauriRuntime, polishPromptWithProvider, referenceImagesFromPaths } from '../services/desktopApi';
 import { PROMPT_POLISH_SECRET_ID, promptPolishConfigId } from '../services/appSettings';
 import { parseExtraHeaders, type OpenAICompatibleConfig } from '../services/providerConfig';
+import { diagnoseGenerationFailure, isPotentialBackgroundCompletion } from '../services/generationErrorDiagnostics';
 import { useStudioStore } from '../store/useStudioStore';
 import { PromptAssistModal } from './PromptAssistModal';
 import { StudioSelect } from './StudioSelect';
@@ -106,6 +107,12 @@ const REFERENCE_ROLE_OPTIONS = [
 ];
 
 type ReferenceDragState = 'supported' | 'unsupported' | null;
+type ReferenceNoticeTone = 'success' | 'warning' | 'error';
+
+type ReferenceNotice = {
+  tone: ReferenceNoticeTone;
+  text: string;
+};
 
 const SUPPORTED_REFERENCE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const SUPPORTED_REFERENCE_PATH_PATTERN = /\.(png|jpe?g|webp)$/i;
@@ -151,20 +158,6 @@ function generationTimeMs(createdAt: string) {
   if (Number.isFinite(numeric) && numeric > 0) return numeric;
   const parsed = new Date(createdAt).getTime();
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function isPotentialBackgroundCompletion(record?: Pick<ReturnType<typeof useStudioStore.getState>['results'][number], 'status' | 'error' | 'raw'>) {
-  if (!record || record.status !== 'failed') return false;
-  const message = `${record.error ?? ''} ${JSON.stringify(record.raw ?? {})}`.toLowerCase();
-  return (
-    message.includes('524') ||
-    message.includes('408') ||
-    message.includes('同步连接超时') ||
-    message.includes('background task') ||
-    message.includes('poll_error') ||
-    message.includes('poll_url') ||
-    message.includes('轮询')
-  );
 }
 
 function providerAccessLabel(provider: ReturnType<typeof listProviders>[number]) {
@@ -260,8 +253,11 @@ export function ModernGeneratePage(props: {
   const [isQuickPolishing, setIsQuickPolishing] = useState(false);
   const [referenceDragState, setReferenceDragState] = useState<ReferenceDragState>(null);
   const [draggingReferenceId, setDraggingReferenceId] = useState<string | null>(null);
+  const [referenceDropTargetId, setReferenceDropTargetId] = useState<string | null>(null);
+  const [referenceNotice, setReferenceNotice] = useState<ReferenceNotice | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const referenceNoticeTimerRef = useRef<number | null>(null);
   const modelOptions = props.supportsOpenAICompatible
     ? props.providerConfig.modelOptions.length > 0
       ? props.providerConfig.modelOptions
@@ -315,6 +311,7 @@ export function ModernGeneratePage(props: {
   );
   const latestImage = sessionResults.find((result) => result.imageUrls[0]);
   const failedLatest = sessionResults.find((result) => result.status === 'failed');
+  const failedLatestDiagnosis = failedLatest ? diagnoseGenerationFailure(failedLatest) : null;
   const failedLatestNeedsCheck = isPotentialBackgroundCompletion(failedLatest);
   const imageToImageStatus = props.selectedProvider.capabilities.imageToImage;
   const multiReferenceStatus = props.selectedProvider.capabilities.multiReferenceImage;
@@ -324,6 +321,12 @@ export function ModernGeneratePage(props: {
   const promptLength = props.prompt.trim().length;
   const promptWidthState =
     promptLength === 0 ? 'promptEmpty' : promptLength < 24 ? 'promptShort' : promptLength < 60 ? 'promptMedium' : 'promptLong';
+  const referenceStatusText = referenceNotice?.text
+    ?? (props.referenceImages.length >= 4
+      ? '已满 4 张，可拖拽排序或清空后再加'
+      : props.referenceImages.length > 0
+        ? '拖拽缩略图可调整顺序'
+        : '拖拽到此处或 Ctrl+V 粘贴');
 
   useEffect(() => {
     setMode(props.defaultMode);
@@ -346,6 +349,35 @@ export function ModernGeneratePage(props: {
       setMode('image');
     }
   }, [props.referenceImages.length]);
+
+  useEffect(() => () => {
+    if (referenceNoticeTimerRef.current) {
+      window.clearTimeout(referenceNoticeTimerRef.current);
+    }
+  }, []);
+
+  function normalizeReferences(nextReferences: ReferenceImage[]) {
+    const uniqueReferences: ReferenceImage[] = [];
+    const seen = new Set<string>();
+    for (const reference of nextReferences) {
+      const key = referenceDedupKey(reference);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      uniqueReferences.push(reference);
+    }
+    return uniqueReferences.slice(0, 4);
+  }
+
+  function showReferenceNotice(text: string, tone: ReferenceNoticeTone = 'success') {
+    setReferenceNotice({ text, tone });
+    if (referenceNoticeTimerRef.current) {
+      window.clearTimeout(referenceNoticeTimerRef.current);
+    }
+    referenceNoticeTimerRef.current = window.setTimeout(() => {
+      setReferenceNotice(null);
+      referenceNoticeTimerRef.current = null;
+    }, tone === 'success' ? 2200 : 3200);
+  }
 
   function applyCustomSize() {
     const width = normalizeDimension(customWidth);
@@ -400,30 +432,39 @@ export function ModernGeneratePage(props: {
   }
 
   function updateReferences(nextReferences: ReferenceImage[]) {
-    const uniqueReferences: ReferenceImage[] = [];
-    const seen = new Set<string>();
-    for (const reference of nextReferences) {
-      const key = referenceDedupKey(reference);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      uniqueReferences.push(reference);
-    }
-    props.onReferenceImagesChange(uniqueReferences.slice(0, 4));
+    props.onReferenceImagesChange(normalizeReferences(nextReferences));
   }
 
   async function addReferenceFiles(files: FileList | File[] | null, source: Extract<ReferenceImage['source'], 'upload' | 'clipboard' | 'drag-drop'> = 'upload') {
     if (!files?.length || props.isGenerating) return;
     const slots = Math.max(0, 4 - props.referenceImages.length);
-    if (slots === 0) return;
-    const selectedFiles = Array.from(files)
-      .filter(isReferenceImageFile)
+    if (slots === 0) {
+      showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
+      return;
+    }
+    const incomingFiles = Array.from(files);
+    const supportedFiles = incomingFiles.filter(isReferenceImageFile);
+    const selectedFiles = supportedFiles
       .slice(0, slots);
-    if (selectedFiles.length === 0) return;
+    if (selectedFiles.length === 0) {
+      showReferenceNotice('没有可用图片，仅支持 PNG/JPG/WebP。', 'warning');
+      return;
+    }
     try {
       const references = await Promise.all(selectedFiles.map((file) => fileToReferenceImage(file, source)));
-      updateReferences([...props.referenceImages, ...references]);
+      const nextReferences = normalizeReferences([...props.referenceImages, ...references]);
+      props.onReferenceImagesChange(nextReferences);
       setMode('image');
+      const addedCount = Math.max(0, nextReferences.length - props.referenceImages.length);
+      if (supportedFiles.length > selectedFiles.length) {
+        showReferenceNotice(`已加入 ${addedCount} 张，最多保留 4 张参考图。`, 'warning');
+      } else if (addedCount < selectedFiles.length) {
+        showReferenceNotice(addedCount > 0 ? `已加入 ${addedCount} 张，重复参考图已跳过。` : '重复参考图已跳过。', 'warning');
+      } else {
+        showReferenceNotice(`已加入 ${addedCount} 张参考图。`);
+      }
     } catch {
+      showReferenceNotice('参考图读取失败，请换一张图片重试。', 'error');
       return;
     }
   }
@@ -431,15 +472,35 @@ export function ModernGeneratePage(props: {
   async function addReferencePaths(paths: string[]) {
     if (!paths.length || props.isGenerating) return;
     const slots = Math.max(0, 4 - props.referenceImages.length);
-    if (slots === 0) return;
-    const references = await referenceImagesFromPaths(paths, slots);
-    if (!references.length) return;
-    updateReferences([...props.referenceImages, ...references]);
+    if (slots === 0) {
+      showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
+      return;
+    }
+    const supportedPaths = paths.filter(isSupportedReferencePath);
+    if (!supportedPaths.length) {
+      showReferenceNotice('拖入文件不是支持的图片格式。', 'warning');
+      return;
+    }
+    const references = await referenceImagesFromPaths(supportedPaths, slots);
+    if (!references.length) {
+      showReferenceNotice('未能读取拖入的参考图。', 'error');
+      return;
+    }
+    const nextReferences = normalizeReferences([...props.referenceImages, ...references]);
+    props.onReferenceImagesChange(nextReferences);
     setMode('image');
+    const addedCount = Math.max(0, nextReferences.length - props.referenceImages.length);
+    showReferenceNotice(
+      supportedPaths.length > slots
+        ? `已加入 ${addedCount} 张，最多保留 4 张参考图。`
+        : `已加入 ${addedCount} 张参考图。`,
+      supportedPaths.length > slots ? 'warning' : 'success'
+    );
   }
 
   function removeReference(referenceId: string) {
     updateReferences(props.referenceImages.filter((reference) => reference.id !== referenceId));
+    showReferenceNotice('已移除 1 张参考图。');
     setReferenceRoles((current) => {
       const next = { ...current };
       delete next[referenceId];
@@ -450,6 +511,7 @@ export function ModernGeneratePage(props: {
   function clearReferences() {
     updateReferences([]);
     setReferenceRoles({});
+    showReferenceNotice('已清空参考图。');
   }
 
   function reorderReference(activeId: string, overId: string) {
@@ -461,6 +523,7 @@ export function ModernGeneratePage(props: {
     const [item] = nextReferences.splice(index, 1);
     nextReferences.splice(nextIndex, 0, item);
     updateReferences(nextReferences);
+    showReferenceNotice('参考图顺序已调整。');
   }
 
   function handleReferenceSortDragStart(referenceId: string, event: DragEvent<HTMLElement>) {
@@ -468,6 +531,12 @@ export function ModernGeneratePage(props: {
       event.preventDefault();
       return;
     }
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('.referenceRoleSelect') || target?.closest('.referenceRemove')) {
+      event.preventDefault();
+      return;
+    }
+    event.stopPropagation();
     setDraggingReferenceId(referenceId);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', referenceId);
@@ -477,18 +546,23 @@ export function ModernGeneratePage(props: {
     const activeId = draggingReferenceId ?? event.dataTransfer.getData('text/plain');
     if (!activeId || activeId === referenceId || props.isGenerating) return;
     event.preventDefault();
+    event.stopPropagation();
     event.dataTransfer.dropEffect = 'move';
+    setReferenceDropTargetId(referenceId);
   }
 
   function handleReferenceSortDrop(referenceId: string, event: DragEvent<HTMLElement>) {
     event.preventDefault();
+    event.stopPropagation();
     const activeId = draggingReferenceId ?? event.dataTransfer.getData('text/plain');
     if (activeId) reorderReference(activeId, referenceId);
     setDraggingReferenceId(null);
+    setReferenceDropTargetId(null);
   }
 
   function handleReferenceSortDragEnd() {
     setDraggingReferenceId(null);
+    setReferenceDropTargetId(null);
   }
 
   function setReferenceRole(referenceId: string, role: string) {
@@ -523,11 +597,15 @@ export function ModernGeneratePage(props: {
     event.stopPropagation();
     if (props.referenceImages.length >= 4) {
       setReferenceDragState(null);
+      showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
       return;
     }
     const nextDragState = referenceTransferState(event.dataTransfer, referenceDragState);
     setReferenceDragState(null);
-    if (nextDragState !== 'supported') return;
+    if (nextDragState !== 'supported') {
+      showReferenceNotice('拖入文件不是支持的图片格式。', 'warning');
+      return;
+    }
     const files = referenceFilesFromTransfer(event.dataTransfer);
     if (files.length > 0) void addReferenceFiles(files, 'drag-drop');
   }
@@ -535,18 +613,30 @@ export function ModernGeneratePage(props: {
   function handleReferencePaste(event: ClipboardEvent<HTMLDivElement>) {
     if (props.isGenerating) return;
     if (props.referenceImages.length >= 4) {
+      const hasImage = Array.from(event.clipboardData.items).some((item) => item.kind === 'file' && item.type.startsWith('image/'));
+      if (hasImage) showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
       return;
     }
     const files = Array.from(event.clipboardData.items)
       .map((item) => (item.kind === 'file' ? item.getAsFile() : null))
       .filter((file): file is File => Boolean(file && isReferenceImageFile(file)));
-    if (files.length === 0) return;
+    if (files.length === 0) {
+      const hasFile = Array.from(event.clipboardData.items).some((item) => item.kind === 'file');
+      if (hasFile) showReferenceNotice('剪贴板图片格式不支持，仅支持 PNG/JPG/WebP。', 'warning');
+      return;
+    }
     event.preventDefault();
     void addReferenceFiles(files, 'clipboard');
   }
 
   function useLatestImageAsReference() {
     if (!latestImage?.imageUrls[0]) return;
+    const hasSameLatestReference = props.referenceImages.some((reference) => reference.sourceGenerationId === latestImage.id);
+    if (props.referenceImages.length >= 4 && !hasSameLatestReference) {
+      setMode('image');
+      showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
+      return;
+    }
     const imageUrl = latestImage.imageUrls[0];
     const nextReference: ReferenceImage = {
       id: `generated-${latestImage.id}-${Date.now()}`,
@@ -561,6 +651,7 @@ export function ModernGeneratePage(props: {
     };
     updateReferences([nextReference, ...props.referenceImages.filter((reference) => reference.sourceGenerationId !== latestImage.id)]);
     setMode('image');
+    showReferenceNotice('最近生成图已加入参考。');
   }
 
   useEffect(() => {
@@ -620,9 +711,14 @@ export function ModernGeneratePage(props: {
       }
       if (payload.type === 'drop') {
         setReferenceDragState(null);
-        if (props.isGenerating || props.referenceImages.length >= 4) return;
+        if (props.isGenerating) return;
+        if (props.referenceImages.length >= 4) {
+          showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
+          return;
+        }
         const supportedPaths = payload.paths.filter(isSupportedReferencePath);
         if (supportedPaths.length > 0) void addReferencePaths(supportedPaths);
+        else showReferenceNotice('拖入文件不是支持的图片格式。', 'warning');
       }
     }).then((cleanup) => {
       if (cancelled) cleanup();
@@ -710,7 +806,13 @@ export function ModernGeneratePage(props: {
                   <Maximize2 size={15} /> 预览
                 </span>
               </button>
-              <button className="useAsReferenceButton" type="button" onClick={useLatestImageAsReference} disabled={props.isGenerating}>
+              <button
+                className="useAsReferenceButton"
+                type="button"
+                data-tooltip={props.referenceImages.length >= 4 ? '参考图已满 4 张，请先移除或清空' : '将最近生成图加入参考'}
+                onClick={useLatestImageAsReference}
+                disabled={props.isGenerating || props.referenceImages.length >= 4}
+              >
                 <ImagePlus size={15} /> 作为参考
               </button>
             </>
@@ -734,12 +836,14 @@ export function ModernGeneratePage(props: {
           {failedLatest && !latestImage ? (
             <div className={`previewError ${failedLatestNeedsCheck ? 'pendingRecovery' : ''}`}>
               <div>
-                <strong>{failedLatestNeedsCheck ? '上一轮待核查' : '上一轮失败'}</strong>
-                <span>
-                  {failedLatestNeedsCheck
-                    ? '同步连接先断开，中转后台可能仍在继续生成。稍后可重载历史，或到作品画廊查看是否已落盘。'
-                    : failedLatest.error}
-                </span>
+                <strong>{failedLatestDiagnosis?.title ?? (failedLatestNeedsCheck ? '上一轮待核查' : '上一轮失败')}</strong>
+                <span>{failedLatestDiagnosis?.summary ?? failedLatest.error}</span>
+                {failedLatestDiagnosis?.actions.length ? (
+                  <ul className="generationErrorActionsList">
+                    {failedLatestDiagnosis.actions.slice(0, 3).map((action) => <li key={action}>{action}</li>)}
+                  </ul>
+                ) : null}
+                {failedLatestDiagnosis?.details.length ? <small>{failedLatestDiagnosis.details.join(' · ')}</small> : null}
               </div>
               <div className="previewErrorActions">
                 <button type="button" onClick={() => void props.onReloadHistory()}>
@@ -776,7 +880,7 @@ export function ModernGeneratePage(props: {
               </div>
               <small>
                 <span>支持 PNG/JPG/WebP</span>
-                <span>拖拽、粘贴和最近生成图</span>
+                <span className={`referenceNotice ${referenceNotice?.tone ?? ''}`}>{referenceStatusText}</span>
               </small>
             </div>
             <input
@@ -811,38 +915,51 @@ export function ModernGeneratePage(props: {
                   <XCircle size={15} /> 清空
                 </button>
                 <div className="referenceStrip">
-                  {props.referenceImages.map((reference) => (
-                    <article
-                      className={`referenceTile ${draggingReferenceId === reference.id ? 'isDragging' : ''}`}
-                      key={reference.id}
-                      draggable={!props.isGenerating}
-                      onDragStart={(event) => handleReferenceSortDragStart(reference.id, event)}
-                      onDragOver={(event) => handleReferenceSortDragOver(reference.id, event)}
-                      onDrop={(event) => handleReferenceSortDrop(reference.id, event)}
-                      onDragEnd={handleReferenceSortDragEnd}
-                    >
-                      <button type="button" className="referenceThumb" onClick={() => reference.previewUrl && props.onPreview(reference.previewUrl)}>
-                        {reference.previewUrl ? <img src={reference.previewUrl} alt={reference.name ?? '参考图'} /> : <ImagePlus size={18} />}
-                      </button>
-                      <span className="referenceSourceBadge" title={reference.name ?? referenceSourceLabel(reference.source)}>
-                        {referenceSourceLabel(reference.source)}
-                      </span>
-                      <StudioSelect
-                        className="referenceRoleSelect"
-                        value={referenceRoles[reference.id] ?? reference.role ?? 'auto'}
-                        options={REFERENCE_ROLE_OPTIONS}
-                        disabled={props.isGenerating}
-                        onChange={(value) => setReferenceRole(reference.id, value)}
-                      />
-                      <button className="referenceRemove" type="button" data-tooltip="移除参考图" aria-label="移除参考图" disabled={props.isGenerating} onClick={() => removeReference(reference.id)}>
-                        <Trash2 size={13} />
-                      </button>
-                    </article>
-                  ))}
+                  {props.referenceImages.map((reference, index) => {
+                    const roleValue = referenceRoles[reference.id] ?? reference.role ?? 'auto';
+                    const roleLabel = REFERENCE_ROLE_OPTIONS.find((option) => option.value === roleValue)?.label ?? '自动';
+                    const sourceLabel = referenceSourceLabel(reference.source);
+                    const referenceTitle = `第 ${index + 1} 张 · ${sourceLabel} · ${roleLabel}${reference.name ? ` · ${reference.name}` : ''}`;
+                    return (
+                      <article
+                        className={`referenceTile ${draggingReferenceId === reference.id ? 'isDragging' : ''} ${referenceDropTargetId === reference.id ? 'isDropTarget' : ''}`}
+                        key={reference.id}
+                        title={`${referenceTitle}。拖拽缩略图可调整顺序。`}
+                        draggable={!props.isGenerating}
+                        onDragStart={(event) => handleReferenceSortDragStart(reference.id, event)}
+                        onDragOver={(event) => handleReferenceSortDragOver(reference.id, event)}
+                        onDrop={(event) => handleReferenceSortDrop(reference.id, event)}
+                        onDragEnd={handleReferenceSortDragEnd}
+                        onDragLeave={() => setReferenceDropTargetId(null)}
+                      >
+                        <button
+                          type="button"
+                          className="referenceThumb"
+                          aria-label={`预览${referenceTitle}`}
+                          onClick={() => reference.previewUrl && props.onPreview(reference.previewUrl)}
+                        >
+                          {reference.previewUrl ? <img src={reference.previewUrl} alt={reference.name ?? `第 ${index + 1} 张参考图`} /> : <ImagePlus size={18} />}
+                        </button>
+                        <span className="referenceSourceBadge" title={reference.name ?? sourceLabel}>
+                          #{index + 1} {sourceLabel}
+                        </span>
+                        <StudioSelect
+                          className="referenceRoleSelect"
+                          value={roleValue}
+                          options={REFERENCE_ROLE_OPTIONS}
+                          disabled={props.isGenerating}
+                          onChange={(value) => setReferenceRole(reference.id, value)}
+                        />
+                        <button className="referenceRemove" type="button" data-tooltip="移除参考图" aria-label={`移除第 ${index + 1} 张参考图`} disabled={props.isGenerating} onClick={() => removeReference(reference.id)}>
+                          <Trash2 size={13} />
+                        </button>
+                      </article>
+                    );
+                  })}
                 </div>
               </>
             ) : (
-              <p>添加本地图片，或拖拽/粘贴图片作为参考。</p>
+              <p className="referenceEmptyState">添加本地图片，或拖拽 / Ctrl+V 粘贴图片作为参考，最多 4 张。</p>
             )}
           </div>
         ) : null}

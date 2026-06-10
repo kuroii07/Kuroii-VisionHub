@@ -1,4 +1,4 @@
-﻿# VisionHub Studio
+# VisionHub Studio
 
 VisionHub Studio 是一个桌面优先的多平台 AI 图片创作工作台，当前以 Tauri + React + TypeScript + Vite 实现。项目优先服务中转站 / 聚合 API 工作流，同时保留官方 API 和本地模型路线，目标是把 OpenAI-compatible 中转、OpenAI 官方、后续 Nano Banana / Grok / Seedream / 即梦 / 豆包 / 可灵等在线生图能力统一到一个本地软件里。
 
