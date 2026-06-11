@@ -13109,6 +13109,366 @@ body {
   flex: 0 0 auto;
 }
 
+/* ── Inspiration Source Library V2 (0.2.9 提示词网站目录) ── */
+
+.sourceLibraryShell {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.sourceLibraryToolbar .selectionCount {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.sourceSearchPanel {
+  align-items: end;
+}
+
+.sourceFilterPanel {
+  grid-template-columns: repeat(5, minmax(108px, 1fr)) auto;
+}
+
+.sourceFilterPanel .miniButton {
+  white-space: nowrap;
+}
+
+.sourceLibraryLayout {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 184px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.sourceCategoryRail {
+  position: sticky;
+  top: 18px;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--app-line);
+  border-radius: 20px;
+  background: var(--app-surface);
+}
+
+.sourceCategoryRail button {
+  min-width: 0;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 0 10px;
+  color: var(--app-text-2);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 850;
+  text-align: left;
+}
+
+.sourceCategoryRail button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sourceCategoryRail button small {
+  flex: 0 0 auto;
+  color: var(--app-muted);
+  font-size: 11px;
+}
+
+.sourceCategoryRail button.active,
+.sourceCategoryRail button:hover {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 26%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+}
+
+.sourceTablePanel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 22px;
+  color: var(--app-text);
+  background: var(--app-surface);
+}
+
+.sourceTableHeader,
+.sourceTableRow {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.1fr) minmax(100px, 0.6fr) minmax(160px, 1.1fr) minmax(104px, 0.65fr) minmax(52px, 0.35fr) minmax(238px, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.sourceTableHeader {
+  min-height: 38px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--app-line);
+  color: var(--app-muted);
+  background: color-mix(in srgb, var(--app-surface-2) 78%, transparent);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.sourceTableRow {
+  min-height: 72px;
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--app-line) 72%, transparent);
+}
+
+.sourceTableRow:last-child {
+  border-bottom: 0;
+}
+
+.sourceTableRow:hover {
+  background: color-mix(in srgb, var(--app-accent-strong) 6%, transparent);
+}
+
+.sourceIdentityCell,
+.sourceMetaCell,
+.sourceNoteCell,
+.sourceStatusCell,
+.sourceRecentCell,
+.sourceRowActions {
+  min-width: 0;
+}
+
+.sourceIdentityCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sourceIdentityCell > div {
+  min-width: 0;
+}
+
+.sourceFavicon {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  color: var(--app-accent-strong);
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.sourceFavicon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sourceIdentityCell strong,
+.sourceMetaCell span,
+.sourceRecentCell strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sourceIdentityCell small,
+.sourceMetaCell small,
+.sourceRecentCell small {
+  display: block;
+  min-width: 0;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sourceMetaCell span {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.sourceNoteCell p {
+  min-width: 0;
+  margin: 0 0 6px;
+  overflow: hidden;
+  color: var(--app-text-2);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sourceInlineTags {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.sourceInlineTags span,
+.sourceBadge {
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-muted);
+  background: var(--app-surface-2);
+  font-size: 10px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sourceInlineTags span {
+  padding: 2px 7px;
+}
+
+.sourceStatusCell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.sourceBadge {
+  padding: 3px 8px;
+}
+
+.sourceBadge.warning {
+  color: #b45309;
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--app-line));
+  background: color-mix(in srgb, #f59e0b 12%, var(--app-surface-2));
+}
+
+.sourceRecentCell strong {
+  font-size: 13px;
+}
+
+.sourceRowActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.sourceRowActions .miniButton {
+  min-height: 32px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+
+.sourceTableEmpty {
+  min-height: 300px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.sourceEditorDrawer {
+  position: fixed;
+  z-index: 45;
+  top: 92px;
+  right: 22px;
+  bottom: 22px;
+  width: min(420px, calc(100vw - 44px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--app-line);
+  border-radius: 24px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 96%, transparent);
+  box-shadow: 0 28px 70px rgba(2, 6, 23, 0.24);
+  backdrop-filter: blur(18px);
+}
+
+.sourceEditorDrawer .panelTitleRow {
+  align-items: flex-start;
+}
+
+.sourceEditorDrawer .panelTitleRow p {
+  margin: 4px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sourceEditorForm {
+  min-height: 0;
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.sourceEditorForm label {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.sourceEditorForm label > span {
+  color: var(--app-muted);
+}
+
+.sourceEditorForm input,
+.sourceEditorForm textarea {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  padding: 0 11px;
+  color: var(--app-text);
+  background: var(--app-surface-2);
+  outline: none;
+}
+
+.sourceEditorForm textarea {
+  min-height: 68px;
+  padding: 9px 11px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.sourceEditorForm input:focus,
+.sourceEditorForm textarea:focus {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 42%, var(--app-line));
+}
+
+.sourceAdvancedToggle {
+  justify-content: center;
+}
+
+.sourceEditorActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sourceEditorActions .miniButton {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
 .selectionCount {
   padding: 3px 10px;
   border: 1px solid var(--app-accent-strong);
@@ -13784,5 +14144,85 @@ body {
 @media (max-width: 760px) {
   .inspirationGalleryFilterPanel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1260px) {
+  .sourceTableHeader,
+  .sourceTableRow {
+    grid-template-columns: minmax(190px, 1.35fr) minmax(130px, 0.8fr) minmax(210px, 1.25fr) minmax(104px, 0.55fr) minmax(220px, 1fr);
+  }
+
+  .sourceTableHeader span:nth-child(4),
+  .sourceStatusCell {
+    display: none;
+  }
+}
+
+@media (max-width: 1080px) {
+  .sourceLibraryLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .sourceCategoryRail {
+    position: static;
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .sourceCategoryRail button {
+    flex: 0 0 auto;
+  }
+
+  .sourceTableHeader,
+  .sourceTableRow {
+    grid-template-columns: minmax(180px, 1.2fr) minmax(190px, 1fr) minmax(220px, 1fr);
+  }
+
+  .sourceTableHeader span:nth-child(2),
+  .sourceTableHeader span:nth-child(4),
+  .sourceTableHeader span:nth-child(5),
+  .sourceMetaCell,
+  .sourceStatusCell,
+  .sourceRecentCell {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .sourceFilterPanel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sourceTableHeader {
+    display: none;
+  }
+
+  .sourceTableRow {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .sourceMetaCell,
+  .sourceStatusCell,
+  .sourceRecentCell {
+    display: flex;
+  }
+
+  .sourceMetaCell,
+  .sourceRecentCell {
+    display: block;
+  }
+
+  .sourceRowActions {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+
+  .sourceEditorDrawer {
+    top: 76px;
+    right: 10px;
+    bottom: 10px;
+    width: calc(100vw - 20px);
   }
 }

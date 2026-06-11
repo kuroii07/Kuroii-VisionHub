@@ -203,11 +203,19 @@ struct InspirationSource {
     url: String,
     category: String,
     region: String,
+    source_kind: Option<String>,
     #[serde(default)]
     tags: Vec<String>,
+    #[serde(default)]
+    keywords: Vec<String>,
     note: Option<String>,
+    scene_notes: Option<String>,
+    membership_notes: Option<String>,
+    copyright_notes: Option<String>,
+    favicon_url: Option<String>,
     requires_login: Option<bool>,
     commercial_reference: String,
+    open_count: Option<u32>,
     created_at: String,
     updated_at: String,
     last_opened_at: Option<String>,
@@ -1012,6 +1020,7 @@ fn save_inspiration_source(
     }
     source.updated_at = now;
     source.tags = clean_string_list(source.tags);
+    source.keywords = clean_string_list(source.keywords);
 
     let mut sources = read_inspiration_sources(&app)?;
     sources.retain(|item| item.id != source.id);

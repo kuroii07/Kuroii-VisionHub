@@ -13,10 +13,17 @@ interface BackendInspirationSource {
   url: string;
   category: InspirationSource['category'];
   region: InspirationSource['region'];
+  source_kind?: InspirationSource['sourceKind'];
   tags: string[];
+  keywords?: string[];
   note?: string;
+  scene_notes?: string;
+  membership_notes?: string;
+  copyright_notes?: string;
+  favicon_url?: string;
   requires_login?: boolean;
   commercial_reference: InspirationSource['commercialReference'];
+  open_count?: number;
   created_at: string;
   updated_at: string;
   last_opened_at?: string;
@@ -55,10 +62,17 @@ function mapSourceFromBackend(source: BackendInspirationSource): InspirationSour
     url: source.url,
     category: source.category,
     region: source.region,
+    sourceKind: source.source_kind ?? 'custom',
     tags: source.tags ?? [],
+    keywords: source.keywords ?? [],
     note: source.note,
+    sceneNotes: source.scene_notes,
+    membershipNotes: source.membership_notes,
+    copyrightNotes: source.copyright_notes,
+    faviconUrl: source.favicon_url,
     requiresLogin: source.requires_login,
     commercialReference: source.commercial_reference,
+    openCount: source.open_count,
     createdAt: source.created_at,
     updatedAt: source.updated_at,
     lastOpenedAt: source.last_opened_at
@@ -72,10 +86,17 @@ function mapSourceToBackend(source: InspirationSource): BackendInspirationSource
     url: source.url,
     category: source.category,
     region: source.region,
+    source_kind: source.sourceKind ?? 'custom',
     tags: source.tags ?? [],
+    keywords: source.keywords ?? [],
     note: source.note,
+    scene_notes: source.sceneNotes,
+    membership_notes: source.membershipNotes,
+    copyright_notes: source.copyrightNotes,
+    favicon_url: source.faviconUrl,
     requires_login: source.requiresLogin,
     commercial_reference: source.commercialReference,
+    open_count: source.openCount,
     created_at: source.createdAt,
     updated_at: source.updatedAt,
     last_opened_at: source.lastOpenedAt

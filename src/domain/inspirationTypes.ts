@@ -9,6 +9,7 @@ export type InspirationSourceCategory =
 export type InspirationRegion = 'china' | 'global' | 'mixed';
 export type InspirationCommercialReference = 'unknown' | 'reference-only' | 'user-confirmed';
 export type InspirationLicenseStatus = 'unknown' | 'reference-only' | 'commercial-confirmed';
+export type InspirationSourceKind = 'preset' | 'custom';
 
 export interface InspirationSource {
   id: string;
@@ -16,10 +17,17 @@ export interface InspirationSource {
   url: string;
   category: InspirationSourceCategory;
   region: InspirationRegion;
+  sourceKind?: InspirationSourceKind;
   tags: string[];
+  keywords?: string[];
   note?: string;
+  sceneNotes?: string;
+  membershipNotes?: string;
+  copyrightNotes?: string;
+  faviconUrl?: string;
   requiresLogin?: boolean;
   commercialReference: InspirationCommercialReference;
+  openCount?: number;
   createdAt: string;
   updatedAt: string;
   lastOpenedAt?: string;
