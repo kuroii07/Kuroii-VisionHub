@@ -25,7 +25,7 @@ import {
   Upload,
   X
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type MouseEvent } from 'react';
 import type {
   InspirationAsset,
   InspirationCommercialReference,
@@ -1238,6 +1238,24 @@ export function InspirationPage(props: {
     return () => window.removeEventListener('pointerdown', closeColorMenu);
   }, [assetColorMenuOpen]);
 
+  useEffect(() => {
+    if (!assetMenuTarget) return;
+    function closeAssetContextMenu(event: globalThis.PointerEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest('.libraryContextMenu')) return;
+      setAssetMenuTarget(null);
+    }
+    function closeAssetContextMenuOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setAssetMenuTarget(null);
+    }
+    window.addEventListener('pointerdown', closeAssetContextMenu);
+    window.addEventListener('keydown', closeAssetContextMenuOnEscape);
+    return () => {
+      window.removeEventListener('pointerdown', closeAssetContextMenu);
+      window.removeEventListener('keydown', closeAssetContextMenuOnEscape);
+    };
+  }, [assetMenuTarget]);
+
   const normalizedQuery = query.trim().toLowerCase();
   const allSources = useMemo(() => {
     const customSources = sources.map((source) => ({ ...source, sourceKind: source.sourceKind ?? 'custom' as const }));
@@ -1330,6 +1348,13 @@ export function InspirationPage(props: {
     () => assets.find((asset) => asset.id === selectedAssetId) ?? null,
     [assets, selectedAssetId]
   );
+  const contextAssets = useMemo(() => {
+    if (!assetMenuTarget) return [];
+    const selected = assets.filter((asset) => selectedAssetIds.includes(asset.id));
+    if (selected.some((asset) => asset.id === assetMenuTarget.assetId)) return selected;
+    const targetAsset = assets.find((asset) => asset.id === assetMenuTarget.assetId);
+    return targetAsset ? [targetAsset] : [];
+  }, [assetMenuTarget, assets, selectedAssetIds]);
   const sourceNavItems = useMemo(() => {
     const count = (predicate: (source: InspirationSource) => boolean) => allSources.filter(predicate).length;
     return [
@@ -1773,7 +1798,72 @@ export function InspirationPage(props: {
 
   function clearAssetSelection() { setSelectedAssetIds([]); setAssetMenuTarget(null); }
 
-  function handleAssetMenuClose() { setAssetMenuTarget(null); }
+  function openAssetContextMenu(asset: InspirationAsset, event: MouseEvent<HTMLElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!selectedAssetIds.includes(asset.id)) {
+      setSelectedAssetIds([asset.id]);
+    }
+    const menuWidth = 178;
+    const menuHeight = 260;
+    setAssetMenuTarget({
+      assetId: asset.id,
+      x: Math.min(event.clientX, Math.max(12, window.innerWidth - menuWidth - 12)),
+      y: Math.min(event.clientY, Math.max(12, window.innerHeight - menuHeight - 12))
+    });
+  }
+
+  async function copyContextAssetPrompts(targetAssets: InspirationAsset[]) {
+    const prompts = targetAssets.map(assetPrompt).filter(Boolean);
+    if (prompts.length === 0) {
+      setMessage('所选图片没有可复制的 Prompt。');
+      setAssetMenuTarget(null);
+      return;
+    }
+    await copyText(targetAssets.length > 1 ? '所选 Prompt' : 'Prompt', prompts.join('\n\n---\n\n'));
+    setAssetMenuTarget(null);
+  }
+
+  async function copyContextAssetPaths(targetAssets: InspirationAsset[]) {
+    const paths = targetAssets.map((asset) => asset.imagePath || asset.imageUrl || '').filter(Boolean);
+    if (paths.length === 0) {
+      setMessage('所选图片没有可复制的路径。');
+      setAssetMenuTarget(null);
+      return;
+    }
+    await copyText(targetAssets.length > 1 ? '所选图片路径' : '图片路径', paths.join('\n'));
+    setAssetMenuTarget(null);
+  }
+
+  function removeContextAssets(targetAssets: InspirationAsset[]) {
+    const targetIds = targetAssets.map((asset) => asset.id);
+    if (targetIds.length === 0) return;
+    setAssetMenuTarget(null);
+    if (targetIds.length === 1) {
+      void removeAsset(targetIds[0]);
+      return;
+    }
+    props.onRequestConfirm({
+      title: '批量删除灵感收藏',
+      message: `确定删除 ${targetIds.length} 条灵感收藏记录吗？这只会删除 VisionHub 记录，不会删除已导入的图片文件。`,
+      confirmLabel: '删除记录',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          for (const assetId of targetIds) {
+            await deleteInspirationAsset(assetId);
+          }
+          setAssets((current) => current.filter((asset) => !targetIds.includes(asset.id)));
+          if (selectedAssetId && targetIds.includes(selectedAssetId)) setSelectedAssetId(null);
+          setSelectedAssetIds((current) => current.filter((assetId) => !targetIds.includes(assetId)));
+          setMessage(`已删除 ${targetIds.length} 条灵感收藏记录。`);
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : String(error));
+          throw error;
+        }
+      }
+    });
+  }
 
   function extractAssetDomain(asset: InspirationAsset) {
     if (asset.sourceUrl) return sourceDomain(asset.sourceUrl);
@@ -1801,10 +1891,10 @@ export function InspirationPage(props: {
       </header>
 
       <section className="inspirationTabs" aria-label="灵感中心分类">
-        <button className={activeTab === 'sources' ? 'active' : ''} onClick={() => setActiveTab('sources')}>
+        <button className={activeTab === 'sources' ? 'active' : ''} onClick={() => { setAssetMenuTarget(null); setActiveTab('sources'); }}>
           <Link2 size={15} /> 提示词网站
         </button>
-        <button className={activeTab === 'assets' ? 'active' : ''} onClick={() => setActiveTab('assets')}>
+        <button className={activeTab === 'assets' ? 'active' : ''} onClick={() => { resetSourceDraft(); setAssetMenuTarget(null); setActiveTab('assets'); }}>
           <Bookmark size={15} /> 图片收藏
         </button>
       </section>
@@ -2159,6 +2249,7 @@ export function InspirationPage(props: {
                               setSelectedAssetId(asset.id);
                             }
                           }}
+                          onContextMenu={(event) => openAssetContextMenu(asset, event)}
                         >
                           <button
                             className={`librarySelectMark ${isSelected ? 'active' : ''}`}
@@ -2311,6 +2402,63 @@ export function InspirationPage(props: {
                   )}
                 </aside>
                 </>
+              ) : null}
+
+              {assetMenuTarget && contextAssets.length > 0 ? (
+                <div
+                  className="libraryContextMenu inspirationAssetContextMenu"
+                  role="menu"
+                  style={{ left: assetMenuTarget.x, top: assetMenuTarget.y }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onContextMenu={(event) => event.preventDefault()}
+                >
+                  <div className="libraryContextMenuHeader">
+                    <strong>{contextAssets.length > 1 ? `${contextAssets.length} 张已选` : '图片操作'}</strong>
+                    <button className="iconMiniButton" type="button" data-tooltip="关闭" aria-label="关闭" onClick={() => setAssetMenuTarget(null)}><X size={13} /></button>
+                  </div>
+                  {contextAssets.length === 1 ? (
+                    <>
+                      <button type="button" role="menuitem" onClick={() => { setSelectedAssetId(contextAssets[0].id); setAssetMenuTarget(null); }}>
+                        <ImageIcon size={13} /> 打开详情
+                      </button>
+                      <button type="button" role="menuitem" disabled={!contextAssets[0].imageUrl} onClick={() => { props.onUseAsReference(contextAssets[0]); setAssetMenuTarget(null); }}>
+                        <ImagePlus size={13} /> 设为参考图
+                      </button>
+                      <button type="button" role="menuitem" disabled={!contextAssets[0].imageUrl} onClick={() => { if (contextAssets[0].imageUrl) props.onPreview(contextAssets[0].imageUrl); setAssetMenuTarget(null); }}>
+                        <Maximize2 size={13} /> 预览图片
+                      </button>
+                    </>
+                  ) : null}
+                  <button type="button" role="menuitem" onClick={() => void copyContextAssetPrompts(contextAssets)}>
+                    <Copy size={13} /> 复制 Prompt
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => void copyContextAssetPaths(contextAssets)}>
+                    <Copy size={13} /> 复制图片路径
+                  </button>
+                  {contextAssets.length === 1 && contextAssets[0].sourceUrl ? (
+                    <button type="button" role="menuitem" onClick={() => { void openExternalUrl(contextAssets[0].sourceUrl!); setAssetMenuTarget(null); }}>
+                      <ExternalLink size={13} /> 打开原始链接
+                    </button>
+                  ) : null}
+                  <span className="libraryMenuDivider" />
+                  {contextAssets.length === 1 ? (
+                    <>
+                      <button type="button" role="menuitem" disabled={!assetPrompt(contextAssets[0])} onClick={() => { props.onUsePrompt(assetPrompt(contextAssets[0])); setAssetMenuTarget(null); }}>
+                        <Sparkles size={13} /> 套用 Prompt
+                      </button>
+                      <button type="button" role="menuitem" disabled={!contextAssets[0].imageUrl} onClick={() => { void reversePromptForAsset(contextAssets[0]); setAssetMenuTarget(null); }}>
+                        <Search size={13} /> 反推提示词
+                      </button>
+                      <button type="button" role="menuitem" onClick={() => { startEditAsset(contextAssets[0]); setAssetMenuTarget(null); }}>
+                        <Edit3 size={13} /> 编辑信息
+                      </button>
+                    </>
+                  ) : null}
+                  <span className="libraryMenuDivider" />
+                  <button className="dangerAction" type="button" role="menuitem" onClick={() => removeContextAssets(contextAssets)}>
+                    <Trash2 size={13} /> {contextAssets.length > 1 ? '删除所选记录' : '删除记录'}
+                  </button>
+                </div>
               ) : null}
             </div>
           </section>

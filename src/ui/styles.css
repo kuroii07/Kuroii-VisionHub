@@ -13381,21 +13381,21 @@ body {
 
 .sourceEditorDrawer {
   position: fixed;
-  z-index: 45;
-  top: 92px;
-  right: 22px;
-  bottom: 22px;
-  width: min(420px, calc(100vw - 44px));
+  z-index: 760;
+  top: 18px;
+  right: 18px;
+  bottom: 18px;
+  width: min(420px, calc(100vw - 36px));
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--app-line);
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--app-line-strong);
   border-radius: 24px;
   color: var(--app-text);
-  background: color-mix(in srgb, var(--app-surface) 96%, transparent);
-  box-shadow: 0 28px 70px rgba(2, 6, 23, 0.24);
-  backdrop-filter: blur(18px);
+  background: color-mix(in srgb, var(--app-surface) 94%, transparent);
+  box-shadow: 0 26px 90px rgba(2, 6, 23, 0.28);
+  backdrop-filter: blur(22px) saturate(1.08);
 }
 
 .sourceEditorDrawer .panelTitleRow {
@@ -14253,9 +14253,7 @@ body {
   }
 
   .sourceEditorDrawer {
-    top: 76px;
-    right: 10px;
-    bottom: 10px;
-    width: calc(100vw - 20px);
+    inset: 10px;
+    width: auto;
   }
 }
