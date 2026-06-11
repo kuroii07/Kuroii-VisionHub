@@ -54,6 +54,8 @@ interface BackendInspirationLibrary {
 }
 
 const LOCAL_STORAGE_KEY = 'visionhub.inspirations.fallback';
+let cachedSources: InspirationSource[] | null = null;
+let cachedAssets: InspirationAsset[] | null = null;
 
 function mapSourceFromBackend(source: BackendInspirationSource): InspirationSource {
   return {
@@ -173,12 +175,44 @@ function nowId() {
 }
 
 export async function loadInspirationLibrary(): Promise<InspirationLibrary> {
+  const [sources, assets] = await Promise.all([loadInspirationSources(), loadInspirationAssets()]);
+  return { sources, assets };
+}
+
+export async function loadInspirationSources(): Promise<InspirationSource[]> {
+  if (cachedSources) return cachedSources;
+  if (!isTauriRuntime()) {
+    cachedSources = loadFallbackLibrary().sources;
+    return cachedSources;
+  }
+  const result = await invoke<BackendInspirationSource[]>('load_inspiration_sources');
+  cachedSources = (result ?? []).map(mapSourceFromBackend);
+  return cachedSources;
+}
+
+export async function loadInspirationAssets(): Promise<InspirationAsset[]> {
+  if (cachedAssets) return cachedAssets;
+  if (!isTauriRuntime()) {
+    cachedAssets = loadFallbackLibrary().assets;
+    return cachedAssets;
+  }
+  const result = await invoke<BackendInspirationAsset[]>('load_inspiration_assets');
+  cachedAssets = (result ?? []).map(mapAssetFromBackend);
+  return cachedAssets;
+}
+
+export async function reloadInspirationLibrary(): Promise<InspirationLibrary> {
+  cachedSources = null;
+  cachedAssets = null;
   if (!isTauriRuntime()) return loadFallbackLibrary();
   const result = await invoke<BackendInspirationLibrary>('load_inspirations');
-  return {
+  const library = {
     sources: (result.sources ?? []).map(mapSourceFromBackend),
     assets: (result.assets ?? []).map(mapAssetFromBackend)
   };
+  cachedSources = library.sources;
+  cachedAssets = library.assets;
+  return library;
 }
 
 export async function saveInspirationSource(source: InspirationSource): Promise<InspirationSource> {
@@ -187,21 +221,28 @@ export async function saveInspirationSource(source: InspirationSource): Promise<
     const nextSource = { ...source, updatedAt: nowId() };
     const sources = [nextSource, ...library.sources.filter((item) => item.id !== source.id)];
     saveFallbackLibrary({ ...library, sources });
+    cachedSources = sources;
     return nextSource;
   }
   const saved = await invoke<BackendInspirationSource>('save_inspiration_source', {
     source: mapSourceToBackend(source)
   });
-  return mapSourceFromBackend(saved);
+  const nextSource = mapSourceFromBackend(saved);
+  cachedSources = [nextSource, ...(cachedSources ?? []).filter((item) => item.id !== nextSource.id)];
+  return nextSource;
 }
 
 export async function deleteInspirationSource(sourceId: string) {
   if (!isTauriRuntime()) {
     const library = loadFallbackLibrary();
-    saveFallbackLibrary({ ...library, sources: library.sources.filter((item) => item.id !== sourceId) });
+    const sources = library.sources.filter((item) => item.id !== sourceId);
+    saveFallbackLibrary({ ...library, sources });
+    cachedSources = sources;
     return { id: sourceId, deleted: true };
   }
-  return invoke<{ id: string; deleted: boolean }>('delete_inspiration_source', { sourceId });
+  const result = await invoke<{ id: string; deleted: boolean }>('delete_inspiration_source', { sourceId });
+  if (result.deleted) cachedSources = (cachedSources ?? []).filter((item) => item.id !== sourceId);
+  return result;
 }
 
 export async function importInspirationAsset(request: InspirationAssetImportRequest): Promise<InspirationAsset> {
@@ -223,7 +264,9 @@ export async function importInspirationAsset(request: InspirationAssetImportRequ
       createdAt: timestamp,
       updatedAt: timestamp
     };
-    saveFallbackLibrary({ ...library, assets: [asset, ...library.assets] });
+    const assets = [asset, ...library.assets];
+    saveFallbackLibrary({ ...library, assets });
+    cachedAssets = assets;
     return asset;
   }
   const saved = await invoke<BackendInspirationAsset>('import_inspiration_asset', {
@@ -241,7 +284,9 @@ export async function importInspirationAsset(request: InspirationAssetImportRequ
       rating: request.rating
     }
   });
-  return mapAssetFromBackend(saved);
+  const nextAsset = mapAssetFromBackend(saved);
+  cachedAssets = [nextAsset, ...(cachedAssets ?? []).filter((item) => item.id !== nextAsset.id)];
+  return nextAsset;
 }
 
 export async function saveInspirationAsset(asset: InspirationAsset): Promise<InspirationAsset> {
@@ -250,19 +295,26 @@ export async function saveInspirationAsset(asset: InspirationAsset): Promise<Ins
     const nextAsset = { ...asset, updatedAt: nowId() };
     const assets = [nextAsset, ...library.assets.filter((item) => item.id !== asset.id)];
     saveFallbackLibrary({ ...library, assets });
+    cachedAssets = assets;
     return nextAsset;
   }
   const saved = await invoke<BackendInspirationAsset>('save_inspiration_asset', {
     asset: mapAssetToBackend(asset)
   });
-  return mapAssetFromBackend(saved);
+  const nextAsset = mapAssetFromBackend(saved);
+  cachedAssets = [nextAsset, ...(cachedAssets ?? []).filter((item) => item.id !== nextAsset.id)];
+  return nextAsset;
 }
 
 export async function deleteInspirationAsset(assetId: string) {
   if (!isTauriRuntime()) {
     const library = loadFallbackLibrary();
-    saveFallbackLibrary({ ...library, assets: library.assets.filter((item) => item.id !== assetId) });
+    const assets = library.assets.filter((item) => item.id !== assetId);
+    saveFallbackLibrary({ ...library, assets });
+    cachedAssets = assets;
     return { id: assetId, deleted: true };
   }
-  return invoke<{ id: string; deleted: boolean }>('delete_inspiration_asset', { assetId });
+  const result = await invoke<{ id: string; deleted: boolean }>('delete_inspiration_asset', { assetId });
+  if (result.deleted) cachedAssets = (cachedAssets ?? []).filter((item) => item.id !== assetId);
+  return result;
 }

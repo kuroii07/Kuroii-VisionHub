@@ -38,7 +38,8 @@ import {
   deleteInspirationAsset,
   deleteInspirationSource,
   importInspirationAsset,
-  loadInspirationLibrary,
+  loadInspirationAssets,
+  loadInspirationSources,
   saveInspirationAsset,
   saveInspirationSource
 } from '../services/inspirationApi';
@@ -1134,7 +1135,9 @@ export function InspirationPage(props: {
   const [activeTab, setActiveTab] = useState<InspirationTab>('sources');
   const [sources, setSources] = useState<InspirationSource[]>([]);
   const [assets, setAssets] = useState<InspirationAsset[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [sourcesLoaded, setSourcesLoaded] = useState(false);
+  const [assetsLoaded, setAssetsLoaded] = useState(false);
+  const [assetsLoading, setAssetsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [query, setQuery] = useState('');
   const [sourceCategory, setSourceCategory] = useState<InspirationSourceCategory | 'all'>('all');
@@ -1175,22 +1178,42 @@ export function InspirationPage(props: {
 
   useEffect(() => {
     let active = true;
-    loadInspirationLibrary()
-      .then((library) => {
+    loadInspirationSources()
+      .then((loadedSources) => {
         if (!active) return;
-        setSources(library.sources);
-        setAssets(library.assets);
+        setSources(loadedSources);
       })
       .catch((error) => {
         if (active) setMessage(error instanceof Error ? error.message : String(error));
       })
       .finally(() => {
-        if (active) setIsLoaded(true);
+        if (active) setSourcesLoaded(true);
       });
     return () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'assets' || assetsLoaded) return;
+    let active = true;
+    setAssetsLoading(true);
+    loadInspirationAssets()
+      .then((loadedAssets) => {
+        if (!active) return;
+        setAssets(loadedAssets);
+        setAssetsLoaded(true);
+      })
+      .catch((error) => {
+        if (active) setMessage(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (active) setAssetsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeTab, assetsLoaded]);
 
   useEffect(() => {
     try {
@@ -1544,6 +1567,7 @@ export function InspirationPage(props: {
         rating: parseAssetRating(draft.rating)
       });
       setAssets((current) => [saved, ...current]);
+      setAssetsLoaded(true);
       setSelectedAssetId(saved.id);
       setAssetDraft(emptyAssetDraft);
       setAssetFile(null);
@@ -1733,6 +1757,7 @@ export function InspirationPage(props: {
         const name = file.name.replace(/\.[^.]+$/, '');
         const saved = await importInspirationAsset({ title: name, dataUrl, fileName: file.name, tags: [] });
         setAssets((current) => [...current, saved]);
+        setAssetsLoaded(true);
         count++;
       } catch (error) { console.warn('folder import failed', file.name, error); }
       await importNext(index + 1);
@@ -1863,7 +1888,7 @@ export function InspirationPage(props: {
                 <span>操作</span>
               </div>
 
-              {!isLoaded ? (
+              {!sourcesLoaded ? (
                 <div className="emptyState libraryEmpty sourceTableEmpty"><Sparkles size={42} /><h3>正在加载提示词网站</h3></div>
               ) : filteredSources.length === 0 ? (
                 <div className="emptyState libraryEmpty sourceTableEmpty"><Link2 size={42} /><h3>没有匹配的网站</h3><p>可以清空筛选，或添加你自己的高价值网站。</p></div>
@@ -2101,7 +2126,7 @@ export function InspirationPage(props: {
 
             <div className={selectedAsset ? 'assetGalleryContent withDetail' : 'assetGalleryContent'}>
               <div className="assetGalleryResults">
-                {!isLoaded ? (
+                {!assetsLoaded || assetsLoading ? (
                   <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>正在加载图片收藏</h3></div>
                 ) : filteredAssets.length === 0 ? (
                   <div className="assetGalleryEmpty">

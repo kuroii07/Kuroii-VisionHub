@@ -1007,6 +1007,20 @@ fn load_inspirations(app: tauri::AppHandle) -> Result<InspirationLibrary, String
 }
 
 #[tauri::command]
+fn load_inspiration_sources(app: tauri::AppHandle) -> Result<Vec<InspirationSource>, String> {
+    read_inspiration_sources(&app)
+}
+
+#[tauri::command]
+fn load_inspiration_assets(app: tauri::AppHandle) -> Result<Vec<InspirationAsset>, String> {
+    let mut assets = read_inspiration_assets(&app)?;
+    for asset in &mut assets {
+        hydrate_inspiration_asset_image_url(&app, asset);
+    }
+    Ok(assets)
+}
+
+#[tauri::command]
 fn save_inspiration_source(
     app: tauri::AppHandle,
     mut source: InspirationSource,
@@ -3258,6 +3272,8 @@ pub fn run() {
             import_library_images_from_folder,
             reference_images_from_paths,
             load_inspirations,
+            load_inspiration_sources,
+            load_inspiration_assets,
             save_inspiration_source,
             delete_inspiration_source,
             import_inspiration_asset,
