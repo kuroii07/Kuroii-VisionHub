@@ -14094,6 +14094,39 @@ body {
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.1);
 }
 
+/* VisionHub 操作按钮规范：灵感中心主操作不使用渐变。 */
+.appShell .inspirationPage .miniButton.primaryMini,
+.appShell .inspirationPage .rowActionButton.primaryAction,
+.appShell .sourceEditorActions .miniButton.primaryMini,
+.appShell .sourceRowActions .miniButton.primaryMini,
+.appShell .galleryToolbar .miniButton.primaryMini {
+  background-image: none !important;
+  background: color-mix(in srgb, var(--app-accent-strong) 13%, var(--app-surface-2)) !important;
+  box-shadow: none;
+}
+
+.appShell.theme-light .inspirationPage .miniButton.primaryMini,
+.appShell.theme-light .inspirationPage .rowActionButton.primaryAction,
+.appShell.theme-light .sourceEditorActions .miniButton.primaryMini,
+.appShell.theme-light .sourceRowActions .miniButton.primaryMini,
+.appShell.theme-light .galleryToolbar .miniButton.primaryMini {
+  color: #064e3b;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, rgba(15, 23, 42, 0.12));
+  background-image: none !important;
+  background: color-mix(in srgb, var(--app-accent-strong) 12%, #ffffff) !important;
+}
+
+.appShell.theme-dark .inspirationPage .miniButton.primaryMini,
+.appShell.theme-dark .inspirationPage .rowActionButton.primaryAction,
+.appShell.theme-dark .sourceEditorActions .miniButton.primaryMini,
+.appShell.theme-dark .sourceRowActions .miniButton.primaryMini,
+.appShell.theme-dark .galleryToolbar .miniButton.primaryMini {
+  color: #eaffff;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 42%, rgba(255, 255, 255, 0.12));
+  background-image: none !important;
+  background: color-mix(in srgb, var(--app-accent-strong) 18%, var(--app-surface-2)) !important;
+}
+
 /* 响应式 */
 @media (max-width: 760px) {
   .assetGalleryComposerGrid {
