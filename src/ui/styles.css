@@ -179,6 +179,10 @@ small,
   overflow: auto;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -1224,6 +1228,9 @@ textarea {
 }
 
 .previewViewport img {
+  --preview-offset-x: 0px;
+  --preview-offset-y: 0px;
+  --preview-scale: 1;
   display: block;
   width: auto;
   height: auto;
@@ -1231,6 +1238,7 @@ textarea {
   max-height: 100%;
   object-fit: contain;
   user-select: none;
+  transform: translate3d(var(--preview-offset-x), var(--preview-offset-y), 0) scale(var(--preview-scale));
   transform-origin: center center;
   transition: transform 0.08s ease-out;
   border-radius: 12px;
@@ -12580,6 +12588,7 @@ body {
 .appShell .libraryCardV2 {
   overflow: visible !important;
   isolation: isolate;
+  contain: layout style;
 }
 
 .appShell .libraryCardV2:hover,
@@ -12607,6 +12616,13 @@ body {
   overflow: visible !important;
   max-height: none !important;
   clip-path: none !important;
+  contain: layout paint style;
+}
+
+.libraryContextMenu,
+.libraryDetailDrawer,
+.previewModal {
+  contain: layout paint style;
 }
 
 .appShell .libraryGridV2.view-list .libraryQuickMenu {
@@ -12851,6 +12867,12 @@ body {
 }
 
 /* ── Inspiration Gallery V2 (0.2.8 图片收藏 Gallery 同构) ── */
+
+.workspacePage[hidden],
+.sourceLibraryShell[hidden],
+.inspirationAssetGalleryShell[hidden] {
+  display: none !important;
+}
 
 .inspirationAssetGalleryShell {
   min-width: 0;

@@ -39,7 +39,7 @@
   ZoomIn,
   ZoomOut
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 import type { InspirationAsset } from '../domain/inspirationTypes';
 import type { GenerationRecord, ImageToImageAdapter, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
 import { listProviders } from '../providers/registry';
@@ -821,6 +821,17 @@ function buildLibraryDataPayload(
   };
 }
 
+function compactLibraryMetaEntry(entry: LibraryMetaEntry): LibraryMetaEntry {
+  const compacted = { ...entry };
+  (Object.keys(compacted) as Array<keyof LibraryMetaEntry>).forEach((key) => {
+    const value = compacted[key];
+    if (value === undefined || (Array.isArray(value) && value.length === 0)) {
+      delete compacted[key];
+    }
+  });
+  return compacted;
+}
+
 function getRecordPrimaryPath(record: GenerationRecord) {
   return record.localImagePaths?.[0] ?? record.imageUrls[0] ?? '';
 }
@@ -1128,6 +1139,15 @@ function sortLibraryRecords(records: GenerationRecord[], sortMode: LibrarySortMo
   });
 }
 
+const LIBRARY_INITIAL_RENDER_COUNT = 48;
+const LIBRARY_RENDER_BATCH_SIZE = 72;
+
+function useStableEvent<T extends (...args: any[]) => unknown>(handler: T): T {
+  const handlerRef = useRef(handler);
+  handlerRef.current = handler;
+  return useCallback(((...args: Parameters<T>) => handlerRef.current(...args)) as T, []);
+}
+
 function mapProviderCapabilityToMatrixStatus(
   template: ProviderServiceTemplate,
   capabilityStatus: ProviderCapabilityStatus
@@ -1337,6 +1357,8 @@ export function App() {
   const [generatePreviewUrl, setGeneratePreviewUrl] = useState<string | null>(null);
   const [libraryPreviewUrl, setLibraryPreviewUrl] = useState<string | null>(null);
   const [inspirationPreviewUrl, setInspirationPreviewUrl] = useState<string | null>(null);
+  const [isLibraryPageMounted, setIsLibraryPageMounted] = useState(() => page === 'library');
+  const [isInspirationPageMounted, setIsInspirationPageMounted] = useState(() => page === 'inspiration');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => appSettings.sidebarCollapsed);
   const [storageSettings, setStorageSettings] = useState<StorageSettings | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
@@ -1398,6 +1420,12 @@ export function App() {
   const generationSupportsOpenAICompatible =
     selectedProviderId === 'openai-gpt-image' || selectedProviderId === 'custom-http-provider';
   const isRealProviderReady = desktopRuntime && generationSupportsOpenAICompatible && secretAvailable;
+  const closeLibraryPreview = useCallback(() => setLibraryPreviewUrl(null), []);
+  const closeInspirationPreview = useCallback(() => setInspirationPreviewUrl(null), []);
+  const deleteLibraryRecord = useCallback(async (recordId: string) => {
+    setLibraryPreviewUrl(null);
+    await removeResult(recordId);
+  }, [removeResult]);
 
   useEffect(() => {
     void loadHistory();
@@ -1450,6 +1478,14 @@ export function App() {
     setSelectedPlatformType(template.platformType);
     setSelectedServiceTemplateId(template.id);
   }, [page, selectedProviderId, selectedServiceTemplate.id]);
+
+  useEffect(() => {
+    if (page === 'library') setIsLibraryPageMounted(true);
+  }, [page]);
+
+  useEffect(() => {
+    if (page === 'inspiration') setIsInspirationPageMounted(true);
+  }, [page]);
 
   useEffect(() => {
     setSecretDraft('');
@@ -1550,12 +1586,12 @@ export function App() {
     }
   }
 
-  function navigateTo(nextPage: Page) {
+  const navigateTo = useCallback((nextPage: Page) => {
     setGeneratePreviewUrl(null);
     setLibraryPreviewUrl(null);
     setInspirationPreviewUrl(null);
     setPage(nextPage);
-  }
+  }, []);
 
   function dispatchGenerateShortcut(shortcut: GenerateShortcutName) {
     const eventName = generateShortcutEventName[shortcut];
@@ -1721,7 +1757,7 @@ export function App() {
     };
   }
 
-  function useRecordAsReference(record: GenerationRecord) {
+  const useRecordAsReference = useCallback((record: GenerationRecord) => {
     const reference = generationRecordToReference(record);
     if (!reference) return;
     setReferenceImages((current) => [
@@ -1732,18 +1768,18 @@ export function App() {
     setLibraryPreviewUrl(null);
     setInspirationPreviewUrl(null);
     navigateTo('generate');
-  }
+  }, [navigateTo]);
 
-  function retryRecordGeneration(record: GenerationRecord) {
+  const retryRecordGeneration = useCallback((record: GenerationRecord) => {
     setPrompt(record.prompt);
     setReferenceImages((record.referenceImages ?? []).slice(0, 4));
     setGeneratePreviewUrl(null);
     setLibraryPreviewUrl(null);
     setInspirationPreviewUrl(null);
     navigateTo('generate');
-  }
+  }, [navigateTo, setPrompt]);
 
-  function useInspirationAssetAsReference(asset: InspirationAsset) {
+  const useInspirationAssetAsReference = useCallback((asset: InspirationAsset) => {
     if (!asset.imageUrl) return;
     const reference: ReferenceImage = {
       id: `inspiration-${asset.id}-${Date.now()}`,
@@ -1765,15 +1801,15 @@ export function App() {
     setLibraryPreviewUrl(null);
     setInspirationPreviewUrl(null);
     navigateTo('generate');
-  }
+  }, [navigateTo, prompt, setPrompt]);
 
-  function useInspirationPrompt(promptText: string) {
+  const useInspirationPrompt = useCallback((promptText: string) => {
     if (!promptText.trim()) return;
     setPrompt(promptText);
     navigateTo('generate');
-  }
+  }, [navigateTo, setPrompt]);
 
-  function createPromptTemplateFromInspiration(title: string, promptText: string, tags: string[]) {
+  const createPromptTemplateFromInspiration = useCallback((title: string, promptText: string, tags: string[]) => {
     const trimmedPrompt = promptText.trim();
     if (!trimmedPrompt) return '没有可用 Prompt。';
     const templates = loadPromptTemplates();
@@ -1787,7 +1823,7 @@ export function App() {
     };
     savePromptTemplates([template, ...templates.filter((item) => item.prompt !== trimmedPrompt)].slice(0, 200));
     return '已转入提示词库。';
-  }
+  }, []);
 
   function updateAppSettings(patch: Partial<AppSettings>) {
     if (typeof patch.sidebarCollapsed === 'boolean') {
@@ -1843,9 +1879,9 @@ export function App() {
     return () => window.removeEventListener(appToastEventName, handleToast);
   }, []);
 
-  function requestConfirm(request: ConfirmDialogRequest) {
+  const requestConfirm = useCallback((request: ConfirmDialogRequest) => {
     setConfirmDialog(request);
-  }
+  }, []);
 
   async function openLibraryDirectory() {
     if (!desktopRuntime) {
@@ -1936,7 +1972,14 @@ export function App() {
     setProviderConfig((current) => {
       if (key === 'protocol') {
         const protocol = value as OpenAICompatibleConfig['protocol'];
-        return { ...current, protocol, endpointPath: defaultEndpointForProtocol(protocol) };
+        const currentEndpointPath = current.endpointPath.trim();
+        const shouldUseProtocolDefault =
+          !currentEndpointPath || currentEndpointPath === defaultEndpointForProtocol(current.protocol);
+        return {
+          ...current,
+          protocol,
+          endpointPath: shouldUseProtocolDefault ? defaultEndpointForProtocol(protocol) : current.endpointPath
+        };
       }
       return { ...current, [key]: value };
     });
@@ -2442,15 +2485,28 @@ export function App() {
         return;
       }
 
+      push({
+        id: 'profile-secret-channel',
+        label: '配置实例与密钥通道',
+        level: targetProfile || selectedProfileId ? 'pass' : 'info',
+        detail: targetProfile || selectedProfileId
+          ? `当前密钥通道：${targetSecretId}。配置 ID 保持不变，系统凭据不会随文案调整重建。`
+          : '当前是临时配置草稿；保存为配置实例后会使用 profile:{profileId} 独立绑定密钥。'
+      });
+
       let endpointPreview = '';
       try {
         const baseUrl = new URL(targetConfig.baseUrl);
         endpointPreview = `${baseUrl.origin}${targetConfig.endpointPath.startsWith('/') ? targetConfig.endpointPath : `/${targetConfig.endpointPath}`}`;
+        const baseUrlPath = baseUrl.pathname.replace(/\/+$/, '');
+        const baseUrlLooksLikeEndpoint = /\/v\d+\/(images|responses|chat|models)/i.test(baseUrlPath);
         push({
           id: 'base-url',
           label: 'Base URL',
-          level: 'pass',
-          detail: `格式有效：${baseUrl.origin}`
+          level: baseUrlLooksLikeEndpoint ? 'warn' : 'pass',
+          detail: baseUrlLooksLikeEndpoint
+            ? `格式有效，但看起来填到了具体接口：${baseUrlPath}。建议 Base URL 只保留 ${baseUrl.origin}，具体路径放到“接口路径”。`
+            : `格式有效：${baseUrl.origin}`
         });
       } catch {
         push({
@@ -2460,6 +2516,27 @@ export function App() {
           detail: 'Base URL 不是有效网址，请使用 https://api.openai.com 或中转站根地址。'
         });
       }
+
+      const endpointPath = targetConfig.endpointPath.trim();
+      const expectedEndpointPath = defaultEndpointForProtocol(targetConfig.protocol);
+      push({
+        id: 'endpoint-path-shape',
+        label: '接口路径格式',
+        level: endpointPath.startsWith('/') ? 'pass' : 'warn',
+        detail: endpointPath.startsWith('/')
+          ? `路径格式正常：${endpointPath}`
+          : `建议以 / 开头，例如 ${expectedEndpointPath}；保存配置时会自动补全，但界面里保持标准路径更清楚。`
+      });
+
+      const modelId = targetConfig.modelId.trim();
+      push({
+        id: 'model-id',
+        label: '模型 ID',
+        level: modelId ? 'pass' : 'fail',
+        detail: modelId
+          ? `当前模型：${modelId}`
+          : '模型 ID 为空；即使密钥正确，也无法执行真实生图或模型列表回填。'
+      });
 
       try {
         parseExtraHeaders(targetConfig.extraHeadersJson);
@@ -2475,6 +2552,15 @@ export function App() {
           label: '额外 Headers',
           level: 'fail',
           detail: error instanceof Error ? error.message : String(error)
+        });
+      }
+
+      if (targetConfig.extraHeadersJson.toLowerCase().includes('authorization')) {
+        push({
+          id: 'authorization-header',
+          label: '鉴权 Header',
+          level: 'warn',
+          detail: '额外 Headers 中包含 Authorization。通常 API Key 会由系统凭据通道注入，除非中转站文档明确要求，否则不要在这里重复放密钥。'
         });
       }
 
@@ -2501,8 +2587,10 @@ export function App() {
       push({
         id: 'protocol',
         label: '协议与接口路径',
-        level: targetConfig.protocol === 'custom-images' || targetConfig.endpointPath === defaultEndpointForProtocol(targetConfig.protocol) ? 'pass' : 'warn',
-        detail: `当前协议：${targetConfig.protocol}；目标接口：${endpointPreview || targetConfig.endpointPath}`
+        level: targetConfig.endpointPath.trim().startsWith('/') ? 'pass' : 'warn',
+        detail: targetConfig.endpointPath === defaultEndpointForProtocol(targetConfig.protocol)
+          ? `当前协议：${targetConfig.protocol}；使用默认目标接口：${endpointPreview || targetConfig.endpointPath}`
+          : `当前协议：${targetConfig.protocol}；使用自定义目标接口：${endpointPreview || targetConfig.endpointPath}`
       });
 
       push({
@@ -2511,6 +2599,49 @@ export function App() {
         level: targetConfig.imageToImageAdapter === 'auto' ? 'info' : 'pass',
         detail: imageToImageAdapterDiagnosticDetail(targetConfig, targetProviderId)
       });
+
+      if (storageSettings) {
+        push({
+          id: 'library-storage',
+          label: '作品保存目录',
+          level: 'pass',
+          detail: `当前保存到：${storageSettings.resolved_library_dir}`
+        });
+      } else {
+        push({
+          id: 'library-storage',
+          label: '作品保存目录',
+          level: desktopRuntime ? 'warn' : 'info',
+          detail: desktopRuntime ? '尚未读取到图库保存路径；可到偏好设置确认作品画廊目录。' : '网页预览模式无法读取桌面图库目录。'
+        });
+      }
+
+      if (appSettings.promptPolish.engine === 'provider') {
+        let polishSecretAvailable = promptPolishSecretAvailable;
+        if (desktopRuntime) {
+          const polishStatus = await getProviderSecretStatus(PROMPT_POLISH_SECRET_ID);
+          polishSecretAvailable = polishStatus.available;
+          setPromptPolishSecretAvailable(polishSecretAvailable);
+        }
+        const polishConfigReady = Boolean(appSettings.promptPolish.baseUrl.trim() && appSettings.promptPolish.modelId.trim());
+        push({
+          id: 'prompt-polish-channel',
+          label: '提示词润色通道',
+          level: polishConfigReady && polishSecretAvailable ? 'pass' : 'warn',
+          detail: polishConfigReady
+            ? polishSecretAvailable
+              ? `模型润色使用独立凭据 ${PROMPT_POLISH_SECRET_ID}，不会复用生图平台 Key。`
+              : `模型润色配置已填写，但独立凭据 ${PROMPT_POLISH_SECRET_ID} 尚未保存；失败时会按设置回退到本地规则。`
+            : '当前启用模型润色，但 Base URL 或模型 ID 不完整；建议补全或切回本地规则。'
+        });
+      } else {
+        push({
+          id: 'prompt-polish-channel',
+          label: '提示词润色通道',
+          level: 'info',
+          detail: '当前默认使用本地规则润色，不消耗额度；模型润色仍保留独立凭据通道。'
+        });
+      }
 
       if (targetConfig.protocol === 'responses') {
         push({
@@ -2767,6 +2898,34 @@ export function App() {
       </aside>
 
       <main className={`workspace ${page === 'generate' ? 'workspaceGenerate' : ''}`}>
+        {isLibraryPageMounted ? (
+          <CachedLibraryPage
+            providers={providers}
+            results={results}
+            isHistoryLoaded={isHistoryLoaded}
+            isActive={page === 'library'}
+            previewUrl={libraryPreviewUrl}
+            onAddResult={addResult}
+            onPreview={setLibraryPreviewUrl}
+            onClosePreview={closeLibraryPreview}
+            onUseAsReference={useRecordAsReference}
+            onRetryRecord={retryRecordGeneration}
+            onRequestConfirm={requestConfirm}
+            onDelete={deleteLibraryRecord}
+          />
+        ) : null}
+        {isInspirationPageMounted ? (
+          <CachedInspirationPage
+            isActive={page === 'inspiration'}
+            previewUrl={inspirationPreviewUrl}
+            onPreview={setInspirationPreviewUrl}
+            onClosePreview={closeInspirationPreview}
+            onUseAsReference={useInspirationAssetAsReference}
+            onUsePrompt={useInspirationPrompt}
+            onCreateTemplate={createPromptTemplateFromInspiration}
+            onRequestConfirm={requestConfirm}
+          />
+        ) : null}
         {page === 'generate' ? (
           <>
             <ModernGeneratePage
@@ -2892,38 +3051,9 @@ export function App() {
             systemTheme={systemTheme}
           />
         ) : page === 'library' ? (
-          <>
-            <LibraryPage
-              providers={providers}
-              results={results}
-              isHistoryLoaded={isHistoryLoaded}
-              onAddResult={addResult}
-              onPreview={setLibraryPreviewUrl}
-              onUseAsReference={useRecordAsReference}
-              onRetryRecord={retryRecordGeneration}
-              onRequestConfirm={requestConfirm}
-              onDelete={async (recordId) => {
-                setLibraryPreviewUrl(null);
-                await removeResult(recordId);
-              }}
-            />
-            {libraryPreviewUrl ? (
-              <ImagePreviewModal imageUrl={libraryPreviewUrl} onClose={() => setLibraryPreviewUrl(null)} />
-            ) : null}
-          </>
+          null
         ) : page === 'inspiration' ? (
-          <>
-            <InspirationPage
-              onPreview={setInspirationPreviewUrl}
-              onUseAsReference={useInspirationAssetAsReference}
-              onUsePrompt={useInspirationPrompt}
-              onCreateTemplate={createPromptTemplateFromInspiration}
-              onRequestConfirm={requestConfirm}
-            />
-            {inspirationPreviewUrl ? (
-              <ImagePreviewModal imageUrl={inspirationPreviewUrl} onClose={() => setInspirationPreviewUrl(null)} />
-            ) : null}
-          </>
+          null
         ) : (
           <PromptTemplatesPage
             onUseTemplate={(templatePrompt) => {
@@ -3587,6 +3717,9 @@ function ProviderSettingsPage(props: {
                   onChange={(event) => props.onConfigChange('endpointPath', event.target.value)}
                   placeholder="/v1/images/generations"
                 />
+                <small className="providerFieldHint">
+                  可按中转站文档自主修改，例如 /images/generations、/v1/images/generations 或 /v1/responses；保存后真实请求会使用这里的路径。
+                </small>
               </label>
               <label>
                 额外 Headers(JSON)
@@ -3622,7 +3755,7 @@ function ProviderSettingsPage(props: {
                 <div className="diagnosticsHeader">
                   <div>
                     <strong>平台诊断助手</strong>
-                    <small>检查桌面环境、密钥、Base URL、Headers、协议路径和模型列表连通性。</small>
+                    <small>检查配置实例、密钥通道、Base URL、Headers、模型、协议路径、保存目录和模型列表连通性。</small>
                   </div>
                   <div className="diagnosticsActions">
                     <button className="rowActionButton" onClick={props.onRunDiagnostics} disabled={props.isRunningDiagnostics}>
@@ -4470,7 +4603,188 @@ function Gallery(props: {
   );
 }
 
-function LibraryPage(props: {
+const CachedLibraryPage = memo(function CachedLibraryPage(props: {
+  providers: ReturnType<typeof listProviders>;
+  results: ReturnType<typeof useStudioStore.getState>['results'];
+  isHistoryLoaded: boolean;
+  isActive: boolean;
+  previewUrl: string | null;
+  onAddResult: (record: GenerationRecord) => void;
+  onPreview: (imageUrl: string) => void;
+  onClosePreview: () => void;
+  onUseAsReference: (record: GenerationRecord) => void;
+  onRetryRecord: (record: GenerationRecord) => void;
+  onRequestConfirm: (request: ConfirmDialogRequest) => void;
+  onDelete: (recordId: string) => Promise<void>;
+}) {
+  return (
+    <section
+      className="workspacePage cachedLibraryPage"
+      hidden={!props.isActive}
+      aria-hidden={!props.isActive}
+    >
+      <LibraryPage
+        providers={props.providers}
+        results={props.results}
+        isHistoryLoaded={props.isHistoryLoaded}
+        onAddResult={props.onAddResult}
+        onPreview={props.onPreview}
+        onUseAsReference={props.onUseAsReference}
+        onRetryRecord={props.onRetryRecord}
+        onRequestConfirm={props.onRequestConfirm}
+        onDelete={props.onDelete}
+      />
+      {props.isActive && props.previewUrl ? (
+        <ImagePreviewModal imageUrl={props.previewUrl} onClose={props.onClosePreview} />
+      ) : null}
+    </section>
+  );
+});
+
+const CachedInspirationPage = memo(function CachedInspirationPage(props: {
+  isActive: boolean;
+  previewUrl: string | null;
+  onPreview: (imageUrl: string) => void;
+  onClosePreview: () => void;
+  onUseAsReference: (asset: InspirationAsset) => void;
+  onUsePrompt: (prompt: string) => void;
+  onCreateTemplate: (title: string, prompt: string, tags: string[]) => string;
+  onRequestConfirm: (request: ConfirmDialogRequest) => void;
+}) {
+  return (
+    <section
+      className="workspacePage cachedInspirationPage"
+      hidden={!props.isActive}
+      aria-hidden={!props.isActive}
+    >
+      <InspirationPage
+        onPreview={props.onPreview}
+        onUseAsReference={props.onUseAsReference}
+        onUsePrompt={props.onUsePrompt}
+        onCreateTemplate={props.onCreateTemplate}
+        onRequestConfirm={props.onRequestConfirm}
+      />
+      {props.isActive && props.previewUrl ? (
+        <ImagePreviewModal imageUrl={props.previewUrl} onClose={props.onClosePreview} />
+      ) : null}
+    </section>
+  );
+});
+
+const LibraryRecordCard = memo(function LibraryRecordCard(props: {
+  record: GenerationRecord;
+  providerName: string;
+  meta?: LibraryMetaEntry;
+  isSelected: boolean;
+  viewMode: LibraryViewMode;
+  displaySettings: LibraryDisplaySettings;
+  isCurrentScopeRemovable: boolean;
+  onSelect: (recordId: string, event?: MouseEvent<HTMLElement>) => void;
+  onOpenContextMenu: (recordId: string, event: MouseEvent<HTMLElement>) => void;
+  onPreview: (record: GenerationRecord, imageUrl?: string) => void;
+  onAnalyzeColors: (recordId: string, image: HTMLImageElement) => void;
+  onToggleFavorite: (recordId: string) => void;
+  onOpenDetails: (record: GenerationRecord) => void;
+  onUseAsReference: (record: GenerationRecord) => void;
+  onCopyPrompt: (record: GenerationRecord) => void;
+  onCopyPath: (record: GenerationRecord) => void;
+  onExportRecord: (record: GenerationRecord) => void;
+  onAssignFolder: (recordId: string) => void;
+  onAssignCollection: (recordId: string) => void;
+  onRemoveFromCurrentScope: (recordId: string) => void;
+  onDelete: (recordId: string) => void;
+}) {
+  const imageUrl = props.record.imageUrls[0];
+  const modeLabel = (props.record.generationMode ?? 'text-to-image') === 'image-to-image' ? '\u56fe\u751f\u56fe' : '\u6587\u751f\u56fe';
+  const referenceCount = props.record.referenceImages?.length ?? 0;
+  const referenceSummary = summarizeReferenceSources(props.record.referenceImages);
+  const isFavorite = Boolean(props.meta?.favorite);
+
+  return (
+    <article
+      className={`libraryCard libraryCardV2 ${props.record.status === 'failed' ? 'failed' : ''} ${isFavorite ? 'favorite' : ''} ${props.isSelected ? 'selected' : ''}`}
+      aria-selected={props.isSelected}
+      onClick={(event) => {
+        const target = event.target;
+        if (target instanceof Element && target.closest('button, a, input, select, textarea, .libraryQuickMenu')) return;
+        props.onSelect(props.record.id, event);
+      }}
+      onContextMenu={(event) => props.onOpenContextMenu(props.record.id, event)}
+    >
+      <button
+        className={`librarySelectMark ${props.isSelected ? 'active' : ''}`}
+        type="button"
+        aria-label={props.isSelected ? '取消选择' : '选择图片'}
+        onClick={(event) => {
+          event.stopPropagation();
+          props.onSelect(props.record.id, event);
+        }}
+      >
+        <span />
+      </button>
+      {imageUrl ? (
+        <button
+          className="libraryThumb"
+          onClick={(event) => {
+            if (event.ctrlKey || event.metaKey || event.shiftKey) {
+              props.onSelect(props.record.id, event);
+              return;
+            }
+            props.onPreview(props.record, imageUrl);
+          }}
+        >
+          <img src={imageUrl} alt={props.record.prompt} onLoad={(event) => props.onAnalyzeColors(props.record.id, event.currentTarget)} />
+          <span><Maximize2 size={15} /> {'\u9884\u89c8'}</span>
+        </button>
+      ) : (
+        <div className="libraryFailedThumb">{'\u751f\u6210\u5931\u8d25'}</div>
+      )}
+      <div className="libraryImageOverlay">
+        <button className={`iconMiniButton favoriteButton ${isFavorite ? 'active' : ''}`} type="button" data-tooltip={isFavorite ? '取消收藏' : '收藏'} aria-label={isFavorite ? '取消收藏' : '收藏'} onClick={() => props.onToggleFavorite(props.record.id)}>
+          <Star size={14} fill={isFavorite ? 'currentColor' : 'none'} />
+        </button>
+        <div className="libraryMoreMenuWrap">
+          <button className="iconMiniButton" type="button" data-tooltip="更多操作" aria-label="更多操作">
+            <MoreHorizontal size={15} />
+          </button>
+          <div className="libraryQuickMenu" aria-label="图片操作">
+            <button type="button" onClick={() => props.onOpenDetails(props.record)}><Info size={13} /> 图片详情</button>
+            <button type="button" disabled={!imageUrl} onClick={() => props.onUseAsReference(props.record)}><ImagePlus size={13} /> 设为参考图</button>
+            <button type="button" onClick={() => props.onCopyPrompt(props.record)}><Copy size={13} /> 复制 Prompt</button>
+            <button type="button" disabled={!getRecordPrimaryPath(props.record)} onClick={() => props.onCopyPath(props.record)}><Copy size={13} /> 复制路径</button>
+            <button type="button" onClick={() => props.onExportRecord(props.record)}><Download size={13} /> 导出清单</button>
+            <span className="libraryMenuDivider" />
+            <button type="button" onClick={() => props.onToggleFavorite(props.record.id)}><Star size={13} /> {isFavorite ? '取消收藏' : '加入收藏'}</button>
+            <button type="button" onClick={() => props.onAssignFolder(props.record.id)}><FolderOpen size={13} /> 移至文件夹</button>
+            <button type="button" onClick={() => props.onAssignCollection(props.record.id)}><Bookmark size={13} /> 加入收藏集</button>
+            {props.isCurrentScopeRemovable ? (
+              <button type="button" onClick={() => props.onRemoveFromCurrentScope(props.record.id)}><X size={13} /> 移出当前分类</button>
+            ) : null}
+            <span className="libraryMenuDivider" />
+            <button className="dangerAction" type="button" onClick={() => props.onDelete(props.record.id)}><Trash2 size={13} /> 删除记录</button>
+          </div>
+        </div>
+      </div>
+      <div className="libraryCardBody">
+        <div className="resultTitleRow">
+          <strong>{props.displaySettings.showProvider ? props.providerName : formatTime(props.record.createdAt)}</strong>
+          <div className="cardTopActions">
+            <span className="statusBadge modeBadge">{modeLabel}</span>
+            {props.displaySettings.showReferenceBadge && referenceCount > 0 ? <span className="statusBadge referenceBadge" title={`\u53c2\u8003\u6765\u6e90\uff1a${referenceSummary}`}>{referenceCount}{'\u53c2\u8003'}</span> : null}
+            <span className={`statusBadge ${generationStatusClass(props.record)}`}>{generationStatusLabel(props.record)}</span>
+          </div>
+        </div>
+        {props.viewMode === 'list' || props.displaySettings.showPrompt ? <p title={props.record.prompt}>{props.record.prompt}</p> : null}
+        <div className="metadataRow">
+          {props.displaySettings.showModel ? <span>{props.record.modelId}</span> : null}
+          <span><Clock3 size={12} /> {formatTime(props.record.createdAt)}</span>
+        </div>
+      </div>
+    </article>
+  );
+});
+
+const LibraryPage = memo(function LibraryPage(props: {
   providers: ReturnType<typeof listProviders>;
   results: ReturnType<typeof useStudioStore.getState>['results'];
   isHistoryLoaded: boolean;
@@ -4516,13 +4830,75 @@ function LibraryPage(props: {
   const [contextMenu, setContextMenu] = useState<LibraryContextMenuState | null>(null);
   const [libraryMeta, setLibraryMeta] = useState<LibraryMetaMap>(() => loadLibraryMeta());
   const [displaySettings, setDisplaySettings] = useState<LibraryDisplaySettings>(() => loadLibraryDisplaySettings());
+  const [renderedItemCount, setRenderedItemCount] = useState(LIBRARY_INITIAL_RENDER_COUNT);
   const [copyMessage, setCopyMessage] = useState('');
   const dockRef = useRef<HTMLElement | null>(null);
   const colorFilterRef = useRef<HTMLLabelElement | null>(null);
   const quickFilterEditorRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const libraryDataHydratedRef = useRef(!isTauriRuntime());
+  const pendingImageMetaPatchesRef = useRef<Record<string, Partial<LibraryMetaEntry>>>({});
+  const imageMetaFlushRef = useRef<{ timerId: number | null; idleId: number | null }>({ timerId: null, idleId: null });
   useToastMessage(copyMessage, setCopyMessage);
+
+  const flushImageMetaPatches = useCallback(() => {
+    const patches = pendingImageMetaPatchesRef.current;
+    pendingImageMetaPatchesRef.current = {};
+    imageMetaFlushRef.current.timerId = null;
+    imageMetaFlushRef.current.idleId = null;
+    const entries = Object.entries(patches);
+    if (!entries.length) return;
+    setLibraryMeta((current) => {
+      let changed = false;
+      const next = { ...current };
+      entries.forEach(([recordId, patch]) => {
+        const entry = compactLibraryMetaEntry({
+          ...next[recordId],
+          ...patch
+        });
+        const previous = next[recordId];
+        if (Object.keys(entry).length) {
+          if (JSON.stringify(previous ?? {}) !== JSON.stringify(entry)) {
+            next[recordId] = entry;
+            changed = true;
+          }
+          return;
+        }
+        if (previous) {
+          delete next[recordId];
+          changed = true;
+        }
+      });
+      if (!changed) return current;
+      saveLibraryMeta(next);
+      return next;
+    });
+  }, []);
+
+  const queueImageMetaPatch = useCallback((recordId: string, patch: Partial<LibraryMetaEntry>) => {
+    pendingImageMetaPatchesRef.current[recordId] = {
+      ...pendingImageMetaPatchesRef.current[recordId],
+      ...patch
+    };
+    if (imageMetaFlushRef.current.timerId !== null || imageMetaFlushRef.current.idleId !== null) return;
+    imageMetaFlushRef.current.timerId = window.setTimeout(() => {
+      imageMetaFlushRef.current.timerId = null;
+      if ('requestIdleCallback' in window) {
+        imageMetaFlushRef.current.idleId = window.requestIdleCallback(flushImageMetaPatches, { timeout: 1200 });
+        return;
+      }
+      flushImageMetaPatches();
+    }, 180);
+  }, [flushImageMetaPatches]);
+
+  useEffect(() => () => {
+    if (imageMetaFlushRef.current.timerId !== null) {
+      window.clearTimeout(imageMetaFlushRef.current.timerId);
+    }
+    if (imageMetaFlushRef.current.idleId !== null && 'cancelIdleCallback' in window) {
+      window.cancelIdleCallback(imageMetaFlushRef.current.idleId);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isTauriRuntime()) return;
@@ -4567,28 +4943,99 @@ function LibraryPage(props: {
 
   useEffect(() => {
     if (!libraryDataHydratedRef.current || !isTauriRuntime()) return;
-    const timer = window.setTimeout(() => {
+    let idleId: number | null = null;
+    const save = () => {
       void saveLibraryData(buildLibraryDataPayload(libraryMeta, libraryOrganization, displaySettings, customQuickFilters))
         .catch((error) => {
           console.warn('[VisionHub] library metadata file save failed; local cache is still available', error);
         });
-    }, 500);
-    return () => window.clearTimeout(timer);
+    };
+    const timer = window.setTimeout(() => {
+      if ('requestIdleCallback' in window) {
+        idleId = window.requestIdleCallback(save, { timeout: 2000 });
+        return;
+      }
+      save();
+    }, 650);
+    return () => {
+      window.clearTimeout(timer);
+      if (idleId !== null && 'cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId);
+      }
+    };
   }, [libraryMeta, libraryOrganization, displaySettings, customQuickFilters]);
   const isDockSubPanel = activePanel !== null && activePanel !== 'main' && activePanel !== 'add';
-  const providerNameMap = new Map(props.providers.map((provider) => [provider.id, providerGenerationLabel(provider)]));
-  const libraryItems = props.results.filter((result) => result.imageUrls.length > 0 || result.status === 'failed');
-  const successCount = libraryItems.filter((result) => result.status === 'succeeded').length;
-  const failedCount = libraryItems.filter((result) => result.status === 'failed').length;
-  const localPathCount = libraryItems.filter((result) => result.localImagePaths?.[0]).length;
-  const nowMs = Date.now();
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const providerNameMap = useMemo(
+    () => new Map(props.providers.map((provider) => [provider.id, providerGenerationLabel(provider)])),
+    [props.providers]
+  );
+  const providerOptions = useMemo(
+    () => [
+      { value: 'all', label: '全部平台' },
+      ...props.providers.map((provider) => ({ value: provider.id, label: providerGenerationLabel(provider) }))
+    ],
+    [props.providers]
+  );
+  const libraryItems = useMemo(
+    () => props.results.filter((result) => result.imageUrls.length > 0 || result.status === 'failed'),
+    [props.results]
+  );
+  const libraryRecordMap = useMemo(
+    () => new Map(libraryItems.map((record) => [record.id, record])),
+    [libraryItems]
+  );
+  const { successCount, failedCount, localPathCount } = useMemo(() => {
+    let success = 0;
+    let failed = 0;
+    let local = 0;
+    libraryItems.forEach((record) => {
+      if (record.status === 'succeeded') success += 1;
+      if (record.status === 'failed') failed += 1;
+      if (record.localImagePaths?.[0]) local += 1;
+    });
+    return { successCount: success, failedCount: failed, localPathCount: local };
+  }, [libraryItems]);
+  const { nowMs, todayStartMs } = useMemo(() => {
+    const now = Date.now();
+    const today = new Date(now);
+    today.setHours(0, 0, 0, 0);
+    return { nowMs: now, todayStartMs: today.getTime() };
+  }, [libraryItems.length]);
   const normalizedQuery = query.trim().toLowerCase();
-  const providerOptions = [
-    { value: 'all', label: '全部平台' },
-    ...props.providers.map((provider) => ({ value: provider.id, label: providerGenerationLabel(provider) }))
-  ];
+  const activeCustomFilters = useMemo(
+    () => activeCustomQuickFilterIds
+      .map((filterId) => customQuickFilters.find((item) => item.id === filterId) ?? null)
+      .filter((filter): filter is LibraryCustomQuickFilter => Boolean(filter)),
+    [activeCustomQuickFilterIds, customQuickFilters]
+  );
+  const filteringMetaSignature = useMemo(() => {
+    const needsFavorite =
+      sortMode === 'favorites' ||
+      libraryScope.type === 'favorites' ||
+      quickFilters.includes('favorites') ||
+      Boolean(normalizedQuery);
+    const needsFolder = libraryScope.type === 'folder';
+    const needsCollection = libraryScope.type === 'collection';
+    const needsColor = colorFilter !== 'all' || activeCustomFilters.some((filter) => Boolean(filter.criteria.colorFilter && filter.criteria.colorFilter !== 'all')) || Boolean(normalizedQuery);
+    const needsShape = shapeFilter !== 'all' || sortMode === 'size' || activeCustomFilters.some((filter) => Boolean(filter.criteria.shapeFilter && filter.criteria.shapeFilter !== 'all'));
+    const needsRating = ratingFilter !== 'all' || activeCustomFilters.some((filter) => Boolean(filter.criteria.ratingFilter && filter.criteria.ratingFilter !== 'all'));
+    const needsTags = Boolean(normalizedQuery) || activeCustomFilters.some((filter) => Boolean(filter.criteria.query?.trim()));
+    if (!needsFavorite && !needsFolder && !needsCollection && !needsColor && !needsShape && !needsRating && !needsTags) return 'none';
+    return libraryItems.map((record) => {
+      const meta = libraryMeta[record.id];
+      if (!meta) return record.id;
+      return [
+        record.id,
+        needsFavorite ? Number(Boolean(meta.favorite)) : '',
+        needsFolder ? meta.folderId ?? '' : '',
+        needsCollection ? meta.collectionIds?.join(',') ?? '' : '',
+        needsColor ? `${meta.colorFamilies?.join(',') ?? ''}|${meta.colorPalette?.join(',') ?? ''}` : '',
+        needsShape ? meta.imageSize ?? '' : '',
+        needsRating ? meta.rating ?? '' : '',
+        needsTags ? meta.tags?.join(',') ?? '' : ''
+      ].join(':');
+    }).join('|');
+  }, [activeCustomFilters, colorFilter, libraryItems, libraryMeta, libraryScope, normalizedQuery, quickFilters, ratingFilter, shapeFilter, sortMode]);
   const statusOptions = [
     { value: 'all', label: '默认状态' },
     { value: 'succeeded', label: '\u6210\u529f' },
@@ -4606,7 +5053,7 @@ function LibraryPage(props: {
     { value: '7d', label: '\u8fd1 7 \u5929' },
     { value: '30d', label: '\u8fd1 30 \u5929' }
   ];
-  const filteredItems = sortLibraryRecords(libraryItems.filter((result) => {
+  const filteredItems = useMemo(() => sortLibraryRecords(libraryItems.filter((result) => {
     const providerName = providerNameMap.get(result.providerId) ?? result.providerName ?? result.providerId;
     const generationMode = result.generationMode ?? 'text-to-image';
     const recordTime = getRecordTimeMs(result.createdAt);
@@ -4618,7 +5065,7 @@ function LibraryPage(props: {
       (modeFilter === 'with-references' && Boolean(result.referenceImages?.length));
     const matchesTime =
       timeFilter === 'all' ||
-      (timeFilter === 'today' && recordTime >= todayStart.getTime()) ||
+      (timeFilter === 'today' && recordTime >= todayStartMs) ||
       (timeFilter === '7d' && recordTime >= nowMs - 7 * 24 * 60 * 60 * 1000) ||
       (timeFilter === '30d' && recordTime >= nowMs - 30 * 24 * 60 * 60 * 1000);
     const referenceText = result.referenceImages?.map((reference) => `${reference.name ?? ''} ${reference.source}`).join(' ') ?? '';
@@ -4648,9 +5095,7 @@ function LibraryPage(props: {
       (libraryScope.type === 'local' && Boolean(result.localImagePaths?.[0])) ||
       (libraryScope.type === 'folder' && meta?.folderId === libraryScope.id) ||
       (libraryScope.type === 'collection' && Boolean(meta?.collectionIds?.includes(libraryScope.id)));
-    const matchesCustomQuickFilters = activeCustomQuickFilterIds.every((filterId) => {
-      const filter = customQuickFilters.find((item) => item.id === filterId);
-      if (!filter) return true;
+    const matchesCustomQuickFilters = activeCustomFilters.every((filter) => {
       const criteria = filter.criteria;
       if (criteria.query?.trim()) {
         const customQuery = criteria.query.trim().toLowerCase();
@@ -4674,7 +5119,7 @@ function LibraryPage(props: {
       if (criteria.statusFilter && criteria.statusFilter !== 'all' && result.status !== criteria.statusFilter) return false;
       if (criteria.statusFilter === 'all' && result.status === 'failed') return false;
       if (criteria.modeFilter && criteria.modeFilter !== 'all' && generationMode !== criteria.modeFilter && !(criteria.modeFilter === 'with-references' && Boolean(result.referenceImages?.length))) return false;
-      if (criteria.timeFilter === 'today' && recordTime < todayStart.getTime()) return false;
+      if (criteria.timeFilter === 'today' && recordTime < todayStartMs) return false;
       if (criteria.timeFilter === '7d' && recordTime < nowMs - 7 * 24 * 60 * 60 * 1000) return false;
       if (criteria.timeFilter === '30d' && recordTime < nowMs - 30 * 24 * 60 * 60 * 1000) return false;
       if (criteria.colorFilter && !libraryColorMatchesFilter(meta, criteria.colorFilter)) return false;
@@ -4708,14 +5153,40 @@ function LibraryPage(props: {
       .toLowerCase();
     const matchesQuery = !normalizedQuery || haystack.includes(normalizedQuery);
     return matchesProvider && matchesStatus && matchesMode && matchesTime && matchesShape && matchesFormat && matchesRating && matchesColor && matchesQuickFilters && matchesLibraryScope && matchesCustomQuickFilters && matchesQuery;
-  }), sortMode, libraryMeta, providerNameMap);
-  const selectedRecord = selectedRecordId ? libraryItems.find((result) => result.id === selectedRecordId) ?? null : null;
-  const filteredIds = filteredItems.map((result) => result.id);
-  const selectedIdSet = new Set(selectedRecordIds);
-  const selectedRecords = selectedRecordIds
-    .map((recordId) => libraryItems.find((result) => result.id === recordId) ?? null)
-    .filter((result): result is GenerationRecord => Boolean(result));
-  const contextRecord = contextMenu ? libraryItems.find((result) => result.id === contextMenu.recordId) ?? null : null;
+  }), sortMode, libraryMeta, providerNameMap), [
+    activeCustomFilters,
+    colorFilter,
+    filteringMetaSignature,
+    formatFilter,
+    libraryItems,
+    libraryScope,
+    modeFilter,
+    normalizedQuery,
+    nowMs,
+    providerFilter,
+    providerNameMap,
+    quickFilters,
+    ratingFilter,
+    shapeFilter,
+    sortMode,
+    statusFilter,
+    timeFilter,
+    todayStartMs
+  ]);
+  const filteredIds = useMemo(() => filteredItems.map((result) => result.id), [filteredItems]);
+  const selectedIdSet = useMemo(() => new Set(selectedRecordIds), [selectedRecordIds]);
+  const visibleLibraryItems = useMemo(
+    () => filteredItems.slice(0, Math.min(renderedItemCount, filteredItems.length)),
+    [filteredItems, renderedItemCount]
+  );
+  const selectedRecord = selectedRecordId ? libraryRecordMap.get(selectedRecordId) ?? null : null;
+  const selectedRecords = useMemo(
+    () => selectedRecordIds
+      .map((recordId) => libraryRecordMap.get(recordId) ?? null)
+      .filter((result): result is GenerationRecord => Boolean(result)),
+    [libraryRecordMap, selectedRecordIds]
+  );
+  const contextRecord = contextMenu ? libraryRecordMap.get(contextMenu.recordId) ?? null : null;
   const contextSelection = selectedRecords.length ? selectedRecords : contextRecord ? [contextRecord] : [];
   const selectedRecordMeta = selectedRecord ? libraryMeta[selectedRecord.id] : undefined;
   const selectedRecordFileName = selectedRecord ? getRecordFileName(selectedRecord) || selectedRecord.id : '';
@@ -4728,18 +5199,30 @@ function LibraryPage(props: {
   const selectedRecordCollections = selectedRecordMeta?.collectionIds?.length
     ? libraryOrganization.collections.filter((collection) => selectedRecordMeta.collectionIds?.includes(collection.id))
     : [];
-  const folderCounts = new Map<string, number>();
-  const collectionCounts = new Map<string, number>();
-  libraryItems.forEach((record) => {
-    const meta = libraryMeta[record.id];
-    if (meta?.folderId) folderCounts.set(meta.folderId, (folderCounts.get(meta.folderId) ?? 0) + 1);
-    meta?.collectionIds?.forEach((collectionId) => {
-      collectionCounts.set(collectionId, (collectionCounts.get(collectionId) ?? 0) + 1);
+  const { folderCounts, collectionCounts, favoriteScopeCount, recentScopeCount, localScopeCount } = useMemo(() => {
+    const nextFolderCounts = new Map<string, number>();
+    const nextCollectionCounts = new Map<string, number>();
+    let favorite = 0;
+    let recent = 0;
+    let local = 0;
+    libraryItems.forEach((record) => {
+      const meta = libraryMeta[record.id];
+      if (meta?.folderId) nextFolderCounts.set(meta.folderId, (nextFolderCounts.get(meta.folderId) ?? 0) + 1);
+      meta?.collectionIds?.forEach((collectionId) => {
+        nextCollectionCounts.set(collectionId, (nextCollectionCounts.get(collectionId) ?? 0) + 1);
+      });
+      if (meta?.favorite) favorite += 1;
+      if (getRecordTimeMs(record.createdAt) >= nowMs - 7 * 24 * 60 * 60 * 1000) recent += 1;
+      if (record.localImagePaths?.[0]) local += 1;
     });
-  });
-  const favoriteScopeCount = libraryItems.filter((record) => libraryMeta[record.id]?.favorite).length;
-  const recentScopeCount = libraryItems.filter((record) => getRecordTimeMs(record.createdAt) >= nowMs - 7 * 24 * 60 * 60 * 1000).length;
-  const localScopeCount = libraryItems.filter((record) => record.localImagePaths?.[0]).length;
+    return {
+      folderCounts: nextFolderCounts,
+      collectionCounts: nextCollectionCounts,
+      favoriteScopeCount: favorite,
+      recentScopeCount: recent,
+      localScopeCount: local
+    };
+  }, [libraryItems, libraryMeta, nowMs]);
   const selectedScopeTitle =
     libraryScope.type === 'all' ? '全部作品'
       : libraryScope.type === 'favorites' ? '收藏'
@@ -4747,6 +5230,31 @@ function LibraryPage(props: {
       : libraryScope.type === 'local' ? '本地已落盘'
       : libraryScope.type === 'folder' ? libraryOrganization.folders.find((folder) => folder.id === libraryScope.id)?.name ?? '文件夹'
       : libraryOrganization.collections.find((collection) => collection.id === libraryScope.id)?.name ?? '收藏集';
+
+  useEffect(() => {
+    const total = filteredItems.length;
+    const initialCount = Math.min(LIBRARY_INITIAL_RENDER_COUNT, total);
+    setRenderedItemCount(initialCount);
+    if (total <= initialCount) return;
+
+    let cancelled = false;
+    let frameId = 0;
+    let nextCount = initialCount;
+    const renderNextBatch = () => {
+      frameId = window.requestAnimationFrame(() => {
+        if (cancelled) return;
+        nextCount = Math.min(nextCount + LIBRARY_RENDER_BATCH_SIZE, total);
+        setRenderedItemCount(nextCount);
+        if (nextCount < total) renderNextBatch();
+      });
+    };
+
+    renderNextBatch();
+    return () => {
+      cancelled = true;
+      if (frameId) window.cancelAnimationFrame(frameId);
+    };
+  }, [filteredItems]);
 
   useEffect(() => {
     function focusSearch() {
@@ -4759,14 +5267,14 @@ function LibraryPage(props: {
   }, []);
   useEffect(() => {
     if (!props.isHistoryLoaded) return;
-    if (selectedRecordId && !libraryItems.some((result) => result.id === selectedRecordId)) {
+    if (selectedRecordId && !libraryRecordMap.has(selectedRecordId)) {
       setSelectedRecordId(null);
     }
     setSelectedRecordIds((current) => {
-      const next = current.filter((recordId) => libraryItems.some((result) => result.id === recordId));
+      const next = current.filter((recordId) => libraryRecordMap.has(recordId));
       return next.length === current.length ? current : next;
     });
-  }, [libraryItems, props.isHistoryLoaded, selectedRecordId]);
+  }, [libraryRecordMap, props.isHistoryLoaded, selectedRecordId]);
 
   useEffect(() => {
     if (!activePanel) return;
@@ -4843,15 +5351,9 @@ function LibraryPage(props: {
 
   function updateLibraryMeta(recordId: string, patch: Partial<LibraryMetaEntry>) {
     setLibraryMeta((current) => {
-      const entry: LibraryMetaEntry = {
+      const entry = compactLibraryMetaEntry({
         ...current[recordId],
         ...patch
-      };
-      Object.keys(entry).forEach((key) => {
-        const value = entry[key as keyof LibraryMetaEntry];
-        if (value === undefined || (Array.isArray(value) && value.length === 0)) {
-          delete entry[key as keyof LibraryMetaEntry];
-        }
       });
       const next = { ...current };
       if (Object.keys(entry).length) next[recordId] = entry;
@@ -4877,16 +5379,16 @@ function LibraryPage(props: {
     const imageSize = image.naturalWidth && image.naturalHeight ? `${image.naturalWidth}x${image.naturalHeight}` : undefined;
     const shouldAnalyzeColors = !current?.colorPalette?.length || current.colorPalette.length < 10 || current.colorAnalysisFailed;
     if (!shouldAnalyzeColors) {
-      if (imageSize && current?.imageSize !== imageSize) updateLibraryMeta(recordId, { imageSize });
+      if (imageSize && current?.imageSize !== imageSize) queueImageMetaPatch(recordId, { imageSize });
       return;
     }
     try {
       const result = analyzeImageColors(image);
       if (!result) {
-        updateLibraryMeta(recordId, { imageSize, colorAnalysisFailed: true });
+        queueImageMetaPatch(recordId, { imageSize, colorAnalysisFailed: true });
         return;
       }
-      updateLibraryMeta(recordId, {
+      queueImageMetaPatch(recordId, {
         imageSize,
         colorPalette: result.palette,
         colorFamilies: result.families,
@@ -4894,12 +5396,12 @@ function LibraryPage(props: {
         colorAnalysisFailed: false
       });
     } catch {
-      updateLibraryMeta(recordId, { colorAnalysisFailed: true });
+      queueImageMetaPatch(recordId, { colorAnalysisFailed: true });
     }
   }
 
   function setRecordsFavorite(recordIds: string[], favorite: boolean) {
-    const uniqueIds = Array.from(new Set(recordIds)).filter((recordId) => libraryItems.some((result) => result.id === recordId));
+    const uniqueIds = Array.from(new Set(recordIds)).filter((recordId) => libraryRecordMap.has(recordId));
     if (!uniqueIds.length) return;
     setLibraryMeta((current) => {
       const next = { ...current };
@@ -4979,14 +5481,41 @@ function LibraryPage(props: {
 
   function openRecordDetails(record: GenerationRecord) {
     setSelectedRecordId(record.id);
-    updateLibraryMeta(record.id, { lastViewedAt: new Date().toISOString() });
   }
 
   function previewRecord(record: GenerationRecord, imageUrl?: string) {
     if (!imageUrl) return;
-    updateLibraryMeta(record.id, { lastViewedAt: new Date().toISOString() });
     props.onPreview(imageUrl);
   }
+
+  const handleSelectRecord = useStableEvent(selectRecord);
+  const handleOpenLibraryContextMenu = useStableEvent(openLibraryContextMenu);
+  const handlePreviewRecord = useStableEvent(previewRecord);
+  const handleAnalyzeRecordColors = useStableEvent(analyzeRecordColors);
+  const handleToggleFavorite = useStableEvent(toggleFavorite);
+  const handleOpenRecordDetails = useStableEvent(openRecordDetails);
+  const handleUseRecordAsReference = useStableEvent(useRecordAsReference);
+  const handleCopyRecordPrompt = useStableEvent((record: GenerationRecord) => {
+    void copyText('Prompt', record.prompt);
+  });
+  const handleCopyRecordPath = useStableEvent((record: GenerationRecord) => {
+    void copyText('Path', getRecordPrimaryPath(record));
+  });
+  const handleExportRecord = useStableEvent((record: GenerationRecord) => {
+    exportSelectedRecordList([record]);
+  });
+  const handleAssignRecordFolder = useStableEvent((recordId: string) => {
+    setAssignDialog({ type: 'folder', recordIds: [recordId] });
+  });
+  const handleAssignRecordCollection = useStableEvent((recordId: string) => {
+    setAssignDialog({ type: 'collection', recordIds: [recordId] });
+  });
+  const handleRemoveRecordFromCurrentScope = useStableEvent((recordId: string) => {
+    removeRecordsFromCurrentScope([recordId]);
+  });
+  const handleDeleteRecord = useStableEvent((recordId: string) => {
+    void deleteRecord(recordId);
+  });
 
   function useRecordAsReference(record: GenerationRecord) {
     updateLibraryMeta(record.id, { lastUsedAsReferenceAt: new Date().toISOString() });
@@ -5014,7 +5543,7 @@ function LibraryPage(props: {
   }
 
   async function deleteRecords(recordIds: string[]) {
-    const uniqueIds = Array.from(new Set(recordIds)).filter((recordId) => libraryItems.some((result) => result.id === recordId));
+    const uniqueIds = Array.from(new Set(recordIds)).filter((recordId) => libraryRecordMap.has(recordId));
     if (!uniqueIds.length) return;
     if (uniqueIds.length === 1) {
       await deleteRecord(uniqueIds[0]);
@@ -5819,98 +6348,32 @@ function LibraryPage(props: {
             </div>
           ) : (
             <section className={`libraryGrid libraryGridV2 view-${viewMode} ${displaySettings.compact ? 'compact' : ''}`} style={gridStyle}>
-          {filteredItems.map((result) => {
-            const imageUrl = result.imageUrls[0];
-            const providerName = providerNameMap.get(result.providerId) ?? result.providerName ?? result.providerId;
-            const modeLabel = (result.generationMode ?? 'text-to-image') === 'image-to-image' ? '\u56fe\u751f\u56fe' : '\u6587\u751f\u56fe';
-            const referenceCount = result.referenceImages?.length ?? 0;
-            const referenceSummary = summarizeReferenceSources(result.referenceImages);
-            const isFavorite = Boolean(libraryMeta[result.id]?.favorite);
-            const isSelected = selectedIdSet.has(result.id);
-            return (
-              <article
-                className={`libraryCard libraryCardV2 ${result.status === 'failed' ? 'failed' : ''} ${isFavorite ? 'favorite' : ''} ${isSelected ? 'selected' : ''}`}
-                key={result.id}
-                aria-selected={isSelected}
-                onClick={(event) => {
-                  const target = event.target;
-                  if (target instanceof Element && target.closest('button, a, input, select, textarea, .libraryQuickMenu')) return;
-                  selectRecord(result.id, event);
-                }}
-                onContextMenu={(event) => openLibraryContextMenu(result.id, event)}
-              >
-                <button
-                  className={`librarySelectMark ${isSelected ? 'active' : ''}`}
-                  type="button"
-                  aria-label={isSelected ? '取消选择' : '选择图片'}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    selectRecord(result.id, event);
-                  }}
-                >
-                  <span />
-                </button>
-                {imageUrl ? (
-                  <button
-                    className="libraryThumb"
-                    onClick={(event) => {
-                      if (event.ctrlKey || event.metaKey || event.shiftKey) {
-                        selectRecord(result.id, event);
-                        return;
-                      }
-                      previewRecord(result, imageUrl);
-                    }}
-                  >
-                    <img src={imageUrl} alt={result.prompt} onLoad={(event) => analyzeRecordColors(result.id, event.currentTarget)} />
-                    <span><Maximize2 size={15} /> {'\u9884\u89c8'}</span>
-                  </button>
-                ) : (
-                  <div className="libraryFailedThumb">{'\u751f\u6210\u5931\u8d25'}</div>
-                )}
-                <div className="libraryImageOverlay">
-                  <button className={`iconMiniButton favoriteButton ${isFavorite ? 'active' : ''}`} type="button" data-tooltip={isFavorite ? '取消收藏' : '收藏'} aria-label={isFavorite ? '取消收藏' : '收藏'} onClick={() => toggleFavorite(result.id)}>
-                    <Star size={14} fill={isFavorite ? 'currentColor' : 'none'} />
-                  </button>
-                  <div className="libraryMoreMenuWrap">
-                    <button className="iconMiniButton" type="button" data-tooltip="更多操作" aria-label="更多操作">
-                      <MoreHorizontal size={15} />
-                    </button>
-                    <div className="libraryQuickMenu" aria-label="图片操作">
-                      <button type="button" onClick={() => openRecordDetails(result)}><Info size={13} /> 图片详情</button>
-                      <button type="button" disabled={!imageUrl} onClick={() => useRecordAsReference(result)}><ImagePlus size={13} /> 设为参考图</button>
-                      <button type="button" onClick={() => void copyText('Prompt', result.prompt)}><Copy size={13} /> 复制 Prompt</button>
-                      <button type="button" disabled={!getRecordPrimaryPath(result)} onClick={() => void copyText('Path', getRecordPrimaryPath(result))}><Copy size={13} /> 复制路径</button>
-                      <button type="button" onClick={() => exportSelectedRecordList([result])}><Download size={13} /> 导出清单</button>
-                      <span className="libraryMenuDivider" />
-                      <button type="button" onClick={() => toggleFavorite(result.id)}><Star size={13} /> {isFavorite ? '取消收藏' : '加入收藏'}</button>
-                      <button type="button" onClick={() => setAssignDialog({ type: 'folder', recordIds: [result.id] })}><FolderOpen size={13} /> 移至文件夹</button>
-                      <button type="button" onClick={() => setAssignDialog({ type: 'collection', recordIds: [result.id] })}><Bookmark size={13} /> 加入收藏集</button>
-                      {(libraryScope.type === 'folder' || libraryScope.type === 'collection') ? (
-                        <button type="button" onClick={() => removeRecordsFromCurrentScope([result.id])}><X size={13} /> 移出当前分类</button>
-                      ) : null}
-                      <span className="libraryMenuDivider" />
-                      <button className="dangerAction" type="button" onClick={() => void deleteRecord(result.id)}><Trash2 size={13} /> 删除记录</button>
-                    </div>
-                  </div>
-                </div>
-                <div className="libraryCardBody">
-                  <div className="resultTitleRow">
-                    <strong>{displaySettings.showProvider ? providerName : formatTime(result.createdAt)}</strong>
-                    <div className="cardTopActions">
-                      <span className="statusBadge modeBadge">{modeLabel}</span>
-                      {displaySettings.showReferenceBadge && referenceCount > 0 ? <span className="statusBadge referenceBadge" title={`\u53c2\u8003\u6765\u6e90\uff1a${referenceSummary}`}>{referenceCount}{'\u53c2\u8003'}</span> : null}
-                      <span className={`statusBadge ${generationStatusClass(result)}`}>{generationStatusLabel(result)}</span>
-                    </div>
-                  </div>
-                  {viewMode === 'list' || displaySettings.showPrompt ? <p title={result.prompt}>{result.prompt}</p> : null}
-                  <div className="metadataRow">
-                    {displaySettings.showModel ? <span>{result.modelId}</span> : null}
-                    <span><Clock3 size={12} /> {formatTime(result.createdAt)}</span>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+              {visibleLibraryItems.map((result) => (
+                <LibraryRecordCard
+                  key={result.id}
+                  record={result}
+                  providerName={providerNameMap.get(result.providerId) ?? result.providerName ?? result.providerId}
+                  meta={libraryMeta[result.id]}
+                  isSelected={selectedIdSet.has(result.id)}
+                  viewMode={viewMode}
+                  displaySettings={displaySettings}
+                  isCurrentScopeRemovable={libraryScope.type === 'folder' || libraryScope.type === 'collection'}
+                  onSelect={handleSelectRecord}
+                  onOpenContextMenu={handleOpenLibraryContextMenu}
+                  onPreview={handlePreviewRecord}
+                  onAnalyzeColors={handleAnalyzeRecordColors}
+                  onToggleFavorite={handleToggleFavorite}
+                  onOpenDetails={handleOpenRecordDetails}
+                  onUseAsReference={handleUseRecordAsReference}
+                  onCopyPrompt={handleCopyRecordPrompt}
+                  onCopyPath={handleCopyRecordPath}
+                  onExportRecord={handleExportRecord}
+                  onAssignFolder={handleAssignRecordFolder}
+                  onAssignCollection={handleAssignRecordCollection}
+                  onRemoveFromCurrentScope={handleRemoveRecordFromCurrentScope}
+                  onDelete={handleDeleteRecord}
+                />
+              ))}
             </section>
           )}
         </div>
@@ -6284,7 +6747,7 @@ function LibraryPage(props: {
       ) : null}
     </>
   );
-}
+});
 
 function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void }) {
   const templates = useMemo(() => loadPromptTemplates(), []);
@@ -6639,36 +7102,54 @@ function SystemInfoModal(props: {
   );
 }
 
-function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
+const ImagePreviewModal = memo(function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
   const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const offsetRef = useRef({ x: 0, y: 0 });
+  const scaleRef = useRef(1);
   const pointerDownPoint = useRef({ x: 0, y: 0 });
   const didDrag = useRef(false);
   const modalRef = useRef<HTMLDivElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+
+  const applyImageTransform = useCallback((nextOffset: { x: number; y: number }, nextScale: number) => {
+    if (!imageRef.current) return;
+    imageRef.current.style.setProperty('--preview-offset-x', `${nextOffset.x}px`);
+    imageRef.current.style.setProperty('--preview-offset-y', `${nextOffset.y}px`);
+    imageRef.current.style.setProperty('--preview-scale', String(nextScale));
+  }, []);
 
   useEffect(() => {
     setScale(1);
-    setOffset({ x: 0, y: 0 });
+    offsetRef.current = { x: 0, y: 0 };
+    scaleRef.current = 1;
     setIsDragging(false);
     didDrag.current = false;
+    window.requestAnimationFrame(() => applyImageTransform({ x: 0, y: 0 }, 1));
     window.setTimeout(() => modalRef.current?.focus(), 0);
-  }, [props.imageUrl]);
+  }, [applyImageTransform, props.imageUrl]);
 
   function clampScale(value: number) {
     return Math.min(6, Math.max(0.25, value));
   }
 
   function zoomBy(delta: number) {
-    setScale((current) => clampScale(Number((current + delta).toFixed(2))));
+    setScale((current) => {
+      const nextScale = clampScale(Number((current + delta).toFixed(2)));
+      scaleRef.current = nextScale;
+      applyImageTransform(offsetRef.current, nextScale);
+      return nextScale;
+    });
   }
 
   function resetView() {
     setScale(1);
-    setOffset({ x: 0, y: 0 });
+    scaleRef.current = 1;
+    offsetRef.current = { x: 0, y: 0 };
     setIsDragging(false);
     didDrag.current = false;
+    applyImageTransform({ x: 0, y: 0 }, 1);
   }
 
   function handleWheel(event: WheelEvent<HTMLDivElement>) {
@@ -6686,8 +7167,8 @@ function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
     didDrag.current = false;
     setIsDragging(true);
     setDragStart({
-      x: event.clientX - offset.x,
-      y: event.clientY - offset.y
+      x: event.clientX - offsetRef.current.x,
+      y: event.clientY - offsetRef.current.y
     });
   }
 
@@ -6696,10 +7177,12 @@ function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
     const moveX = event.clientX - pointerDownPoint.current.x;
     const moveY = event.clientY - pointerDownPoint.current.y;
     if (Math.hypot(moveX, moveY) > 4) didDrag.current = true;
-    setOffset({
+    const nextOffset = {
       x: event.clientX - dragStart.x,
       y: event.clientY - dragStart.y
-    });
+    };
+    offsetRef.current = nextOffset;
+    applyImageTransform(nextOffset, scaleRef.current);
   }
 
   function handlePointerUp(event: PointerEvent<HTMLDivElement>) {
@@ -6769,19 +7252,17 @@ function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
           onClick={handleViewportClick}
         >
           <img
+            ref={imageRef}
             src={props.imageUrl}
             alt="生成图片预览"
             draggable={false}
             onClick={(event) => event.stopPropagation()}
-            style={{
-              transform: `translate3d(${offset.x}px, ${offset.y}px, 0) scale(${scale})`
-            }}
           />
         </div>
       </div>
     </div>
   );
-}
+});
 
 function getRecordTimeMs(value: string) {
   const numeric = Number(value);

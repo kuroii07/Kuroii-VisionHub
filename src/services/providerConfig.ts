@@ -122,6 +122,12 @@ export function defaultEndpointForProtocol(protocol: OpenAICompatibleProtocol) {
   }
 }
 
+function normalizeEndpointPath(endpointPath: unknown, protocol: OpenAICompatibleProtocol) {
+  const trimmed = String(endpointPath || defaultEndpointForProtocol(protocol)).trim();
+  if (!trimmed || trimmed.startsWith('/') || /^https?:\/\//i.test(trimmed)) return trimmed;
+  return `/${trimmed}`;
+}
+
 export function normalizeImageToImageAdapter(value: unknown): ImageToImageAdapter {
   return IMAGE_TO_IMAGE_ADAPTERS.includes(value as ImageToImageAdapter)
     ? (value as ImageToImageAdapter)
@@ -186,10 +192,7 @@ export function normalizeProviderConfig(config: Partial<OpenAICompatibleConfig>)
     modelId: String(merged.modelId || defaultOpenAICompatibleConfig.modelId).trim(),
     protocol: merged.protocol,
     imageToImageAdapter: normalizeImageToImageAdapter(merged.imageToImageAdapter),
-    endpointPath:
-      merged.protocol === 'custom-images'
-        ? String(merged.endpointPath || defaultEndpointForProtocol('images')).trim()
-        : defaultEndpointForProtocol(merged.protocol),
+    endpointPath: normalizeEndpointPath(merged.endpointPath, merged.protocol),
     extraHeadersJson: String(merged.extraHeadersJson || '{}'),
     modelOptions: Array.isArray(merged.modelOptions) ? merged.modelOptions.map(String) : []
   };

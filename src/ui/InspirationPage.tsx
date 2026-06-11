@@ -25,7 +25,7 @@ import {
   Upload,
   X
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type MouseEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type MouseEvent } from 'react';
 import type {
   InspirationAsset,
   InspirationCommercialReference,
@@ -1125,7 +1125,7 @@ function firstImageFile(files: FileList | File[] | null | undefined) {
   return array.find((file) => file.type.startsWith('image/')) ?? null;
 }
 
-export function InspirationPage(props: {
+export const InspirationPage = memo(function InspirationPage(props: {
   onPreview: (imageUrl: string) => void;
   onUseAsReference: (asset: InspirationAsset) => void;
   onUsePrompt: (prompt: string) => void;
@@ -1133,6 +1133,7 @@ export function InspirationPage(props: {
   onRequestConfirm: (request: ConfirmDialogRequest) => void;
 }) {
   const [activeTab, setActiveTab] = useState<InspirationTab>('sources');
+  const [isAssetTabMounted, setIsAssetTabMounted] = useState(false);
   const [sources, setSources] = useState<InspirationSource[]>([]);
   const [assets, setAssets] = useState<InspirationAsset[]>([]);
   const [sourcesLoaded, setSourcesLoaded] = useState(false);
@@ -1193,6 +1194,10 @@ export function InspirationPage(props: {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'assets') setIsAssetTabMounted(true);
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== 'assets' || assetsLoaded) return;
@@ -1899,8 +1904,7 @@ export function InspirationPage(props: {
         </button>
       </section>
 
-      {activeTab === 'sources' ? (
-        <section className="sourceLibraryShell">
+      <section className="sourceLibraryShell" hidden={activeTab !== 'sources'} aria-hidden={activeTab !== 'sources'}>
           <div className="galleryToolbar sourceLibraryToolbar">
             <div className="galleryToolbarLeft">
               <button className="miniButton primaryMini" onClick={() => openSourceEditor()} title="添加自定义网站" type="button">
@@ -2064,9 +2068,14 @@ export function InspirationPage(props: {
               </div>
             </aside>
           ) : null}
-        </section>
-      ) : (
-        <section className="inspirationAssetGalleryShell libraryPageShell">
+      </section>
+
+      {isAssetTabMounted ? (
+        <section
+          className="inspirationAssetGalleryShell libraryPageShell"
+          hidden={activeTab !== 'assets'}
+          aria-hidden={activeTab !== 'assets'}
+        >
           <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileImport} />
 
           <section className="inspirationGalleryArea">
@@ -2463,7 +2472,7 @@ export function InspirationPage(props: {
             </div>
           </section>
         </section>
-      )}
+      ) : null}
     </div>
   );
-}
+});

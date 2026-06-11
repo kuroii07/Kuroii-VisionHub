@@ -2982,7 +2982,7 @@ fn normalize_endpoint_path(custom_path: Option<&str>, protocol: &str) -> Result<
         "images" => "/v1/images/generations",
         "responses" => "/v1/responses",
         "chat-completions" => "/v1/chat/completions",
-        "custom-images" => custom_path.unwrap_or("/v1/images/generations"),
+        "custom-images" => "/v1/images/generations",
         other => return Err(format!("Unsupported protocol: {other}")),
     };
 

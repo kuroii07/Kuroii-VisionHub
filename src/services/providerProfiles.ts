@@ -1,6 +1,5 @@
 import type { OpenAICompatibleConfig } from './providerConfig';
 import {
-  defaultEndpointForProtocol,
   defaultOpenAICompatibleConfig,
   exportProviderConfigMap,
   isOfficialOpenAIBaseUrl,
@@ -51,11 +50,7 @@ export function createProviderProfile(
   const now = new Date().toISOString();
   const normalized = normalizeProviderConfig({
     ...defaultOpenAICompatibleConfig,
-    ...config,
-    endpointPath:
-      config.protocol && config.protocol !== 'custom-images'
-        ? defaultEndpointForProtocol(config.protocol)
-        : config.endpointPath
+    ...config
   });
 
   return {
