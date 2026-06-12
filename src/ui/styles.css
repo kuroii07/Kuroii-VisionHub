@@ -1158,6 +1158,16 @@ textarea {
   left: 96px;
 }
 
+.previewModalBackdrop {
+  inset: 0;
+  z-index: 4200;
+}
+
+.appShell.sidebarCollapsed .previewModalBackdrop,
+.previewModalBackdrop {
+  left: 0;
+}
+
 .previewModal {
   position: relative;
   width: 100%;
@@ -1175,7 +1185,7 @@ textarea {
   position: absolute;
   top: clamp(14px, 2vw, 22px);
   right: clamp(14px, 2vw, 22px);
-  z-index: 3;
+  z-index: 12;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1210,6 +1220,71 @@ textarea {
   font-weight: 900;
 }
 
+.previewNavButton {
+  position: absolute;
+  top: 50%;
+  z-index: 11;
+  width: 48px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.48);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(16px) saturate(1.08);
+  transform: translateY(-50%);
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    opacity 0.16s ease;
+}
+
+.previewNavButton.previous {
+  left: clamp(18px, 2.6vw, 34px);
+}
+
+.previewNavButton.next {
+  right: clamp(18px, 2.6vw, 34px);
+}
+
+.previewNavButton:hover:not(:disabled) {
+  background: rgba(30, 41, 59, 0.72);
+  border-color: rgba(255, 255, 255, 0.38);
+  transform: translateY(-50%) scale(1.04);
+}
+
+.previewNavButton:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.96);
+}
+
+.previewNavButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.34;
+}
+
+.previewNavCounter {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(14px, 2vw, 22px);
+  z-index: 11;
+  min-width: 74px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  color: #f8fafc;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 900;
+  background: rgba(15, 23, 42, 0.52);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(16px) saturate(1.08);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
 .previewViewport {
   position: relative;
   width: 100%;
@@ -1217,7 +1292,7 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(10px, 1.5vw, 24px);
+  padding: clamp(10px, 1.4vw, 20px);
   overflow: hidden;
   touch-action: none;
   cursor: grab;
@@ -1235,8 +1310,8 @@ textarea {
   display: block;
   width: auto;
   height: auto;
-  max-width: 100%;
-  max-height: 100%;
+  max-width: calc(100vw - clamp(20px, 2.8vw, 40px));
+  max-height: calc(100vh - clamp(20px, 2.8vw, 40px));
   object-fit: contain;
   user-select: none;
   transform: translate3d(var(--preview-offset-x), var(--preview-offset-y), 0) scale(var(--preview-scale));
@@ -1248,6 +1323,7 @@ textarea {
 
 @media (max-width: 860px) {
   .modalBackdrop,
+  .previewModalBackdrop,
   .appShell.sidebarCollapsed .modalBackdrop {
     left: 0;
   }
@@ -1257,8 +1333,21 @@ textarea {
     right: 12px;
   }
 
+  .previewNavButton {
+    width: 40px;
+    height: 54px;
+  }
+
+  .previewNavButton.previous {
+    left: 12px;
+  }
+
+  .previewNavButton.next {
+    right: 12px;
+  }
+
   .previewViewport {
-    padding: 9px;
+    padding: 8px;
   }
 
   .previewViewport img {
@@ -9848,43 +9937,80 @@ body {
   overflow: auto;
 }
 
-.libraryReferenceDetailList {
-  display: grid;
+.libraryReferenceDetailSection {
+  height: fit-content;
+  min-height: 0;
+  align-self: start;
+  align-content: start;
+  grid-auto-rows: max-content;
   gap: 8px;
+  overflow: visible;
+}
+
+.libraryReferenceDetailSection > p {
+  max-height: none;
+  overflow: visible;
+}
+
+.libraryReferenceDetailList {
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  max-height: var(--reference-detail-list-max-height, 358px);
+  display: grid;
+  gap: 10px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .libraryReferenceDetailItem {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  padding: 8px;
+  grid-template-columns: 62px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-height: 82px;
+  padding: 10px;
   border: 1px solid var(--app-line);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--app-surface) 56%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--app-surface) 68%, transparent);
+  overflow: hidden;
 }
 
 .libraryReferenceDetailThumb {
-  width: 54px;
-  height: 54px;
+  width: 62px !important;
+  height: 62px !important;
+  min-width: 62px;
+  max-width: 62px;
+  aspect-ratio: 1 / 1;
+  flex: 0 0 62px;
+  padding: 0;
   display: grid;
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--app-line);
-  border-radius: 12px;
+  border-radius: 14px;
   color: var(--app-muted);
-  background: var(--app-surface-2);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--app-surface-2) 92%, #fff), color-mix(in srgb, var(--app-surface) 94%, #000));
 }
 
 .libraryReferenceDetailThumb img {
-  width: 100%;
-  height: 100%;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
   object-fit: cover;
+  object-position: center;
 }
 
 .libraryReferenceDetailItem > div {
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   display: grid;
   gap: 3px;
 }
@@ -9902,17 +10028,20 @@ body {
   color: var(--app-text);
   font-size: 12px;
   font-weight: 900;
+  line-height: 1.35;
 }
 
 .libraryReferenceDetailItem span {
   color: var(--app-accent-strong);
   font-size: 11px;
   font-weight: 850;
+  line-height: 1.35;
 }
 
 .libraryReferenceDetailItem small {
   color: var(--app-muted);
   font-size: 10px;
+  line-height: 1.35;
 }
 
 .libraryDetailInlineActions {
@@ -12551,6 +12680,20 @@ body {
 
 .appShell .libraryDetailSection.promptDetailSection p {
   max-height: min(320px, 38vh);
+}
+
+.appShell .libraryReferenceDetailSection {
+  height: fit-content;
+  overflow: visible;
+}
+
+.appShell .libraryReferenceDetailSection > p {
+  max-height: none;
+  overflow: visible;
+}
+
+.appShell .libraryReferenceDetailSection .libraryReferenceDetailList {
+  max-height: var(--reference-detail-list-max-height, 358px);
 }
 
 .appShell .libraryDetailActions .miniButton {

@@ -1,4 +1,5 @@
 ﻿import {
+  ChevronLeft,
   ChevronRight,
   ClipboardPaste,
   Clock3,
@@ -40,6 +41,7 @@
   ZoomOut
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import { createPortal } from 'react-dom';
 import type { InspirationAsset } from '../domain/inspirationTypes';
 import type { GenerationRecord, ImageToImageAdapter, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
 import { listProviders } from '../providers/registry';
@@ -267,6 +269,19 @@ type LibraryContextMenuState = {
   x: number;
   y: number;
   recordId: string;
+};
+type ImagePreviewNavigationItem = {
+  id: string;
+  imageUrl: string;
+  label: string;
+};
+type ImagePreviewNavigation = {
+  items: ImagePreviewNavigationItem[];
+  currentId: string;
+};
+type ImagePreviewState = {
+  imageUrl: string;
+  navigation?: ImagePreviewNavigation;
 };
 type ToastItem = {
   id: number;
@@ -1436,8 +1451,8 @@ export function App() {
   const [isRunningTestGeneration, setIsRunningTestGeneration] = useState(false);
   const [providerDiagnostics, setProviderDiagnostics] = useState<ProviderDiagnosticItem[]>([]);
   const [generatePreviewUrl, setGeneratePreviewUrl] = useState<string | null>(null);
-  const [libraryPreviewUrl, setLibraryPreviewUrl] = useState<string | null>(null);
-  const [inspirationPreviewUrl, setInspirationPreviewUrl] = useState<string | null>(null);
+  const [libraryPreview, setLibraryPreview] = useState<ImagePreviewState | null>(null);
+  const [inspirationPreview, setInspirationPreview] = useState<ImagePreviewState | null>(null);
   const [isLibraryPageMounted, setIsLibraryPageMounted] = useState(() => page === 'library');
   const [isInspirationPageMounted, setIsInspirationPageMounted] = useState(() => page === 'inspiration');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => appSettings.sidebarCollapsed);
@@ -1501,10 +1516,28 @@ export function App() {
   const generationSupportsOpenAICompatible =
     selectedProviderId === 'openai-gpt-image' || selectedProviderId === 'custom-http-provider';
   const isRealProviderReady = desktopRuntime && generationSupportsOpenAICompatible && secretAvailable;
-  const closeLibraryPreview = useCallback(() => setLibraryPreviewUrl(null), []);
-  const closeInspirationPreview = useCallback(() => setInspirationPreviewUrl(null), []);
+  const openLibraryPreview = useCallback((imageUrl: string, navigation?: ImagePreviewNavigation) => {
+    setLibraryPreview({ imageUrl, navigation });
+  }, []);
+  const closeLibraryPreview = useCallback(() => setLibraryPreview(null), []);
+  const navigateLibraryPreview = useCallback((item: ImagePreviewNavigationItem) => {
+    setLibraryPreview((current) => current ? {
+      imageUrl: item.imageUrl,
+      navigation: current.navigation ? { ...current.navigation, currentId: item.id } : undefined
+    } : current);
+  }, []);
+  const openInspirationPreview = useCallback((imageUrl: string, navigation?: ImagePreviewNavigation) => {
+    setInspirationPreview({ imageUrl, navigation });
+  }, []);
+  const closeInspirationPreview = useCallback(() => setInspirationPreview(null), []);
+  const navigateInspirationPreview = useCallback((item: ImagePreviewNavigationItem) => {
+    setInspirationPreview((current) => current ? {
+      imageUrl: item.imageUrl,
+      navigation: current.navigation ? { ...current.navigation, currentId: item.id } : undefined
+    } : current);
+  }, []);
   const deleteLibraryRecord = useCallback(async (recordId: string) => {
-    setLibraryPreviewUrl(null);
+    setLibraryPreview(null);
     await removeResult(recordId);
   }, [removeResult]);
 
@@ -1669,8 +1702,8 @@ export function App() {
 
   const navigateTo = useCallback((nextPage: Page) => {
     setGeneratePreviewUrl(null);
-    setLibraryPreviewUrl(null);
-    setInspirationPreviewUrl(null);
+    setLibraryPreview(null);
+    setInspirationPreview(null);
     setPage(nextPage);
   }, []);
 
@@ -1721,11 +1754,11 @@ export function App() {
       return;
     }
 
-    if (key === 'escape' && (generatePreviewUrl || libraryPreviewUrl || inspirationPreviewUrl)) {
+    if (key === 'escape' && (generatePreviewUrl || libraryPreview || inspirationPreview)) {
       event.preventDefault();
       setGeneratePreviewUrl(null);
-      setLibraryPreviewUrl(null);
-      setInspirationPreviewUrl(null);
+      setLibraryPreview(null);
+      setInspirationPreview(null);
       return;
     }
 
@@ -1846,8 +1879,8 @@ export function App() {
       ...current.filter((item) => item.sourceGenerationId !== record.id)
     ].slice(0, 4));
     setGeneratePreviewUrl(null);
-    setLibraryPreviewUrl(null);
-    setInspirationPreviewUrl(null);
+    setLibraryPreview(null);
+    setInspirationPreview(null);
     navigateTo('generate');
   }, [navigateTo]);
 
@@ -1855,8 +1888,8 @@ export function App() {
     setPrompt(record.prompt);
     setReferenceImages((record.referenceImages ?? []).slice(0, 4));
     setGeneratePreviewUrl(null);
-    setLibraryPreviewUrl(null);
-    setInspirationPreviewUrl(null);
+    setLibraryPreview(null);
+    setInspirationPreview(null);
     navigateTo('generate');
   }, [navigateTo, setPrompt]);
 
@@ -1905,8 +1938,8 @@ export function App() {
     ].slice(0, 4));
     setPrompt(asset.originalPrompt || asset.inferredPrompt || prompt);
     setGeneratePreviewUrl(null);
-    setLibraryPreviewUrl(null);
-    setInspirationPreviewUrl(null);
+    setLibraryPreview(null);
+    setInspirationPreview(null);
     navigateTo('generate');
   }, [navigateTo, prompt, setPrompt]);
 
@@ -1956,7 +1989,7 @@ export function App() {
   useEffect(() => {
     window.addEventListener('keydown', handleGlobalShortcut);
     return () => window.removeEventListener('keydown', handleGlobalShortcut);
-  }, [activeUtilityModal, page, generatePreviewUrl, libraryPreviewUrl, inspirationPreviewUrl, isSidebarCollapsed, desktopRuntime, appSettings]);
+  }, [activeUtilityModal, page, generatePreviewUrl, libraryPreview, inspirationPreview, isSidebarCollapsed, desktopRuntime, appSettings]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -2902,7 +2935,7 @@ export function App() {
         updateProviderProfileTestState(selectedProfileId, 'passed', Math.round(performance.now() - startedAt), '测试生成成功');
         setPage('providers');
         setGeneratePreviewUrl(null);
-        setLibraryPreviewUrl(null);
+        setLibraryPreview(null);
         setConfigMessage('测试生成成功：已生成 1 张小样图，并自动保存到作品画廊。');
       } else if (isPotentialBackgroundCompletion(saved)) {
         const message = '测试生成待核查：同步连接先超时，但中转后台可能仍会继续生成。已写入作品画廊，稍后可重载历史或查看中转后台。';
@@ -3011,9 +3044,10 @@ export function App() {
             results={results}
             isHistoryLoaded={isHistoryLoaded}
             isActive={page === 'library'}
-            previewUrl={libraryPreviewUrl}
+            preview={libraryPreview}
             onAddResult={addResult}
-            onPreview={setLibraryPreviewUrl}
+            onPreview={openLibraryPreview}
+            onNavigatePreview={navigateLibraryPreview}
             onClosePreview={closeLibraryPreview}
             onUseAsReference={useRecordAsReference}
             onRetryRecord={retryRecordGeneration}
@@ -3025,8 +3059,9 @@ export function App() {
         {isInspirationPageMounted ? (
           <CachedInspirationPage
             isActive={page === 'inspiration'}
-            previewUrl={inspirationPreviewUrl}
-            onPreview={setInspirationPreviewUrl}
+            preview={inspirationPreview}
+            onPreview={openInspirationPreview}
+            onNavigatePreview={navigateInspirationPreview}
             onClosePreview={closeInspirationPreview}
             onUseAsReference={useInspirationAssetAsReference}
             onUsePrompt={useInspirationPrompt}
@@ -4716,9 +4751,10 @@ const CachedLibraryPage = memo(function CachedLibraryPage(props: {
   results: ReturnType<typeof useStudioStore.getState>['results'];
   isHistoryLoaded: boolean;
   isActive: boolean;
-  previewUrl: string | null;
+  preview: ImagePreviewState | null;
   onAddResult: (record: GenerationRecord) => void;
-  onPreview: (imageUrl: string) => void;
+  onPreview: (imageUrl: string, navigation?: ImagePreviewNavigation) => void;
+  onNavigatePreview: (item: ImagePreviewNavigationItem) => void;
   onClosePreview: () => void;
   onUseAsReference: (record: GenerationRecord) => void;
   onRetryRecord: (record: GenerationRecord) => void;
@@ -4743,8 +4779,13 @@ const CachedLibraryPage = memo(function CachedLibraryPage(props: {
         onRequestConfirm={props.onRequestConfirm}
         onDelete={props.onDelete}
       />
-      {props.isActive && props.previewUrl ? (
-        <ImagePreviewModal imageUrl={props.previewUrl} onClose={props.onClosePreview} />
+      {props.isActive && props.preview ? (
+        <ImagePreviewModal
+          imageUrl={props.preview.imageUrl}
+          navigation={props.preview.navigation}
+          onNavigate={props.onNavigatePreview}
+          onClose={props.onClosePreview}
+        />
       ) : null}
     </section>
   );
@@ -4752,8 +4793,9 @@ const CachedLibraryPage = memo(function CachedLibraryPage(props: {
 
 const CachedInspirationPage = memo(function CachedInspirationPage(props: {
   isActive: boolean;
-  previewUrl: string | null;
-  onPreview: (imageUrl: string) => void;
+  preview: ImagePreviewState | null;
+  onPreview: (imageUrl: string, navigation?: ImagePreviewNavigation) => void;
+  onNavigatePreview: (item: ImagePreviewNavigationItem) => void;
   onClosePreview: () => void;
   onUseAsReference: (asset: InspirationAsset) => void;
   onUsePrompt: (prompt: string) => void;
@@ -4772,8 +4814,13 @@ const CachedInspirationPage = memo(function CachedInspirationPage(props: {
         onCreateTemplate={props.onCreateTemplate}
         onRequestConfirm={props.onRequestConfirm}
       />
-      {props.isActive && props.previewUrl ? (
-        <ImagePreviewModal imageUrl={props.previewUrl} onClose={props.onClosePreview} />
+      {props.isActive && props.preview ? (
+        <ImagePreviewModal
+          imageUrl={props.preview.imageUrl}
+          navigation={props.preview.navigation}
+          onNavigate={props.onNavigatePreview}
+          onClose={props.onClosePreview}
+        />
       ) : null}
     </section>
   );
@@ -4907,7 +4954,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   results: ReturnType<typeof useStudioStore.getState>['results'];
   isHistoryLoaded: boolean;
   onAddResult: (record: GenerationRecord) => void;
-  onPreview: (imageUrl: string) => void;
+  onPreview: (imageUrl: string, navigation?: ImagePreviewNavigation) => void;
   onUseAsReference: (record: GenerationRecord) => void;
   onRetryRecord: (record: GenerationRecord) => void;
   onRecheckBackgroundRecord: (record: GenerationRecord) => Promise<GenerationRecord>;
@@ -5634,9 +5681,20 @@ const LibraryPage = memo(function LibraryPage(props: {
     setSelectedRecordId(null);
   }
 
+  function createLibraryPreviewNavigation(record: GenerationRecord): ImagePreviewNavigation | undefined {
+    const items = filteredItems
+      .filter((item) => Boolean(item.imageUrls[0]))
+      .map((item) => ({
+        id: item.id,
+        imageUrl: item.imageUrls[0],
+        label: getRecordFileName(item) || item.prompt || '作品图片'
+      }));
+    return items.length > 1 ? { items, currentId: record.id } : undefined;
+  }
+
   function previewRecord(record: GenerationRecord, imageUrl?: string) {
     if (!imageUrl) return;
-    props.onPreview(imageUrl);
+    props.onPreview(imageUrl, createLibraryPreviewNavigation(record));
   }
 
   const handleSelectRecord = useStableEvent(selectRecord);
@@ -6790,7 +6848,7 @@ const LibraryPage = memo(function LibraryPage(props: {
             </div>
             {selectedRecord.imageUrls[0] ? (
               <div className="libraryDetailPreview">
-                <button className="libraryDetailPreviewImageButton" type="button" onClick={() => previewRecord(selectedRecord, selectedRecord.imageUrls[0])}>
+                <button className="libraryDetailPreviewImageButton" type="button" onClick={() => props.onPreview(selectedRecord.imageUrls[0])}>
                   <img
                     src={selectedRecord.imageUrls[0]}
                     alt={selectedRecord.prompt}
@@ -6886,9 +6944,11 @@ const LibraryPage = memo(function LibraryPage(props: {
               <button className="miniButton danger" onClick={() => void deleteRecord(selectedRecord.id)}><Trash2 size={13} /> 删除记录</button>
             </div>
             {selectedRecord.referenceImages?.length ? (
-              <div className="libraryDetailSection libraryReferenceDetailSection">
+              <div
+                className="libraryDetailSection libraryReferenceDetailSection"
+                style={{ '--reference-detail-list-max-height': `${Math.min(selectedRecord.referenceImages.length * 92 - 10, 358)}px` } as CSSProperties}
+              >
                 <strong>参考图来源</strong>
-                <p>{summarizeReferenceSources(selectedRecord.referenceImages)}</p>
                 <div className="libraryReferenceDetailList">
                   {selectedRecord.referenceImages.map((reference, index) => {
                     const previewUrl = getReferencePreviewUrl(reference);
@@ -7353,7 +7413,12 @@ function SystemInfoModal(props: {
   );
 }
 
-const ImagePreviewModal = memo(function ImagePreviewModal(props: { imageUrl: string; onClose: () => void }) {
+const ImagePreviewModal = memo(function ImagePreviewModal(props: {
+  imageUrl: string;
+  navigation?: ImagePreviewNavigation;
+  onNavigate?: (item: ImagePreviewNavigationItem) => void;
+  onClose: () => void;
+}) {
   const [scale, setScale] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -7363,6 +7428,13 @@ const ImagePreviewModal = memo(function ImagePreviewModal(props: { imageUrl: str
   const didDrag = useRef(false);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const navigationItems = props.navigation?.items ?? [];
+  const navigationIndex = props.navigation
+    ? navigationItems.findIndex((item) => item.id === props.navigation?.currentId)
+    : -1;
+  const hasPreviewNavigation = Boolean(props.onNavigate && navigationItems.length > 1 && navigationIndex >= 0);
+  const canNavigatePrevious = hasPreviewNavigation && navigationIndex > 0;
+  const canNavigateNext = hasPreviewNavigation && navigationIndex < navigationItems.length - 1;
 
   const applyImageTransform = useCallback((nextOffset: { x: number; y: number }, nextScale: number) => {
     if (!imageRef.current) return;
@@ -7401,6 +7473,13 @@ const ImagePreviewModal = memo(function ImagePreviewModal(props: { imageUrl: str
     setIsDragging(false);
     didDrag.current = false;
     applyImageTransform({ x: 0, y: 0 }, 1);
+  }
+
+  function navigatePreview(delta: -1 | 1) {
+    if (!hasPreviewNavigation) return;
+    const target = navigationItems[navigationIndex + delta];
+    if (!target) return;
+    props.onNavigate?.(target);
   }
 
   function handleWheel(event: WheelEvent<HTMLDivElement>) {
@@ -7458,6 +7537,16 @@ const ImagePreviewModal = memo(function ImagePreviewModal(props: { imageUrl: str
       props.onClose();
       return;
     }
+    if (event.key === 'ArrowLeft' && hasPreviewNavigation) {
+      event.preventDefault();
+      navigatePreview(-1);
+      return;
+    }
+    if (event.key === 'ArrowRight' && hasPreviewNavigation) {
+      event.preventDefault();
+      navigatePreview(1);
+      return;
+    }
     if (event.key === '+' || event.key === '=') {
       event.preventDefault();
       zoomBy(0.2);
@@ -7474,8 +7563,8 @@ const ImagePreviewModal = memo(function ImagePreviewModal(props: { imageUrl: str
     }
   }
 
-  return (
-    <div ref={modalRef} className="modalBackdrop" onClick={props.onClose} onKeyDown={handlePreviewKeyDown} tabIndex={-1}>
+  const previewContent = (
+    <div ref={modalRef} className="modalBackdrop previewModalBackdrop" onClick={props.onClose} onKeyDown={handlePreviewKeyDown} tabIndex={-1}>
       <div className="previewModal">
         <div className="previewToolbar" onClick={(event) => event.stopPropagation()}>
           <button type="button" data-tooltip="缩小" aria-label="缩小" onClick={() => zoomBy(-0.2)}>
@@ -7492,6 +7581,41 @@ const ImagePreviewModal = memo(function ImagePreviewModal(props: { imageUrl: str
             <X size={18} />
           </button>
         </div>
+        {hasPreviewNavigation ? (
+          <>
+            <button
+              className="previewNavButton previous"
+              type="button"
+              disabled={!canNavigatePrevious}
+              data-tooltip="上一张"
+              aria-label="上一张"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                navigatePreview(-1);
+              }}
+            >
+              <ChevronLeft size={30} />
+            </button>
+            <button
+              className="previewNavButton next"
+              type="button"
+              disabled={!canNavigateNext}
+              data-tooltip="下一张"
+              aria-label="下一张"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                navigatePreview(1);
+              }}
+            >
+              <ChevronRight size={30} />
+            </button>
+            <div className="previewNavCounter" aria-label="预览序号">
+              {navigationIndex + 1} / {navigationItems.length}
+            </div>
+          </>
+        ) : null}
         <div
           className={`previewViewport ${isDragging ? 'isDragging' : ''}`}
           onWheel={handleWheel}
@@ -7513,6 +7637,8 @@ const ImagePreviewModal = memo(function ImagePreviewModal(props: { imageUrl: str
       </div>
     </div>
   );
+
+  return typeof document === 'undefined' ? previewContent : createPortal(previewContent, document.body);
 });
 
 function getRecordTimeMs(value: string) {

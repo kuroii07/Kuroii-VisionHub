@@ -59,6 +59,10 @@ type AssetColorFilter = 'all' | 'red' | 'orange' | 'yellow' | 'green' | 'cyan' |
 type SourceKindFilter = 'all' | 'preset' | 'custom';
 type SourceLoginFilter = 'all' | 'requires-login' | 'no-login';
 type SourceNavFilter = 'all' | 'preset' | 'custom' | InspirationSourceCategory | InspirationRegion;
+type ImagePreviewNavigation = {
+  items: Array<{ id: string; imageUrl: string; label: string }>;
+  currentId: string;
+};
 type AssetImageMeta = {
   shapeTokens: AssetShapeFilter[];
   colorFamilies: AssetColorFilter[];
@@ -1128,7 +1132,7 @@ function firstImageFile(files: FileList | File[] | null | undefined) {
 }
 
 export const InspirationPage = memo(function InspirationPage(props: {
-  onPreview: (imageUrl: string) => void;
+  onPreview: (imageUrl: string, navigation?: ImagePreviewNavigation) => void;
   onUseAsReference: (asset: InspirationAsset) => void;
   onUsePrompt: (prompt: string) => void;
   onCreateTemplate: (title: string, prompt: string, tags: string[]) => string;
@@ -1407,6 +1411,16 @@ export const InspirationPage = memo(function InspirationPage(props: {
     () => filteredAssets.slice(0, Math.min(renderedAssetCount, filteredAssets.length)),
     [filteredAssets, renderedAssetCount]
   );
+  const assetPreviewNavigationItems = useMemo(
+    () => filteredAssets
+      .filter((asset) => Boolean(asset.imageUrl))
+      .map((asset) => ({
+        id: asset.id,
+        imageUrl: asset.imageUrl!,
+        label: asset.title || '灵感图片'
+      })),
+    [filteredAssets]
+  );
 
   const selectedAsset = useMemo(
     () => assets.find((asset) => asset.id === selectedAssetId) ?? null,
@@ -1419,6 +1433,14 @@ export const InspirationPage = memo(function InspirationPage(props: {
     const targetAsset = assets.find((asset) => asset.id === assetMenuTarget.assetId);
     return targetAsset ? [targetAsset] : [];
   }, [assetMenuTarget, assets, selectedAssetIds]);
+
+  function previewAssetFromGallery(asset: InspirationAsset) {
+    if (!asset.imageUrl) return;
+    props.onPreview(
+      asset.imageUrl,
+      assetPreviewNavigationItems.length > 1 ? { items: assetPreviewNavigationItems, currentId: asset.id } : undefined
+    );
+  }
   const sourceNavItems = useMemo(() => {
     const count = (predicate: (source: InspirationSource) => boolean) => allSources.filter(predicate).length;
     return [
@@ -2345,7 +2367,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
                             <span />
                           </button>
                           {asset.imageUrl ? (
-                            <button className="libraryThumb" onClick={(event) => { event.stopPropagation(); props.onPreview(asset.imageUrl!); }}>
+                            <button className="libraryThumb" onClick={(event) => { event.stopPropagation(); previewAssetFromGallery(asset); }}>
                               <img src={asset.imageUrl} alt={asset.title} loading="lazy" decoding="async" onLoad={(event) => rememberAssetImageMeta(asset.id, event.currentTarget)} />
                               <span><Maximize2 size={15} /> 预览</span>
                             </button>
@@ -2506,7 +2528,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
                       <button type="button" role="menuitem" disabled={!contextAssets[0].imageUrl} onClick={() => { props.onUseAsReference(contextAssets[0]); setAssetMenuTarget(null); }}>
                         <ImagePlus size={13} /> 设为参考图
                       </button>
-                      <button type="button" role="menuitem" disabled={!contextAssets[0].imageUrl} onClick={() => { if (contextAssets[0].imageUrl) props.onPreview(contextAssets[0].imageUrl); setAssetMenuTarget(null); }}>
+                      <button type="button" role="menuitem" disabled={!contextAssets[0].imageUrl} onClick={() => { previewAssetFromGallery(contextAssets[0]); setAssetMenuTarget(null); }}>
                         <Maximize2 size={13} /> 预览图片
                       </button>
                     </>
