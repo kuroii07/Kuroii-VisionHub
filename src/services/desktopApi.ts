@@ -313,6 +313,23 @@ export async function saveGenerationRecord(record: ImageGenerationResult, provid
   return mapBackendRecord(saved);
 }
 
+export async function recheckBackgroundGeneration(
+  recordId: string,
+  options?: { secretId?: string; extraHeaders?: Record<string, string> }
+) {
+  if (!isTauriRuntime()) {
+    throw new Error('后台任务重查需要 Tauri 桌面端运行时。');
+  }
+  const record = await invoke<BackendGenerationRecord>('recheck_background_generation', {
+    request: {
+      record_id: recordId,
+      secret_id: options?.secretId,
+      extra_headers: options?.extraHeaders
+    }
+  });
+  return mapBackendRecord(record);
+}
+
 
 export async function deleteGenerationRecord(recordId: string) {
   if (!isTauriRuntime()) return { id: recordId, deleted: true };

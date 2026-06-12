@@ -308,6 +308,13 @@ struct GenerationRecord {
     reference_images: Option<Vec<ReferenceImage>>,
 }
 
+#[derive(Debug, Deserialize)]
+struct RecheckBackgroundGenerationRequest {
+    record_id: String,
+    secret_id: Option<String>,
+    extra_headers: Option<std::collections::HashMap<String, String>>,
+}
+
 fn secret_entry(provider_id: &str) -> Result<Entry, String> {
     Entry::new(KEYRING_SERVICE, &format!("provider:{provider_id}"))
         .map_err(|error| format!("Cannot open secure credential store: {error}"))
@@ -855,6 +862,123 @@ fn save_generation_record(
 
     hydrate_record_image_urls(&app, &mut record);
     Ok(record)
+}
+
+#[tauri::command]
+async fn recheck_background_generation(
+    app: tauri::AppHandle,
+    request: RecheckBackgroundGenerationRequest,
+) -> Result<GenerationRecord, String> {
+    let record_id = request.record_id.trim().to_string();
+    if record_id.is_empty() {
+        return Err("Generation record id cannot be empty.".to_string());
+    }
+
+    let mut records = read_generation_history_records(&app)?;
+    let Some(index) = records.iter().position(|item| item.id == record_id) else {
+        return Err("没有找到这条生成记录，无法重查后台任务。".to_string());
+    };
+    let previous_record = records[index].clone();
+    let poll_url = extract_background_poll_url(&previous_record.raw)
+        .ok_or_else(|| "这条记录没有保存可重查的 poll_url，无法自动重查后台任务。".to_string())?;
+    if !(poll_url.starts_with("https://") || poll_url.starts_with("http://")) {
+        return Err("后台重查地址不是有效 HTTP URL，已停止请求。".to_string());
+    }
+
+    let api_key = read_provider_secret(request.secret_id.as_deref(), &previous_record.provider_id)
+        .map_err(|error| format!("无法读取用于重查的 API Key：{error}"))?;
+    let client = reqwest::Client::new();
+    let mut builder = client.get(&poll_url).bearer_auth(api_key);
+    if let Some(headers) = request.extra_headers.as_ref() {
+        for (name, value) in headers {
+            if name.eq_ignore_ascii_case("authorization") || name.eq_ignore_ascii_case("content-type") {
+                continue;
+            }
+            builder = builder.header(name, value);
+        }
+    }
+
+    let response = builder
+        .send()
+        .await
+        .map_err(|error| format!("后台任务重查请求失败：{error}"))?;
+    let status = response.status();
+    let body_text = response
+        .text()
+        .await
+        .map_err(|error| format!("无法读取后台任务重查响应：{error}"))?;
+    let raw: Value = serde_json::from_str(&body_text).map_err(|error| {
+        let preview: String = body_text.chars().take(600).collect();
+        format!("后台任务重查响应不是 JSON：{error}. HTTP {status}. 响应预览：{preview}")
+    })?;
+
+    if !status.is_success() {
+        return Err(format_openai_compatible_error(
+            status.as_u16(),
+            extract_error_message(&raw).as_deref(),
+            None,
+            None,
+            None,
+        ));
+    }
+
+    let image_urls = extract_image_urls(&raw, None);
+    if image_urls.is_empty() {
+        let response_status = extract_response_status(&raw)
+            .unwrap_or_else(|| "未知".to_string());
+        return Err(format!(
+            "后台任务已重查，但暂未返回可恢复图片。当前任务状态：{response_status}。"
+        ));
+    }
+
+    let recovery_request = OpenAIImageRequest {
+        provider_id: previous_record.provider_id.clone(),
+        model_id: previous_record.model_id.clone(),
+        prompt: previous_record.prompt.clone(),
+        size: "1024x1024".to_string(),
+        quality: None,
+        output_format: None,
+        output_compression: None,
+        count: image_urls.len().clamp(1, 4) as u8,
+        generation_mode: previous_record.generation_mode.clone(),
+        reference_images: previous_record.reference_images.clone(),
+        base_url: None,
+        protocol: Some("responses".to_string()),
+        image_to_image_adapter: None,
+        endpoint_path: None,
+        extra_headers: None,
+        secret_id: request.secret_id.clone(),
+    };
+    let local_image_paths = save_images_to_library(&app, &image_urls, &recovery_request)
+        .await
+        .unwrap_or_default();
+    let display_image_urls = display_library_image_urls_for_paths(&app, &local_image_paths, &image_urls);
+    let recovered_at = chrono_like_timestamp();
+
+    let mut record = previous_record.clone();
+    record.status = "succeeded".to_string();
+    record.error = None;
+    record.image_urls = display_image_urls;
+    record.local_image_paths = local_image_paths;
+    record.cost_hint = Some("后台任务重查已恢复；实际计费以中转站/供应商账单为准".to_string());
+    record.raw = serde_json::json!({
+        "visionhub_recovery": {
+            "recovered_at": recovered_at,
+            "poll_url": poll_url,
+            "http_status": status.as_u16(),
+            "previous_status": previous_record.status
+        },
+        "recovered_response": raw,
+        "previous_failure": previous_record.raw
+    });
+    record.saved_at = Some(chrono_like_timestamp());
+
+    records[index] = record.clone();
+    write_generation_history(&app, &records)?;
+
+    let mut returned = record;
+    hydrate_record_image_urls(&app, &mut returned);
+    Ok(returned)
 }
 
 #[tauri::command]
@@ -1571,6 +1695,14 @@ fn responses_poll_error_raw(
         "poll_endpoint_path": endpoint_path,
         "response_id": response_id
     })
+}
+
+fn extract_background_poll_url(raw: &Value) -> Option<String> {
+    raw.get("poll_url")
+        .and_then(Value::as_str)
+        .or_else(|| raw.pointer("/visionhub_recovery/poll_url").and_then(Value::as_str))
+        .filter(|url| !url.trim().is_empty())
+        .map(|url| url.trim().to_string())
 }
 
 fn extract_response_id(raw: &Value) -> Option<String> {
@@ -3267,6 +3399,7 @@ pub fn run() {
             load_library_data,
             save_library_data,
             save_generation_record,
+            recheck_background_generation,
             delete_generation_record,
             import_library_images_from_files,
             import_library_images_from_folder,

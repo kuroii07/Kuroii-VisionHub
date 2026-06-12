@@ -53,6 +53,7 @@ import {
   importLibraryImagesFromFiles,
   importLibraryImagesFromFolder,
   loadLibraryData,
+  recheckBackgroundGeneration,
   revealAppDataDir,
   isTauriRuntime,
   listOpenAICompatibleModels,
@@ -1859,6 +1860,32 @@ export function App() {
     navigateTo('generate');
   }, [navigateTo, setPrompt]);
 
+  const recheckLibraryBackgroundRecord = useCallback(async (record: GenerationRecord) => {
+    const matchingProfiles = providerProfiles.filter((profile) => profile.providerId === record.providerId);
+    const targetProfile =
+      matchingProfiles.find((profile) => profile.enabled && profile.modelId === record.modelId) ??
+      matchingProfiles.find((profile) => profile.modelId === record.modelId) ??
+      matchingProfiles.find((profile) => profile.enabled) ??
+      matchingProfiles[0] ??
+      null;
+    const targetConfig = targetProfile
+      ? profileToProviderConfig(targetProfile)
+      : record.providerId === selectedProvider.id
+        ? providerConfig
+        : loadProviderConfig(record.providerId);
+    const secretId = targetProfile
+      ? providerProfileSecretId(targetProfile.id)
+      : record.providerId === selectedProvider.id
+        ? activeSecretId()
+        : record.providerId;
+    const updated = await recheckBackgroundGeneration(record.id, {
+      secretId,
+      extraHeaders: parseExtraHeaders(targetConfig.extraHeadersJson)
+    });
+    addResult(updated);
+    return updated;
+  }, [addResult, providerConfig, providerProfiles, selectedProfileId, selectedProvider.id]);
+
   const useInspirationAssetAsReference = useCallback((asset: InspirationAsset) => {
     if (!asset.imageUrl) return;
     const reference: ReferenceImage = {
@@ -2990,6 +3017,7 @@ export function App() {
             onClosePreview={closeLibraryPreview}
             onUseAsReference={useRecordAsReference}
             onRetryRecord={retryRecordGeneration}
+            onRecheckBackgroundRecord={recheckLibraryBackgroundRecord}
             onRequestConfirm={requestConfirm}
             onDelete={deleteLibraryRecord}
           />
@@ -4694,6 +4722,7 @@ const CachedLibraryPage = memo(function CachedLibraryPage(props: {
   onClosePreview: () => void;
   onUseAsReference: (record: GenerationRecord) => void;
   onRetryRecord: (record: GenerationRecord) => void;
+  onRecheckBackgroundRecord: (record: GenerationRecord) => Promise<GenerationRecord>;
   onRequestConfirm: (request: ConfirmDialogRequest) => void;
   onDelete: (recordId: string) => Promise<void>;
 }) {
@@ -4710,6 +4739,7 @@ const CachedLibraryPage = memo(function CachedLibraryPage(props: {
         onPreview={props.onPreview}
         onUseAsReference={props.onUseAsReference}
         onRetryRecord={props.onRetryRecord}
+        onRecheckBackgroundRecord={props.onRecheckBackgroundRecord}
         onRequestConfirm={props.onRequestConfirm}
         onDelete={props.onDelete}
       />
@@ -4880,6 +4910,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   onPreview: (imageUrl: string) => void;
   onUseAsReference: (record: GenerationRecord) => void;
   onRetryRecord: (record: GenerationRecord) => void;
+  onRecheckBackgroundRecord: (record: GenerationRecord) => Promise<GenerationRecord>;
   onRequestConfirm: (request: ConfirmDialogRequest) => void;
   onDelete: (recordId: string) => Promise<void>;
 }) {
@@ -4921,6 +4952,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   const [displaySettings, setDisplaySettings] = useState<LibraryDisplaySettings>(() => loadLibraryDisplaySettings());
   const [renderedItemCount, setRenderedItemCount] = useState(LIBRARY_INITIAL_RENDER_COUNT);
   const [copyMessage, setCopyMessage] = useState('');
+  const [recheckingRecordId, setRecheckingRecordId] = useState<string | null>(null);
   const dockRef = useRef<HTMLElement | null>(null);
   const colorFilterRef = useRef<HTMLLabelElement | null>(null);
   const quickFilterEditorRef = useRef<HTMLDivElement | null>(null);
@@ -5791,6 +5823,20 @@ const LibraryPage = memo(function LibraryPage(props: {
     if (records.length !== 1) return;
     openRecordDiagnostics(records[0]);
     setContextMenu(null);
+  }
+
+  async function recheckDiagnosticRecord(record: GenerationRecord) {
+    setRecheckingRecordId(record.id);
+    try {
+      const updated = await props.onRecheckBackgroundRecord(record);
+      setDiagnosticRecordId(updated.id);
+      setSelectedRecordId(null);
+      setCopyMessage(updated.status === 'succeeded' ? '后台任务已恢复到作品画廊' : '后台任务已重查');
+    } catch (error) {
+      setCopyMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRecheckingRecordId(null);
+    }
   }
 
   function useContextRecordAsReference(records: GenerationRecord[]) {
@@ -6910,6 +6956,22 @@ const LibraryPage = memo(function LibraryPage(props: {
                 <div className="generationBackgroundNotice">
                   <Clock3 size={14} />
                   <span>这类记录不一定彻底失败，建议先重载历史或到中转站后台核查是否已有生成结果，再决定是否重新生成。</span>
+                </div>
+              ) : null}
+              {diagnosticRecordFailureDiagnosis.isPotentialBackgroundCompletion ? (
+                <div className="generationRecoveryCallout">
+                  <div>
+                    <strong>后台任务重查</strong>
+                    <span>如果 raw 中保存了 poll_url，可尝试向中转站重新查询结果；成功后会自动恢复到作品画廊。</span>
+                  </div>
+                  <button
+                    className="miniButton"
+                    type="button"
+                    disabled={recheckingRecordId === diagnosticRecord.id}
+                    onClick={() => void recheckDiagnosticRecord(diagnosticRecord)}
+                  >
+                    <RefreshCcw size={13} /> {recheckingRecordId === diagnosticRecord.id ? '重查中…' : '重查后台任务'}
+                  </button>
                 </div>
               ) : null}
               <div className="generationDiagnosticBlock">

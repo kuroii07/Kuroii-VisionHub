@@ -12950,6 +12950,37 @@ body {
   line-height: 1.45;
 }
 
+.generationRecoveryCallout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 22%, var(--app-line));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--app-accent-strong) 7%, var(--app-surface-2));
+}
+
+.generationRecoveryCallout > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.generationRecoveryCallout strong {
+  font-size: 12px;
+}
+
+.generationRecoveryCallout span {
+  color: var(--app-text-2);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.generationRecoveryCallout .miniButton {
+  white-space: nowrap;
+}
+
 .generationDiagnosticBlock {
   display: grid;
   gap: 5px;
