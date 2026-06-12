@@ -25,7 +25,7 @@ import {
   Upload,
   X
 } from 'lucide-react';
-import { memo, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type MouseEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type MouseEvent } from 'react';
 import type {
   InspirationAsset,
   InspirationCommercialReference,
@@ -67,6 +67,8 @@ type AssetImageMeta = {
 
 const SOURCE_PRESET_STATS_KEY = 'visionhub.inspiration.sourcePresetStats';
 const SOURCE_PRESET_TIMESTAMP = 'preset';
+const ASSET_INITIAL_RENDER_COUNT = 48;
+const ASSET_RENDER_BATCH_SIZE = 72;
 
 const sourceCategoryOptions: Array<{ value: InspirationSourceCategory | 'all'; label: string }> = [
   { value: 'all', label: '全部类型' },
@@ -1174,8 +1176,60 @@ export const InspirationPage = memo(function InspirationPage(props: {
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const assetColorFilterRef = useRef<HTMLLabelElement | null>(null);
   const [assetImageMeta, setAssetImageMeta] = useState<Record<string, AssetImageMeta>>({});
+  const [renderedAssetCount, setRenderedAssetCount] = useState(ASSET_INITIAL_RENDER_COUNT);
+  const pendingAssetImageMetaRef = useRef<Record<string, AssetImageMeta>>({});
+  const assetImageMetaFlushRef = useRef<{ timerId: number | null; idleId: number | null }>({ timerId: null, idleId: null });
 
   useToastMessage(message, setMessage);
+
+  const flushAssetImageMeta = useCallback(() => {
+    const patches = pendingAssetImageMetaRef.current;
+    pendingAssetImageMetaRef.current = {};
+    assetImageMetaFlushRef.current.timerId = null;
+    assetImageMetaFlushRef.current.idleId = null;
+    const entries = Object.entries(patches);
+    if (!entries.length) return;
+    setAssetImageMeta((current) => {
+      let changed = false;
+      const next = { ...current };
+      entries.forEach(([assetId, meta]) => {
+        const previous = current[assetId];
+        if (
+          previous &&
+          previous.shapeTokens.join('|') === meta.shapeTokens.join('|') &&
+          previous.colorFamilies.join('|') === meta.colorFamilies.join('|') &&
+          previous.palette.join('|') === meta.palette.join('|')
+        ) {
+          return;
+        }
+        next[assetId] = meta;
+        changed = true;
+      });
+      return changed ? next : current;
+    });
+  }, []);
+
+  const queueAssetImageMeta = useCallback((assetId: string, meta: AssetImageMeta) => {
+    pendingAssetImageMetaRef.current[assetId] = meta;
+    if (assetImageMetaFlushRef.current.timerId !== null || assetImageMetaFlushRef.current.idleId !== null) return;
+    assetImageMetaFlushRef.current.timerId = window.setTimeout(() => {
+      assetImageMetaFlushRef.current.timerId = null;
+      if ('requestIdleCallback' in window) {
+        assetImageMetaFlushRef.current.idleId = window.requestIdleCallback(flushAssetImageMeta, { timeout: 1200 });
+        return;
+      }
+      flushAssetImageMeta();
+    }, 180);
+  }, [flushAssetImageMeta]);
+
+  useEffect(() => () => {
+    if (assetImageMetaFlushRef.current.timerId !== null) {
+      window.clearTimeout(assetImageMetaFlushRef.current.timerId);
+    }
+    if (assetImageMetaFlushRef.current.idleId !== null && 'cancelIdleCallback' in window) {
+      window.cancelIdleCallback(assetImageMetaFlushRef.current.idleId);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -1348,6 +1402,11 @@ export const InspirationPage = memo(function InspirationPage(props: {
       return matchesLicense && matchesSource && matchesPrompt && matchesShape && matchesFormat && matchesRating && matchesColor && (!normalizedQuery || haystack.includes(normalizedQuery));
     });
   }, [assetColorFilter, assetFormatFilter, assetImageMeta, assetLicense, assetPromptFilter, assetRatingFilter, assetShapeFilter, assetSourceFilter, assets, normalizedQuery]);
+  const filteredAssetIdsSignature = useMemo(() => filteredAssets.map((asset) => asset.id).join('|'), [filteredAssets]);
+  const visibleAssets = useMemo(
+    () => filteredAssets.slice(0, Math.min(renderedAssetCount, filteredAssets.length)),
+    [filteredAssets, renderedAssetCount]
+  );
 
   const selectedAsset = useMemo(
     () => assets.find((asset) => asset.id === selectedAssetId) ?? null,
@@ -1392,6 +1451,31 @@ export const InspirationPage = memo(function InspirationPage(props: {
     assetFormatFilter !== 'all',
     assetRatingFilter !== 'all'
   ].filter(Boolean).length;
+
+  useEffect(() => {
+    const total = filteredAssets.length;
+    const initialCount = Math.min(ASSET_INITIAL_RENDER_COUNT, total);
+    setRenderedAssetCount(initialCount);
+    if (total <= initialCount) return;
+
+    let cancelled = false;
+    let frameId = 0;
+    let nextCount = initialCount;
+    const renderNextBatch = () => {
+      frameId = window.requestAnimationFrame(() => {
+        if (cancelled) return;
+        nextCount = Math.min(nextCount + ASSET_RENDER_BATCH_SIZE, total);
+        setRenderedAssetCount(nextCount);
+        if (nextCount < total) renderNextBatch();
+      });
+    };
+
+    renderNextBatch();
+    return () => {
+      cancelled = true;
+      if (frameId) window.cancelAnimationFrame(frameId);
+    };
+  }, [filteredAssetIdsSignature, filteredAssets.length]);
 
   function resetSourceDraft() {
     setSourceDraft(emptySourceDraft);
@@ -1450,24 +1534,14 @@ export const InspirationPage = memo(function InspirationPage(props: {
   }
 
   function rememberAssetImageMeta(assetId: string, image: HTMLImageElement) {
+    if (assetImageMeta[assetId] || pendingAssetImageMetaRef.current[assetId]) return;
     const colors = analyzeImageColors(image);
     const nextMeta: AssetImageMeta = {
       shapeTokens: getShapeTokensFromSize(image.naturalWidth, image.naturalHeight),
       colorFamilies: colors?.families ?? [],
       palette: colors?.palette ?? []
     };
-    setAssetImageMeta((current) => {
-      const previous = current[assetId];
-      if (
-        previous &&
-        previous.shapeTokens.join('|') === nextMeta.shapeTokens.join('|') &&
-        previous.colorFamilies.join('|') === nextMeta.colorFamilies.join('|') &&
-        previous.palette.join('|') === nextMeta.palette.join('|')
-      ) {
-        return current;
-      }
-      return { ...current, [assetId]: nextMeta };
-    });
+    queueAssetImageMeta(assetId, nextMeta);
   }
 
   function updateAssetDraftFromFile(file: File | null) {
@@ -1904,7 +1978,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
         </button>
       </section>
 
-      <section className="sourceLibraryShell" hidden={activeTab !== 'sources'} aria-hidden={activeTab !== 'sources'}>
+      <section className={`sourceLibraryShell ${activeTab === 'sources' ? 'active' : 'inactive'}`} aria-hidden={activeTab !== 'sources'}>
           <div className="galleryToolbar sourceLibraryToolbar">
             <div className="galleryToolbarLeft">
               <button className="miniButton primaryMini" onClick={() => openSourceEditor()} title="添加自定义网站" type="button">
@@ -2072,8 +2146,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
 
       {isAssetTabMounted ? (
         <section
-          className="inspirationAssetGalleryShell libraryPageShell"
-          hidden={activeTab !== 'assets'}
+          className={`inspirationAssetGalleryShell libraryPageShell ${activeTab === 'assets' ? 'active' : 'inactive'}`}
           aria-hidden={activeTab !== 'assets'}
         >
           <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFileImport} />
@@ -2239,7 +2312,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
                   </div>
                 ) : (
                   <section className={`libraryGrid libraryGridV2 view-${assetViewMode}`}>
-                    {filteredAssets.map((asset) => {
+                    {visibleAssets.map((asset) => {
                       const prompt = assetPrompt(asset);
                       const domain = extractAssetDomain(asset);
                       const isSelected = selectedAssetIds.includes(asset.id);
@@ -2273,7 +2346,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
                           </button>
                           {asset.imageUrl ? (
                             <button className="libraryThumb" onClick={(event) => { event.stopPropagation(); props.onPreview(asset.imageUrl!); }}>
-                              <img src={asset.imageUrl} alt={asset.title} loading="lazy" onLoad={(event) => rememberAssetImageMeta(asset.id, event.currentTarget)} />
+                              <img src={asset.imageUrl} alt={asset.title} loading="lazy" decoding="async" onLoad={(event) => rememberAssetImageMeta(asset.id, event.currentTarget)} />
                               <span><Maximize2 size={15} /> 预览</span>
                             </button>
                           ) : (
@@ -2349,7 +2422,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
                   {selectedAsset.imageUrl ? (
                     <div className="libraryDetailPreview">
                     <button className="libraryDetailPreviewImageButton" type="button" onClick={() => props.onPreview(selectedAsset.imageUrl!)}>
-                      <img src={selectedAsset.imageUrl} alt={selectedAsset.title} onLoad={(event) => rememberAssetImageMeta(selectedAsset.id, event.currentTarget)} />
+                      <img src={selectedAsset.imageUrl} alt={selectedAsset.title} decoding="async" onLoad={(event) => rememberAssetImageMeta(selectedAsset.id, event.currentTarget)} />
                     </button>
                     </div>
                   ) : (

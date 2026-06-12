@@ -4619,8 +4619,7 @@ const CachedLibraryPage = memo(function CachedLibraryPage(props: {
 }) {
   return (
     <section
-      className="workspacePage cachedLibraryPage"
-      hidden={!props.isActive}
+      className={`workspacePage cachedLibraryPage ${props.isActive ? 'active' : 'inactive'}`}
       aria-hidden={!props.isActive}
     >
       <LibraryPage
@@ -4653,8 +4652,7 @@ const CachedInspirationPage = memo(function CachedInspirationPage(props: {
 }) {
   return (
     <section
-      className="workspacePage cachedInspirationPage"
-      hidden={!props.isActive}
+      className={`workspacePage cachedInspirationPage ${props.isActive ? 'active' : 'inactive'}`}
       aria-hidden={!props.isActive}
     >
       <InspirationPage
@@ -4733,7 +4731,13 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
             props.onPreview(props.record, imageUrl);
           }}
         >
-          <img src={imageUrl} alt={props.record.prompt} onLoad={(event) => props.onAnalyzeColors(props.record.id, event.currentTarget)} />
+          <img
+            src={imageUrl}
+            alt={props.record.prompt}
+            loading="lazy"
+            decoding="async"
+            onLoad={(event) => props.onAnalyzeColors(props.record.id, event.currentTarget)}
+          />
           <span><Maximize2 size={15} /> {'\u9884\u89c8'}</span>
         </button>
       ) : (
@@ -5174,6 +5178,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     todayStartMs
   ]);
   const filteredIds = useMemo(() => filteredItems.map((result) => result.id), [filteredItems]);
+  const filteredIdsSignature = useMemo(() => filteredIds.join('|'), [filteredIds]);
   const selectedIdSet = useMemo(() => new Set(selectedRecordIds), [selectedRecordIds]);
   const visibleLibraryItems = useMemo(
     () => filteredItems.slice(0, Math.min(renderedItemCount, filteredItems.length)),
@@ -5254,7 +5259,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       cancelled = true;
       if (frameId) window.cancelAnimationFrame(frameId);
     };
-  }, [filteredItems]);
+  }, [filteredIdsSignature, filteredItems.length]);
 
   useEffect(() => {
     function focusSearch() {
@@ -5376,6 +5381,8 @@ const LibraryPage = memo(function LibraryPage(props: {
 
   function analyzeRecordColors(recordId: string, image: HTMLImageElement) {
     const current = libraryMeta[recordId];
+    const pending = pendingImageMetaPatchesRef.current[recordId];
+    if (pending?.colorPalette?.length || pending?.colorAnalysisFailed) return;
     const imageSize = image.naturalWidth && image.naturalHeight ? `${image.naturalWidth}x${image.naturalHeight}` : undefined;
     const shouldAnalyzeColors = !current?.colorPalette?.length || current.colorPalette.length < 10 || current.colorAnalysisFailed;
     if (!shouldAnalyzeColors) {
@@ -6611,7 +6618,12 @@ const LibraryPage = memo(function LibraryPage(props: {
             {selectedRecord.imageUrls[0] ? (
               <div className="libraryDetailPreview">
                 <button className="libraryDetailPreviewImageButton" type="button" onClick={() => previewRecord(selectedRecord, selectedRecord.imageUrls[0])}>
-                  <img src={selectedRecord.imageUrls[0]} alt={selectedRecord.prompt} onLoad={(event) => analyzeRecordColors(selectedRecord.id, event.currentTarget)} />
+                  <img
+                    src={selectedRecord.imageUrls[0]}
+                    alt={selectedRecord.prompt}
+                    decoding="async"
+                    onLoad={(event) => analyzeRecordColors(selectedRecord.id, event.currentTarget)}
+                  />
                 </button>
                 <div className="libraryRatingControl" aria-label="图片评分">
                   {libraryRatingValues.map((rating) => (
