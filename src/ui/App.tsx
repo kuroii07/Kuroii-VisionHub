@@ -4763,6 +4763,7 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
   onAnalyzeColors: (recordId: string, image: HTMLImageElement) => void;
   onToggleFavorite: (recordId: string) => void;
   onOpenDetails: (record: GenerationRecord) => void;
+  onOpenDiagnostics: (record: GenerationRecord) => void;
   onUseAsReference: (record: GenerationRecord) => void;
   onCopyPrompt: (record: GenerationRecord) => void;
   onCopyPath: (record: GenerationRecord) => void;
@@ -4834,7 +4835,7 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
           <div className="libraryQuickMenu" aria-label="图片操作">
             <button type="button" onClick={() => props.onOpenDetails(props.record)}><Info size={13} /> 图片详情</button>
             {props.record.error || props.record.status === 'failed' ? (
-              <button type="button" onClick={() => props.onOpenDetails(props.record)}><Gauge size={13} /> 查看诊断</button>
+              <button type="button" onClick={() => props.onOpenDiagnostics(props.record)}><Gauge size={13} /> 查看诊断</button>
             ) : null}
             <button type="button" disabled={!imageUrl} onClick={() => props.onUseAsReference(props.record)}><ImagePlus size={13} /> 设为参考图</button>
             <button type="button" onClick={() => props.onCopyPrompt(props.record)}><Copy size={13} /> 复制 Prompt</button>
@@ -4912,6 +4913,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   const [filtersVisible, setFiltersVisible] = useState(true);
   const [activePanel, setActivePanel] = useState<'main' | 'view' | 'display' | 'sort' | 'add' | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(() => readUrlSearchParam('record'));
+  const [diagnosticRecordId, setDiagnosticRecordId] = useState<string | null>(null);
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>(() => readUrlSearchList('selected'));
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<LibraryContextMenuState | null>(null);
@@ -5268,6 +5270,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     [filteredItems, renderedItemCount]
   );
   const selectedRecord = selectedRecordId ? libraryRecordMap.get(selectedRecordId) ?? null : null;
+  const diagnosticRecord = diagnosticRecordId ? libraryRecordMap.get(diagnosticRecordId) ?? null : null;
   const selectedRecords = useMemo(
     () => selectedRecordIds
       .map((recordId) => libraryRecordMap.get(recordId) ?? null)
@@ -5276,22 +5279,22 @@ const LibraryPage = memo(function LibraryPage(props: {
   );
   const contextRecord = contextMenu ? libraryRecordMap.get(contextMenu.recordId) ?? null : null;
   const contextSelection = selectedRecords.length ? selectedRecords : contextRecord ? [contextRecord] : [];
-  const selectedRecordProviderName = selectedRecord ? providerNameMap.get(selectedRecord.providerId) ?? selectedRecord.providerName ?? selectedRecord.providerId : '';
-  const selectedRecordFailureDiagnosis = useMemo(
-    () => selectedRecord && (selectedRecord.error || selectedRecord.status === 'failed') ? diagnoseGenerationFailure(selectedRecord) : null,
-    [selectedRecord]
+  const diagnosticRecordProviderName = diagnosticRecord ? providerNameMap.get(diagnosticRecord.providerId) ?? diagnosticRecord.providerName ?? diagnosticRecord.providerId : '';
+  const diagnosticRecordFailureDiagnosis = useMemo(
+    () => diagnosticRecord && (diagnosticRecord.error || diagnosticRecord.status === 'failed') ? diagnoseGenerationFailure(diagnosticRecord) : null,
+    [diagnosticRecord]
   );
-  const selectedRecordFailureDetails = useMemo(
-    () => selectedRecordFailureDiagnosis && selectedRecord ? generationFailureDetails(selectedRecord) : [],
-    [selectedRecord, selectedRecordFailureDiagnosis]
+  const diagnosticRecordFailureDetails = useMemo(
+    () => diagnosticRecordFailureDiagnosis && diagnosticRecord ? generationFailureDetails(diagnosticRecord) : [],
+    [diagnosticRecord, diagnosticRecordFailureDiagnosis]
   );
-  const selectedRecordFailureActions = useMemo(
-    () => selectedRecordFailureDiagnosis && selectedRecord ? generationFailureActions(selectedRecord) : [],
-    [selectedRecord, selectedRecordFailureDiagnosis]
+  const diagnosticRecordFailureActions = useMemo(
+    () => diagnosticRecordFailureDiagnosis && diagnosticRecord ? generationFailureActions(diagnosticRecord) : [],
+    [diagnosticRecord, diagnosticRecordFailureDiagnosis]
   );
-  const selectedRecordFailureRawText = useMemo(
-    () => selectedRecordFailureDiagnosis && selectedRecord ? generationFailureRawText(selectedRecord) : '',
-    [selectedRecord, selectedRecordFailureDiagnosis]
+  const diagnosticRecordFailureRawText = useMemo(
+    () => diagnosticRecordFailureDiagnosis && diagnosticRecord ? generationFailureRawText(diagnosticRecord) : '',
+    [diagnosticRecord, diagnosticRecordFailureDiagnosis]
   );
   const selectedRecordMeta = selectedRecord ? libraryMeta[selectedRecord.id] : undefined;
   const selectedRecordFileName = selectedRecord ? getRecordFileName(selectedRecord) || selectedRecord.id : '';
@@ -5375,11 +5378,14 @@ const LibraryPage = memo(function LibraryPage(props: {
     if (selectedRecordId && !libraryRecordMap.has(selectedRecordId)) {
       setSelectedRecordId(null);
     }
+    if (diagnosticRecordId && !libraryRecordMap.has(diagnosticRecordId)) {
+      setDiagnosticRecordId(null);
+    }
     setSelectedRecordIds((current) => {
       const next = current.filter((recordId) => libraryRecordMap.has(recordId));
       return next.length === current.length ? current : next;
     });
-  }, [libraryRecordMap, props.isHistoryLoaded, selectedRecordId]);
+  }, [diagnosticRecordId, libraryRecordMap, props.isHistoryLoaded, selectedRecordId]);
 
   useEffect(() => {
     if (!activePanel) return;
@@ -5588,6 +5594,12 @@ const LibraryPage = memo(function LibraryPage(props: {
 
   function openRecordDetails(record: GenerationRecord) {
     setSelectedRecordId(record.id);
+    setDiagnosticRecordId(null);
+  }
+
+  function openRecordDiagnostics(record: GenerationRecord) {
+    setDiagnosticRecordId(record.id);
+    setSelectedRecordId(null);
   }
 
   function previewRecord(record: GenerationRecord, imageUrl?: string) {
@@ -5601,6 +5613,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   const handleAnalyzeRecordColors = useStableEvent(analyzeRecordColors);
   const handleToggleFavorite = useStableEvent(toggleFavorite);
   const handleOpenRecordDetails = useStableEvent(openRecordDetails);
+  const handleOpenRecordDiagnostics = useStableEvent(openRecordDiagnostics);
   const handleUseRecordAsReference = useStableEvent(useRecordAsReference);
   const handleCopyRecordPrompt = useStableEvent((record: GenerationRecord) => {
     void copyText('Prompt', record.prompt);
@@ -5639,6 +5652,7 @@ const LibraryPage = memo(function LibraryPage(props: {
         try {
           await props.onDelete(recordId);
           setSelectedRecordId((current) => (current === recordId ? null : current));
+          setDiagnosticRecordId((current) => (current === recordId ? null : current));
           setSelectedRecordIds((current) => current.filter((item) => item !== recordId));
           setCopyMessage('已删除图册记录');
         } catch (error) {
@@ -5668,6 +5682,7 @@ const LibraryPage = memo(function LibraryPage(props: {
           }
           setSelectedRecordIds((current) => current.filter((recordId) => !uniqueIds.includes(recordId)));
           setSelectedRecordId((current) => (current && uniqueIds.includes(current) ? null : current));
+          setDiagnosticRecordId((current) => (current && uniqueIds.includes(current) ? null : current));
           setSelectionAnchorId(null);
           setContextMenu(null);
           setCopyMessage(`已删除 ${uniqueIds.length} 条图册记录`);
@@ -5769,6 +5784,12 @@ const LibraryPage = memo(function LibraryPage(props: {
   function openContextDetails(records: GenerationRecord[]) {
     if (records.length !== 1) return;
     openRecordDetails(records[0]);
+    setContextMenu(null);
+  }
+
+  function openContextDiagnostics(records: GenerationRecord[]) {
+    if (records.length !== 1) return;
+    openRecordDiagnostics(records[0]);
     setContextMenu(null);
   }
 
@@ -6471,6 +6492,7 @@ const LibraryPage = memo(function LibraryPage(props: {
                   onAnalyzeColors={handleAnalyzeRecordColors}
                   onToggleFavorite={handleToggleFavorite}
                   onOpenDetails={handleOpenRecordDetails}
+                  onOpenDiagnostics={handleOpenRecordDiagnostics}
                   onUseAsReference={handleUseRecordAsReference}
                   onCopyPrompt={handleCopyRecordPrompt}
                   onCopyPath={handleCopyRecordPath}
@@ -6504,7 +6526,7 @@ const LibraryPage = memo(function LibraryPage(props: {
                 <Info size={13} /> 打开详情
               </button>
               {contextSelection[0]?.error || contextSelection[0]?.status === 'failed' ? (
-                <button type="button" role="menuitem" onClick={() => openContextDetails(contextSelection)}>
+                <button type="button" role="menuitem" onClick={() => openContextDiagnostics(contextSelection)}>
                   <Gauge size={13} /> 查看诊断
                 </button>
               ) : null}
@@ -6809,6 +6831,9 @@ const LibraryPage = memo(function LibraryPage(props: {
               <button className={`miniButton ${libraryMeta[selectedRecord.id]?.favorite ? 'active' : ''}`} onClick={() => toggleFavorite(selectedRecord.id)}><Star size={13} /> {libraryMeta[selectedRecord.id]?.favorite ? '已收藏' : '收藏'}</button>
               <button className="miniButton" disabled={!selectedRecord.imageUrls[0]} onClick={() => useRecordAsReference(selectedRecord)}><ImagePlus size={13} /> 设为参考图</button>
               <button className="miniButton" onClick={() => props.onRetryRecord(selectedRecord)}><RefreshCcw size={13} /> 重新生成</button>
+              {selectedRecord.error || selectedRecord.status === 'failed' ? (
+                <button className="miniButton" onClick={() => openRecordDiagnostics(selectedRecord)}><Gauge size={13} /> 查看诊断</button>
+              ) : null}
               <button className="miniButton" onClick={() => void copyText('Prompt', selectedRecord.prompt)}><Copy size={13} /> Prompt</button>
               <button className="miniButton" disabled={!getRecordPrimaryPath(selectedRecord)} onClick={() => void copyText('Path', getRecordPrimaryPath(selectedRecord))}><Copy size={13} /> 路径</button>
               <button className="miniButton" disabled={!selectedRecord.localImagePaths?.[0]} onClick={() => selectedRecord.localImagePaths?.[0] && void revealGenerationFile(selectedRecord.localImagePaths[0])}><FolderOpen size={13} /> 文件夹</button>
@@ -6843,48 +6868,69 @@ const LibraryPage = memo(function LibraryPage(props: {
                 </div>
               </div>
             ) : null}
-            {selectedRecordFailureDiagnosis ? (
-              <div className={`libraryDetailSection warning generationDiagnosticPanel severity-${selectedRecordFailureDiagnosis.severity}`}>
-                <div className="generationDiagnosticHeader">
-                  <div>
-                    <span>错误诊断报告</span>
-                    <strong>{selectedRecordFailureDiagnosis.title}</strong>
-                  </div>
-                  <em>{generationFailureCategoryLabels[selectedRecordFailureDiagnosis.category]} · {generationFailureSeverityLabels[selectedRecordFailureDiagnosis.severity]}</em>
-                </div>
-                <p>{selectedRecordFailureDiagnosis.summary}</p>
-                <div className="generationDiagnosisChips" aria-label="诊断关键参数">
-                  <span>状态：{generationStatusLabel(selectedRecord)}</span>
-                  <span>平台：{selectedRecordProviderName}</span>
-                  <span>模型：{selectedRecord.modelId || '-'}</span>
-                  {selectedRecordFailureDetails.map((detail) => <span key={detail}>{detail}</span>)}
-                </div>
-                {selectedRecordFailureDiagnosis.isPotentialBackgroundCompletion ? (
-                  <div className="generationBackgroundNotice">
-                    <Clock3 size={14} />
-                    <span>这类记录不一定彻底失败，建议先重载历史或到中转站后台核查是否已有生成结果，再决定是否重新生成。</span>
-                  </div>
-                ) : null}
-                <div className="generationDiagnosticBlock">
-                  <strong>建议操作</strong>
-                  <ul className="generationErrorActionsList libraryErrorActionsList">
-                    {selectedRecordFailureActions.map((action) => <li key={action}>{action}</li>)}
-                  </ul>
-                </div>
-                {selectedRecordFailureRawText ? (
-                  <details className="generationRawDetails">
-                    <summary>原始错误 / Raw 摘要</summary>
-                    <pre>{clipDiagnosticText(selectedRecordFailureRawText)}</pre>
-                  </details>
-                ) : null}
-                <div className="libraryDetailInlineActions generationDiagnosticActions">
-                  <button className="miniButton" type="button" onClick={() => props.onRetryRecord(selectedRecord)}><RefreshCcw size={13} /> 重新生成</button>
-                  <button className="miniButton" type="button" onClick={() => void copyText('错误诊断', generationFailureCopyText(selectedRecord, selectedRecordProviderName))}><Copy size={13} /> 复制诊断</button>
-                  <button className="miniButton" type="button" onClick={() => void copyText('请求摘要', generationRequestSummaryCopyText(selectedRecord, selectedRecordProviderName))}><Copy size={13} /> 复制请求摘要</button>
-                  <button className="miniButton" type="button" disabled={!selectedRecordFailureRawText} onClick={() => void copyText('Raw', selectedRecordFailureRawText)}><Database size={13} /> 复制 Raw</button>
-                </div>
+          </aside>
+        </>
+      ) : null}
+      {diagnosticRecord && diagnosticRecordFailureDiagnosis ? (
+        <>
+          <button
+            className="libraryDetailBackdrop"
+            type="button"
+            aria-label="关闭错误诊断"
+            onClick={() => setDiagnosticRecordId(null)}
+          />
+          <aside className="libraryDetailDrawer libraryDiagnosticDrawer" aria-label="错误诊断">
+            <div className="libraryDetailHeader">
+              <div className="libraryDetailTitle">
+                <p className="eyebrow">Error Diagnostics</p>
+                <h2>错误诊断</h2>
+                <small title={getRecordFileName(diagnosticRecord) || diagnosticRecord.id}>{getRecordFileName(diagnosticRecord) || diagnosticRecord.id}</small>
               </div>
-            ) : null}
+              <div className="libraryDetailHeaderActions">
+                <button className="iconMiniButton" type="button" data-tooltip="查看详情" aria-label="查看详情" onClick={() => openRecordDetails(diagnosticRecord)}><Info size={15} /></button>
+                <button className="iconMiniButton" type="button" data-tooltip="关闭诊断" aria-label="关闭诊断" onClick={() => setDiagnosticRecordId(null)}><X size={15} /></button>
+              </div>
+            </div>
+            <div className={`libraryDetailSection warning generationDiagnosticPanel severity-${diagnosticRecordFailureDiagnosis.severity}`}>
+              <div className="generationDiagnosticHeader">
+                <div>
+                  <span>错误诊断报告</span>
+                  <strong>{diagnosticRecordFailureDiagnosis.title}</strong>
+                </div>
+                <em>{generationFailureCategoryLabels[diagnosticRecordFailureDiagnosis.category]} · {generationFailureSeverityLabels[diagnosticRecordFailureDiagnosis.severity]}</em>
+              </div>
+              <p>{diagnosticRecordFailureDiagnosis.summary}</p>
+              <div className="generationDiagnosisChips" aria-label="诊断关键参数">
+                <span>状态：{generationStatusLabel(diagnosticRecord)}</span>
+                <span>平台：{diagnosticRecordProviderName}</span>
+                <span>模型：{diagnosticRecord.modelId || '-'}</span>
+                {diagnosticRecordFailureDetails.map((detail) => <span key={detail}>{detail}</span>)}
+              </div>
+              {diagnosticRecordFailureDiagnosis.isPotentialBackgroundCompletion ? (
+                <div className="generationBackgroundNotice">
+                  <Clock3 size={14} />
+                  <span>这类记录不一定彻底失败，建议先重载历史或到中转站后台核查是否已有生成结果，再决定是否重新生成。</span>
+                </div>
+              ) : null}
+              <div className="generationDiagnosticBlock">
+                <strong>建议操作</strong>
+                <ul className="generationErrorActionsList libraryErrorActionsList">
+                  {diagnosticRecordFailureActions.map((action) => <li key={action}>{action}</li>)}
+                </ul>
+              </div>
+              {diagnosticRecordFailureRawText ? (
+                <details className="generationRawDetails">
+                  <summary>原始错误 / Raw 摘要</summary>
+                  <pre>{clipDiagnosticText(diagnosticRecordFailureRawText)}</pre>
+                </details>
+              ) : null}
+              <div className="libraryDetailInlineActions generationDiagnosticActions">
+                <button className="miniButton" type="button" onClick={() => props.onRetryRecord(diagnosticRecord)}><RefreshCcw size={13} /> 重新生成</button>
+                <button className="miniButton" type="button" onClick={() => void copyText('错误诊断', generationFailureCopyText(diagnosticRecord, diagnosticRecordProviderName))}><Copy size={13} /> 复制诊断</button>
+                <button className="miniButton" type="button" onClick={() => void copyText('请求摘要', generationRequestSummaryCopyText(diagnosticRecord, diagnosticRecordProviderName))}><Copy size={13} /> 复制请求摘要</button>
+                <button className="miniButton" type="button" disabled={!diagnosticRecordFailureRawText} onClick={() => void copyText('Raw', diagnosticRecordFailureRawText)}><Database size={13} /> 复制 Raw</button>
+              </div>
+            </div>
           </aside>
         </>
       ) : null}

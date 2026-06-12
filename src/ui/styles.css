@@ -9536,6 +9536,15 @@ body {
   backdrop-filter: blur(22px) saturate(1.08);
 }
 
+.libraryDiagnosticDrawer {
+  width: min(460px, calc(100vw - 36px));
+  grid-template-rows: auto minmax(0, auto);
+}
+
+.libraryDiagnosticDrawer .generationDiagnosticPanel {
+  min-width: 0;
+}
+
 .libraryDetailHeader {
   display: flex;
   align-items: flex-start;
