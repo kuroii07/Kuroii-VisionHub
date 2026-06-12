@@ -169,6 +169,15 @@ type ProviderDiagnosticItem = {
   detail: string;
   level: ProviderDiagnosticLevel;
 };
+type ProviderDiagnosticsReportContext = {
+  platformLabel: string;
+  serviceLabel: string;
+  providerName: string;
+  profileName?: string;
+  profileId?: string | null;
+  modelId?: string;
+  generatedAt: string;
+};
 type ProviderPlatformOption = {
   id: ProviderPlatformType;
   label: string;
@@ -763,6 +772,142 @@ function generationRequestSummaryCopyText(record: GenerationRecord, providerName
     record.error ? `错误：${record.error}` : '',
     rawText ? `Raw 摘要：\n${clipDiagnosticText(rawText, 1800)}` : ''
   ].filter(Boolean).join('\n\n');
+}
+
+function buildProviderDiagnosticsReport(checks: ProviderDiagnosticItem[], context: ProviderDiagnosticsReportContext) {
+  const counts = checks.reduce((acc, item) => {
+    acc[item.level] += 1;
+    return acc;
+  }, { pass: 0, warn: 0, fail: 0, info: 0 } as Record<ProviderDiagnosticLevel, number>);
+  return [
+    'VisionHub 配置自检报告',
+    `生成时间：${context.generatedAt}`,
+    `平台路线：${context.platformLabel}`,
+    `服务模板：${context.serviceLabel}`,
+    `Provider：${context.providerName}`,
+    context.profileName ? `配置实例：${context.profileName}${context.profileId ? ` (${context.profileId})` : ''}` : '配置实例：当前编辑草稿',
+    context.modelId ? `模型：${context.modelId}` : '',
+    `统计：通过 ${counts.pass} / 注意 ${counts.warn} / 错误 ${counts.fail} / 提示 ${counts.info}`,
+    '',
+    ...checks.map((item, index) => [
+      `#${index + 1} ${item.label}`,
+      `等级：${item.level === 'pass' ? '通过' : item.level === 'warn' ? '注意' : item.level === 'fail' ? '错误' : '提示'}`,
+      `说明：${item.detail}`
+    ].join('\n')),
+    '',
+    '安全说明：本报告不会包含 API Key；Provider profile 的密钥仍绑定在系统凭据中，secret id 形如 profile:{profileId}。'
+  ].filter((line) => line !== '').join('\n\n');
+}
+
+type LibraryRecoveryAdvice = {
+  title: string;
+  summary: string;
+  actions: string[];
+};
+
+function rawObjectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function readRawStringPath(raw: unknown, path: string[]) {
+  let current: unknown = raw;
+  for (const key of path) {
+    const object = rawObjectValue(current);
+    if (!object) return '';
+    current = object[key];
+  }
+  return typeof current === 'string' ? current.trim() : '';
+}
+
+function recordBackgroundPollUrl(record: Pick<GenerationRecord, 'raw'>) {
+  return readRawStringPath(record.raw, ['poll_url']) || readRawStringPath(record.raw, ['visionhub_recovery', 'poll_url']);
+}
+
+function isBackgroundRecoveryCandidate(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
+  return Boolean((record.status === 'failed' || record.error) && recordBackgroundPollUrl(record) && isPotentialBackgroundCompletion(record));
+}
+
+function buildLibraryRecoveryAdvice(record: GenerationRecord): LibraryRecoveryAdvice | null {
+  const diagnosis = diagnoseGenerationFailure(record);
+  const hasPreview = Boolean(record.imageUrls[0]);
+  const hasLocalPath = Boolean(record.localImagePaths?.[0]);
+  const hasPollUrl = Boolean(recordBackgroundPollUrl(record));
+
+  if (diagnosis.isPotentialBackgroundCompletion) {
+    return {
+      title: hasPollUrl ? '后台任务可重查' : '后台结果待人工核查',
+      summary: hasPollUrl
+        ? '这条记录保存了后台轮询地址，可直接重查；如果返回图片，VisionHub 会自动下载并恢复到作品画廊。'
+        : '这条记录像是同步超时，但 raw 里没有可自动重查的 poll_url，需要到中转站后台按 trace/request id 核对。',
+      actions: [
+        hasPollUrl ? '点击“重查后台任务”，不要先重新生成，避免重复消耗额度。' : '复制诊断或请求摘要，到中转站后台查是否已有完成结果。',
+        '如果后台已成功但软件未恢复，可把图片下载到本地后通过“导入本地图片”加入作品画廊。',
+        '后续同类任务可降低尺寸、数量或质量，减少同步超时概率。'
+      ]
+    };
+  }
+
+  if (record.status === 'succeeded' && hasLocalPath && !hasPreview) {
+    return {
+      title: '本地图片路径存在，但预览索引缺失',
+      summary: '记录保存了本地路径，却没有可显示的图片地址，通常可通过重载历史重新补齐显示链接。',
+      actions: [
+        '先点击 AI 创作页或作品画廊里的“重载历史”。',
+        '如果仍无法预览，复制路径并确认文件是否还在原目录。',
+        '不要删除记录；确认文件存在后再决定是否重新导入。'
+      ]
+    };
+  }
+
+  if (record.status === 'succeeded' && !hasLocalPath && hasPreview) {
+    return {
+      title: '只有远程 / raw 图片，尚未稳定落盘',
+      summary: '记录能预览，但缺少本地图片路径；如果远程链接过期，后续可能无法继续作为参考图。',
+      actions: [
+        '重载历史会尝试从 raw 或 data URL 补写到本地图库。',
+        '如果图片来自网页下载，建议另存后通过“导入本地图片”建立稳定索引。',
+        '迁移电脑前优先打包本地图库目录，而不是只复制历史 JSON。'
+      ]
+    };
+  }
+
+  if (record.status === 'failed' && diagnosis.category === 'no-image') {
+    return {
+      title: '接口响应里没有可恢复图片',
+      summary: '服务端有返回，但当前解析规则没有找到图片字段，可能是模型不对或协议返回结构不兼容。',
+      actions: [
+        '确认模型是真正的图片模型，不是文本对话模型。',
+        '复制 Raw 给中转站或检查图片字段位置，再决定是否调整协议映射。',
+        '重新生成前先用 1 张、小尺寸和默认质量排除参数问题。'
+      ]
+    };
+  }
+
+  if (record.status === 'failed' && diagnosis.category === 'response-format') {
+    return {
+      title: '返回格式异常，无法自动恢复',
+      summary: '接口返回了 HTML、网关页或非标准 JSON，VisionHub 不能从这类响应里恢复图片。',
+      actions: [
+        '检查 Base URL 是否填成网页控制台或带了具体接口路径。',
+        '到平台接入页运行“配置自检报告”，确认 Base URL、接口路径和 Headers。',
+        '不要修改系统代理；优先换一个已验证的中转站 API 地址测试。'
+      ]
+    };
+  }
+
+  if (record.status === 'failed') {
+    return {
+      title: '失败记录恢复建议',
+      summary: '这条记录没有可直接恢复的图片。建议先保留记录，用诊断信息定位配置或服务商问题。',
+      actions: [
+        '先复制诊断和请求摘要，确认认证、模型、协议路径、参数或额度问题。',
+        '修正配置后再重新生成，避免用错误配置反复消耗额度。',
+        '如果中转站后台已有图片，可下载后通过“导入本地图片”加入作品画廊。'
+      ]
+    };
+  }
+
+  return null;
 }
 
 function loadLibraryMeta(): LibraryMetaMap {
@@ -1461,6 +1606,7 @@ export function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [generateSessionStartedAt] = useState(() => Date.now());
+  const autoRecheckedRecordIdsRef = useRef<Set<string>>(new Set());
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() =>
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   );
@@ -1918,6 +2064,48 @@ export function App() {
     addResult(updated);
     return updated;
   }, [addResult, providerConfig, providerProfiles, selectedProfileId, selectedProvider.id]);
+
+  useEffect(() => {
+    if (!desktopRuntime || !isHistoryLoaded || isGenerating || typeof window === 'undefined') return;
+    const candidates = results
+      .filter(isBackgroundRecoveryCandidate)
+      .filter((record) => !autoRecheckedRecordIdsRef.current.has(record.id))
+      .slice(0, page === 'library' ? 3 : 1);
+    if (!candidates.length) return;
+
+    let cancelled = false;
+    const delayMs = page === 'library' ? 1200 : Math.max(4500, appSettings.refreshIntervalSeconds * 1000);
+    const timerId = window.setTimeout(() => {
+      void (async () => {
+        let checked = 0;
+        let recovered = 0;
+        for (const record of candidates) {
+          if (cancelled) break;
+          autoRecheckedRecordIdsRef.current.add(record.id);
+          try {
+            const updated = await recheckLibraryBackgroundRecord(record);
+            checked += 1;
+            if (updated.status === 'succeeded' && updated.imageUrls[0]) recovered += 1;
+          } catch {
+            // 自动重查只做轻量恢复尝试，失败仍保留手动诊断入口，避免打扰正常创作。
+          }
+        }
+        if (!cancelled && (checked || recovered)) {
+          window.dispatchEvent(new CustomEvent(appToastEventName, {
+            detail: {
+              message: recovered ? `后台任务自动恢复 ${recovered} 条记录` : `已自动重查 ${checked} 条后台记录，暂未发现可恢复图片`,
+              level: recovered ? 'success' : 'info'
+            } satisfies ToastEventDetail
+          }));
+        }
+      })();
+    }, delayMs);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timerId);
+    };
+  }, [appSettings.refreshIntervalSeconds, desktopRuntime, isGenerating, isHistoryLoaded, page, recheckLibraryBackgroundRecord, results]);
 
   const useInspirationAssetAsReference = useCallback((asset: InspirationAsset) => {
     if (!asset.imageUrl) return;
@@ -2456,6 +2644,25 @@ export function App() {
     try {
       await navigator.clipboard?.writeText(serializeProviderConfig(providerConfig));
       setConfigMessage('当前平台接入配置已复制，API Key 不会包含在导出内容中。');
+    } catch (error) {
+      setConfigMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function copyProviderDiagnosticsReport() {
+    try {
+      if (!providerDiagnostics.length) throw new Error('请先运行一次配置自检报告。');
+      const report = buildProviderDiagnosticsReport(providerDiagnostics, {
+        platformLabel: providerPlatformOptions.find((item) => item.id === selectedPlatformType)?.label ?? selectedPlatformType,
+        serviceLabel: selectedServiceTemplate.label,
+        providerName: selectedProvider.name,
+        profileName: selectedProfile?.displayName,
+        profileId: selectedProfile?.id ?? selectedProfileId,
+        modelId: providerConfig.modelId,
+        generatedAt: new Date().toISOString()
+      });
+      await navigator.clipboard?.writeText(report);
+      setConfigMessage('配置自检报告已复制，内容不包含 API Key。');
     } catch (error) {
       setConfigMessage(error instanceof Error ? error.message : String(error));
     }
@@ -3160,6 +3367,7 @@ export function App() {
             onRunProfileConnectionTest={runProviderProfileConnectionTest}
             onRunTestGeneration={runProviderTestGeneration}
             onCopyConfig={copyCurrentProviderConfig}
+            onCopyDiagnostics={copyProviderDiagnosticsReport}
             onImportConfig={importProviderConfigFromClipboard}
             onPinModel={pinCurrentModelAsDefault}
             isRunningDiagnostics={isRunningDiagnostics}
@@ -3532,6 +3740,7 @@ function ProviderSettingsPage(props: {
   onRunProfileConnectionTest: (profileId: string) => void;
   onRunTestGeneration: () => void;
   onCopyConfig: () => void;
+  onCopyDiagnostics: () => void;
   onImportConfig: () => void;
   onPinModel: () => void;
   isRunningDiagnostics: boolean;
@@ -3897,12 +4106,15 @@ function ProviderSettingsPage(props: {
               <div className="providerDiagnostics">
                 <div className="diagnosticsHeader">
                   <div>
-                    <strong>平台诊断助手</strong>
-                    <small>检查配置实例、密钥通道、Base URL、Headers、模型、协议路径、保存目录和模型列表连通性。</small>
+                    <strong>配置自检报告</strong>
+                    <small>检查配置实例、密钥通道、Base URL、Headers、模型、协议路径、图生图映射、提示词润色凭据、保存目录和模型列表连通性。</small>
                   </div>
                   <div className="diagnosticsActions">
                     <button className="rowActionButton" onClick={props.onRunDiagnostics} disabled={props.isRunningDiagnostics}>
-                      <RefreshCcw size={15} /> {props.isRunningDiagnostics ? '诊断中…' : '诊断'}
+                      <RefreshCcw size={15} /> {props.isRunningDiagnostics ? '自检中…' : '运行自检'}
+                    </button>
+                    <button className="rowActionButton" onClick={props.onCopyDiagnostics} disabled={!props.diagnostics.length} title="复制不含 API Key 的配置自检报告">
+                      <Copy size={15} /> 复制报告
                     </button>
                     <button
                       className="rowActionButton primaryAction"
@@ -3915,7 +4127,7 @@ function ProviderSettingsPage(props: {
                   </div>
                 </div>
                 {props.diagnostics.length === 0 ? (
-                  <p className="diagnosticsHint">保存配置后可运行诊断；如果没有 API Key，也会先给出本地配置检查结果。</p>
+                  <p className="diagnosticsHint">保存配置后可运行自检；如果没有 API Key，也会先给出本地配置、凭据通道、提示词润色和图库目录检查结果。</p>
                 ) : (
                   <>
                     <div className="diagnosticsSummary">
@@ -5374,6 +5586,14 @@ const LibraryPage = memo(function LibraryPage(props: {
   const diagnosticRecordFailureRawText = useMemo(
     () => diagnosticRecordFailureDiagnosis && diagnosticRecord ? generationFailureRawText(diagnosticRecord) : '',
     [diagnosticRecord, diagnosticRecordFailureDiagnosis]
+  );
+  const diagnosticRecordRecoveryAdvice = useMemo(
+    () => diagnosticRecord ? buildLibraryRecoveryAdvice(diagnosticRecord) : null,
+    [diagnosticRecord]
+  );
+  const selectedRecordRecoveryAdvice = useMemo(
+    () => selectedRecord ? buildLibraryRecoveryAdvice(selectedRecord) : null,
+    [selectedRecord]
   );
   const selectedRecordMeta = selectedRecord ? libraryMeta[selectedRecord.id] : undefined;
   const selectedRecordFileName = selectedRecord ? getRecordFileName(selectedRecord) || selectedRecord.id : '';
@@ -6927,6 +7147,20 @@ const LibraryPage = memo(function LibraryPage(props: {
                 <small>{selectedRecordMeta?.colorAnalysisFailed ? '未识别' : '分析中'}</small>
               )}
             </div>
+            {selectedRecordRecoveryAdvice ? (
+              <div className="libraryDetailSection libraryRecoveryAdvicePanel">
+                <div className="generationDiagnosticHeader">
+                  <div>
+                    <span>恢复建议</span>
+                    <strong>{selectedRecordRecoveryAdvice.title}</strong>
+                  </div>
+                </div>
+                <p>{selectedRecordRecoveryAdvice.summary}</p>
+                <ul className="generationErrorActionsList libraryErrorActionsList">
+                  {selectedRecordRecoveryAdvice.actions.map((action) => <li key={action}>{action}</li>)}
+                </ul>
+              </div>
+            ) : null}
             <div className="libraryDetailSection promptDetailSection">
               <strong>Prompt</strong>
               <p>{selectedRecord.prompt}</p>
@@ -7032,6 +7266,15 @@ const LibraryPage = memo(function LibraryPage(props: {
                   >
                     <RefreshCcw size={13} /> {recheckingRecordId === diagnosticRecord.id ? '重查中…' : '重查后台任务'}
                   </button>
+                </div>
+              ) : null}
+              {diagnosticRecordRecoveryAdvice ? (
+                <div className="generationDiagnosticBlock libraryRecoveryAdvicePanel compact">
+                  <strong>{diagnosticRecordRecoveryAdvice.title}</strong>
+                  <p>{diagnosticRecordRecoveryAdvice.summary}</p>
+                  <ul className="generationErrorActionsList libraryErrorActionsList">
+                    {diagnosticRecordRecoveryAdvice.actions.map((action) => <li key={action}>{action}</li>)}
+                  </ul>
                 </div>
               ) : null}
               <div className="generationDiagnosticBlock">

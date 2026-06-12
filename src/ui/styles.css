@@ -13133,6 +13133,26 @@ body {
   font-size: 12px;
 }
 
+.libraryRecoveryAdvicePanel {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 24%, var(--app-line));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--app-accent-strong) 8%, transparent), transparent 52%),
+    color-mix(in srgb, var(--app-surface-2) 82%, transparent);
+}
+
+.libraryRecoveryAdvicePanel.compact {
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 20%, var(--app-line));
+  border-radius: 14px;
+}
+
+.libraryRecoveryAdvicePanel p {
+  margin: 0;
+  color: var(--app-text-2);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .generationRawDetails {
   border: 1px solid var(--app-line);
   border-radius: 12px;

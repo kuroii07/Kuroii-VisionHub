@@ -16,6 +16,11 @@ src-tauri/gen/
 # These are generated when launching or validating locally and differ per machine.
 docs/run-reports/
 
+# Local / migration-only reference packs
+# Keep generated images out of the main source branch. If a one-off transfer is
+# needed, push the archive to a dedicated reference-pack branch or release asset.
+reference-packs/*.zip
+
 # Logs
 *.log
 npm-debug.log*
