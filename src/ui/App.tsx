@@ -67,7 +67,7 @@ import {
   type LibraryDataPayload,
   type StorageSettings
 } from '../services/desktopApi';
-import { diagnoseGenerationFailure } from '../services/generationErrorDiagnostics';
+import { diagnoseGenerationFailure, type GenerationFailureCategory, type GenerationFailureSeverity } from '../services/generationErrorDiagnostics';
 import {
   defaultEndpointForProtocol,
   defaultOpenAICompatibleConfig,
@@ -659,13 +659,93 @@ function generationFailureDetails(record: Pick<GenerationRecord, 'status' | 'err
   return diagnoseGenerationFailure(record).details;
 }
 
-function generationFailureCopyText(record: Pick<GenerationRecord, 'status' | 'error' | 'raw' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>) {
+const generationFailureCategoryLabels: Record<GenerationFailureCategory, string> = {
+  auth: '认证',
+  permission: '权限',
+  quota: '额度',
+  'rate-limit': '限流',
+  protocol: '协议',
+  model: '模型',
+  parameter: '参数',
+  'content-safety': '安全',
+  'timeout-background': '后台待核查',
+  server: '服务商',
+  network: '网络',
+  'response-format': '响应格式',
+  'no-image': '无图片',
+  unknown: '待确认'
+};
+
+const generationFailureSeverityLabels: Record<GenerationFailureSeverity, string> = {
+  error: '阻断',
+  warning: '警告',
+  info: '提示'
+};
+
+function safeStringifyDiagnosticRaw(raw: unknown) {
+  if (raw == null) return '';
+  try {
+    return JSON.stringify(raw, null, 2);
+  } catch {
+    return String(raw);
+  }
+}
+
+function clipDiagnosticText(text: string, maxLength = 1400) {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}\n…已截断，复制 Raw 可查看完整内容。`;
+}
+
+function generationFailureRawText(record: Pick<GenerationRecord, 'error' | 'raw' | 'status' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>) {
   const diagnosis = diagnoseGenerationFailure(record);
+  return safeStringifyDiagnosticRaw(record.raw) || diagnosis.rawMessage || record.error || '';
+}
+
+function generationFailureCopyText(record: GenerationRecord, providerName?: string) {
+  const diagnosis = diagnoseGenerationFailure(record);
+  const detailLines = generationFailureDetails(record);
   return [
-    `${diagnosis.title}：${diagnosis.summary}`,
+    'VisionHub 生成失败诊断',
+    `诊断：${diagnosis.title}`,
+    `摘要：${diagnosis.summary}`,
+    `分类：${generationFailureCategoryLabels[diagnosis.category]} / ${generationFailureSeverityLabels[diagnosis.severity]}`,
+    `状态：${generationStatusLabel(record)} (${record.status})`,
+    providerName ? `平台：${providerName} (${record.providerId})` : `平台：${record.providerName ?? record.providerId}`,
+    `模型：${record.modelId || '-'}`,
+    `模式：${(record.generationMode ?? 'text-to-image') === 'image-to-image' ? '图生图' : (record.generationMode === 'imported' ? '导入图片' : '文生图')}`,
+    `参考图：${record.referenceImages?.length ?? 0} 张`,
+    record.durationMs ? `耗时：${record.durationMs}ms` : '',
+    record.createdAt ? `创建时间：${record.createdAt}` : '',
+    getRecordPrimaryPath(record) ? `图片/路径：${getRecordPrimaryPath(record)}` : '',
+    detailLines.length ? `细节：${detailLines.join(' · ')}` : '',
     diagnosis.actions.length ? `建议：\n${diagnosis.actions.map((action, index) => `${index + 1}. ${action}`).join('\n')}` : '',
-    diagnosis.details.length ? `细节：${diagnosis.details.join(' · ')}` : '',
     diagnosis.rawMessage ? `原始错误：${diagnosis.rawMessage}` : ''
+  ].filter(Boolean).join('\n\n');
+}
+
+function generationRequestSummaryCopyText(record: GenerationRecord, providerName?: string) {
+  const diagnosis = diagnoseGenerationFailure(record);
+  const rawText = generationFailureRawText(record);
+  return [
+    'VisionHub 请求摘要',
+    `记录 ID：${record.id}`,
+    `状态：${generationStatusLabel(record)} (${record.status})`,
+    `平台：${providerName ?? record.providerName ?? record.providerId}`,
+    `Provider ID：${record.providerId}`,
+    `模型：${record.modelId || '-'}`,
+    `模式：${(record.generationMode ?? 'text-to-image') === 'image-to-image' ? '图生图' : (record.generationMode === 'imported' ? '导入图片' : '文生图')}`,
+    `参考图：${record.referenceImages?.length ?? 0} 张`,
+    record.costHint ? `费用提示：${record.costHint}` : '',
+    record.durationMs ? `耗时：${record.durationMs}ms` : '',
+    record.createdAt ? `创建时间：${record.createdAt}` : '',
+    getRecordPrimaryPath(record) ? `主路径：${getRecordPrimaryPath(record)}` : '',
+    `诊断分类：${generationFailureCategoryLabels[diagnosis.category]} / ${generationFailureSeverityLabels[diagnosis.severity]}`,
+    diagnosis.httpStatus ? `HTTP：${diagnosis.httpStatus}` : '',
+    diagnosis.traceId ? `trace_id：${diagnosis.traceId}` : '',
+    diagnosis.requestId ? `request_id：${diagnosis.requestId}` : '',
+    `Prompt：\n${record.prompt}`,
+    record.error ? `错误：${record.error}` : '',
+    rawText ? `Raw 摘要：\n${clipDiagnosticText(rawText, 1800)}` : ''
   ].filter(Boolean).join('\n\n');
 }
 
@@ -4489,7 +4569,7 @@ function SettingsPage(props: {
           <div className="settingsRowMain">
             <strong>版本</strong>
           </div>
-          <span className="settingsValue">0.2.4</span>
+          <span className="settingsValue">0.3.0</span>
         </div>
         <div className="settingsListRow">
           <div className="settingsRowMain">
@@ -4753,6 +4833,9 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
           </button>
           <div className="libraryQuickMenu" aria-label="图片操作">
             <button type="button" onClick={() => props.onOpenDetails(props.record)}><Info size={13} /> 图片详情</button>
+            {props.record.error || props.record.status === 'failed' ? (
+              <button type="button" onClick={() => props.onOpenDetails(props.record)}><Gauge size={13} /> 查看诊断</button>
+            ) : null}
             <button type="button" disabled={!imageUrl} onClick={() => props.onUseAsReference(props.record)}><ImagePlus size={13} /> 设为参考图</button>
             <button type="button" onClick={() => props.onCopyPrompt(props.record)}><Copy size={13} /> 复制 Prompt</button>
             <button type="button" disabled={!getRecordPrimaryPath(props.record)} onClick={() => props.onCopyPath(props.record)}><Copy size={13} /> 复制路径</button>
@@ -5193,6 +5276,23 @@ const LibraryPage = memo(function LibraryPage(props: {
   );
   const contextRecord = contextMenu ? libraryRecordMap.get(contextMenu.recordId) ?? null : null;
   const contextSelection = selectedRecords.length ? selectedRecords : contextRecord ? [contextRecord] : [];
+  const selectedRecordProviderName = selectedRecord ? providerNameMap.get(selectedRecord.providerId) ?? selectedRecord.providerName ?? selectedRecord.providerId : '';
+  const selectedRecordFailureDiagnosis = useMemo(
+    () => selectedRecord && (selectedRecord.error || selectedRecord.status === 'failed') ? diagnoseGenerationFailure(selectedRecord) : null,
+    [selectedRecord]
+  );
+  const selectedRecordFailureDetails = useMemo(
+    () => selectedRecordFailureDiagnosis && selectedRecord ? generationFailureDetails(selectedRecord) : [],
+    [selectedRecord, selectedRecordFailureDiagnosis]
+  );
+  const selectedRecordFailureActions = useMemo(
+    () => selectedRecordFailureDiagnosis && selectedRecord ? generationFailureActions(selectedRecord) : [],
+    [selectedRecord, selectedRecordFailureDiagnosis]
+  );
+  const selectedRecordFailureRawText = useMemo(
+    () => selectedRecordFailureDiagnosis && selectedRecord ? generationFailureRawText(selectedRecord) : '',
+    [selectedRecord, selectedRecordFailureDiagnosis]
+  );
   const selectedRecordMeta = selectedRecord ? libraryMeta[selectedRecord.id] : undefined;
   const selectedRecordFileName = selectedRecord ? getRecordFileName(selectedRecord) || selectedRecord.id : '';
   const selectedRecordDetailMeta = selectedRecord
@@ -6403,6 +6503,11 @@ const LibraryPage = memo(function LibraryPage(props: {
               <button type="button" role="menuitem" onClick={() => openContextDetails(contextSelection)}>
                 <Info size={13} /> 打开详情
               </button>
+              {contextSelection[0]?.error || contextSelection[0]?.status === 'failed' ? (
+                <button type="button" role="menuitem" onClick={() => openContextDetails(contextSelection)}>
+                  <Gauge size={13} /> 查看诊断
+                </button>
+              ) : null}
               <button type="button" role="menuitem" disabled={!contextSelection[0]?.imageUrls[0]} onClick={() => useContextRecordAsReference(contextSelection)}>
                 <ImagePlus size={13} /> 设为参考图
               </button>
@@ -6738,19 +6843,45 @@ const LibraryPage = memo(function LibraryPage(props: {
                 </div>
               </div>
             ) : null}
-            {selectedRecord.error ? (
-              <div className="libraryDetailSection warning">
-                <strong>{diagnoseGenerationFailure(selectedRecord).title}</strong>
-                <p>{generationFailureHint(selectedRecord)}</p>
-                <ul className="generationErrorActionsList libraryErrorActionsList">
-                  {generationFailureActions(selectedRecord).map((action) => <li key={action}>{action}</li>)}
-                </ul>
-                {generationFailureDetails(selectedRecord).length ? (
-                  <small>{generationFailureDetails(selectedRecord).join(' · ')}</small>
+            {selectedRecordFailureDiagnosis ? (
+              <div className={`libraryDetailSection warning generationDiagnosticPanel severity-${selectedRecordFailureDiagnosis.severity}`}>
+                <div className="generationDiagnosticHeader">
+                  <div>
+                    <span>错误诊断报告</span>
+                    <strong>{selectedRecordFailureDiagnosis.title}</strong>
+                  </div>
+                  <em>{generationFailureCategoryLabels[selectedRecordFailureDiagnosis.category]} · {generationFailureSeverityLabels[selectedRecordFailureDiagnosis.severity]}</em>
+                </div>
+                <p>{selectedRecordFailureDiagnosis.summary}</p>
+                <div className="generationDiagnosisChips" aria-label="诊断关键参数">
+                  <span>状态：{generationStatusLabel(selectedRecord)}</span>
+                  <span>平台：{selectedRecordProviderName}</span>
+                  <span>模型：{selectedRecord.modelId || '-'}</span>
+                  {selectedRecordFailureDetails.map((detail) => <span key={detail}>{detail}</span>)}
+                </div>
+                {selectedRecordFailureDiagnosis.isPotentialBackgroundCompletion ? (
+                  <div className="generationBackgroundNotice">
+                    <Clock3 size={14} />
+                    <span>这类记录不一定彻底失败，建议先重载历史或到中转站后台核查是否已有生成结果，再决定是否重新生成。</span>
+                  </div>
                 ) : null}
-                <div className="libraryDetailInlineActions">
+                <div className="generationDiagnosticBlock">
+                  <strong>建议操作</strong>
+                  <ul className="generationErrorActionsList libraryErrorActionsList">
+                    {selectedRecordFailureActions.map((action) => <li key={action}>{action}</li>)}
+                  </ul>
+                </div>
+                {selectedRecordFailureRawText ? (
+                  <details className="generationRawDetails">
+                    <summary>原始错误 / Raw 摘要</summary>
+                    <pre>{clipDiagnosticText(selectedRecordFailureRawText)}</pre>
+                  </details>
+                ) : null}
+                <div className="libraryDetailInlineActions generationDiagnosticActions">
                   <button className="miniButton" type="button" onClick={() => props.onRetryRecord(selectedRecord)}><RefreshCcw size={13} /> 重新生成</button>
-                  <button className="miniButton" type="button" onClick={() => void copyText('错误诊断', generationFailureCopyText(selectedRecord))}><Copy size={13} /> 复制诊断</button>
+                  <button className="miniButton" type="button" onClick={() => void copyText('错误诊断', generationFailureCopyText(selectedRecord, selectedRecordProviderName))}><Copy size={13} /> 复制诊断</button>
+                  <button className="miniButton" type="button" onClick={() => void copyText('请求摘要', generationRequestSummaryCopyText(selectedRecord, selectedRecordProviderName))}><Copy size={13} /> 复制请求摘要</button>
+                  <button className="miniButton" type="button" disabled={!selectedRecordFailureRawText} onClick={() => void copyText('Raw', selectedRecordFailureRawText)}><Database size={13} /> 复制 Raw</button>
                 </div>
               </div>
             ) : null}
@@ -7093,7 +7224,7 @@ function SystemInfoModal(props: {
   onClose: () => void;
 }) {
   const rows = [
-    { label: '版本', value: '0.2.4' },
+    { label: '版本', value: '0.3.0' },
     { label: '运行环境', value: props.desktopRuntime ? 'Tauri 桌面端' : 'Web 预览模式' },
     { label: '作品画廊目录', value: props.storageSettings?.resolved_library_dir ?? (props.desktopRuntime ? '正在读取…' : '桌面端可用') },
     { label: '默认图库目录', value: props.storageSettings?.default_library_dir ?? '—' },

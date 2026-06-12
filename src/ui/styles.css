@@ -12854,6 +12854,148 @@ body {
   color: var(--app-text-2);
 }
 
+.generationDiagnosticPanel {
+  gap: 10px;
+}
+
+.generationDiagnosticPanel.severity-error {
+  border-color: rgba(244, 63, 94, 0.34);
+  background: rgba(244, 63, 94, 0.07);
+}
+
+.generationDiagnosticPanel.severity-warning {
+  border-color: rgba(245, 158, 11, 0.38);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.generationDiagnosticHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.generationDiagnosticHeader > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.generationDiagnosticHeader span {
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.generationDiagnosticHeader strong {
+  color: var(--app-text);
+}
+
+.generationDiagnosticHeader em {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-accent-strong);
+  background: color-mix(in srgb, var(--app-surface) 68%, transparent);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.generationDiagnosisChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.generationDiagnosisChips span {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 4px 7px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface) 72%, transparent);
+  font-size: 10px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generationBackgroundNotice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 12px;
+  color: #92400e;
+  background: rgba(245, 158, 11, 0.1);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.generationDiagnosticBlock {
+  display: grid;
+  gap: 5px;
+}
+
+.generationDiagnosticBlock > strong {
+  font-size: 12px;
+}
+
+.generationRawDetails {
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--app-surface) 68%, transparent);
+}
+
+.generationRawDetails summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  color: var(--app-text-2);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.generationRawDetails pre {
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  padding: 0 10px 10px;
+  color: var(--app-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.generationDiagnosticActions .miniButton {
+  flex: 1 1 128px;
+  justify-content: center;
+}
+
+.appShell .libraryCardV2 .statusBadge.pendingRecovery {
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.2);
+}
+
+.appShell.theme-light .generationBackgroundNotice {
+  color: #78350f;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.appShell.theme-dark .generationBackgroundNotice {
+  color: #fde68a;
+}
+
 .libraryDetailSection.warning small {
   display: block;
   margin-top: 6px;
