@@ -41,8 +41,10 @@ struct OpenAIImageRequest {
     provider_id: String,
     model_id: String,
     prompt: String,
+    negative_prompt: Option<String>,
     size: String,
     quality: Option<String>,
+    seed: Option<u64>,
     output_format: Option<String>,
     output_compression: Option<u8>,
     count: u8,
@@ -89,6 +91,7 @@ struct PromptPolishRequest {
     model_id: String,
     prompt: String,
     mode_id: String,
+    style_id: Option<String>,
     language: String,
     strength: String,
     protocol: Option<String>,
@@ -523,6 +526,7 @@ async fn generate_openai_image(
             Ok(polled_raw) => raw = polled_raw,
             Err(error) => {
                 let raw = responses_poll_error_raw(raw, &base_url, &endpoint_path, &error);
+                let raw = with_protocol_mapping_raw(raw, &protocol_mapping, &request);
                 return Ok(ImageGenerationResult {
                     id: format!("openai-{}", chrono_like_timestamp_millis()),
                     provider_id: request.provider_id,
@@ -534,7 +538,7 @@ async fn generate_openai_image(
                     cost_hint: Some("已创建后台任务但未取回有效图片；以中转站/供应商账单为准".to_string()),
                     duration_ms: Some(started.elapsed().as_millis()),
                     error: Some(error),
-                    raw: with_protocol_mapping_raw(raw, &protocol_mapping),
+                    raw,
                     created_at: chrono_like_timestamp(),
                     generation_mode: Some(generation_mode),
                     reference_images: Some(reference_images),
@@ -566,7 +570,7 @@ async fn generate_openai_image(
             Some(&protocol_mapping),
         ))
     };
-    raw = with_protocol_mapping_raw(raw, &protocol_mapping);
+    raw = with_protocol_mapping_raw(raw, &protocol_mapping, &request);
 
     Ok(ImageGenerationResult {
         id: format!("openai-{}", chrono_like_timestamp_millis()),
@@ -935,8 +939,10 @@ async fn recheck_background_generation(
         provider_id: previous_record.provider_id.clone(),
         model_id: previous_record.model_id.clone(),
         prompt: previous_record.prompt.clone(),
+        negative_prompt: None,
         size: "1024x1024".to_string(),
         quality: None,
+        seed: None,
         output_format: None,
         output_compression: None,
         count: image_urls.len().clamp(1, 4) as u8,
@@ -1555,18 +1561,35 @@ fn protocol_mapping_raw(mapping: &ImageToImageProtocolMapping) -> Value {
     })
 }
 
-fn with_protocol_mapping_raw(raw: Value, mapping: &ImageToImageProtocolMapping) -> Value {
+fn request_options_raw(request: &OpenAIImageRequest) -> Value {
+    serde_json::json!({
+        "count": request.count.max(1).min(4),
+        "size": &request.size,
+        "quality": &request.quality,
+        "negative_prompt": request.negative_prompt.as_deref().unwrap_or(""),
+        "seed": request.seed,
+        "output_format": &request.output_format,
+        "output_compression": request.output_compression
+    })
+}
+
+fn with_protocol_mapping_raw(raw: Value, mapping: &ImageToImageProtocolMapping, request: &OpenAIImageRequest) -> Value {
     match raw {
         Value::Object(mut map) => {
             map.insert(
                 "visionhub_protocol_mapping".to_string(),
                 protocol_mapping_raw(mapping),
             );
+            map.insert(
+                "visionhub_request_options".to_string(),
+                request_options_raw(request),
+            );
             Value::Object(map)
         }
         other => serde_json::json!({
             "response": other,
-            "visionhub_protocol_mapping": protocol_mapping_raw(mapping)
+            "visionhub_protocol_mapping": protocol_mapping_raw(mapping),
+            "visionhub_request_options": request_options_raw(request)
         }),
     }
 }
@@ -1834,20 +1857,28 @@ fn build_prompt_polish_instruction(request: &PromptPolishRequest) -> String {
         _ => "专业生图提示词：整理成适合 AI 图像生成的完整提示词。",
     };
     let mode = prompt_polish_mode_rules(&request.mode_id);
+    let style = prompt_style_rules(request.style_id.as_deref().unwrap_or("auto"));
+    let style_rule = if style.is_empty() {
+        "".to_string()
+    } else {
+        format!("当前风格规则：{style}")
+    };
 
     format!(
-        "你是专业 AI 图像提示词编辑器，不是普通文本改写助手。你的任务是把用户原始提示词重写成更适合文生图/图生图的可执行提示词。硬性要求：{language}{strength}当前模式规则：{mode} 必须重组原提示词，形成完整画面方案，禁止只在原句后面追加一句泛泛的质量词。输出必须覆盖主体、场景、构图/镜头、光线、材质、色彩、画质、约束中的至少 6 类信息；短提示词要主动扩展到可直接生成的画面描述。保留用户明确指定的主体、人物特征、服装、颜色、物体和限制，不要编造冲突信息，不要引入具体艺术家、真实品牌或版权角色，除非原文已经明确要求。只输出最终提示词正文，不要解释，不要 Markdown，不要加标题，不要复述规则。"
+        "你是专业 AI 图像提示词编辑器，不是普通文本改写助手。你的任务是把用户原始提示词重写成更适合文生图/图生图的可执行提示词。硬性要求：{language}{strength}当前模式规则：{mode}{style_rule} 必须重组原提示词，形成完整画面方案，禁止只在原句后面追加一句泛泛的质量词。输出必须覆盖主体、场景、构图/镜头、光线、材质、色彩、画质、约束中的至少 6 类信息；短提示词要主动扩展到可直接生成的画面描述。保留用户明确指定的主体、人物特征、服装、颜色、物体和限制，不要编造冲突信息，不要引入具体艺术家、真实品牌或版权角色，除非原文已经明确要求。只输出最终提示词正文，不要解释，不要 Markdown，不要加标题，不要复述规则。"
     )
 }
 
 fn build_prompt_polish_payload(request: &PromptPolishRequest, protocol: &str, instruction: &str) -> Value {
     let mode_rules = prompt_polish_mode_rules(&request.mode_id);
     let strength_rules = prompt_polish_strength_rules(&request.strength);
+    let style_rules = prompt_style_rules(request.style_id.as_deref().unwrap_or("auto"));
     let user_content = format!(
-        "请按以下规则重写原始提示词。\n\n当前润色模式：{}\n模式规则：{}\n强度规则：{}\n输出要求：只输出一段完整的最终生图提示词；不要把原文原样放在开头再追加一句；必须把原文拆解并重组为主体、场景、构图/镜头、光线、材质、色彩、画质、约束明确的画面方案；如果原文少于 20 个字，要扩写到可直接用于生成的丰富画面描述；不要输出说明文字。\n\n原始提示词：\n{}",
+        "请按以下规则重写原始提示词。\n\n当前润色模式：{}\n模式规则：{}\n强度规则：{}\n风格规则：{}\n输出要求：只输出一段完整的最终生图提示词；不要把原文原样放在开头再追加一句；必须把原文拆解并重组为主体、场景、构图/镜头、光线、材质、色彩、画质、约束明确的画面方案；如果原文少于 20 个字，要扩写到可直接用于生成的丰富画面描述；不要输出说明文字。\n\n原始提示词：\n{}",
         prompt_polish_mode_label(&request.mode_id),
         mode_rules,
         strength_rules,
+        if style_rules.is_empty() { "不额外限定画风，按原始需求自然处理。" } else { style_rules },
         request.prompt.trim()
     );
     match protocol {
@@ -2251,6 +2282,31 @@ fn prompt_polish_strength_rules(strength: &str) -> &'static str {
         "cinematic" => "偏电影感，优先补镜头、光影、景深、色调和氛围。",
         "commercial" => "偏商业视觉，优先补主体质感、干净背景、灯光、构图和交付质感。",
         _ => "专业生图提示词，整理成结构清晰、信息完整、可直接用于 AI 图像生成的一段提示词。",
+    }
+}
+
+fn prompt_style_rules(style_id: &str) -> &'static str {
+    match style_id {
+        "photorealistic" => "按写实摄影风格处理：真实镜头感、自然光线、真实材质和高可信度细节。",
+        "cinematic" => "按电影感视觉处理：镜头叙事、体积光、浅景深、高级调色和明确画面焦点。",
+        "commercial" => "按商业广告视觉处理：主体突出、干净高级背景、精致布光和品牌质感。",
+        "product-photo" => "按产品摄影处理：棚拍布光、清晰边缘高光、真实材质、柔和阴影和电商可交付感。",
+        "anime" => "按二次元动漫画风处理：清晰线条、精致角色设计、明快色彩和高完成度插画。",
+        "chinese-illustration" => "按国风插画处理：东方审美、传统纹样、细腻线条、雅致配色和国潮视觉。",
+        "ink-wash" => "按水墨国风处理：宣纸质感、墨色层次、留白构图、东方意境和淡雅色彩。",
+        "watercolor" => "按水彩插画处理：透明叠色、柔和边缘、手绘纸张质感和轻盈氛围。",
+        "oil-painting" => "按油画质感处理：厚重笔触、画布纹理、丰富色层和艺术绘画感。",
+        "concept-art" => "按厚涂概念设计处理：体积感强、材质清晰、概念艺术完成度高，适合设定图。",
+        "three-d-render" => "按高质量 3D 渲染处理：真实材质、精致模型、干净灯光和清晰体积感。",
+        "flat-vector" => "按扁平矢量插画处理：几何形状、干净边界、简洁配色和高可读性。",
+        "ui-icon" => "按现代 UI 图标处理：居中构图、简洁轮廓、小尺寸可读，无文字、无水印。",
+        "game-asset" => "按游戏资产美术处理：清晰轮廓、居中展示、高可读性、材质统一和干净背景。",
+        "pixel-art" => "按像素艺术处理：清晰像素块、复古游戏视觉、有限色板和高辨识轮廓。",
+        "line-art" => "按线稿漫画处理：清晰黑白线条、干净轮廓、漫画构图，适合后续上色。",
+        "cyberpunk" => "按赛博朋克视觉处理：霓虹灯光、未来城市、高对比色彩和科技氛围。",
+        "retro-film" => "按复古胶片摄影处理：柔和颗粒、怀旧色调、自然曝光和真实生活感。",
+        "minimal-premium" => "按极简高级视觉处理：大面积留白、克制配色、干净构图和高级品牌感。",
+        _ => "",
     }
 }
 
@@ -3196,6 +3252,38 @@ fn mime_from_output_format(output_format: Option<&str>) -> &'static str {
     }
 }
 
+fn image_generation_tool(request: &OpenAIImageRequest, api_size: &str) -> Value {
+    serde_json::json!({
+        "type": "image_generation",
+        "size": api_size,
+        "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string()),
+        "n": request.count.max(1).min(4)
+    })
+}
+
+fn apply_advanced_request_options(mut payload: Value, request: &OpenAIImageRequest) -> Value {
+    if request.provider_id != "custom-http-provider" {
+        return payload;
+    }
+    if let Value::Object(map) = &mut payload {
+        if let Some(seed) = request.seed {
+            map.insert("seed".to_string(), serde_json::json!(seed));
+        }
+        if let Some(negative_prompt) = request
+            .negative_prompt
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            map.insert(
+                "negative_prompt".to_string(),
+                serde_json::json!(negative_prompt),
+            );
+        }
+    }
+    payload
+}
+
 fn build_openai_compatible_payload(
     request: &OpenAIImageRequest,
     protocol: &str,
@@ -3222,7 +3310,7 @@ fn build_openai_compatible_payload(
     let is_image_to_image = mapping.is_image_to_image && !reference_data_urls.is_empty();
 
     if is_image_to_image {
-        return match mapping.image_to_image_adapter.as_str() {
+        return apply_advanced_request_options(match mapping.image_to_image_adapter.as_str() {
             "responses-input-image" => {
                 let mut content = vec![serde_json::json!({
                     "type": "input_text",
@@ -3237,11 +3325,12 @@ fn build_openai_compatible_payload(
                 serde_json::json!({
                     "model": request.model_id,
                     "input": [{ "role": "user", "content": content }],
-                    "tools": [{ "type": "image_generation" }],
+                    "tools": [image_generation_tool(request, api_size)],
                     "background": true,
                     "store": true,
                     "size": api_size,
-                    "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string())
+                    "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string()),
+                    "n": request.count.max(1).min(4)
                 })
             }
             "chat-image-url" => {
@@ -3272,19 +3361,20 @@ fn build_openai_compatible_payload(
                 "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string()),
                 "n": request.count.max(1).min(4)
             }),
-        };
+        }, request);
     }
 
-    match protocol {
+    apply_advanced_request_options(match protocol {
         "responses" => {
             serde_json::json!({
                 "model": request.model_id,
                 "input": request.prompt,
-                "tools": [{ "type": "image_generation" }],
+                "tools": [image_generation_tool(request, api_size)],
                 "background": true,
                 "store": true,
                 "size": api_size,
-                "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string())
+                "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string()),
+                "n": request.count.max(1).min(4)
             })
         }
         "chat-completions" => {
@@ -3310,7 +3400,7 @@ fn build_openai_compatible_payload(
                 "n": request.count.max(1).min(4)
             })
         }
-    }
+    }, request)
 }
 
 fn extract_image_urls(raw: &Value, output_format: Option<&str>) -> Vec<String> {

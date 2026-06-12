@@ -113,7 +113,6 @@ import {
   PROMPT_POLISH_SECRET_ID,
   PROMPT_POLISH_STRENGTH_OPTIONS,
   REFRESH_INTERVAL_OPTIONS,
-  REVIEW_MODE_OPTIONS,
   STARTUP_PAGE_OPTIONS,
   loadAppSettings,
   saveAppSettings,
@@ -3295,7 +3294,6 @@ export function App() {
               isHistoryLoaded={isHistoryLoaded}
               defaultMode={appSettings.generationDefaults.defaultMode}
               defaultOutputFormat={appSettings.generationDefaults.outputFormat}
-              defaultReviewMode={appSettings.generationDefaults.reviewMode}
               promptHistorySettings={appSettings.promptHistory}
               promptPolishSettings={appSettings.promptPolish}
               sessionStartedAtMs={generateSessionStartedAt}
@@ -4465,19 +4463,14 @@ function SettingsPage(props: {
 
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
-            <strong>输出与审核偏好</strong>
-            <small>控制创作页底部的输出格式和审核模式默认值。</small>
+            <strong>输出格式偏好</strong>
+            <small>控制创作页底部的默认输出格式。</small>
           </div>
           <div className="settingsInlineGrid">
             <StudioSelect
               value={generationDefaults.outputFormat}
               onChange={(value) => updateGenerationDefaults({ outputFormat: value as GenerationDefaults['outputFormat'] })}
               options={OUTPUT_FORMAT_OPTIONS}
-            />
-            <StudioSelect
-              value={generationDefaults.reviewMode}
-              onChange={(value) => updateGenerationDefaults({ reviewMode: value as GenerationDefaults['reviewMode'] })}
-              options={REVIEW_MODE_OPTIONS}
             />
           </div>
         </div>

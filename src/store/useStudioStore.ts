@@ -29,7 +29,7 @@ interface StudioState {
   setQuality: (quality: string) => void;
   setSelectedModel: (modelId: string) => void;
   loadHistory: () => Promise<void>;
-  generate: (options?: { mode?: GenerationMode; references?: ReferenceImage[]; outputFormat?: ImageGenerationRequest['outputFormat']; outputCompression?: ImageGenerationRequest['outputCompression']; metadata?: ImageGenerationRequest['metadata'] }) => Promise<void>;
+  generate: (options?: { mode?: GenerationMode; references?: ReferenceImage[]; outputFormat?: ImageGenerationRequest['outputFormat']; outputCompression?: ImageGenerationRequest['outputCompression']; negativePrompt?: ImageGenerationRequest['negativePrompt']; seed?: ImageGenerationRequest['seed']; metadata?: ImageGenerationRequest['metadata'] }) => Promise<void>;
 }
 
 const providers = listProviders();
@@ -117,6 +117,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     const references = options?.references ?? [];
     const outputFormat = options?.outputFormat ?? initialGenerationDefaults.outputFormat;
     const outputCompression = options?.outputCompression;
+    const negativePrompt = options?.negativePrompt;
+    const seed = options?.seed;
     const metadata = options?.metadata;
 
     set({ isGenerating: true });
@@ -128,6 +130,8 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         count: state.count,
         size: state.size,
         quality: state.quality,
+        negativePrompt,
+        seed,
         outputFormat,
         outputCompression,
         generationMode,

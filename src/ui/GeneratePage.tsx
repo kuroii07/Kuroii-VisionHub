@@ -3,10 +3,12 @@
   Clock3,
   GalleryHorizontal,
   History,
+  Library,
   ImagePlus,
   Maximize2,
   PanelRight,
   RotateCcw,
+  Save,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -23,15 +25,15 @@ import type {
   DefaultGenerationMode,
   OutputFormat,
   PromptHistorySettings,
-  PromptPolishSettings,
-  ReviewMode
+  PromptPolishSettings
 } from '../services/appSettings';
 import type { GenerationMode, ReferenceImage } from '../domain/providerTypes';
-import { getDefaultPolishMode, polishPrompt, resolvePolishMode, type PromptAssistMode } from '../services/promptAssist';
+import { getDefaultPolishMode, polishPrompt, PROMPT_STYLE_PRESETS, resolvePolishMode, type PromptAssistMode } from '../services/promptAssist';
 import { isTauriRuntime, polishPromptWithProvider, referenceImagesFromPaths } from '../services/desktopApi';
 import { PROMPT_POLISH_SECRET_ID, promptPolishConfigId } from '../services/appSettings';
 import { parseExtraHeaders, type OpenAICompatibleConfig } from '../services/providerConfig';
 import { diagnoseGenerationFailure, isPotentialBackgroundCompletion } from '../services/generationErrorDiagnostics';
+import { readStorageValue, writeStorageValue } from '../services/safeStorage';
 import { useStudioStore } from '../store/useStudioStore';
 import { PromptAssistModal } from './PromptAssistModal';
 import { StudioSelect } from './StudioSelect';
@@ -65,7 +67,7 @@ const SIZE_OPTIONS: SizeOption[] = [
   { value: '1792x768', ratio: '21:9', desc: '电影感宽画幅 / 横版 Banner', badge: '2K' },
   { value: '2240x960', ratio: '21:9', desc: '带鱼屏游戏壁纸 / 宽景概念图', badge: '2K' },
   { value: '2576x1104', ratio: '21:9', desc: '极宽超清场景设计', badge: '2K' },
-  { value: '3136x1344', ratio: '21:9', desc: '实验性电影级巨幕', badge: '4K', experimental: true },
+  { value: '3136x1344', ratio: '21:9', desc: '电影级巨幕宽画幅', badge: '4K', experimental: true },
 
   { value: '1024x768', ratio: '4:3', desc: '经典平板 / iPad 基础画幅', badge: '1K' },
   { value: '1280x960', ratio: '4:3', desc: '传统演示文档 / 幻灯片', badge: '2K' },
@@ -80,22 +82,22 @@ const SIZE_OPTIONS: SizeOption[] = [
   { value: '1152x768', ratio: '3:2', desc: '横向摄影 / 基础画幅', badge: '1K' },
   { value: '1536x1024', ratio: '3:2', desc: '横版封面 / 场景图', badge: '2K' },
   { value: '2304x1536', ratio: '3:2', desc: '高清横版摄影比例', badge: '2K' },
-  { value: '3072x2048', ratio: '3:2', desc: '4K 横版实验尺寸', badge: '4K', experimental: true },
+  { value: '3072x2048', ratio: '3:2', desc: '4K 横版精细输出', badge: '4K', experimental: true },
 
   { value: '768x1152', ratio: '2:3', desc: '竖版海报 / 基础画幅', badge: '1K' },
   { value: '1024x1536', ratio: '2:3', desc: '竖版角色图 / 海报', badge: '2K' },
   { value: '1536x2304', ratio: '2:3', desc: '高清竖版人像海报', badge: '2K' },
-  { value: '2048x3072', ratio: '2:3', desc: '4K 竖版实验尺寸', badge: '4K', experimental: true },
+  { value: '2048x3072', ratio: '2:3', desc: '4K 竖版精细输出', badge: '4K', experimental: true },
 
   { value: '1280x1024', ratio: '5:4', desc: '传统显示器 / 产品图', badge: '1K' },
   { value: '1600x1280', ratio: '5:4', desc: '高清产品展示画幅', badge: '2K' },
   { value: '2560x2048', ratio: '5:4', desc: '高精细产品海报', badge: '2K' },
-  { value: '3200x2560', ratio: '5:4', desc: '4K 产品图实验尺寸', badge: '4K', experimental: true },
+  { value: '3200x2560', ratio: '5:4', desc: '4K 产品图精细输出', badge: '4K', experimental: true },
 
   { value: '1024x1280', ratio: '4:5', desc: '社媒帖子 / 竖版构图', badge: '1K' },
   { value: '1280x1600', ratio: '4:5', desc: '小红书 / 电商竖图', badge: '2K' },
   { value: '2048x2560', ratio: '4:5', desc: '高清竖版商业海报', badge: '2K' },
-  { value: '2560x3200', ratio: '4:5', desc: '4K 竖版实验尺寸', badge: '4K', experimental: true }
+  { value: '2560x3200', ratio: '4:5', desc: '4K 竖版精细输出', badge: '4K', experimental: true }
 ];
 
 const REFERENCE_ROLE_OPTIONS = [
@@ -113,9 +115,18 @@ type ReferenceNotice = {
   tone: ReferenceNoticeTone;
   text: string;
 };
+type PromptDraftKind = 'manual' | 'previous' | 'polished' | 'retry';
+type PromptDraft = {
+  id: string;
+  title: string;
+  prompt: string;
+  kind: PromptDraftKind;
+  createdAt: string;
+};
 
 const SUPPORTED_REFERENCE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const SUPPORTED_REFERENCE_PATH_PATTERN = /\.(png|jpe?g|webp)$/i;
+const PROMPT_DRAFT_STORAGE_KEY = 'visionhub.generate.promptDrafts.v1';
 
 const RATIO_OPTIONS = [
   { label: '1:1', size: '1024x1024', w: 18, h: 18 },
@@ -146,6 +157,12 @@ function ratioFromSize(size: string) {
   const [width, height] = parseSize(size);
   const divisor = gcd(width, height);
   return `${Math.round(width / divisor)}:${Math.round(height / divisor)}`;
+}
+
+function isKnown4KUnsupportedModel(providerId: string, modelId: string) {
+  const normalizedModel = modelId.trim().toLowerCase();
+  if (providerId === 'openai-gpt-image') return true;
+  return normalizedModel === 'gpt-image-1';
 }
 
 function normalizeDimension(value: number) {
@@ -184,6 +201,87 @@ function compactModelLabel(modelId: string) {
     .slice(0, 20);
 }
 
+function formatDraftTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '刚刚';
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function promptDraftKindLabel(kind: PromptDraftKind) {
+  const labels: Record<PromptDraftKind, string> = {
+    manual: '手动',
+    previous: '上一版',
+    polished: '润色',
+    retry: '重试'
+  };
+  return labels[kind];
+}
+
+function normalizePromptDrafts(value: unknown): PromptDraft[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const draft = item as Partial<PromptDraft>;
+      const prompt = typeof draft.prompt === 'string' ? draft.prompt.trim() : '';
+      if (!prompt) return null;
+      const kind: PromptDraftKind =
+        draft.kind === 'previous' || draft.kind === 'polished' || draft.kind === 'retry' ? draft.kind : 'manual';
+      return {
+        id: typeof draft.id === 'string' && draft.id ? draft.id : `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        title: typeof draft.title === 'string' && draft.title.trim() ? draft.title.trim() : prompt.slice(0, 28),
+        prompt,
+        kind,
+        createdAt: typeof draft.createdAt === 'string' && draft.createdAt ? draft.createdAt : new Date().toISOString()
+      };
+    })
+    .filter((item): item is PromptDraft => Boolean(item))
+    .slice(0, 20);
+}
+
+function loadPromptDrafts() {
+  const raw = readStorageValue(PROMPT_DRAFT_STORAGE_KEY);
+  if (!raw) return [];
+  try {
+    return normalizePromptDrafts(JSON.parse(raw));
+  } catch (error) {
+    console.warn('[VisionHub] prompt draft parse failed; using empty drafts', error);
+    return [];
+  }
+}
+
+function savePromptDrafts(drafts: PromptDraft[]) {
+  const normalized = normalizePromptDrafts(drafts).slice(0, 12);
+  writeStorageValue(PROMPT_DRAFT_STORAGE_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+
+function buildPromptDraft(prompt: string, kind: PromptDraftKind, title?: string): PromptDraft | null {
+  const trimmed = prompt.trim();
+  if (!trimmed) return null;
+  const label = title || `${promptDraftKindLabel(kind)}草稿`;
+  return {
+    id: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: `${label} · ${trimmed.slice(0, 22)}`,
+    prompt: trimmed,
+    kind,
+    createdAt: new Date().toISOString()
+  };
+}
+
+function mergePromptDraft(drafts: PromptDraft[], draft: PromptDraft | null) {
+  if (!draft) return drafts;
+  const normalizedPrompt = draft.prompt.trim();
+  if (!normalizedPrompt) return drafts;
+  const deduped = drafts.filter((item) => item.prompt.trim() !== normalizedPrompt);
+  return [draft, ...deduped].slice(0, 12);
+}
+
 function resolveActivePromptPolishConfigId(settings: PromptPolishSettings) {
   const currentConfigId = promptPolishConfigId(settings.displayName, settings.baseUrl);
   const exactConfig = settings.savedConfigs.find((config) => config.id === currentConfigId);
@@ -218,7 +316,6 @@ export function ModernGeneratePage(props: {
   results: ReturnType<typeof useStudioStore.getState>['results'];
   defaultMode: DefaultGenerationMode;
   defaultOutputFormat: OutputFormat;
-  defaultReviewMode: ReviewMode;
   promptHistorySettings: PromptHistorySettings;
   promptPolishSettings: PromptPolishSettings;
   sessionStartedAtMs: number;
@@ -228,7 +325,7 @@ export function ModernGeneratePage(props: {
   onCountChange: (count: number) => void;
   onSizeChange: (size: string) => void;
   onQualityChange: (quality: string) => void;
-  onGenerate: (options?: { mode?: GenerationMode; references?: ReferenceImage[]; outputFormat?: OutputFormat; outputCompression?: number; metadata?: Record<string, unknown> }) => void;
+  onGenerate: (options?: { mode?: GenerationMode; references?: ReferenceImage[]; outputFormat?: OutputFormat; outputCompression?: number; negativePrompt?: string; seed?: number; metadata?: Record<string, unknown> }) => void;
   onPreview: (imageUrl: string) => void;
   onReloadHistory: () => void | Promise<void>;
   onOpenLibrary: () => void;
@@ -239,7 +336,9 @@ export function ModernGeneratePage(props: {
   const [mode, setMode] = useState<DefaultGenerationMode>(props.defaultMode);
   const [outputFormat, setOutputFormat] = useState<OutputFormat>(props.defaultOutputFormat);
   const [compression, setCompression] = useState('');
-  const [reviewMode, setReviewMode] = useState<ReviewMode>(props.defaultReviewMode);
+  const [promptStyleId, setPromptStyleId] = useState('auto');
+  const [seedInput, setSeedInput] = useState('');
+  const [negativePrompt, setNegativePrompt] = useState('');
   const [referenceStrength, setReferenceStrength] = useState('auto');
   const [referenceRoles, setReferenceRoles] = useState<Record<string, string>>({});
   const [preserveComposition, setPreserveComposition] = useState(true);
@@ -255,9 +354,13 @@ export function ModernGeneratePage(props: {
   const [draggingReferenceId, setDraggingReferenceId] = useState<string | null>(null);
   const [referenceDropTargetId, setReferenceDropTargetId] = useState<string | null>(null);
   const [referenceNotice, setReferenceNotice] = useState<ReferenceNotice | null>(null);
+  const [promptDrafts, setPromptDrafts] = useState<PromptDraft[]>(() => loadPromptDrafts());
+  const [draftNotice, setDraftNotice] = useState('');
+  const [isDraftLibraryOpen, setIsDraftLibraryOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
   const referenceNoticeTimerRef = useRef<number | null>(null);
+  const draftNoticeTimerRef = useRef<number | null>(null);
   const modelOptions = props.supportsOpenAICompatible
     ? props.providerConfig.modelOptions.length > 0
       ? props.providerConfig.modelOptions
@@ -309,15 +412,22 @@ export function ModernGeneratePage(props: {
     () => props.results.filter((result) => generationTimeMs(result.createdAt) >= props.sessionStartedAtMs),
     [props.results, props.sessionStartedAtMs]
   );
+  const currentGenerationMode: GenerationMode = mode === 'image' ? 'image-to-image' : 'text-to-image';
+  const currentModeSessionResults = useMemo(
+    () => sessionResults.filter((result) => (result.generationMode ?? 'text-to-image') === currentGenerationMode),
+    [currentGenerationMode, sessionResults]
+  );
   const latestImage = sessionResults.find((result) => result.imageUrls[0]);
-  const failedLatest = sessionResults.find((result) => result.status === 'failed');
+  const latestCurrentModeResult = currentModeSessionResults[0];
+  const failedLatest = !props.isGenerating && latestCurrentModeResult?.status === 'failed'
+    ? latestCurrentModeResult
+    : undefined;
   const failedLatestDiagnosis = failedLatest ? diagnoseGenerationFailure(failedLatest) : null;
   const failedLatestNeedsCheck = isPotentialBackgroundCompletion(failedLatest);
   const imageToImageStatus = props.selectedProvider.capabilities.imageToImage;
   const multiReferenceStatus = props.selectedProvider.capabilities.multiReferenceImage;
   const advancedImageTuningEnabled = ['supported', 'partial'].includes(imageToImageStatus);
   const multiReferenceAllowed = ['supported', 'partial'].includes(multiReferenceStatus);
-  const canAttemptImageToImage = !['unsupported', 'unknown'].includes(imageToImageStatus);
   const promptLength = props.prompt.trim().length;
   const promptWidthState =
     promptLength === 0 ? 'promptEmpty' : promptLength < 24 ? 'promptShort' : promptLength < 60 ? 'promptMedium' : 'promptLong';
@@ -327,7 +437,6 @@ export function ModernGeneratePage(props: {
       : props.referenceImages.length > 0
         ? '拖拽缩略图可调整顺序'
         : '拖拽到此处或 Ctrl+V 粘贴');
-
   useEffect(() => {
     setMode(props.defaultMode);
   }, [props.defaultMode]);
@@ -341,10 +450,6 @@ export function ModernGeneratePage(props: {
   }, [props.defaultOutputFormat]);
 
   useEffect(() => {
-    setReviewMode(props.defaultReviewMode);
-  }, [props.defaultReviewMode]);
-
-  useEffect(() => {
     if (props.referenceImages.length > 0) {
       setMode('image');
     }
@@ -353,6 +458,9 @@ export function ModernGeneratePage(props: {
   useEffect(() => () => {
     if (referenceNoticeTimerRef.current) {
       window.clearTimeout(referenceNoticeTimerRef.current);
+    }
+    if (draftNoticeTimerRef.current) {
+      window.clearTimeout(draftNoticeTimerRef.current);
     }
   }, []);
 
@@ -379,6 +487,45 @@ export function ModernGeneratePage(props: {
     }, tone === 'success' ? 2200 : 3200);
   }
 
+  function showDraftNotice(text: string) {
+    setDraftNotice(text);
+    if (draftNoticeTimerRef.current) {
+      window.clearTimeout(draftNoticeTimerRef.current);
+    }
+    draftNoticeTimerRef.current = window.setTimeout(() => {
+      setDraftNotice('');
+      draftNoticeTimerRef.current = null;
+    }, 2400);
+  }
+
+  function updatePromptDrafts(nextDrafts: PromptDraft[]) {
+    setPromptDrafts(savePromptDrafts(nextDrafts));
+  }
+
+  function saveCurrentPromptDraft(kind: PromptDraftKind = 'manual', title?: string) {
+    const draft = buildPromptDraft(props.prompt, kind, title);
+    if (!draft) {
+      showDraftNotice('当前 Prompt 为空，未保存草稿。');
+      return;
+    }
+    updatePromptDrafts(mergePromptDraft(promptDrafts, draft));
+    showDraftNotice('Prompt 草稿已保存。');
+  }
+
+  function applyPromptDraft(draft: PromptDraft) {
+    if (props.prompt.trim() && props.prompt.trim() !== draft.prompt.trim()) {
+      updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'previous', '替换前')));
+    }
+    props.onPromptChange(draft.prompt);
+    promptInputRef.current?.focus();
+    showDraftNotice('已回填草稿到当前 Prompt。');
+  }
+
+  function deletePromptDraft(draftId: string) {
+    updatePromptDrafts(promptDrafts.filter((draft) => draft.id !== draftId));
+    showDraftNotice('已删除草稿。');
+  }
+
   function applyCustomSize() {
     const width = normalizeDimension(customWidth);
     const height = normalizeDimension(customHeight);
@@ -390,6 +537,9 @@ export function ModernGeneratePage(props: {
   function applyAssistedPrompt(nextPrompt: string, placement: 'replace' | 'append') {
     const trimmed = nextPrompt.trim();
     if (!trimmed) return;
+    if (props.prompt.trim()) {
+      updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, placement === 'replace' ? 'previous' : 'manual', placement === 'replace' ? '替换前' : '追加前')));
+    }
     props.onPromptChange(placement === 'append' && props.prompt.trim() ? `${props.prompt.trim()}\n\n${trimmed}` : trimmed);
     setAssistMode(null);
   }
@@ -402,11 +552,15 @@ export function ModernGeneratePage(props: {
       effectivePromptPolishSettings.engine
     ).id;
     if (selectedQuickPolishValue === '__local__' || effectivePromptPolishSettings.engine === 'local') {
-      props.onPromptChange(polishPrompt(sourcePrompt, modeId));
+      const polished = polishPrompt(sourcePrompt, modeId, promptStyleId);
+      updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', '润色前')), buildPromptDraft(polished, 'polished', '本地润色')));
+      props.onPromptChange(polished);
       return;
     }
     if (!effectivePromptPolishSettings.baseUrl.trim() || !effectivePromptPolishSettings.modelId.trim()) {
-      props.onPromptChange(polishPrompt(sourcePrompt, modeId));
+      const polished = polishPrompt(sourcePrompt, modeId, promptStyleId);
+      updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', '润色前')), buildPromptDraft(polished, 'polished', '本地兜底')));
+      props.onPromptChange(polished);
       return;
     }
     setIsQuickPolishing(true);
@@ -416,15 +570,20 @@ export function ModernGeneratePage(props: {
         modelId: effectivePromptPolishSettings.modelId,
         prompt: sourcePrompt,
         modeId,
+        styleId: promptStyleId,
         settings: effectivePromptPolishSettings,
         baseUrl: effectivePromptPolishSettings.baseUrl,
         extraHeaders: parseExtraHeaders(effectivePromptPolishSettings.extraHeadersJson),
         secretId: PROMPT_POLISH_SECRET_ID
       });
-      props.onPromptChange(result.polishedPrompt.trim() || sourcePrompt);
+      const polished = result.polishedPrompt.trim() || sourcePrompt;
+      updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', '润色前')), buildPromptDraft(polished, 'polished', '模型润色')));
+      props.onPromptChange(polished);
     } catch {
       if (props.promptPolishSettings.fallbackToLocal) {
-        props.onPromptChange(polishPrompt(sourcePrompt, modeId));
+        const polished = polishPrompt(sourcePrompt, modeId, promptStyleId);
+        updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', '润色前')), buildPromptDraft(polished, 'polished', '本地兜底')));
+        props.onPromptChange(polished);
       }
     } finally {
       setIsQuickPolishing(false);
@@ -732,11 +891,24 @@ export function ModernGeneratePage(props: {
   }, [props.isGenerating, props.referenceImages]);
 
   function runGenerate() {
+    const selectedModelForGeneration = props.supportsOpenAICompatible ? props.providerConfig.modelId : props.selectedModelId;
+    if (selectedSize?.badge === '4K' && isKnown4KUnsupportedModel(props.selectedProvider.id, selectedModelForGeneration)) {
+      window.alert(`当前模型 ${selectedModelForGeneration || '未配置模型'} 不支持 4K 图片。请换成 1K/2K 输出尺寸，或切换到支持 4K 的模型后再生成。`);
+      return;
+    }
     const trimmedCompression = compression.trim();
     const parsedCompression = trimmedCompression ? Number(trimmedCompression) : Number.NaN;
     const outputCompression = trimmedCompression && Number.isFinite(parsedCompression)
       ? Math.max(75, Math.min(100, Math.round(parsedCompression)))
       : undefined;
+    const trimmedNegativePrompt = negativePrompt.trim();
+    const trimmedSeed = seedInput.trim();
+    const parsedSeed = trimmedSeed ? Number(trimmedSeed) : Number.NaN;
+    const seed = trimmedSeed && Number.isFinite(parsedSeed) ? Math.max(0, Math.round(parsedSeed)) : undefined;
+    const advancedGenerationOptions = {
+      negativePrompt: trimmedNegativePrompt || undefined,
+      seed
+    };
     if (mode === 'image') {
       const referenceRoleMap = Object.fromEntries(props.referenceImages.map((reference) => [
         reference.id,
@@ -747,6 +919,7 @@ export function ModernGeneratePage(props: {
         references: props.referenceImages,
         outputFormat,
         outputCompression,
+        ...advancedGenerationOptions,
         metadata: {
           imageToImageTuning: {
             referenceStrength,
@@ -758,9 +931,11 @@ export function ModernGeneratePage(props: {
           }
         }
       });
+      updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', '已提交图生图')));
       return;
     }
-    props.onGenerate({ mode: 'text-to-image', references: [], outputFormat, outputCompression });
+    props.onGenerate({ mode: 'text-to-image', references: [], outputFormat, outputCompression, ...advancedGenerationOptions });
+    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', '已提交文生图')));
   }
 
   return (
@@ -798,6 +973,27 @@ export function ModernGeneratePage(props: {
         </header>
 
         <div className="previewStage">
+          <svg className="previewSparkleMesh" aria-hidden="true">
+            <defs>
+              <pattern id="previewSparkleMeshPattern" width="58" height="58" patternUnits="userSpaceOnUse">
+                <path
+                  className="sparkleMeshLine"
+                  d="M29 0 58 29 29 58 0 29Z"
+                  fill="none"
+                  strokeDasharray="3 7"
+                  strokeLinecap="round"
+                />
+                <path
+                  className="sparkleStarLine"
+                  d="M29 23c1.1 3.7 2.3 4.9 6 6-3.7 1.1-4.9 2.3-6 6-1.1-3.7-2.3-4.9-6-6 3.7-1.1 4.9-2.3 6-6Z"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#previewSparkleMeshPattern)" />
+          </svg>
           {latestImage?.imageUrls[0] ? (
             <>
               <button className="latestPreview" onClick={() => props.onPreview(latestImage.imageUrls[0])}>
@@ -821,12 +1017,12 @@ export function ModernGeneratePage(props: {
               <div className="emptyIcon">
                 <Sparkles size={25} />
               </div>
-              <h2>还没有图片</h2>
-              <p>在底部填写提示词，右侧确认参数后开始生成。</p>
+              <h2>{mode === 'image' ? '等待参考图' : '画布待点亮'}</h2>
+              <p>{mode === 'image' ? '加入参考图后，描述想保留或改变的部分，再开始重绘。' : '写下画面想法，选择比例与风格，然后生成第一张视觉草稿。'}</p>
               {props.isGenerating ? (
                 <div className="generationOverlay inlineGenerationOverlay">
                   <span>
-                    <Sparkles size={16} /> 正在生成画面
+                    <Sparkles size={16} /> 画布渲染中
                   </span>
                   <small>任务已发送到当前模型，请稍候…</small>
                 </div>
@@ -858,7 +1054,7 @@ export function ModernGeneratePage(props: {
           {props.isGenerating && latestImage?.imageUrls[0] ? (
             <div className="generationOverlay centerGenerationOverlay">
               <span>
-                <Sparkles size={16} /> 正在生成画面
+                <Sparkles size={16} /> 画布渲染中
               </span>
               <small>任务已发送到当前模型，请稍候…</small>
             </div>
@@ -974,6 +1170,12 @@ export function ModernGeneratePage(props: {
               <button type="button" className="chipButton" data-tooltip="打开灵感库" onClick={() => setAssistMode('inspiration')}>
                 <Sparkles size={13} /> 模板灵感
               </button>
+              <button type="button" className="chipButton promptSaveIconButton" data-tooltip="保存当前 Prompt 草稿" aria-label="保存当前 Prompt 草稿" onClick={() => saveCurrentPromptDraft()}>
+                <Save size={14} />
+              </button>
+              <button type="button" className="chipButton" data-tooltip="打开 Prompt 草稿库" onClick={() => setIsDraftLibraryOpen(true)}>
+                <Library size={13} /> 草稿 {promptDrafts.length}/12
+              </button>
               <div className="promptPolishQuickGroup">
                 <button type="button" className="chipButton" data-tooltip="按右侧模型快速润色并替换当前提示词" disabled={isQuickPolishing || !props.prompt.trim()} onClick={runQuickPromptPolish}>
                   <Wand2 size={13} /> {isQuickPolishing ? '润色中…' : '提示词润色'}
@@ -999,7 +1201,7 @@ export function ModernGeneratePage(props: {
               className="bottomPromptInput"
               value={props.prompt}
               onChange={(event) => props.onPromptChange(event.target.value)}
-              placeholder={mode === 'image' ? '描述你希望基于参考图改变什么，例如风格、构图、材质或细节' : '描述画面的主体、风格、光线、构图等，越具体效果越好'}
+              placeholder={mode === 'image' ? '说明要保留什么、改变什么，例如：保留人物姿势，改成电影感夜景和蓝紫色灯光' : '写下主体、场景、镜头、光线与氛围，例如：雨夜霓虹街头，一位披风少女回头看向镜头'}
             />
           </div>
           <div className="promptControlRow">
@@ -1030,20 +1232,17 @@ export function ModernGeneratePage(props: {
               />
             </label>
             <label>
-              压缩率
-              <input value={compression} placeholder="自动 / 75-100" onChange={(event) => setCompression(event.target.value)} />
+              风格
+              <StudioSelect
+                className="promptStyleQuickSelect noSelectCheck"
+                value={promptStyleId}
+                onChange={setPromptStyleId}
+                options={PROMPT_STYLE_PRESETS.map((style) => ({ value: style.id, label: style.label }))}
+              />
             </label>
             <label>
-              审核
-              <StudioSelect
-                value={reviewMode}
-                onChange={(value) => setReviewMode(value as ReviewMode)}
-                options={[
-                  { value: 'auto', label: '自动' },
-                  { value: 'strict', label: '严格' },
-                  { value: 'relaxed', label: '宽松' }
-                ]}
-              />
+              压缩率
+              <input value={compression} placeholder="自动 / 75-100" onChange={(event) => setCompression(event.target.value)} />
             </label>
             <label>
               数量
@@ -1053,11 +1252,10 @@ export function ModernGeneratePage(props: {
               <button
                 className="primaryGenerate"
                 onClick={runGenerate}
-                disabled={props.isGenerating || !props.prompt.trim() || (mode === 'image' && (!props.referenceImages.length || !canAttemptImageToImage))}
+                disabled={props.isGenerating}
               >
-                <Sparkles size={17} /> {props.isGenerating ? '生成中…' : mode === 'image' ? '启动参考生成' : '启动生成'}
+                <Sparkles size={17} /> {props.isGenerating ? '画布渲染中…' : mode === 'image' ? '参考重绘' : '点亮画布'}
               </button>
-              {mode === 'image' && !canAttemptImageToImage ? <small className="generateHint">当前平台暂不支持图生图</small> : null}
             </div>
           </div>
         </div>
@@ -1102,7 +1300,7 @@ export function ModernGeneratePage(props: {
                 onClick={() => props.onSizeChange(ratio.size)}
               >
                 <span style={{ width: ratio.w, height: ratio.h }} />
-                {ratio.label}
+                <strong>{ratio.label}</strong>
               </button>
             ))}
           </div>
@@ -1119,7 +1317,6 @@ export function ModernGeneratePage(props: {
                 <div>
                   <strong>{item.value}</strong>
                   <small>{item.desc}</small>
-                  {item.experimental ? <em>实验性</em> : null}
                 </div>
                 <span>{item.badge}</span>
               </button>
@@ -1190,11 +1387,29 @@ export function ModernGeneratePage(props: {
           </section>
         ) : null}
 
-        <section className="railCard collapsedRail">
-          <div>
+        <section className="railCard advancedParamsCard">
+          <div className="railTitle">
             <ChevronDown size={16} /> 高级参数
           </div>
-          <small>Seed、负面提示词、风格锁定、成本策略等会收纳到这里。</small>
+          <label>
+            Seed
+            <input
+              value={seedInput}
+              inputMode="numeric"
+              placeholder="随机 / 固定种子"
+              onChange={(event) => setSeedInput(event.target.value.replace(/[^\d]/g, '').slice(0, 12))}
+            />
+          </label>
+          <label>
+            负面提示词
+            <textarea
+              value={negativePrompt}
+              placeholder="不想出现的元素，可留空"
+              rows={3}
+              onChange={(event) => setNegativePrompt(event.target.value)}
+            />
+          </label>
+          <small>填写后会随请求记录，并传给支持 Seed / 负面提示词字段的兼容接口。</small>
         </section>
       </aside>
       {assistMode ? (
@@ -1204,10 +1419,60 @@ export function ModernGeneratePage(props: {
           results={props.results}
           promptHistorySettings={props.promptHistorySettings}
           promptPolishSettings={effectivePromptPolishSettings}
+          promptStyleId={promptStyleId}
+          onPromptStyleChange={setPromptStyleId}
           onClose={() => setAssistMode(null)}
           onApplyPrompt={applyAssistedPrompt}
           onDeleteRecord={props.onDeleteResult}
         />
+      ) : null}
+      {isDraftLibraryOpen ? (
+        <div className="promptDraftBackdrop" onClick={() => setIsDraftLibraryOpen(false)}>
+          <section className="promptDraftDialog" role="dialog" aria-modal="true" aria-label="Prompt 草稿" onClick={(event) => event.stopPropagation()}>
+            <header className="promptDraftDialogHeader">
+              <div>
+                <span>Prompt 草稿</span>
+                <strong>已保存 {promptDrafts.length}/12</strong>
+              </div>
+              <button type="button" className="promptAssistClose" aria-label="关闭草稿窗口" onClick={() => setIsDraftLibraryOpen(false)}>
+                <XCircle size={18} />
+              </button>
+            </header>
+            <div className="promptDraftDialogBody">
+              <button type="button" className="promptDraftSaveButton" onClick={() => saveCurrentPromptDraft()}>
+                <Save size={13} /> 保存当前 Prompt
+              </button>
+              {draftNotice ? <p className="promptDraftNotice">{draftNotice}</p> : null}
+              {promptDrafts.length ? (
+                <div className="promptDraftDialogList">
+                  {promptDrafts.map((draft) => (
+                    <article className="promptDraftDialogItem" key={draft.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          applyPromptDraft(draft);
+                          setIsDraftLibraryOpen(false);
+                        }}
+                      >
+                        <span>{promptDraftKindLabel(draft.kind)} · {formatDraftTime(draft.createdAt)}</span>
+                        <strong>{draft.title}</strong>
+                        <small>{draft.prompt}</small>
+                      </button>
+                      <button type="button" className="promptDraftDelete" aria-label={`删除草稿：${draft.title}`} onClick={() => deletePromptDraft(draft.id)}>
+                        <XCircle size={14} />
+                      </button>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="promptDraftEmpty">
+                  <strong>暂无草稿</strong>
+                  <small>点击「存草稿」或在这里保存当前 Prompt 后，会出现在此窗口。</small>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
       ) : null}
     </div>
   );

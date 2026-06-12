@@ -4,7 +4,6 @@ export type AppPage = 'generate' | 'free' | 'library' | 'inspiration' | 'templat
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type DefaultGenerationMode = 'text' | 'image';
 export type OutputFormat = 'PNG' | 'JPEG' | 'WebP';
-export type ReviewMode = 'auto' | 'strict' | 'relaxed';
 export type PromptPolishEngine = 'local' | 'provider';
 export type PromptPolishLanguage = 'zh' | 'en' | 'bilingual';
 export type PromptPolishProtocol = 'chat-completions' | 'responses';
@@ -26,7 +25,6 @@ export interface GenerationDefaults {
   defaultCount: number;
   defaultQuality: string;
   outputFormat: OutputFormat;
-  reviewMode: ReviewMode;
 }
 
 export interface PromptHistorySettings {
@@ -158,12 +156,6 @@ export const OUTPUT_FORMAT_OPTIONS: Array<{ value: OutputFormat; label: string }
   { value: 'WebP', label: 'WebP' }
 ];
 
-export const REVIEW_MODE_OPTIONS: Array<{ value: ReviewMode; label: string }> = [
-  { value: 'auto', label: '自动' },
-  { value: 'strict', label: '严格' },
-  { value: 'relaxed', label: '宽松' }
-];
-
 export const PROMPT_HISTORY_LIMIT_OPTIONS = [
   { value: 50, label: '50 条' },
   { value: 100, label: '100 条' },
@@ -211,8 +203,7 @@ export const defaultAppSettings: AppSettings = {
     defaultSize: '1024x1024',
     defaultCount: 1,
     defaultQuality: 'auto',
-    outputFormat: 'JPEG',
-    reviewMode: 'auto'
+    outputFormat: 'JPEG'
   },
   promptHistory: {
     enabled: true,
@@ -282,8 +273,7 @@ function normalizeGenerationDefaults(value: Partial<GenerationDefaults> | null |
     defaultSize: pickStringOption(value?.defaultSize, DEFAULT_SIZE_OPTIONS, fallback.defaultSize),
     defaultCount: pickNumberOption(value?.defaultCount, DEFAULT_COUNT_OPTIONS, fallback.defaultCount),
     defaultQuality: pickStringOption(value?.defaultQuality, DEFAULT_QUALITY_OPTIONS, fallback.defaultQuality),
-    outputFormat: pickStringOption<OutputFormat>(value?.outputFormat, OUTPUT_FORMAT_OPTIONS, fallback.outputFormat),
-    reviewMode: pickStringOption<ReviewMode>(value?.reviewMode, REVIEW_MODE_OPTIONS, fallback.reviewMode)
+    outputFormat: pickStringOption<OutputFormat>(value?.outputFormat, OUTPUT_FORMAT_OPTIONS, fallback.outputFormat)
   };
 }
 

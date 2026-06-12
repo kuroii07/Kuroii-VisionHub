@@ -68,6 +68,7 @@ export interface PromptPolishRequest {
   modelId: string;
   prompt: string;
   modeId: string;
+  styleId?: string;
   settings: PromptPolishSettings;
   baseUrl?: string;
   extraHeaders?: Record<string, string>;
@@ -204,8 +205,10 @@ export async function generateOpenAIImage(request: ImageGenerationRequest) {
       provider_id: request.providerId,
       model_id: request.modelId,
       prompt: request.prompt,
+      negative_prompt: request.negativePrompt,
       size: request.size,
       quality: request.quality,
+      seed: request.seed,
       output_format: request.outputFormat,
       output_compression: request.outputCompression,
       count: request.count,
@@ -251,6 +254,7 @@ export async function polishPromptWithProvider(request: PromptPolishRequest): Pr
       model_id: request.modelId,
       prompt: request.prompt,
       mode_id: request.modeId,
+      style_id: request.styleId,
       language: request.settings.language,
       strength: request.settings.strength,
       protocol: request.settings.protocol,

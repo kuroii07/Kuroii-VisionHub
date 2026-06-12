@@ -9,7 +9,6 @@ import {
   INSPIRATION_TEMPLATE_FILTERS,
   POLISH_MODES,
   PROMPT_STYLE_PRESETS,
-  applyPromptStyle,
   getDefaultPolishMode,
   getPolishModesForEngine,
   polishPrompt,
@@ -28,6 +27,8 @@ interface PromptAssistModalProps {
   results: GenerationRecord[];
   promptHistorySettings: PromptHistorySettings;
   promptPolishSettings: PromptPolishSettings;
+  promptStyleId: string;
+  onPromptStyleChange: (styleId: string) => void;
   onClose: () => void;
   onApplyPrompt: (prompt: string, placement: 'replace' | 'append') => void;
   onDeleteRecord?: (recordId: string) => Promise<void>;
@@ -67,7 +68,6 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
   const [modelPolishedPrompt, setModelPolishedPrompt] = useState('');
   const [selectedPolishConfigId, setSelectedPolishConfigId] = useState(resolveInitialPolishConfigId);
   const [selectedPolishModelId, setSelectedPolishModelId] = useState(props.promptPolishSettings.modelId.trim());
-  const [selectedPromptStyleId, setSelectedPromptStyleId] = useState('auto');
   const [polishMessage, setPolishMessage] = useState('');
   const [isPolishing, setIsPolishing] = useState(false);
   useToastMessage(copiedMessage, setCopiedMessage);
@@ -82,7 +82,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
     [templateFilter]
   );
   const inspirationPrompt = renderInspirationPrompt(selectedTemplate, templateValues);
-  const localPolishedPrompt = polishPrompt(editableSourcePrompt, polishMode, selectedPromptStyleId);
+  const localPolishedPrompt = polishPrompt(editableSourcePrompt, polishMode, props.promptStyleId);
   const polishedPrompt = modelPolishedPrompt || localPolishedPrompt;
   const polishConfigOptions = useMemo(() => {
     const configs = props.promptPolishSettings.savedConfigs.length > 0
@@ -231,7 +231,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
   async function runModelPolish() {
     if (!modelPolishEnabled) {
       setModelPolishedPrompt('');
-      const nextLocalPrompt = polishPrompt(editableSourcePrompt, polishMode, selectedPromptStyleId);
+      const nextLocalPrompt = polishPrompt(editableSourcePrompt, polishMode, props.promptStyleId);
       setEditableResultPrompt(nextLocalPrompt);
       setLastAutoPolishedPrompt(nextLocalPrompt);
       setIsResultManuallyEdited(false);
@@ -253,8 +253,9 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
       const result = await polishPromptWithProvider({
         providerId: 'prompt-polish',
         modelId: polishModelId,
-        prompt: applyPromptStyle(editableSourcePrompt.trim() || '一个清晰明确的画面主体', selectedPromptStyleId),
+        prompt: editableSourcePrompt.trim() || '一个清晰明确的画面主体',
         modeId: polishMode,
+        styleId: props.promptStyleId,
         settings: { ...effectivePolishSettings, modelId: polishModelId },
         baseUrl: polishBaseUrl,
         extraHeaders: parseExtraHeaders(effectivePolishSettings.extraHeadersJson),
@@ -266,7 +267,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (props.promptPolishSettings.fallbackToLocal && !isResultManuallyEdited) {
-        const fallbackPrompt = polishPrompt(editableSourcePrompt, polishMode, selectedPromptStyleId);
+        const fallbackPrompt = polishPrompt(editableSourcePrompt, polishMode, props.promptStyleId);
         setModelPolishedPrompt('');
         setEditableResultPrompt(fallbackPrompt);
         setLastAutoPolishedPrompt(fallbackPrompt);
@@ -371,7 +372,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
             sourcePrompt={editableSourcePrompt}
             polishMode={polishMode}
             polishModes={availablePolishModes}
-            promptStyleId={selectedPromptStyleId}
+            promptStyleId={props.promptStyleId}
             resultPrompt={editableResultPrompt}
             engine={props.promptPolishSettings.engine}
             configId={selectedPolishConfigId}
@@ -387,7 +388,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
               setIsResultManuallyEdited(false);
             }}
             onStyleChange={(styleId) => {
-              setSelectedPromptStyleId(styleId);
+              props.onPromptStyleChange(styleId);
               setModelPolishedPrompt('');
               setIsResultManuallyEdited(false);
             }}
