@@ -14984,7 +14984,7 @@ body {
 
 /* AI creation V4 compact parameter and rail refinements. */
 .workspaceGenerate .promptControlRow {
-  grid-template-columns: 76px 72px 106px 96px 58px minmax(148px, 1fr);
+  grid-template-columns: 88px 86px 128px 116px 66px minmax(132px, 1fr);
   align-items: end;
   gap: 8px;
 }
@@ -15018,13 +15018,20 @@ body {
 
 .workspaceGenerate .promptControlRow .generateStack {
   min-width: 0;
+  justify-self: end;
+  width: min(158px, 100%);
 }
 
 .workspaceGenerate .promptControlRow .primaryGenerate {
   width: 100%;
   min-width: 0;
   min-height: 36px;
+  padding-inline: 14px;
   white-space: nowrap;
+}
+
+.workspaceGenerate .promptControlRow label:nth-of-type(5) input {
+  text-align: center;
 }
 
 .workspaceGenerate .ratioGrid {

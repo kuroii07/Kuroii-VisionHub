@@ -1018,7 +1018,7 @@ export function ModernGeneratePage(props: {
                 <Sparkles size={25} />
               </div>
               <h2>{mode === 'image' ? '等待参考图' : '画布待点亮'}</h2>
-              <p>{mode === 'image' ? '加入参考图后，描述想保留或改变的部分，再开始重绘。' : '写下画面想法，选择比例与风格，然后生成第一张视觉草稿。'}</p>
+              <p>{mode === 'image' ? '加入参考图后，说明要保留或改变的部分，再开始重绘。' : '写下主体、场景和氛围，选好比例与风格后开始生成。'}</p>
               {props.isGenerating ? (
                 <div className="generationOverlay inlineGenerationOverlay">
                   <span>
