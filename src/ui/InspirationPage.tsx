@@ -821,7 +821,7 @@ const assetRatingOptions: Array<{ value: AssetRatingFilter; label: string }> = [
 const assetRatingEditOptions = assetRatingOptions.filter((option) => option.value !== 'all') as Array<{ value: AssetRatingValue; label: string }>;
 
 const assetColorOptions: Array<{ value: AssetColorFilter; label: string; color: string }> = [
-  { value: 'all', label: '全部颜色', color: 'linear-gradient(135deg, #ef4444, #f59e0b, #22c55e, #38bdf8, #8b5cf6)' },
+  { value: 'all', label: '全部颜色', color: '#64748b' },
   { value: 'red', label: '红色', color: '#ef4444' },
   { value: 'orange', label: '橙色', color: '#f97316' },
   { value: 'yellow', label: '黄色', color: '#eab308' },
@@ -830,7 +830,7 @@ const assetColorOptions: Array<{ value: AssetColorFilter; label: string; color: 
   { value: 'blue', label: '蓝色', color: '#3b82f6' },
   { value: 'purple', label: '紫色', color: '#8b5cf6' },
   { value: 'pink', label: '粉色', color: '#ec4899' },
-  { value: 'mono', label: '黑白', color: 'linear-gradient(135deg, #111827 0 45%, #f8fafc 45% 100%)' }
+  { value: 'mono', label: '黑白', color: '#64748b' }
 ];
 
 const emptySourceDraft = {

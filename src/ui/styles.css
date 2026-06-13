@@ -18,10 +18,7 @@ body {
   margin: 0;
   min-width: 1180px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(124, 92, 255, 0.24), transparent 32%),
-    radial-gradient(circle at 78% 12%, rgba(41, 214, 200, 0.18), transparent 28%),
-    #070a11;
+  background: var(--app-surface);
 }
 
 button,
@@ -72,7 +69,7 @@ button {
   display: grid;
   place-items: center;
   border-radius: 16px;
-  background: linear-gradient(135deg, var(--accent), #23c9d9);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
   box-shadow: 0 20px 60px rgba(124, 92, 255, 0.38);
 }
 
@@ -351,7 +348,7 @@ label {
   padding: 15px;
   justify-content: center;
   gap: 8px;
-  background: linear-gradient(135deg, #fff, #aaf8ef 42%, #a999ff);
+  background: var(--app-surface);
   box-shadow: 0 20px 60px rgba(41, 214, 200, 0.2);
 }
 
@@ -543,7 +540,7 @@ label {
   border-radius: 14px;
   color: #fff;
   font-weight: 950;
-  background: linear-gradient(135deg, #ff7a1a, #ff4f8a);
+  background: var(--app-surface);
 }
 
 .profileMain {
@@ -631,7 +628,7 @@ label {
 }
 
 .profileSwitch.on {
-  background: linear-gradient(135deg, #ff7a1a, #ff9b1a);
+  background: var(--app-surface);
 }
 
 .profileSwitch.on span {
@@ -676,16 +673,14 @@ label {
 .rowActionButton.primaryAction {
   color: #fff;
   border-color: color-mix(in srgb, var(--app-accent-strong) 58%, transparent);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-purple) 86%, #fff 0%), var(--app-accent-strong));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
   box-shadow: 0 14px 28px color-mix(in srgb, var(--app-accent-strong) 22%, transparent);
 }
 
 .rowActionButton.primaryAction:hover {
   color: #fff;
   border-color: color-mix(in srgb, var(--app-accent-strong) 72%, transparent);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-purple) 75%, #fff 9%), color-mix(in srgb, var(--app-accent-strong) 92%, #fff 8%));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 
 .rowActionButton.primaryAction:disabled {
@@ -980,7 +975,7 @@ label {
 
 .composerCard {
   max-width: 1120px;
-  background: linear-gradient(180deg, rgba(18, 24, 40, 0.9), rgba(12, 16, 27, 0.78));
+  background: var(--app-surface);
 }
 
 .composerCard.wide {
@@ -999,7 +994,7 @@ textarea {
 }
 
 .resultCard {
-  background: linear-gradient(180deg, rgba(18, 24, 39, 0.9), rgba(11, 15, 25, 0.82));
+  background: var(--app-surface);
 }
 
 .imageButton {
@@ -1374,9 +1369,7 @@ textarea {
   display: grid;
   grid-template-rows: 66px minmax(360px, 1fr) 82px auto;
   min-height: 100vh;
-  background:
-    linear-gradient(180deg, rgba(239, 250, 248, 0.9), rgba(247, 250, 252, 0.96)),
-    #f8fbfc;
+  background: var(--app-surface);
   border-right: 1px solid #dde6ef;
 }
 
@@ -1435,7 +1428,7 @@ textarea {
 .modeToggle.active {
   color: #008b82;
   border-color: rgba(0, 184, 171, 0.42);
-  background: linear-gradient(180deg, #ffffff, #e8fbf8);
+  background: var(--app-surface);
   box-shadow: 0 8px 22px rgba(0, 184, 171, 0.13);
 }
 
@@ -1614,7 +1607,7 @@ textarea {
 .promptDock {
   margin: 8px 0 0;
   padding: 10px;
-  background: linear-gradient(180deg, rgba(239, 255, 252, 0.9), #eefdfa);
+  background: var(--app-surface);
   border-top: 1px solid rgba(0, 184, 171, 0.25);
   box-shadow: 0 -8px 32px rgba(0, 139, 130, 0.13);
 }
@@ -1704,7 +1697,7 @@ textarea {
   border: 0;
   border-radius: 14px;
   color: white;
-  background: linear-gradient(135deg, #14c8bb, #16a8f5);
+  background: var(--app-surface);
   box-shadow: 0 14px 32px rgba(20, 200, 187, 0.25);
   font-weight: 900;
 }
@@ -1863,7 +1856,7 @@ textarea {
 
 .resolutionList button.active {
   border-color: #10c6ba;
-  background: linear-gradient(135deg, #e4fffb, #c7f7ee);
+  background: var(--app-surface);
   color: #08756e;
 }
 
@@ -1922,10 +1915,7 @@ textarea {
 
 /* VisionHub original direction: Aurora dark cockpit, not a copied light playground */
 .workspaceGenerate {
-  background:
-    radial-gradient(circle at 18% 8%, rgba(105, 91, 255, 0.24), transparent 28%),
-    radial-gradient(circle at 80% 22%, rgba(0, 225, 214, 0.16), transparent 30%),
-    linear-gradient(145deg, #080b14 0%, #0c1220 52%, #060811 100%);
+  background: var(--app-surface);
   color: #ecf4ff;
 }
 
@@ -1941,11 +1931,7 @@ textarea {
   min-height: calc(100vh - 36px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 30px;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    radial-gradient(circle at 50% 38%, rgba(125, 101, 255, 0.18), transparent 34%),
-    rgba(8, 12, 22, 0.78);
+  background: var(--app-surface);
   background-size: 42px 42px, 42px 42px, auto, auto;
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.34);
   overflow: hidden;
@@ -1985,7 +1971,7 @@ textarea {
 .modeToggle.active {
   color: #06101c;
   border-color: transparent;
-  background: linear-gradient(135deg, #ffffff, #aefaf0 45%, #bcaeff);
+  background: var(--app-surface);
   box-shadow: 0 12px 32px rgba(127, 105, 255, 0.22);
 }
 
@@ -1998,7 +1984,7 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 28px;
   color: #aab7ce;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
+  background: var(--app-surface);
 }
 
 .emptyIcon {
@@ -2093,7 +2079,7 @@ textarea {
 
 .primaryGenerate {
   color: #06101c;
-  background: linear-gradient(135deg, #ffffff, #aefaf0 42%, #9f8cff);
+  background: var(--app-surface);
   box-shadow: 0 16px 38px rgba(159, 140, 255, 0.26);
 }
 
@@ -2124,7 +2110,7 @@ textarea {
   padding: 15px;
   border-color: rgba(255, 255, 255, 0.1);
   border-radius: 22px;
-  background: linear-gradient(180deg, rgba(18, 25, 42, 0.86), rgba(11, 16, 28, 0.82));
+  background: var(--app-surface);
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.26);
 }
 
@@ -2172,7 +2158,7 @@ select option {
 .ratioGrid button.active {
   color: #06101c;
   border-color: transparent;
-  background: linear-gradient(135deg, #ffffff, #aefaf0);
+  background: var(--app-surface);
 }
 
 .ratioGrid button.active > span {
@@ -2193,7 +2179,7 @@ select option {
 .resolutionList button.active {
   border-color: rgba(174, 250, 240, 0.34);
   color: #f6fbff;
-  background: linear-gradient(135deg, rgba(159, 140, 255, 0.28), rgba(22, 208, 195, 0.18));
+  background: var(--app-surface);
 }
 
 .resolutionList button > span {
@@ -2315,7 +2301,7 @@ select option {
   border: 0;
   border-radius: 12px;
   color: #06101c;
-  background: linear-gradient(135deg, #fff, #aefaf0);
+  background: var(--app-surface);
   font-weight: 900;
   padding: 0 12px;
 }
@@ -2449,10 +2435,7 @@ select option {
   gap: 18px;
   padding: 18px;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 18% 8%, rgba(174, 250, 240, 0.13), transparent 30%),
-    radial-gradient(circle at 76% 14%, rgba(159, 140, 255, 0.16), transparent 34%),
-    linear-gradient(135deg, #050812 0%, #09111f 48%, #070a13 100%);
+  background: var(--app-surface);
 }
 
 .workspaceGenerate .canvasPane {
@@ -2463,16 +2446,14 @@ select option {
   overflow: hidden;
   border: 1px solid var(--studio-line);
   border-radius: 30px;
-  background:
-    linear-gradient(180deg, rgba(14, 22, 38, 0.82), rgba(7, 11, 20, 0.92)),
-    #080d18;
+  background: var(--app-surface);
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
 }
 
 .workspaceGenerate .generatorTopbar {
   padding: 10px 16px 10px 18px;
   border-bottom-color: rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(19, 28, 47, 0.78), rgba(11, 16, 29, 0.48));
+  background: var(--app-surface);
 }
 
 .workspaceGenerate .generatorTopbar strong {
@@ -2508,7 +2489,7 @@ select option {
 .workspaceGenerate .modeToggle.active {
   color: #06101c;
   border-color: transparent;
-  background: linear-gradient(135deg, #ffffff, var(--studio-accent));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
   box-shadow: 0 12px 28px rgba(174, 250, 240, 0.12);
 }
 
@@ -2523,9 +2504,7 @@ select option {
   padding: 22px 28px;
   border: 1px dashed rgba(255, 255, 255, 0.12);
   border-radius: 28px;
-  background:
-    radial-gradient(circle at 50% 0%, rgba(174, 250, 240, 0.08), transparent 45%),
-    rgba(255, 255, 255, 0.035);
+  background: var(--app-surface);
   animation: studioFadeUp 0.36s ease both;
 }
 
@@ -2576,8 +2555,7 @@ select option {
   border: 1px solid rgba(174, 250, 240, 0.22);
   border-radius: 18px;
   color: #dffefa;
-  background:
-    linear-gradient(135deg, rgba(13, 25, 41, 0.88), rgba(19, 20, 43, 0.84));
+  background: var(--app-surface);
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.36);
   backdrop-filter: blur(18px);
   animation: studioFadeUp 0.24s ease both;
@@ -2615,9 +2593,7 @@ select option {
   gap: 12px;
   padding: 16px 18px 18px;
   border-top: 1px solid rgba(255, 255, 255, 0.095);
-  background:
-    radial-gradient(circle at 14% 0%, rgba(174, 250, 240, 0.11), transparent 36%),
-    linear-gradient(180deg, rgba(11, 17, 30, 0.92), rgba(5, 8, 15, 0.96));
+  background: var(--app-surface);
   box-shadow: 0 -24px 70px rgba(0, 0, 0, 0.34);
 }
 
@@ -2626,7 +2602,7 @@ select option {
   position: absolute;
   inset: 0 18px auto;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(174, 250, 240, 0.34), rgba(159, 140, 255, 0.26), transparent);
+  background: var(--app-surface);
   pointer-events: none;
 }
 
@@ -2724,8 +2700,7 @@ select option {
   font-size: 15px;
   line-height: 1.65;
   border-color: rgba(255, 255, 255, 0.13);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.052));
+  background: var(--app-surface);
   box-shadow:
     inset 0 1px 1px rgba(255, 255, 255, 0.04),
     inset 0 -1px 0 rgba(0, 0, 0, 0.18);
@@ -2808,7 +2783,7 @@ select option {
 .workspaceGenerate .primaryGenerate:disabled {
   cursor: not-allowed;
   color: rgba(255, 255, 255, 0.55);
-  background: linear-gradient(135deg, rgba(110, 124, 148, 0.68), rgba(80, 91, 112, 0.72));
+  background: var(--app-surface);
   box-shadow: none;
   opacity: 0.72;
 }
@@ -2945,11 +2920,7 @@ select option {
 }
 
 .workspaceGenerate .previewStage {
-  background:
-    radial-gradient(circle at 50% 18%, rgba(174, 250, 240, 0.075), transparent 34%),
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(9, 15, 27, 0.5), rgba(6, 10, 19, 0.72));
+  background: var(--app-surface);
   background-size: auto, 34px 34px, 34px 34px, auto;
   background-position: center, center, center, center;
 }
@@ -3020,9 +2991,7 @@ select option {
   border-radius: 15px;
   padding: 0 12px;
   color: #f7faff;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.045)),
-    rgba(13, 18, 31, 0.82);
+  background: var(--app-surface);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.055),
     0 10px 26px rgba(0, 0, 0, 0.08);
@@ -3089,9 +3058,7 @@ select option {
 .studioSelect.open .studioSelectButton {
   transform: translateY(-1px);
   border-color: rgba(174, 250, 240, 0.32);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.092), rgba(255, 255, 255, 0.06)),
-    rgba(16, 23, 39, 0.92);
+  background: var(--app-surface);
   box-shadow:
     0 0 0 3px rgba(174, 250, 240, 0.055),
     0 16px 34px rgba(0, 0, 0, 0.14);
@@ -3117,9 +3084,7 @@ select option {
   padding: 6px;
   border: 1px solid rgba(174, 250, 240, 0.18);
   border-radius: 16px;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(174, 250, 240, 0.09), transparent 35%),
-    linear-gradient(180deg, rgba(19, 27, 45, 0.98), rgba(8, 12, 22, 0.98));
+  background: var(--app-surface);
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(18px);
   animation: studioSelectPop 0.14s ease both;
@@ -3129,9 +3094,9 @@ select option {
   width: 100%;
   min-height: 42px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 16px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 0;
   border: 0;
   border-radius: 11px;
   padding: 0 9px;
@@ -3153,7 +3118,7 @@ select option {
 
 .studioSelectMenu button.active {
   color: #06101c;
-  background: linear-gradient(135deg, #ffffff, var(--studio-accent, #aefaf0));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 
 .studioSelectMenu button.active small {
@@ -3210,10 +3175,7 @@ select option {
   color: #f7faff;
   border: 1px solid rgba(255, 255, 255, 0.13);
   background-color: rgba(255, 255, 255, 0.062);
-  background-image:
-    linear-gradient(135deg, transparent 50%, rgba(174, 250, 240, 0.95) 50%),
-    linear-gradient(45deg, rgba(174, 250, 240, 0.95) 50%, transparent 50%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0.05));
+  background-image: none;
   background-position:
     calc(100% - 17px) 50%,
     calc(100% - 12px) 50%,
@@ -3324,10 +3286,7 @@ select option {
   --app-scrollbar-thumb: rgba(148, 163, 184, 0.3);
   --app-scrollbar-thumb-hover: rgba(45, 212, 191, 0.44);
   color: var(--app-text);
-  background:
-    radial-gradient(circle at 20% 0%, rgba(124, 92, 255, 0.24), transparent 32%),
-    radial-gradient(circle at 78% 12%, rgba(41, 214, 200, 0.18), transparent 28%),
-    var(--app-bg);
+  background: var(--app-surface);
 }
 
 .theme-light {
@@ -3350,10 +3309,7 @@ select option {
   --app-scrollbar-thumb: rgba(100, 116, 139, 0.26);
   --app-scrollbar-thumb-hover: rgba(20, 184, 166, 0.42);
   color: var(--app-text);
-  background:
-    radial-gradient(circle at 14% 0%, rgba(59, 130, 246, 0.12), transparent 32%),
-    radial-gradient(circle at 78% 10%, rgba(20, 184, 166, 0.12), transparent 28%),
-    var(--app-bg);
+  background: var(--app-surface);
 }
 
 .appShell {
@@ -3394,17 +3350,11 @@ select option {
 }
 
 .appShell.theme-dark {
-  background:
-    radial-gradient(circle at 20% 0%, rgba(124, 92, 255, 0.24), transparent 32%),
-    radial-gradient(circle at 78% 12%, rgba(41, 214, 200, 0.18), transparent 28%),
-    var(--app-bg);
+  background: var(--app-surface);
 }
 
 .appShell.theme-light {
-  background:
-    radial-gradient(circle at 14% 0%, rgba(59, 130, 246, 0.12), transparent 32%),
-    radial-gradient(circle at 78% 10%, rgba(20, 184, 166, 0.12), transparent 28%),
-    var(--app-bg);
+  background: var(--app-surface);
 }
 
 .sidebar {
@@ -3673,7 +3623,7 @@ kbd {
 .studioSelectMenu button:hover { color: var(--app-text); background: var(--app-surface-2); }
 .studioSelectMenu button.active {
   color: color-mix(in srgb, var(--app-accent) 50%, #06101c);
-  background: linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--app-accent-strong) 34%, #ffffff));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 
 /* Generation workspace theme bridge */
@@ -3689,16 +3639,10 @@ kbd {
   color: var(--app-text);
 }
 .theme-light .workspaceGenerate .generatorStudio {
-  background:
-    radial-gradient(circle at 18% 8%, rgba(20, 184, 166, 0.13), transparent 30%),
-    radial-gradient(circle at 76% 14%, rgba(99, 102, 241, 0.12), transparent 34%),
-    linear-gradient(135deg, #f7fafc 0%, #eef5fb 48%, #f8fafc 100%);
+  background: var(--app-surface);
 }
 .theme-dark .workspaceGenerate .generatorStudio {
-  background:
-    radial-gradient(circle at 18% 8%, rgba(174, 250, 240, 0.13), transparent 30%),
-    radial-gradient(circle at 76% 14%, rgba(159, 140, 255, 0.16), transparent 34%),
-    linear-gradient(135deg, #050812 0%, #09111f 48%, #070a13 100%);
+  background: var(--app-surface);
 }
 .workspaceGenerate .canvasPane,
 .workspaceGenerate .generatorTopbar,
@@ -3710,27 +3654,19 @@ kbd {
   border-color: var(--app-line);
 }
 .theme-light .workspaceGenerate .canvasPane {
-  background: linear-gradient(180deg, rgba(255,255,255,.86), rgba(244,247,251,.94)), #f8fafc;
+  background: var(--app-surface);
   box-shadow: 0 28px 80px rgba(15, 23, 42, 0.12);
 }
 .theme-dark .workspaceGenerate .canvasPane {
-  background: linear-gradient(180deg, rgba(14,22,38,.82), rgba(7,11,20,.92)), #080d18;
+  background: var(--app-surface);
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
 }
 .theme-light .workspaceGenerate .previewStage {
-  background:
-    radial-gradient(circle at 50% 18%, rgba(20,184,166,.09), transparent 34%),
-    linear-gradient(rgba(15,23,42,.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15,23,42,.055) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(248,250,252,.72), rgba(241,245,249,.82));
+  background: var(--app-surface);
   background-size: auto, 34px 34px, 34px 34px, auto;
 }
 .theme-dark .workspaceGenerate .previewStage {
-  background:
-    radial-gradient(circle at 50% 18%, rgba(174,250,240,.075), transparent 34%),
-    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(9,15,27,.5), rgba(6,10,19,.72));
+  background: var(--app-surface);
   background-size: auto, 34px 34px, 34px 34px, auto;
 }
 .theme-light .workspaceGenerate .generatorTopbar,
@@ -3780,7 +3716,7 @@ kbd {
 .workspaceGenerate .ratioGrid button.active,
 .workspaceGenerate .primaryGenerate {
   color: #042f2e;
-  background: linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--app-accent-strong) 38%, #ffffff), color-mix(in srgb, var(--app-purple) 38%, #ffffff));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 .workspaceGenerate .bottomPromptInput,
 .workspaceGenerate input,
@@ -3873,7 +3809,7 @@ kbd {
 
 .theme-light .workspaceGenerate .primaryGenerate:disabled {
   color: #64748b;
-  background: linear-gradient(135deg, rgba(226, 232, 240, 0.92), rgba(203, 213, 225, 0.9));
+  background: var(--app-surface);
   box-shadow: none;
   opacity: 0.84;
 }
@@ -3968,15 +3904,18 @@ kbd {
 .segmentedControl {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 4px;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid transparent;
   border-radius: 999px;
   background: var(--app-surface-2);
+  overflow: hidden;
 }
 .segmentedControl button {
   min-height: 28px;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   border: 0;
   border-radius: 999px;
@@ -3985,8 +3924,12 @@ kbd {
   background: transparent;
   font-size: 13px;
   font-weight: 850;
+  line-height: 1;
 }
-.segmentedControl button.active { color: var(--app-text); background: color-mix(in srgb, var(--app-surface) 72%, #fff 12%); }
+.segmentedControl button.active {
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-accent-strong) 12%, var(--app-surface));
+}
 .segmentedControl button:disabled { cursor: not-allowed; opacity: .58; }
 .compactSegment button { min-width: 64px; }
 .colorDotRow { display: flex; align-items: center; gap: 12px; }
@@ -4307,7 +4250,7 @@ kbd {
 .settingsBooleanGrid button.active {
   color: #042f2e;
   border-color: transparent;
-  background: linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--app-accent-strong) 42%, #ffffff));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 .settingsTogglePill {
   min-height: 38px;
@@ -4321,7 +4264,7 @@ kbd {
 .settingsTogglePill.active {
   color: #042f2e;
   border-color: transparent;
-  background: linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--app-accent-strong) 42%, #ffffff));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 .settingsNotice {
   margin: 0;
@@ -4438,17 +4381,11 @@ kbd {
 }
 
 .theme-light .workspace:not(.workspaceGenerate) {
-  background:
-    radial-gradient(circle at 12% 0%, rgba(59, 130, 246, 0.08), transparent 34%),
-    radial-gradient(circle at 86% 10%, rgba(20, 184, 166, 0.08), transparent 28%),
-    #f4f7fb;
+  background: var(--app-surface);
 }
 
 .theme-dark .workspace:not(.workspaceGenerate) {
-  background:
-    radial-gradient(circle at 12% 0%, rgba(124, 92, 255, 0.14), transparent 34%),
-    radial-gradient(circle at 86% 10%, rgba(41, 214, 200, 0.1), transparent 28%),
-    #070a11;
+  background: var(--app-surface);
 }
 
 .workspace:not(.workspaceGenerate),
@@ -4703,7 +4640,7 @@ kbd {
   position: sticky;
   bottom: 0;
   z-index: 90;
-  background: linear-gradient(to bottom, transparent, var(--app-sidebar-bg) 32%);
+  background: var(--app-surface);
 }
 
 .appShell .themeToggle {
@@ -4756,10 +4693,7 @@ kbd {
 
 .appShell.theme-light .workspace:not(.workspaceGenerate) {
   color: var(--app-text);
-  background:
-    radial-gradient(circle at 12% 0%, rgba(59, 130, 246, 0.08), transparent 34%),
-    radial-gradient(circle at 86% 10%, rgba(20, 184, 166, 0.08), transparent 28%),
-    #f4f7fb;
+  background: var(--app-surface);
 }
 
 .appShell.theme-light .providerDirectory,
@@ -4880,7 +4814,7 @@ kbd {
 .appShell.theme-light .freePlatformActions .primaryMini {
   color: #042f2e;
   border-color: rgba(20, 184, 166, 0.34);
-  background: linear-gradient(135deg, #ffffff, rgba(153, 246, 228, 0.92));
+  background: var(--app-surface);
 }
 
 .appShell.theme-light .miniButton:disabled,
@@ -5098,9 +5032,7 @@ kbd {
 
 .libraryInsightCard.primary {
   border-color: color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-line));
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-accent-strong) 13%, transparent), color-mix(in srgb, var(--app-purple) 8%, transparent)),
-    var(--app-surface);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 
 .libraryInsightCard span {
@@ -5158,9 +5090,7 @@ kbd {
   place-items: center;
   border: 0;
   color: var(--app-text);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-purple) 14%, transparent), transparent),
-    var(--app-surface-2);
+  background: var(--app-surface);
 }
 
 .libraryThumb {
@@ -5199,9 +5129,7 @@ kbd {
   border-radius: 999px;
   border-color: color-mix(in srgb, var(--app-accent-strong) 26%, var(--app-line));
   color: var(--app-text);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-accent-strong) 13%, transparent), color-mix(in srgb, var(--app-purple) 10%, transparent)),
-    var(--app-surface-2);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
   font-size: 12px;
   font-weight: 850;
   white-space: nowrap;
@@ -5234,10 +5162,7 @@ kbd {
   border: 1px solid var(--app-line-strong);
   border-radius: 28px;
   color: var(--app-text);
-  background:
-    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--app-accent-strong) 17%, transparent), transparent 34%),
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--app-purple) 16%, transparent), transparent 32%),
-    color-mix(in srgb, var(--app-bg) 88%, var(--app-surface));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
   box-shadow: 0 34px 90px rgba(2, 6, 23, 0.42);
 }
 
@@ -5401,9 +5326,7 @@ kbd {
 
 .assistTemplateCard.active {
   border-color: color-mix(in srgb, var(--app-accent-strong) 48%, var(--app-line));
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-accent-strong) 13%, transparent), color-mix(in srgb, var(--app-purple) 9%, transparent)),
-    var(--app-surface);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
   box-shadow: 0 14px 34px color-mix(in srgb, var(--app-accent-strong) 14%, transparent);
 }
 
@@ -5614,7 +5537,7 @@ kbd {
 .assistActionRow button:first-child {
   color: #042f2e;
   border-color: transparent;
-  background: linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--app-accent-strong) 42%, #ffffff));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 
 .assistActionRow button:hover {
@@ -5671,9 +5594,7 @@ kbd {
 .workspaceGenerate .promptPolishDetailButton {
   border-color: color-mix(in srgb, var(--app-accent-strong) 26%, var(--app-line));
   color: var(--app-text);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-accent-strong) 13%, transparent), color-mix(in srgb, var(--app-purple) 10%, transparent)),
-    var(--app-surface-2);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
   transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 
@@ -5825,7 +5746,7 @@ kbd {
   border-radius: 999px;
   padding: 0 12px;
   color: #042f2e;
-  background: linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--app-accent-strong) 42%, #ffffff));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
   font-size: 12px;
   font-weight: 900;
 }
@@ -5909,10 +5830,7 @@ kbd {
 .reuseFilterPanel select {
   appearance: none;
   padding: 0 34px 0 12px;
-  background:
-    linear-gradient(45deg, transparent 50%, var(--app-muted) 50%) calc(100% - 18px) 18px / 5px 5px no-repeat,
-    linear-gradient(135deg, var(--app-muted) 50%, transparent 50%) calc(100% - 13px) 18px / 5px 5px no-repeat,
-    color-mix(in srgb, var(--app-surface) 84%, transparent);
+  background: var(--app-surface);
 }
 
 @media (max-width: 1180px) {
@@ -5998,10 +5916,7 @@ kbd {
 }
 
 .theme-light .promptAssistWindow {
-  background:
-    radial-gradient(circle at 0% 0%, rgba(20, 184, 166, 0.13), transparent 34%),
-    radial-gradient(circle at 100% 0%, rgba(99, 102, 241, 0.11), transparent 32%),
-    rgba(255, 255, 255, 0.94);
+  background: var(--app-surface);
   box-shadow: 0 34px 90px rgba(15, 23, 42, 0.24);
 }
 
@@ -6109,9 +6024,9 @@ kbd {
 
 .freeToolbar {
   display: grid;
-  grid-template-columns: minmax(260px, auto) minmax(220px, 280px) auto;
-  gap: 14px;
-  align-items: center;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: stretch;
   margin-bottom: 18px;
   padding: 14px;
   border: 1px solid var(--app-line);
@@ -6120,15 +6035,145 @@ kbd {
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.18);
 }
 
+.freeWorkflowStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.freeWorkflowStrip div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: var(--app-surface);
+}
+
+.freeWorkflowStrip strong {
+  color: var(--app-text);
+  font-size: 13px;
+}
+
+.freeWorkflowStrip span {
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.freeFilterGroup,
+.freeActionGroup {
+  display: grid;
+  gap: 10px;
+  align-items: end;
+  min-width: 0;
+}
+
+.freeFilterGroup {
+  grid-template-columns: minmax(210px, auto) 160px 160px minmax(0, 1fr);
+  justify-content: stretch;
+}
+
+.freeActionGroup {
+  grid-template-columns: minmax(360px, 1fr) 132px minmax(220px, auto);
+  justify-content: stretch;
+}
+
+.freeToolbar .studioSelect {
+  width: 100%;
+  min-width: 148px;
+}
+
+.freeSearchBox {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.freeViewSwitch {
+  min-width: 132px;
+}
+
+.freeViewSwitch button,
+.freeFilterGroup .compactSegment button {
+  min-height: 30px;
+  padding-inline: 14px;
+}
+
+.freeImportHint {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+}
+
+.visuallyHidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+}
+
+.freeToolbar .segmentedControl button,
+.freeToolbar .studioSelectButton,
+.freeToolbar .rowActionButton {
+  white-space: nowrap;
+}
+
+.freeToolbar .studioSelectValue {
+  min-width: 0;
+}
+
+.freeSearchBox input,
+.freePlatformExpandedPanel textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--app-line);
+  border-radius: 14px;
+  color: var(--app-text);
+  background: var(--app-surface-2);
+  outline: none;
+}
+
+.freeSearchBox input {
+  height: 38px;
+  padding: 0 12px;
+}
+
+.freePlatformExpandedPanel textarea {
+  resize: vertical;
+  min-height: 54px;
+  padding: 9px 10px;
+  line-height: 1.45;
+}
+
 .freePlatformGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.freePlatformList {
+  display: grid;
+  gap: 10px;
 }
 
 .freePlatformCard {
   display: grid;
-  gap: 14px;
+  align-content: start;
+  gap: 12px;
   padding: 16px;
   border: 1px solid var(--app-line);
   border-radius: 22px;
@@ -6136,29 +6181,64 @@ kbd {
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.22);
 }
 
+.freePlatformGrid .freePlatformCard {
+  height: 100%;
+  align-self: stretch;
+}
+
+.freePlatformCard:not(.listMode) {
+  grid-template-rows: auto auto minmax(48px, auto) auto auto;
+  min-height: 286px;
+}
+
+.freePlatformCard.listMode {
+  grid-template-columns: minmax(185px, 1.05fr) minmax(150px, 0.9fr) minmax(170px, 1fr) minmax(180px, 1fr) 190px;
+  grid-template-areas: "header meta desc quick actions";
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 18px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16);
+}
+
+.freePlatformCard.listMode.expanded {
+  align-items: start;
+  grid-template-areas:
+    "header meta desc quick actions"
+    "expanded expanded expanded expanded expanded";
+}
+
 .freePlatformHeader {
   display: grid;
-  grid-template-columns: 54px 1fr;
-  gap: 12px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
 }
 
+.freePlatformCard.listMode .freePlatformHeader {
+  grid-area: header;
+  min-width: 0;
+}
+
 .freePlatformLogo {
-  width: 54px;
-  height: 54px;
+  width: 42px;
+  height: 42px;
   display: grid;
   place-items: center;
-  border-radius: 16px;
+  border-radius: 14px;
   color: #fff;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 950;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 16px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
 }
 
 .freePlatformHeader strong {
   display: block;
   color: var(--app-text);
   font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .freePlatformHeader small,
@@ -6168,37 +6248,286 @@ kbd {
 }
 
 .freePlatformCard p {
+  margin: 0;
+  line-height: 1.55;
+  color: var(--app-text-2);
   min-height: 44px;
+}
+
+.freePlatformCard:not(.listMode) p {
+  display: -webkit-box;
+  min-height: 48px;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.freePlatformCard.listMode p {
+  grid-area: desc;
+  min-height: 0;
+  display: block;
+  overflow: hidden;
+  color: var(--app-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.freePlatformCard.listMode .freePlatformMeta {
+  grid-area: meta;
+  max-height: 56px;
+  overflow: hidden;
+}
+
+.freePlatformCard.listMode .freePlatformMeta span {
+  padding: 4px 7px;
+  font-size: 10.5px;
+}
+
+.favoritePlatformButton {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+}
+
+.favoritePlatformButton.active {
+  color: var(--app-accent-strong);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface-2));
+}
+
+.freePlatformMeta {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 6px;
+  align-items: start;
+  justify-content: start;
+}
+
+.freePlatformMeta span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.freePlatformQuickInfo {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--app-line);
+  border-radius: 15px;
+  color: var(--app-muted);
+  background: color-mix(in srgb, var(--app-surface-2) 78%, transparent);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.freePlatformQuickInfo span:first-child {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.freePlatformQuickInfo span:last-child {
+  color: var(--app-text-2);
+  font-weight: 850;
+}
+
+.freePlatformCard.listMode .freePlatformQuickInfo {
+  grid-area: quick;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.freePlatformCard.listMode .freePlatformQuickInfo span:first-child {
+  -webkit-line-clamp: 1;
+}
+
+.freePlatformStatusLine {
+  display: grid;
+  grid-template-columns: minmax(112px, 132px) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.freePlatformStatusLine small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.freePlatformDetails {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--app-line);
+  border-radius: 16px;
+  background: var(--app-surface-2);
+}
+
+.freePlatformDetails small {
+  color: var(--app-muted);
+  line-height: 1.45;
+}
+
+.freePlatformDetails strong {
+  color: var(--app-text-2);
+}
+
+.freePlatformExpandedPanel {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.freePlatformCard.listMode .freePlatformExpandedPanel {
+  grid-area: expanded;
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(240px, auto) minmax(280px, 1fr);
+  gap: 12px;
+  padding-top: 0;
+}
+
+.freePlatformDetailControls {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.freePlatformDrawerBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.freePlatformDrawer {
+  width: min(420px, calc(100vw - 24px));
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto auto auto auto auto auto 1fr;
+  gap: 14px;
+  padding: 22px;
+  overflow: auto;
+  border-left: 1px solid var(--app-line);
+  color: var(--app-text);
+  background: var(--app-surface);
+  box-shadow: -18px 0 52px rgba(15, 23, 42, 0.18);
+}
+
+.freePlatformDrawerHeader {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.freePlatformDrawerHeader h2 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 22px;
+}
+
+.freePlatformDrawerHeader small,
+.freePlatformDrawerSummary {
+  color: var(--app-muted);
+}
+
+.freePlatformDrawerSummary {
   margin: 0;
   line-height: 1.55;
 }
 
-.freePlatformMeta {
-  display: flex;
-  flex-wrap: wrap;
+.freePlatformDrawerField {
+  display: grid;
+  gap: 8px;
+  color: var(--app-text-2);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.freePlatformDrawerField textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  border: 1px solid var(--app-line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  color: var(--app-text);
+  background: var(--app-surface-2);
+  outline: none;
+}
+
+.freePlatformDrawerActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.freePlatformMeta span {
-  border: 1px solid var(--app-line);
-  border-radius: 999px;
-  padding: 6px 9px;
+.freePlatformExpandedPanel label {
+  display: grid;
+  gap: 6px;
   color: var(--app-text-2);
-  background: var(--app-surface-2);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 850;
 }
 
 .freePlatformActions {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr 0.8fr;
+  grid-template-columns: 1.2fr 1fr 0.72fr;
   gap: 8px;
+}
+
+.freePlatformCard:not(.listMode) .freePlatformActions {
+  align-self: end;
+  margin-top: auto;
 }
 
 .primaryMini {
   color: var(--app-text);
   border-color: color-mix(in srgb, var(--app-accent-strong) 28%, var(--app-line));
   background: color-mix(in srgb, var(--app-accent-strong) 12%, var(--app-surface-2));
+}
+
+.freePlatformCard.listMode .freePlatformActions {
+  grid-area: actions;
+  grid-template-columns: repeat(3, 36px);
+  justify-content: end;
+  gap: 6px;
+}
+
+.freePlatformCard.listMode .freePlatformActions .miniButton {
+  width: 36px;
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+  font-size: 0;
+  white-space: nowrap;
+}
+
+.freePlatformCard.listMode .freePlatformActions .miniButton svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.subtleMini {
+  padding-inline: 10px;
+  color: var(--app-text-2);
+  white-space: nowrap;
 }
 
 .miniButton:disabled {
@@ -6327,7 +6656,25 @@ kbd {
     grid-template-columns: 1fr;
   }
 
-  .freePlatformActions {
+  .freePlatformCard:not(.listMode) .freePlatformActions {
+    grid-template-columns: 1fr;
+  }
+
+  .freePlatformCard.listMode {
+    grid-template-columns: minmax(180px, 1fr) minmax(160px, 1fr) minmax(190px, 1fr);
+    grid-template-areas:
+      "header meta actions"
+      "desc quick actions";
+  }
+
+  .freePlatformCard.listMode.expanded {
+    grid-template-areas:
+      "header meta actions"
+      "desc quick actions"
+      "expanded expanded expanded";
+  }
+
+  .freePlatformCard.listMode .freePlatformExpandedPanel {
     grid-template-columns: 1fr;
   }
 }
@@ -6336,9 +6683,32 @@ kbd {
   .libraryInsightGrid {
     grid-template-columns: 1fr;
   }
+
+  .freeWorkflowStrip,
+  .freeFilterGroup,
+  .freeActionGroup,
+  .freePlatformCard.listMode,
+  .freePlatformCard.listMode.expanded {
+    grid-template-columns: 1fr;
+  }
+
+  .freePlatformCard.listMode,
+  .freePlatformCard.listMode.expanded {
+    grid-template-areas:
+      "header"
+      "meta"
+      "desc"
+      "quick"
+      "actions"
+      "expanded";
+  }
+
+  .freePlatformStatusLine {
+    grid-template-columns: 1fr;
+  }
 }
 
-/* Global solid visual system: remove decorative gradients from app chrome and controls. */
+/* Global solid visual system: no gradients in VisionHub. */
 body {
   background: #070a11;
 }
@@ -7235,9 +7605,7 @@ body {
 .appShell.theme-light .workspaceGenerate .previewStage,
 .theme-light .workspaceGenerate .previewStage {
   background-color: #eef6f4;
-  background-image:
-    linear-gradient(rgba(15, 23, 42, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.06) 1px, transparent 1px);
+  background-image: none;
   background-size: 32px 32px;
   background-position: center;
 }
@@ -7245,9 +7613,7 @@ body {
 .appShell.theme-dark .workspaceGenerate .previewStage,
 .theme-dark .workspaceGenerate .previewStage {
   background-color: #080d18;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-image: none;
   background-size: 32px 32px;
   background-position: center;
 }
@@ -7915,30 +8281,27 @@ body {
 .freePlatformLogo {
   position: relative;
   overflow: hidden;
-  background: color-mix(in srgb, var(--app-surface) 72%, transparent) !important;
+  padding: 1px;
 }
 
 .freePlatformLogo img {
-  width: 34px;
-  height: 34px;
+  width: 100%;
+  height: 100%;
   display: block;
-  object-fit: contain;
-  border-radius: 9px;
+  object-fit: cover;
+  border-radius: 13px;
   z-index: 1;
 }
 
 .freePlatformLogo span {
-  display: none;
+  display: grid;
+  place-items: center;
 }
 
 .freePlatformLogo img[src=''],
-.freePlatformLogo img:not([src]) {
+.freePlatformLogo img:not([src]),
+.freePlatformLogo img[data-failed='true'] {
   display: none;
-}
-
-.freePlatformLogo img[src=''] + span,
-.freePlatformLogo img:not([src]) + span {
-  display: block;
 }
 
 .libraryToolbar {
@@ -8641,7 +9004,7 @@ body {
   height: 17px;
   overflow: hidden;
   color: #ffffff;
-  background: linear-gradient(135deg, var(--filter-icon-a, #38bdf8), var(--filter-icon-b, #8b5cf6));
+  background: var(--app-surface);
   box-shadow:
     inset 0 0 0 3px color-mix(in srgb, var(--app-surface) 58%, transparent),
     0 0 0 1px color-mix(in srgb, var(--filter-icon-a, #38bdf8) 28%, transparent);
@@ -8748,7 +9111,7 @@ body {
   height: 17px;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: conic-gradient(#ef4444, #f97316, #eab308, #22c55e, #06b6d4, #3b82f6, #8b5cf6, #ec4899, #ef4444);
+  background: var(--app-surface);
   box-shadow:
     inset 0 0 0 3px color-mix(in srgb, var(--app-surface) 58%, transparent),
     0 0 0 1px rgba(255, 255, 255, 0.18);
@@ -9292,7 +9655,7 @@ body {
   gap: 3px;
   padding: 22px 8px 8px;
   color: #ffffff;
-  background: linear-gradient(180deg, transparent, rgba(2, 6, 23, 0.38) 30%, rgba(2, 6, 23, 0.72));
+  background: var(--app-surface);
   opacity: 0;
   transform: translateY(12px);
   transition: opacity 0.16s ease, transform 0.16s ease;
@@ -10320,8 +10683,7 @@ body {
   border: 1px solid var(--app-line);
   border-radius: 14px;
   color: var(--app-muted);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-surface-2) 92%, #fff), color-mix(in srgb, var(--app-surface) 94%, #000));
+  background: var(--app-surface);
 }
 
 .libraryReferenceDetailThumb img {
@@ -10986,8 +11348,7 @@ body {
 .providerAccessLayout .providerTypeSwitch button.active {
   color: #06211f;
   border-color: color-mix(in srgb, var(--app-accent-strong) 72%, #ffffff);
-  background:
-    linear-gradient(135deg, #ffffff, color-mix(in srgb, var(--app-accent-strong) 78%, #ffffff));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--app-accent-strong) 24%, transparent),
     0 10px 24px color-mix(in srgb, var(--app-accent-strong) 18%, transparent);
@@ -12204,9 +12565,7 @@ body {
   border-radius: 999px;
   padding: 0;
   color: var(--app-text);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-accent-strong) 13%, transparent), color-mix(in srgb, var(--app-purple) 10%, transparent)),
-    var(--app-surface-2);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 
 .appShell .polishModelPicker .noSelectCheck .studioSelectMenu button > svg,
@@ -12525,9 +12884,7 @@ body {
   z-index: 2600;
   place-items: center;
   padding: clamp(18px, 4vw, 42px);
-  background:
-    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--app-accent-strong) 18%, transparent), transparent 32%),
-    rgba(2, 6, 23, 0.52);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 
 .appShell.sidebarCollapsed .confirmBackdrop {
@@ -12636,7 +12993,7 @@ body {
 .confirmPrimaryButton.danger {
   color: #fff;
   border-color: color-mix(in srgb, #ef4444 68%, transparent);
-  background: linear-gradient(135deg, #ef4444, #f43f5e);
+  background: var(--app-surface);
 }
 
 .confirmActions button:disabled {
@@ -12645,9 +13002,7 @@ body {
 }
 
 .appShell.theme-light .confirmBackdrop {
-  background:
-    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--app-accent-strong) 14%, transparent), transparent 32%),
-    rgba(15, 23, 42, 0.22);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 
 .appShell.theme-light .confirmDialog {
@@ -12670,9 +13025,7 @@ body {
   z-index: 2580;
   place-items: center;
   padding: clamp(18px, 4vw, 42px);
-  background:
-    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--app-accent-strong) 16%, transparent), transparent 32%),
-    rgba(2, 6, 23, 0.48);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 
 .organizerDialog {
@@ -12873,9 +13226,7 @@ body {
 }
 
 .appShell.theme-light .organizerDialogBackdrop {
-  background:
-    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--app-accent-strong) 13%, transparent), transparent 32%),
-    rgba(15, 23, 42, 0.2);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 
 .appShell.theme-light .organizerDialog {
@@ -12968,8 +13319,10 @@ body {
 .freePlatformLogo img {
   position: relative;
   z-index: 1;
+  padding: 0;
   box-shadow: none !important;
   filter: none !important;
+  background: transparent;
 }
 
 .appShell .libraryFloatingDock {
@@ -13463,9 +13816,7 @@ body {
 
 .libraryRecoveryAdvicePanel {
   border-color: color-mix(in srgb, var(--app-accent-strong) 24%, var(--app-line));
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-accent-strong) 8%, transparent), transparent 52%),
-    color-mix(in srgb, var(--app-surface-2) 82%, transparent);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
 }
 
 .libraryRecoveryAdvicePanel.compact {
@@ -13590,7 +13941,7 @@ body {
   border: 1px solid var(--app-line);
   border-radius: 24px;
   color: var(--app-text);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--app-surface) 96%, transparent), color-mix(in srgb, var(--app-surface-2) 72%, transparent));
+  background: var(--app-surface);
 }
 
 .assetGalleryComposer .panelTitleRow {
@@ -14219,9 +14570,7 @@ body {
   border: 1px dashed color-mix(in srgb, var(--app-accent-strong) 28%, var(--app-line));
   border-radius: 24px;
   color: var(--app-text);
-  background:
-    radial-gradient(circle at center, color-mix(in srgb, var(--app-accent-strong) 8%, transparent), transparent 46%),
-    var(--app-surface);
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
   text-align: center;
 }
 
@@ -15369,15 +15718,7 @@ body {
   border: 0;
   border-radius: 18px;
   clip-path: none;
-  background:
-    linear-gradient(var(--viewfinder-line), var(--viewfinder-line)) left top / 96px 2px no-repeat,
-    linear-gradient(var(--viewfinder-line), var(--viewfinder-line)) left top / 2px 96px no-repeat,
-    linear-gradient(var(--viewfinder-line), var(--viewfinder-line)) right top / 96px 2px no-repeat,
-    linear-gradient(var(--viewfinder-line), var(--viewfinder-line)) right top / 2px 96px no-repeat,
-    linear-gradient(var(--viewfinder-line), var(--viewfinder-line)) left bottom / 96px 2px no-repeat,
-    linear-gradient(var(--viewfinder-line), var(--viewfinder-line)) left bottom / 2px 96px no-repeat,
-    linear-gradient(var(--viewfinder-line), var(--viewfinder-line)) right bottom / 96px 2px no-repeat,
-    linear-gradient(var(--viewfinder-line), var(--viewfinder-line)) right bottom / 2px 96px no-repeat;
+  background: var(--app-surface);
 }
 
 .workspaceGenerate .previewStage::after {
@@ -15561,15 +15902,12 @@ body {
   opacity: 0.22;
 }
 
-/* AI creation V4 sparkle visibility fix: use gradients instead of masks for the star layer. */
+/* AI creation V4 sparkle visibility fix: solid star layer. */
 .workspaceGenerate .previewStage::after {
   color: var(--visionhub-canvas-star-color);
   opacity: 0.28;
   background-color: transparent;
-  background-image:
-    radial-gradient(ellipse 2px 11px at 50% 50%, currentColor 0 58%, transparent 62%),
-    radial-gradient(ellipse 11px 2px at 50% 50%, currentColor 0 58%, transparent 62%),
-    radial-gradient(circle at 50% 50%, currentColor 0 1.6px, transparent 1.9px);
+  background-image: none;
   background-repeat: repeat;
   background-position: center;
   background-size: var(--visionhub-canvas-mesh-size) var(--visionhub-canvas-mesh-size);
@@ -15625,18 +15963,13 @@ body {
 .workspaceGenerate .previewStage::before {
   opacity: 0.3;
   background-color: transparent !important;
-  background-image:
-    linear-gradient(45deg, transparent 49.1%, var(--visionhub-canvas-mesh-color) 49.6%, var(--visionhub-canvas-mesh-color) 50.4%, transparent 50.9%),
-    linear-gradient(-45deg, transparent 49.1%, var(--visionhub-canvas-mesh-color) 49.6%, var(--visionhub-canvas-mesh-color) 50.4%, transparent 50.9%);
+  background-image: none;
 }
 
 .workspaceGenerate .previewStage::after {
   opacity: 0.26;
   background-color: transparent !important;
-  background-image:
-    radial-gradient(ellipse 1.8px 10px at 50% 50%, var(--visionhub-canvas-star-color) 0 62%, transparent 66%),
-    radial-gradient(ellipse 10px 1.8px at 50% 50%, var(--visionhub-canvas-star-color) 0 62%, transparent 66%),
-    radial-gradient(circle at 50% 50%, var(--visionhub-canvas-star-color) 0 1.8px, transparent 2.1px);
+  background-image: none;
 }
 
 .appShell.theme-light .workspaceGenerate .previewStage::after,

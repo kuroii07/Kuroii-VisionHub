@@ -261,7 +261,7 @@ for term in [
     assert term in settings_src, f"App settings persistence missing: {term}"
 
 free_platform_src = (ROOT / "src/services/freePlatforms.ts").read_text(encoding="utf-8")
-for term in ["FREE_PLATFORMS", "doubao", "jimeng", "kling", "yuanbao", "qwen", "chatgpt", "grok", "gemini"]:
+for term in ["FREE_PLATFORMS", "doubao", "jimeng", "kling", "qwen", "chatgpt", "grok", "gemini", "tongyi-wanxiang", "liblib", "seaart"]:
     assert term in free_platform_src, f"Free platform missing: {term}"
 
 prompt_templates_src = (ROOT / "src/services/promptTemplates.ts").read_text(encoding="utf-8")

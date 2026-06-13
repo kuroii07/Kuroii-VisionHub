@@ -40,7 +40,7 @@
   ZoomIn,
   ZoomOut
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { InspirationAsset } from '../domain/inspirationTypes';
 import type { GenerationRecord, ImageToImageAdapter, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
@@ -130,7 +130,8 @@ import {
   savePromptTemplates,
   type PromptTemplate
 } from '../services/promptTemplates';
-import { FREE_PLATFORMS, type FreePlatform } from '../services/freePlatforms';
+import { importInspirationAsset } from '../services/inspirationApi';
+import { FREE_PLATFORMS, buildFreePlatformPrompt, type FreePlatform } from '../services/freePlatforms';
 import { readStorageValue, writeStorageValue } from '../services/safeStorage';
 import { useStudioStore } from '../store/useStudioStore';
 import { ModernGeneratePage } from './GeneratePage';
@@ -153,6 +154,15 @@ type ProviderMatrixCapabilityKey =
   | 'openAICompatible'
   | 'officialProtocol'
   | 'localService';
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error('读取图片失败'));
+    reader.readAsDataURL(file);
+  });
+}
 type LibraryTimeFilter = 'all' | 'today' | '7d' | '30d';
 type LibraryViewMode = 'masonry' | 'adaptive' | 'square' | 'contain' | 'list';
 type LibrarySortMode = 'newest' | 'oldest' | 'favorites' | 'provider' | 'model' | 'duration' | 'size' | 'filename';
@@ -632,7 +642,7 @@ const libraryRatingOptions: Array<{ value: LibraryRatingFilter; label: string }>
 const libraryRatingValues = [1, 2, 3, 4, 5] as const;
 
 const libraryColorOptions: Array<{ value: LibraryColorFilter; label: string; color: string }> = [
-  { value: 'all', label: '全部颜色', color: 'linear-gradient(135deg, #ef4444, #f59e0b, #22c55e, #38bdf8, #8b5cf6)' },
+  { value: 'all', label: '全部颜色', color: '#64748b' },
   { value: 'red', label: '红色', color: '#ef4444' },
   { value: 'orange', label: '橙色', color: '#f97316' },
   { value: 'yellow', label: '黄色', color: '#eab308' },
@@ -641,7 +651,7 @@ const libraryColorOptions: Array<{ value: LibraryColorFilter; label: string; col
   { value: 'blue', label: '蓝色', color: '#3b82f6' },
   { value: 'purple', label: '紫色', color: '#8b5cf6' },
   { value: 'pink', label: '粉色', color: '#ec4899' },
-  { value: 'mono', label: '黑白', color: 'linear-gradient(135deg, #111827 0 45%, #f8fafc 45% 100%)' }
+  { value: 'mono', label: '黑白', color: '#64748b' }
 ];
 
 const libraryAddActions: Array<{ id: LibraryAddAction; label: string; detail: string }> = [
@@ -2693,10 +2703,13 @@ export function App() {
 
   async function copyPromptAndOpenPlatform(platform: FreePlatform) {
     try {
-      if (!prompt.trim()) throw new Error('请先在 AI 创作里写好 Prompt。');
-      await navigator.clipboard?.writeText(prompt);
+      if (prompt.trim()) {
+        await navigator.clipboard?.writeText(buildFreePlatformPrompt(platform, prompt));
+      }
       await openExternalUrl(platform.url);
-      setFreePlatformMessage(`已复制 Prompt，并打开 ${platform.name}。`);
+      setFreePlatformMessage(prompt.trim()
+        ? `已复制 ${platform.name} 专用 Prompt，并打开网页。`
+        : `已打开 ${platform.name} 网页。`);
     } catch (error) {
       setFreePlatformMessage(error instanceof Error ? error.message : String(error));
     }
@@ -2705,8 +2718,8 @@ export function App() {
   async function copyPromptForPlatform(platform: FreePlatform) {
     try {
       if (!prompt.trim()) throw new Error('请先在 AI 创作里写好 Prompt。');
-      await navigator.clipboard?.writeText(prompt);
-      setFreePlatformMessage(`已复制 Prompt，可粘贴到 ${platform.name}。`);
+      await navigator.clipboard?.writeText(buildFreePlatformPrompt(platform, prompt));
+      setFreePlatformMessage(`已复制 ${platform.name} 专用 Prompt。`);
     } catch (error) {
       setFreePlatformMessage(error instanceof Error ? error.message : String(error));
     }
@@ -2716,6 +2729,29 @@ export function App() {
     try {
       await openExternalUrl(platform.url);
       setFreePlatformMessage(`已打开 ${platform.name}。`);
+    } catch (error) {
+      setFreePlatformMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function importWebResultFromPlatform(platform: FreePlatform, file: File) {
+    try {
+      if (!file.type.startsWith('image/')) throw new Error('请选择网页下载的图片文件。');
+      const adaptedPrompt = buildFreePlatformPrompt(platform, prompt);
+      const dataUrl = await fileToDataUrl(file);
+      await importInspirationAsset({
+        title: `${platform.name} 网页成品 · ${file.name.replace(/\.[^.]+$/, '')}`,
+        dataUrl,
+        fileName: file.name,
+        sourceUrl: platform.url,
+        sourcePlatform: platform.name,
+        originalPrompt: adaptedPrompt || prompt.trim() || undefined,
+        tags: ['免费平台', platform.name, platform.region === 'china' ? '国内平台' : '海外平台', platform.supportsImageToImage ? '图生图' : '文生图'],
+        note: `从 ${platform.name} 网页下载后导入。${platform.commercialNote}`,
+        licenseStatus: platform.commercialUse === 'allowed' ? 'commercial-confirmed' : 'reference-only'
+      });
+      setIsInspirationPageMounted(true);
+      setFreePlatformMessage(`已把 ${platform.name} 网页下载图导入图片收藏。`);
     } catch (error) {
       setFreePlatformMessage(error instanceof Error ? error.message : String(error));
     }
@@ -3324,10 +3360,7 @@ export function App() {
             onCopyPrompt={copyPromptForPlatform}
             onOpenPlatform={openPlatform}
             onCopyPromptAndOpen={copyPromptAndOpenPlatform}
-            onImportLibrary={() => {
-              navigateTo('library');
-              setFreePlatformMessage('请把网页下载的图片拖入或通过后续导入入口加入作品画廊。');
-            }}
+            onImportWebResult={importWebResultFromPlatform}
           />
         ) : page === 'providers' ? (
           <ProviderSettingsPage
@@ -3586,119 +3619,464 @@ function FreeGenerationPage(props: {
   onCopyPrompt: (platform: FreePlatform) => void;
   onOpenPlatform: (platform: FreePlatform) => void;
   onCopyPromptAndOpen: (platform: FreePlatform) => void;
-  onImportLibrary: () => void;
+  onImportWebResult: (platform: FreePlatform, file: File) => void;
 }) {
+  type FreePlatformUsageStatus = 'unused' | 'registered' | 'favorite' | 'unavailable';
+  type FreePlatformPrefs = Record<string, { status: FreePlatformUsageStatus; note: string }>;
+
+  const FREE_PLATFORM_PREFS_KEY = 'visionhub.freePlatformPrefs.v1';
+  const FREE_PLATFORM_LOGO_CACHE_KEY = 'visionhub.freePlatformLogoCache.v1';
+  const statusOptions: Array<{ value: FreePlatformUsageStatus; label: string }> = [
+    { value: 'unused', label: '未使用' },
+    { value: 'registered', label: '已注册' },
+    { value: 'favorite', label: '常用' },
+    { value: 'unavailable', label: '暂不可用' }
+  ];
+  const commercialLabelMap: Record<FreePlatform['commercialUse'], string> = {
+    unknown: '商用待确认',
+    personal: '仅个人使用',
+    limited: '商用需复核',
+    allowed: '可商用'
+  };
+  const loginLabelMap: Record<FreePlatform['loginRequirement'], string> = {
+    required: '需要登录',
+    optional: '可免登录',
+    unknown: '登录规则待确认'
+  };
+  function loadFreePlatformPrefs(): FreePlatformPrefs {
+    const raw = readStorageValue(FREE_PLATFORM_PREFS_KEY);
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw) as FreePlatformPrefs;
+      return Object.fromEntries(
+        Object.entries(parsed).map(([id, value]) => [
+          id,
+          {
+            status: statusOptions.some((item) => item.value === value?.status) ? value.status : 'unused',
+            note: typeof value?.note === 'string' ? value.note.slice(0, 500) : ''
+          }
+        ])
+      );
+    } catch (error) {
+      console.warn('[VisionHub] free platform prefs parse failed; using defaults', error);
+      return {};
+    }
+  }
+
+  function loadFreePlatformLogoCache(): Record<string, string | null> {
+    const raw = readStorageValue(FREE_PLATFORM_LOGO_CACHE_KEY);
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw) as Record<string, string | null>;
+      return Object.fromEntries(
+        Object.entries(parsed).filter(([, value]) => value === null || typeof value === 'string')
+      );
+    } catch (error) {
+      console.warn('[VisionHub] free platform logo cache parse failed; using defaults', error);
+      return {};
+    }
+  }
+
   const [regionFilter, setRegionFilter] = useState<'all' | FreePlatform['region']>('all');
   const [kindFilter, setKindFilter] = useState<'all' | FreePlatform['kind']>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | FreePlatformUsageStatus>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [prefs, setPrefs] = useState<FreePlatformPrefs>(() => loadFreePlatformPrefs());
+  const [detailPlatformId, setDetailPlatformId] = useState<string | null>(null);
+  const [expandedListPlatformId, setExpandedListPlatformId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [importTargetPlatform, setImportTargetPlatform] = useState<FreePlatform | null>(null);
+  const [resolvedLogoUrls, setResolvedLogoUrls] = useState<Record<string, string | null>>(() => loadFreePlatformLogoCache());
+  const webResultInputRef = useRef<HTMLInputElement | null>(null);
   const promptReady = props.prompt.trim().length > 0;
+
+  function savePrefs(nextPrefs: FreePlatformPrefs) {
+    setPrefs(nextPrefs);
+    writeStorageValue(FREE_PLATFORM_PREFS_KEY, JSON.stringify(nextPrefs));
+  }
+
+  function updatePlatformPrefs(platformId: string, patch: Partial<FreePlatformPrefs[string]>) {
+    const current = prefs[platformId] ?? { status: 'unused', note: '' };
+    savePrefs({
+      ...prefs,
+      [platformId]: {
+        status: patch.status ?? current.status,
+        note: patch.note ?? current.note
+      }
+    });
+  }
+
+  function toggleFavorite(platformId: string) {
+    const current = prefs[platformId]?.status ?? 'unused';
+    updatePlatformPrefs(platformId, { status: current === 'favorite' ? 'registered' : 'favorite' });
+  }
+
+  function startImportWebResult(platform: FreePlatform) {
+    setImportTargetPlatform(platform);
+    webResultInputRef.current?.click();
+  }
+
+  function resolveInitialLogoUrl(platform: FreePlatform) {
+    return Object.prototype.hasOwnProperty.call(resolvedLogoUrls, platform.id)
+      ? resolvedLogoUrls[platform.id]
+      : platform.logoUrl;
+  }
+
+  function markResolvedLogoUrl(platformId: string, url: string | null) {
+    setResolvedLogoUrls((current) => {
+      if (current[platformId] === url) return current;
+      const next = { ...current, [platformId]: url };
+      const persistent = Object.fromEntries(Object.entries(next).filter(([, value]) => typeof value === 'string'));
+      writeStorageValue(FREE_PLATFORM_LOGO_CACHE_KEY, JSON.stringify(persistent));
+      return next;
+    });
+  }
+
+  function handleWebResultSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = Array.from(event.target.files ?? []).find((item) => item.type.startsWith('image/'));
+    if (file && importTargetPlatform) {
+      props.onImportWebResult(importTargetPlatform, file);
+    }
+    event.target.value = '';
+  }
+
   const filteredPlatforms = FREE_PLATFORMS.filter((platform) => {
+    const platformPrefs = prefs[platform.id] ?? { status: 'unused', note: '' };
+    const normalizedQuery = searchQuery.trim().toLowerCase();
     const matchesRegion = regionFilter === 'all' || platform.region === regionFilter;
     const matchesKind = kindFilter === 'all' || platform.kind === kindFilter;
-    return matchesRegion && matchesKind;
+    const matchesStatus = statusFilter === 'all' || platformPrefs.status === statusFilter;
+    const matchesSearch = !normalizedQuery
+      || [
+        platform.name,
+        platform.vendor,
+        platform.bestFor,
+        platform.freeQuota,
+        platform.commercialNote,
+        platform.promptHint,
+        platform.tags.join(' '),
+        platformPrefs.note
+      ].some((value) => value.toLowerCase().includes(normalizedQuery));
+    return matchesRegion && matchesKind && matchesStatus && matchesSearch;
   });
+  const favoriteCount = FREE_PLATFORMS.filter((platform) => prefs[platform.id]?.status === 'favorite').length;
 
   return (
     <>
       <header className="topbar freeTopbar">
         <div className="pageTitleBlock">
-          <p className="eyebrow">Free Platform Studio</p>
-          <h1>免费平台</h1>
-          <p>用网页登录额度试平台；稳定自动生成仍建议走已保存的 API Key 配置。</p>
+          <p className="eyebrow">Web Platform Helper</p>
+          <h1>免费平台助手</h1>
+          <p>整理常用网页平台，复制适配 Prompt；网页生成后把下载图片导入图片收藏管理。</p>
         </div>
         <div className="statusPills">
           <span>
             <Gift size={15} /> {FREE_PLATFORMS.length} 个平台
           </span>
           <span>
-            <Copy size={15} /> {promptReady ? 'Prompt 已准备' : '等待 Prompt'}
+            <Star size={15} /> {favoriteCount} 个常用
+          </span>
+          <span>
+            <Copy size={15} /> {promptReady ? '可复制适配 Prompt' : '先写 Prompt'}
           </span>
         </div>
       </header>
 
-      <section className="freeToolbar">
-        <div className="segmentedControl compactSegment">
-          <button className={regionFilter === 'all' ? 'active' : ''} onClick={() => setRegionFilter('all')}>
-            全部
-          </button>
-          <button className={regionFilter === 'china' ? 'active' : ''} onClick={() => setRegionFilter('china')}>
-            国内
-          </button>
-          <button className={regionFilter === 'global' ? 'active' : ''} onClick={() => setRegionFilter('global')}>
-            海外
-          </button>
+      <section className="freeWorkflowStrip" aria-label="免费平台使用流程">
+        <div>
+          <strong>1. 复制并打开</strong>
+          <span>把当前 Prompt 转成平台适配版并打开网页。</span>
         </div>
-        <StudioSelect
-          value={kindFilter}
-          onChange={(value) => setKindFilter(value as 'all' | FreePlatform['kind'])}
-          options={[
-            { value: 'all', label: '全部能力' },
-            { value: 'chat-image', label: '聊天生图' },
-            { value: 'image', label: '图片生成' },
-            { value: 'image-video', label: '图像 / 视频' }
-          ]}
-        />
-        <button className="rowActionButton" onClick={props.onImportLibrary}>
-          <FolderOpen size={15} /> 导入到画廊
-        </button>
+        <div>
+          <strong>2. 网页生成下载</strong>
+          <span>在平台网页里手动生成并下载图片。</span>
+        </div>
+        <div>
+          <strong>3. 导入成品</strong>
+          <span>选择下载图，存入灵感中心图片收藏。</span>
+        </div>
       </section>
 
-      <section className="freePlatformGrid">
-        {filteredPlatforms.map((platform) => (
-          <article className="freePlatformCard" key={platform.id}>
+      <section className="freeToolbar">
+        <input
+          ref={webResultInputRef}
+          className="visuallyHidden"
+          type="file"
+          accept="image/*"
+          onChange={handleWebResultSelected}
+        />
+        <div className="freeFilterGroup">
+          <div className="segmentedControl compactSegment">
+            <button className={regionFilter === 'all' ? 'active' : ''} onClick={() => setRegionFilter('all')}>
+              全部
+            </button>
+            <button className={regionFilter === 'china' ? 'active' : ''} onClick={() => setRegionFilter('china')}>
+              国内
+            </button>
+            <button className={regionFilter === 'global' ? 'active' : ''} onClick={() => setRegionFilter('global')}>
+              海外
+            </button>
+          </div>
+          <StudioSelect
+            value={kindFilter}
+            onChange={(value) => setKindFilter(value as 'all' | FreePlatform['kind'])}
+            options={[
+              { value: 'all', label: '全部能力' },
+              { value: 'chat-image', label: '聊天生图' },
+              { value: 'image', label: '图片生成' },
+              { value: 'image-video', label: '图像 / 视频' }
+            ]}
+          />
+          <StudioSelect
+            value={statusFilter}
+            onChange={(value) => setStatusFilter(value as 'all' | FreePlatformUsageStatus)}
+            options={[
+              { value: 'all', label: '全部状态' },
+              ...statusOptions
+            ]}
+          />
+        </div>
+        <div className="freeActionGroup">
+          <label className="freeSearchBox">
+            <span>搜索平台 / 标签 / 备注</span>
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="例如：图生图、商用、中文、海报"
+            />
+          </label>
+          <div className="segmentedControl compactSegment freeViewSwitch" aria-label="免费平台视图切换">
+            <button className={viewMode === 'card' ? 'active' : ''} onClick={() => setViewMode('card')}>
+              卡片
+            </button>
+            <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')}>
+              列表
+            </button>
+          </div>
+          <div className="freeImportHint">
+            网页生成后，在对应平台行点“导入成品”
+          </div>
+        </div>
+      </section>
+
+      <section className={viewMode === 'list' ? 'freePlatformList' : 'freePlatformGrid'}>
+        {filteredPlatforms.map((platform) => {
+          const platformPrefs = prefs[platform.id] ?? { status: 'unused', note: '' };
+          const isListExpanded = viewMode === 'list' && expandedListPlatformId === platform.id;
+          return (
+          <article className={`freePlatformCard ${viewMode === 'list' ? 'listMode' : ''} ${isListExpanded ? 'expanded' : ''}`} key={platform.id}>
             <div className="freePlatformHeader">
               <div
                 className="freePlatformLogo"
                 style={{ background: platform.brandColor }}
                 aria-label={`${platform.name} Logo`}
               >
-                <img
-                  src={platform.logoUrl}
-                  alt=""
-                  loading="lazy"
-                  onError={(event) => {
-                    const image = event.currentTarget;
-                    if (image.dataset.fallback !== 'used') {
-                      image.dataset.fallback = 'used';
-                      image.src = platform.fallbackLogoUrl;
-                      return;
-                    }
-                    image.style.display = 'none';
-                  }}
-                />
+                {resolveInitialLogoUrl(platform) ? (
+                  <img
+                    src={resolveInitialLogoUrl(platform) ?? undefined}
+                    alt=""
+                    loading="lazy"
+                    onLoad={(event) => markResolvedLogoUrl(platform.id, event.currentTarget.currentSrc || event.currentTarget.src)}
+                    onError={(event) => {
+                      const image = event.currentTarget;
+                      const fallbackIndex = Number(image.dataset.fallbackIndex ?? '0');
+                      const fallbackUrls = platform.fallbackLogoUrls?.length
+                        ? platform.fallbackLogoUrls
+                        : [platform.fallbackLogoUrl];
+                      const nextUrl = fallbackUrls[fallbackIndex];
+                      if (nextUrl) {
+                        image.dataset.fallbackIndex = String(fallbackIndex + 1);
+                        image.src = nextUrl;
+                        return;
+                      }
+                      markResolvedLogoUrl(platform.id, null);
+                    }}
+                  />
+                ) : null}
                 <span>{platform.logoText}</span>
               </div>
               <div>
                 <strong>{platform.name}</strong>
                 <small>{platform.vendor}</small>
               </div>
+              <button
+                className={`iconButton favoritePlatformButton ${platformPrefs.status === 'favorite' ? 'active' : ''}`}
+                onClick={() => toggleFavorite(platform.id)}
+                title={platformPrefs.status === 'favorite' ? '取消常用' : '标记常用'}
+                aria-label={platformPrefs.status === 'favorite' ? `取消常用 ${platform.name}` : `标记常用 ${platform.name}`}
+              >
+                <Star size={15} fill={platformPrefs.status === 'favorite' ? 'currentColor' : 'none'} />
+              </button>
             </div>
 
             <div className="freePlatformMeta">
               <span>{platform.region === 'china' ? '国内平台' : '海外平台'}</span>
               <span>{platform.kind === 'image-video' ? '图像 / 视频' : platform.kind === 'chat-image' ? '聊天生图' : '图片生成'}</span>
+              <span>{loginLabelMap[platform.loginRequirement]}</span>
+              <span>{platform.supportsImageToImage ? '支持图生图' : '偏文生图'}</span>
             </div>
 
             <p>{platform.bestFor}</p>
-            <small className="quotaHint">{platform.quotaHint}</small>
+            <div className="freePlatformQuickInfo">
+              <span>{platform.freeQuota}</span>
+              <span>{commercialLabelMap[platform.commercialUse]}</span>
+            </div>
 
             <div className="freePlatformActions">
               <button
                 className="miniButton primaryMini"
-                disabled={!promptReady}
                 onClick={() => props.onCopyPromptAndOpen(platform)}
+                title={promptReady ? `复制 ${platform.name} 专用 Prompt 并打开网页` : `打开 ${platform.name} 网页`}
+                aria-label={promptReady ? `复制 ${platform.name} 专用 Prompt 并打开网页` : `打开 ${platform.name} 网页`}
               >
                 <ExternalLink size={13} /> 复制并打开
               </button>
-              <button className="miniButton" disabled={!promptReady} onClick={() => props.onCopyPrompt(platform)}>
-                <Copy size={13} /> Prompt
+              <button
+                className="miniButton"
+                onClick={() => startImportWebResult(platform)}
+                title={`导入从 ${platform.name} 网页下载的图片`}
+                aria-label={`导入从 ${platform.name} 网页下载的图片`}
+              >
+                <FolderOpen size={13} /> 导入成品
               </button>
-              <button className="miniButton" onClick={() => props.onOpenPlatform(platform)}>
-                <Globe2 size={13} /> 网页
+              <button
+                className="miniButton subtleMini freePlatformDetailButton"
+                onClick={() => {
+                  if (viewMode === 'card') {
+                    setDetailPlatformId(platform.id);
+                    return;
+                  }
+                  setExpandedListPlatformId((current) => current === platform.id ? null : platform.id);
+                }}
+                title={`查看 ${platform.name} 详情`}
+                aria-label={`查看 ${platform.name} 详情`}
+              >
+                <Info size={13} /> 详情
               </button>
             </div>
+            {isListExpanded ? (
+              <div className="freePlatformExpandedPanel">
+                <div className="freePlatformDetails">
+                  <small><strong>额度：</strong>{platform.freeQuota}</small>
+                  <small><strong>限制：</strong>{platform.watermarkLimit}</small>
+                  <small><strong>商用：</strong>{platform.commercialNote}</small>
+                  <small><strong>Prompt：</strong>{platform.promptHint}</small>
+                </div>
+                <div className="freePlatformDetailControls">
+                  <label>
+                    使用状态
+                    <StudioSelect
+                      value={platformPrefs.status}
+                      onChange={(value) => updatePlatformPrefs(platform.id, { status: value as FreePlatformUsageStatus })}
+                      options={statusOptions}
+                    />
+                  </label>
+                </div>
+                <label>
+                  我的备注
+                  <textarea
+                    value={platformPrefs.note}
+                    onChange={(event) => updatePlatformPrefs(platform.id, { note: event.target.value.slice(0, 500) })}
+                    placeholder={`记录 ${platform.name} 的账号、额度、试用结果或商用注意`}
+                    rows={3}
+                  />
+                </label>
+              </div>
+            ) : null}
           </article>
-        ))}
+        );
+        })}
       </section>
+      {viewMode === 'card' && detailPlatformId ? (() => {
+        const platform = FREE_PLATFORMS.find((item) => item.id === detailPlatformId);
+        if (!platform) return null;
+        const platformPrefs = prefs[platform.id] ?? { status: 'unused', note: '' };
+        return (
+          <div className="freePlatformDrawerBackdrop" onClick={() => setDetailPlatformId(null)}>
+            <aside className="freePlatformDrawer" role="dialog" aria-modal="true" aria-label={`${platform.name} 详情`} onClick={(event) => event.stopPropagation()}>
+              <div className="freePlatformDrawerHeader">
+                <div className="freePlatformLogo" style={{ background: platform.brandColor }} aria-label={`${platform.name} Logo`}>
+                  {resolveInitialLogoUrl(platform) ? (
+                    <img
+                      src={resolveInitialLogoUrl(platform) ?? undefined}
+                      alt=""
+                      loading="lazy"
+                      onLoad={(event) => markResolvedLogoUrl(platform.id, event.currentTarget.currentSrc || event.currentTarget.src)}
+                      onError={(event) => {
+                        const image = event.currentTarget;
+                        const fallbackIndex = Number(image.dataset.fallbackIndex ?? '0');
+                        const fallbackUrls = platform.fallbackLogoUrls?.length
+                          ? platform.fallbackLogoUrls
+                          : [platform.fallbackLogoUrl];
+                        const nextUrl = fallbackUrls[fallbackIndex];
+                        if (nextUrl) {
+                          image.dataset.fallbackIndex = String(fallbackIndex + 1);
+                          image.src = nextUrl;
+                          return;
+                        }
+                        markResolvedLogoUrl(platform.id, null);
+                      }}
+                    />
+                  ) : null}
+                  <span>{platform.logoText}</span>
+                </div>
+                <div>
+                  <p className="eyebrow">Web Platform Detail</p>
+                  <h2>{platform.name}</h2>
+                  <small>{platform.vendor}</small>
+                </div>
+                <button className="iconButton" onClick={() => setDetailPlatformId(null)} aria-label="关闭详情">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="freePlatformMeta">
+                <span>{platform.region === 'china' ? '国内平台' : '海外平台'}</span>
+                <span>{platform.kind === 'image-video' ? '图像 / 视频' : platform.kind === 'chat-image' ? '聊天生图' : '图片生成'}</span>
+                <span>{loginLabelMap[platform.loginRequirement]}</span>
+                <span>{platform.supportsImageToImage ? '支持图生图' : '偏文生图'}</span>
+              </div>
+              <p className="freePlatformDrawerSummary">{platform.bestFor}</p>
+              <div className="freePlatformDetails">
+                <small><strong>额度：</strong>{platform.freeQuota}</small>
+                <small><strong>限制：</strong>{platform.watermarkLimit}</small>
+                <small><strong>商用：</strong>{platform.commercialNote}</small>
+                <small><strong>Prompt：</strong>{platform.promptHint}</small>
+              </div>
+              <label className="freePlatformDrawerField">
+                <span>使用状态</span>
+                <StudioSelect
+                  value={platformPrefs.status}
+                  onChange={(value) => updatePlatformPrefs(platform.id, { status: value as FreePlatformUsageStatus })}
+                  options={statusOptions}
+                />
+              </label>
+              <div className="freePlatformDrawerActions">
+                <button className="miniButton primaryMini" onClick={() => props.onCopyPromptAndOpen(platform)}>
+                  <ExternalLink size={13} /> 复制并打开
+                </button>
+                <button className="miniButton" disabled={!promptReady} onClick={() => props.onCopyPrompt(platform)}>
+                  <Copy size={13} /> 只复制 Prompt
+                </button>
+                <button className="miniButton" onClick={() => props.onOpenPlatform(platform)}>
+                  <Globe2 size={13} /> 只打开网页
+                </button>
+                <button className="miniButton" onClick={() => startImportWebResult(platform)}>
+                  <FolderOpen size={13} /> 导入成品
+                </button>
+              </div>
+              <label className="freePlatformDrawerField">
+                <span>我的备注</span>
+                <textarea
+                  value={platformPrefs.note}
+                  onChange={(event) => updatePlatformPrefs(platform.id, { note: event.target.value.slice(0, 500) })}
+                  placeholder={`记录 ${platform.name} 的账号、额度、试用结果或商用注意`}
+                  rows={4}
+                />
+              </label>
+            </aside>
+          </div>
+        );
+      })() : null}
     </>
   );
 }

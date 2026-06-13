@@ -1,4 +1,4 @@
-import { Check, ChevronDown } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 export type StudioSelectOption = {
@@ -72,7 +72,6 @@ export function StudioSelect(props: {
                   <span>{option.label}</span>
                   {option.description ? <small>{option.description}</small> : null}
                 </span>
-                {active ? <Check size={14} /> : null}
               </button>
             );
           })}
