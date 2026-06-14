@@ -13,6 +13,13 @@ const RELAY_PROVIDER_ID = 'custom-http-provider';
 
 export type ProviderProfileTestStatus = 'untested' | 'passed' | 'warning' | 'failed';
 
+export interface ProviderProfileModelProbe {
+  modelId: string;
+  available: boolean;
+  checkedAt: string;
+  message: string;
+}
+
 export interface ProviderConnectionProfile extends OpenAICompatibleConfig {
   id: string;
   providerId: string;
@@ -22,6 +29,9 @@ export interface ProviderConnectionProfile extends OpenAICompatibleConfig {
   lastLatencyMs?: number;
   lastMessage?: string;
   lastTestedAt?: string;
+  lastModelCount?: number;
+  lastImageModelCount?: number;
+  lastModelProbe?: ProviderProfileModelProbe;
   createdAt: string;
   updatedAt: string;
 }
@@ -82,8 +92,26 @@ export function normalizeProviderProfile(profile: Partial<ProviderConnectionProf
     lastLatencyMs: typeof profile.lastLatencyMs === 'number' ? profile.lastLatencyMs : undefined,
     lastMessage: profile.lastMessage,
     lastTestedAt: profile.lastTestedAt,
+    lastModelCount: typeof profile.lastModelCount === 'number' ? profile.lastModelCount : undefined,
+    lastImageModelCount: typeof profile.lastImageModelCount === 'number' ? profile.lastImageModelCount : undefined,
+    lastModelProbe: normalizeModelProbe(profile.lastModelProbe),
     createdAt: String(profile.createdAt || base.createdAt),
     updatedAt: String(profile.updatedAt || base.updatedAt)
+  };
+}
+
+function normalizeModelProbe(value: unknown): ProviderProfileModelProbe | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const probe = value as Partial<ProviderProfileModelProbe>;
+  const modelId = typeof probe.modelId === 'string' ? probe.modelId.trim() : '';
+  const checkedAt = typeof probe.checkedAt === 'string' ? probe.checkedAt : '';
+  const message = typeof probe.message === 'string' ? probe.message : '';
+  if (!modelId || !checkedAt) return undefined;
+  return {
+    modelId,
+    available: Boolean(probe.available),
+    checkedAt,
+    message
   };
 }
 

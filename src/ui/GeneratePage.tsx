@@ -32,6 +32,7 @@ import { getDefaultPolishMode, polishPrompt, PROMPT_STYLE_PRESETS, resolvePolish
 import { isTauriRuntime, polishPromptWithProvider, referenceImagesFromPaths } from '../services/desktopApi';
 import { PROMPT_POLISH_SECRET_ID, promptPolishConfigId } from '../services/appSettings';
 import { parseExtraHeaders, type OpenAICompatibleConfig } from '../services/providerConfig';
+import type { ProviderConnectionProfile } from '../services/providerProfiles';
 import { diagnoseGenerationFailure, isPotentialBackgroundCompletion } from '../services/generationErrorDiagnostics';
 import { readStorageValue, writeStorageValue } from '../services/safeStorage';
 import { useStudioStore } from '../store/useStudioStore';
@@ -306,6 +307,8 @@ export function ModernGeneratePage(props: {
   supportsOpenAICompatible: boolean;
   isRealProviderReady: boolean;
   providerConfig: OpenAICompatibleConfig;
+  activeProfile: Pick<ProviderConnectionProfile, 'id' | 'displayName' | 'enabled' | 'lastTestStatus' | 'lastModelProbe'> | null;
+  activeProfileSecretAvailable: boolean;
   selectedModelId: string;
   prompt: string;
   count: number;
@@ -405,6 +408,23 @@ export function ModernGeneratePage(props: {
           protocol: selectedQuickPolishConfig?.protocol ?? props.promptPolishSettings.protocol
         };
   const modelValue = props.supportsOpenAICompatible ? props.providerConfig.modelId : props.selectedModelId;
+  const activeProfileName = props.activeProfile?.displayName ?? (props.supportsOpenAICompatible ? '未保存配置实例' : props.selectedProvider.name);
+  const activeProfileStatus = props.activeProfile
+    ? props.activeProfile.lastTestStatus === 'passed'
+      ? '已验证'
+      : props.activeProfile.lastTestStatus === 'warning'
+        ? '注意'
+        : props.activeProfile.lastTestStatus === 'failed'
+          ? '失败'
+          : '未测试'
+    : props.supportsOpenAICompatible ? '草稿 / 旧配置' : '内置平台';
+  const activeProfileSecretText = props.activeProfileSecretAvailable ? '密钥已绑定' : '密钥未绑定';
+  const activeProfileModelProbeText = props.activeProfile?.lastModelProbe
+    ? props.activeProfile.lastModelProbe.available ? '当前模型已命中' : '当前模型未命中'
+    : '模型未探测';
+  const topbarProviderSummary = props.supportsOpenAICompatible
+    ? `${providerAccessLabel(props.selectedProvider)} · ${activeProfileName} · ${modelValue}`
+    : `${providerAccessLabel(props.selectedProvider)} · ${modelValue}`;
   const selectedRatio = ratioFromSize(props.size);
   const selectedSize = SIZE_OPTIONS.find((item) => item.value === props.size);
   const currentRatioSizes = useMemo(() => SIZE_OPTIONS.filter((item) => item.ratio === selectedRatio), [selectedRatio]);
@@ -953,7 +973,7 @@ export function ModernGeneratePage(props: {
             <span className="tealLabel">AI 创作工作台</span>
             <div className="workspaceTitleLine">
               <strong>{props.isGenerating ? '渲染进行中' : latestImage ? '最近画面' : '准备生成'}</strong>
-              <small>{providerAccessLabel(props.selectedProvider)} · {modelValue}</small>
+              <small>{topbarProviderSummary}</small>
             </div>
           </div>
           <div className="quickToolbar">
@@ -1285,6 +1305,17 @@ export function ModernGeneratePage(props: {
           </label>
           <div className={`connectionState ${props.isRealProviderReady ? 'ready' : ''}`}>
             <ShieldCheck size={14} /> {props.isRealProviderReady ? '真实通道已就绪' : '未配置密钥时使用演示模式'}
+          </div>
+          <div className="activeProfileSummary">
+            <div className="activeProfileLine">
+              <span>配置实例</span>
+              <strong>{activeProfileName}</strong>
+            </div>
+            <div className="activeProfileChips" aria-label="当前配置实例状态">
+              <span>{activeProfileStatus}</span>
+              <span>{activeProfileModelProbeText}</span>
+              <span>{activeProfileSecretText}</span>
+            </div>
           </div>
         </section>
 

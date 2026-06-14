@@ -376,7 +376,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     status: 'configurable',
     providerId: 'custom-http-provider',
     defaultDisplayName: 'DMXAPI',
-    notes: ['可保存连接配置；试生图前请确认服务商文档中的模型 ID 和路径。']
+    notes: ['可保存连接配置；真实试生图前请确认服务商文档中的模型 ID 和路径。']
   },
   {
     id: 'siliconflow',
@@ -422,7 +422,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-gemini',
     platformType: 'official',
     label: 'Google Gemini / Nano Banana 官方',
-    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
     notes: ['后续需要单独实现官方 API adapter、鉴权和图片返回解析。']
   },
@@ -430,7 +430,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-xai',
     platformType: 'official',
     label: 'xAI 官方',
-    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
     notes: ['后续按官方图片接口能力接入。']
   },
@@ -438,7 +438,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-volcengine',
     platformType: 'official',
     label: '火山方舟 / Seedream 官方',
-    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
     notes: ['后续需要接入火山鉴权、模型参数和结果落盘链路。']
   },
@@ -446,7 +446,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-bailian',
     platformType: 'official',
     label: '阿里百炼 / 通义万相官方',
-    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
     notes: ['后续需要接入官方鉴权与异步任务轮询。']
   },
@@ -454,7 +454,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-fal',
     platformType: 'official',
     label: 'fal.ai',
-    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
     notes: ['后续按 fal.ai 图片任务接口实现。']
   },
@@ -462,7 +462,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-replicate',
     platformType: 'official',
     label: 'Replicate',
-    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
     notes: ['后续需要模型级参数表单和任务轮询。']
   },
@@ -470,7 +470,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-stability',
     platformType: 'official',
     label: 'Stability AI',
-    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
     notes: ['后续按官方生图与编辑接口拆分配置。']
   },
@@ -478,7 +478,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-kling',
     platformType: 'official',
     label: '可灵企业 API',
-    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
     notes: ['后续可作为图像 / 视频生成企业 API 路线。']
   },
@@ -486,7 +486,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-jimeng',
     platformType: 'official',
     label: '即梦企业 API',
-    description: '待接入；当前只展示规划，不允许保存启用或试生图。',
+    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
     notes: ['后续可作为国内官方企业 API 路线。']
   },
@@ -494,7 +494,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'local-comfyui',
     platformType: 'local',
     label: 'ComfyUI',
-    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
     status: 'local-plan',
     notes: ['后续需要工作流 JSON、节点参数映射和本地队列轮询。']
   },
@@ -502,7 +502,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'local-sd-webui',
     platformType: 'local',
     label: 'Stable Diffusion WebUI / Forge',
-    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
     status: 'local-plan',
     notes: ['后续接入本地 endpoint、采样器、尺寸和 ControlNet 参数。']
   },
@@ -510,7 +510,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'local-invokeai',
     platformType: 'local',
     label: 'InvokeAI',
-    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
     status: 'local-plan',
     notes: ['后续按 InvokeAI API 能力接入。']
   },
@@ -518,7 +518,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'local-swarmui',
     platformType: 'local',
     label: 'SwarmUI',
-    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
     status: 'local-plan',
     notes: ['后续按本地任务队列和模型列表接入。']
   },
@@ -526,7 +526,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'local-fooocus',
     platformType: 'local',
     label: 'Fooocus',
-    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
     status: 'local-plan',
     notes: ['后续评估可用 API 与参数覆盖范围。']
   },
@@ -534,7 +534,7 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'local-openai-compatible',
     platformType: 'local',
     label: 'LocalAI / OpenAI-compatible 本地服务',
-    description: '本地模型路线规划；暂不允许保存启用或试生图。',
+    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
     status: 'local-plan',
     notes: ['后续可复用 OpenAI-compatible 调用层，但需要独立本地服务发现和安全提示。']
   },
@@ -810,7 +810,7 @@ function buildProviderDiagnosticsReport(checks: ProviderDiagnosticItem[], contex
       `说明：${item.detail}`
     ].join('\n')),
     '',
-    '安全说明：本报告不会包含 API Key；Provider profile 的密钥仍绑定在系统凭据中，secret id 形如 profile:{profileId}。'
+    '安全说明：本报告不会包含 API Key；只记录当前配置是否已保存密钥，不导出具体密钥值。'
   ].filter((line) => line !== '').join('\n\n');
 }
 
@@ -1433,7 +1433,7 @@ function matrixStatusDetail(template: ProviderServiceTemplate, status: ProviderM
   if (status === 'live') return `${columnLabel} 已有真实调用入口，可在当前版本使用。`;
   if (status === 'configurable') return `${columnLabel} 可保存配置，实际可用性以服务商模型和协议为准。`;
   if (status === 'partial') return `${columnLabel} 有入口或部分映射，仍需要按服务商协议验证。`;
-  if (status === 'planned') return `${columnLabel} 仅路线展示，当前不会开放保存、启用或试生图。`;
+  if (status === 'planned') return `${columnLabel} 仅路线展示，当前不会开放保存、启用或真实试生图。`;
   if (status === 'localPlan') return `${columnLabel} 属于本地模型规划，不影响在线平台主流程。`;
   if (status === 'unsupported') return `${template.label} 当前不支持 ${columnLabel}。`;
   return `${columnLabel} 需要结合服务商文档确认。`;
@@ -1598,6 +1598,7 @@ export function App() {
   const [page, setPage] = useState<Page>(() => readInitialPage(appSettings.startupPage));
   const [secretDraft, setSecretDraft] = useState('');
   const [secretAvailable, setSecretAvailable] = useState(false);
+  const [generationSecretAvailable, setGenerationSecretAvailable] = useState(false);
   const [secretMessage, setSecretMessage] = useState('');
   const [providerConfig, setProviderConfig] = useState<OpenAICompatibleConfig>(
     defaultOpenAICompatibleConfig
@@ -1619,6 +1620,7 @@ export function App() {
   const [freePlatformMessage, setFreePlatformMessage] = useState('');
   const [isSavingSecret, setIsSavingSecret] = useState(false);
   const [isRefreshingModels, setIsRefreshingModels] = useState(false);
+  const [isProbingModel, setIsProbingModel] = useState(false);
   const [isRunningDiagnostics, setIsRunningDiagnostics] = useState(false);
   const [isRunningTestGeneration, setIsRunningTestGeneration] = useState(false);
   const [providerDiagnostics, setProviderDiagnostics] = useState<ProviderDiagnosticItem[]>([]);
@@ -1684,12 +1686,21 @@ export function App() {
   const selectedProfile = isCreatingProviderProfile
     ? null
     : selectedProviderProfiles.find((profile) => profile.id === selectedProfileId) ?? null;
+  const activeGenerationProfile = useMemo(
+    () => getProfilesForProvider(providerProfiles, selectedProviderId).find((profile) => profile.enabled) ??
+      getProfilesForProvider(providerProfiles, selectedProviderId)[0] ??
+      null,
+    [providerProfiles, selectedProviderId]
+  );
+  const activeGenerationConfig = activeGenerationProfile
+    ? profileToProviderConfig(activeGenerationProfile)
+    : loadProviderConfig(selectedProviderId);
   const desktopRuntime = isTauriRuntime();
   const supportsOpenAICompatible =
     selectedProvider.id === 'openai-gpt-image' || selectedProvider.id === 'custom-http-provider';
   const generationSupportsOpenAICompatible =
     selectedProviderId === 'openai-gpt-image' || selectedProviderId === 'custom-http-provider';
-  const isRealProviderReady = desktopRuntime && generationSupportsOpenAICompatible && secretAvailable;
+  const isRealProviderReady = desktopRuntime && generationSupportsOpenAICompatible && generationSecretAvailable;
   const openLibraryPreview = useCallback((imageUrl: string, navigation?: ImagePreviewNavigation) => {
     setLibraryPreview({ imageUrl, navigation });
   }, []);
@@ -1754,6 +1765,34 @@ export function App() {
       isActive = false;
     };
   }, [desktopRuntime]);
+
+  useEffect(() => {
+    if (!desktopRuntime || !generationSupportsOpenAICompatible) {
+      setGenerationSecretAvailable(false);
+      return;
+    }
+    let isActive = true;
+    const secretId = activeGenerationProfile
+      ? providerProfileSecretId(activeGenerationProfile.id)
+      : selectedProviderId;
+    void getProviderSecretStatus(secretId)
+      .then(async (status) => {
+        if (!isActive) return;
+        if (status.available || !activeGenerationProfile) {
+          setGenerationSecretAvailable(status.available);
+          return;
+        }
+        const legacyStatus = await getProviderSecretStatus(selectedProviderId);
+        if (isActive) setGenerationSecretAvailable(legacyStatus.available);
+      })
+      .catch(() => {
+        if (isActive) setGenerationSecretAvailable(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [activeGenerationProfile, desktopRuntime, generationSupportsOpenAICompatible, selectedProviderId]);
 
   useEffect(() => {
     setPromptPolishDraft(appSettings.promptPolish);
@@ -2584,6 +2623,7 @@ export function App() {
     setSelectedProfileId(profile.id);
     setProviderConfig(profileToProviderConfig(profile));
     setSelectedModel(profile.modelId);
+    if (profile.enabled) setSelectedProvider(profile.providerId);
     saveProviderConfig(selectedProvider.id, profileToProviderConfig(profile));
     return nextProfiles;
   }
@@ -2682,6 +2722,7 @@ export function App() {
       setSelectedProfileId(profile.id);
       setProviderConfig(profileToProviderConfig(profile));
       setSelectedModel(profile.modelId);
+      if (enabled) setSelectedProvider(profile.providerId);
       setConfigMessage(`${enabled ? '已启用' : '已停用'}：${profile.displayName}`);
     }
   }
@@ -2690,7 +2731,8 @@ export function App() {
     profileId: string | null,
     status: ProviderConnectionProfile['lastTestStatus'],
     latencyMs: number,
-    message: string
+    message: string,
+    patch: Partial<Pick<ProviderConnectionProfile, 'lastModelCount' | 'lastImageModelCount' | 'lastModelProbe'>> = {}
   ) {
     if (!profileId) return;
     const now = new Date().toISOString();
@@ -2702,6 +2744,7 @@ export function App() {
             lastLatencyMs: latencyMs,
             lastMessage: message,
             lastTestedAt: now,
+            ...patch,
             updatedAt: now
           }
         : profile
@@ -2847,6 +2890,7 @@ export function App() {
 
     setIsRefreshingModels(true);
     setConfigMessage('正在刷新模型列表…');
+    const startedAt = performance.now();
     try {
       const models = await listOpenAICompatibleModels(
         selectedProvider.id,
@@ -2855,26 +2899,66 @@ export function App() {
         activeSecretId()
       );
       const modelOptions = models.map((model) => model.id);
+      const imageModelCount = countLikelyImageModels(modelOptions);
       const nextModelId =
         modelOptions.find((id) => id === providerConfig.modelId) ??
         modelOptions.find((id) => id.toLowerCase().includes('image')) ??
         modelOptions[0] ??
         providerConfig.modelId;
+      const modelProbe = buildModelProbe(nextModelId, modelOptions, '来自模型列表刷新。');
       const nextConfig = { ...providerConfig, modelOptions, modelId: nextModelId };
+      const latencyMs = Math.round(performance.now() - startedAt);
+      const testStatus = modelProbe.available ? 'passed' : 'warning';
       setProviderConfig(nextConfig);
       saveProviderConfig(selectedProvider.id, nextConfig);
       if (selectedProfile) {
-        persistProfile({ ...selectedProfile, ...nextConfig });
+        persistProfile({
+          ...selectedProfile,
+          ...nextConfig,
+          lastTestStatus: testStatus,
+          lastLatencyMs: latencyMs,
+          lastMessage: modelProbe.message,
+          lastTestedAt: new Date().toISOString(),
+          lastModelCount: modelOptions.length,
+          lastImageModelCount: imageModelCount,
+          lastModelProbe: modelProbe
+        });
+      } else {
+        updateProviderProfileTestState(
+          selectedProfileId,
+          testStatus,
+          latencyMs,
+          modelProbe.message,
+          {
+            lastModelCount: modelOptions.length,
+            lastImageModelCount: imageModelCount,
+            lastModelProbe: modelProbe
+          }
+        );
       }
       setSelectedModel(nextModelId);
-      setConfigMessage(`已刷新 ${modelOptions.length} 个模型。`);
+      setConfigMessage(`已刷新 ${modelOptions.length} 个模型。${modelProbe.available ? '' : ' 当前模型未在列表中，已保留手动选择。'}`);
     } catch (error) {
       if (isModelListUnavailableError(error)) {
         const nextConfig = ensureManualModelOption(providerConfig);
         setProviderConfig(nextConfig);
         saveProviderConfig(selectedProvider.id, nextConfig);
         if (selectedProfile) {
-          persistProfile({ ...selectedProfile, ...nextConfig });
+          const message = formatModelListFallbackMessage(error, nextConfig.modelId);
+          persistProfile({
+            ...selectedProfile,
+            ...nextConfig,
+            lastTestStatus: 'warning',
+            lastLatencyMs: Math.round(performance.now() - startedAt),
+            lastMessage: message,
+            lastTestedAt: new Date().toISOString(),
+            lastModelProbe: {
+              modelId: nextConfig.modelId.trim(),
+              available: false,
+              checkedAt: new Date().toISOString(),
+              message
+            }
+          });
         }
         setSelectedModel(nextConfig.modelId);
         setConfigMessage(formatModelListFallbackMessage(error, nextConfig.modelId));
@@ -2883,6 +2967,119 @@ export function App() {
       }
     } finally {
       setIsRefreshingModels(false);
+    }
+  }
+
+  async function probeCurrentModel() {
+    if (!isSelectedServiceConfigurable) {
+      setConfigMessage('当前服务模板尚未接入，暂不能探测模型。');
+      return;
+    }
+    if (!desktopRuntime) {
+      setConfigMessage('请在 Tauri 桌面端探测模型。');
+      return;
+    }
+    if (!providerConfig.modelId.trim()) {
+      setConfigMessage('请先填写模型 ID。');
+      return;
+    }
+    if (!secretAvailable) {
+      const savedSecret = await saveActiveProviderSecret();
+      if (!savedSecret) {
+        setConfigMessage('请先保存 API Key，再探测模型。');
+        return;
+      }
+    }
+
+    setIsProbingModel(true);
+    setConfigMessage(`正在探测模型：${providerConfig.modelId.trim()}…`);
+    const startedAt = performance.now();
+    try {
+      const models = await listOpenAICompatibleModels(
+        selectedProvider.id,
+        providerConfig.baseUrl,
+        parseExtraHeaders(providerConfig.extraHeadersJson),
+        activeSecretId()
+      );
+      const modelOptions = models.map((model) => model.id);
+      const latencyMs = Math.round(performance.now() - startedAt);
+      const modelProbe = buildModelProbe(providerConfig.modelId, modelOptions, `延迟 ${latencyMs} ms。`);
+      const imageModelCount = countLikelyImageModels(modelOptions);
+      const nextConfig = {
+        ...providerConfig,
+        modelOptions: Array.from(new Set([...modelOptions, providerConfig.modelId.trim()].filter(Boolean)))
+      };
+      setProviderConfig(nextConfig);
+      saveProviderConfig(selectedProvider.id, nextConfig);
+      const testStatus = modelProbe.available ? 'passed' : 'warning';
+      if (selectedProfile) {
+        persistProfile({
+          ...selectedProfile,
+          ...nextConfig,
+          lastTestStatus: testStatus,
+          lastLatencyMs: latencyMs,
+          lastMessage: modelProbe.message,
+          lastTestedAt: new Date().toISOString(),
+          lastModelCount: modelOptions.length,
+          lastImageModelCount: imageModelCount,
+          lastModelProbe: modelProbe
+        });
+      } else {
+        updateProviderProfileTestState(
+          selectedProfileId,
+          testStatus,
+          latencyMs,
+          modelProbe.message,
+          {
+            lastModelCount: modelOptions.length,
+            lastImageModelCount: imageModelCount,
+            lastModelProbe: modelProbe
+          }
+        );
+      }
+      setProviderDiagnostics((current) => [
+        ...current.filter((item) => item.id !== 'model-probe'),
+        {
+          id: 'model-probe',
+          label: '当前模型探测',
+          level: modelProbe.available ? 'pass' : 'warn',
+          detail: modelProbe.message
+        }
+      ]);
+      setConfigMessage(modelProbe.message);
+    } catch (error) {
+      const latencyMs = Math.round(performance.now() - startedAt);
+      if (isModelListUnavailableError(error)) {
+        const nextConfig = ensureManualModelOption(providerConfig);
+        const probe = {
+          modelId: nextConfig.modelId.trim(),
+          available: false,
+          checkedAt: new Date().toISOString(),
+          message: formatModelListFallbackMessage(error, nextConfig.modelId)
+        };
+        setProviderConfig(nextConfig);
+        saveProviderConfig(selectedProvider.id, nextConfig);
+        if (selectedProfile) {
+          persistProfile({
+            ...selectedProfile,
+            ...nextConfig,
+            lastTestStatus: 'warning',
+            lastLatencyMs: latencyMs,
+            lastMessage: probe.message,
+            lastTestedAt: new Date().toISOString(),
+            lastModelProbe: probe
+          });
+        } else {
+          updateProviderProfileTestState(selectedProfileId, 'warning', latencyMs, probe.message, { lastModelProbe: probe });
+        }
+        setConfigMessage(probe.message);
+      } else {
+        const message = mapProviderErrorMessage(error);
+        updateProviderProfileTestState(selectedProfileId, 'failed', latencyMs, message);
+        setConfigMessage(message);
+      }
+    } finally {
+      setIsProbingModel(false);
     }
   }
 
@@ -2912,6 +3109,7 @@ export function App() {
     const startedAt = performance.now();
     let profileStatus: ProviderConnectionProfile['lastTestStatus'] = 'warning';
     let profileMessage = '诊断未完成。';
+    let profilePatch: Partial<Pick<ProviderConnectionProfile, 'lastModelCount' | 'lastImageModelCount' | 'lastModelProbe'>> = {};
 
     function push(item: ProviderDiagnosticItem) {
       checks.push(item);
@@ -2943,8 +3141,8 @@ export function App() {
         label: '配置实例与密钥通道',
         level: targetProfile || selectedProfileId ? 'pass' : 'info',
         detail: targetProfile || selectedProfileId
-          ? `当前密钥通道：${targetSecretId}。配置 ID 保持不变，系统凭据不会随文案调整重建。`
-          : '当前是临时配置草稿；保存为配置实例后会使用 profile:{profileId} 独立绑定密钥。'
+          ? '当前配置已绑定独立密钥；配置 ID 保持不变，系统凭据不会随文案调整重建。'
+          : '当前是临时配置草稿；保存为配置实例后会使用独立密钥。'
       });
 
       let endpointPreview = '';
@@ -3037,6 +3235,16 @@ export function App() {
         detail: currentSecretAvailable ? '系统安全凭据里已有密钥。' : '尚未保存密钥；可以先填写 API Key，再点击保存或保存并启用。'
       });
 
+      buildProviderReadinessItems({
+        profile: targetProfile ?? selectedProfile,
+        config: targetConfig,
+        providerId: targetProviderId,
+        desktopRuntime,
+        secretAvailable: currentSecretAvailable,
+        serviceConfigurable: true,
+        supportsOpenAICompatible: targetSupportsOpenAICompatible
+      }).forEach((item) => push({ ...item, id: `readiness-${item.id}` }));
+
       push({
         id: 'protocol',
         label: '协议与接口路径',
@@ -3125,11 +3333,15 @@ export function App() {
           targetSecretId
         );
         const latencyMs = Math.round(performance.now() - startedAt);
-        const imageModelCount = models.filter((model) => model.id.toLowerCase().includes('image')).length;
-        profileStatus = models.length > 0 ? 'passed' : 'warning';
+        const modelOptions = models.map((model) => model.id);
+        const imageModelCount = countLikelyImageModels(modelOptions);
+        const modelProbe = buildModelProbe(targetConfig.modelId, modelOptions, '来自配置自检。');
+        profileStatus = models.length > 0 && modelProbe.available ? 'passed' : 'warning';
         profileMessage =
-          models.length > 0
-            ? `连接成功，延迟 ${latencyMs} ms，读取 ${models.length} 个模型。`
+          models.length > 0 && modelProbe.available
+            ? `连接成功，延迟 ${latencyMs} ms，读取 ${models.length} 个模型，当前模型可见。`
+            : models.length > 0
+              ? `连接成功，延迟 ${latencyMs} ms，读取 ${models.length} 个模型，但当前模型未出现在列表中。`
             : `接口可调用，延迟 ${latencyMs} ms，但没有返回模型。`;
         push({
           id: 'models',
@@ -3137,6 +3349,17 @@ export function App() {
           level: models.length > 0 ? 'pass' : 'warn',
           detail: models.length > 0 ? `成功读取 ${models.length} 个模型，其中 ${imageModelCount} 个 ID 包含 image；延迟 ${latencyMs} ms。` : `接口可调用但没有返回模型；延迟 ${latencyMs} ms，已保留当前手动模型 ID。`
         });
+        push({
+          id: 'model-probe',
+          label: '当前模型探测',
+          level: modelProbe.available ? 'pass' : 'warn',
+          detail: modelProbe.message
+        });
+        profilePatch = {
+          lastModelCount: modelOptions.length,
+          lastImageModelCount: imageModelCount,
+          lastModelProbe: modelProbe
+        };
       } catch (error) {
         if (isModelListUnavailableError(error)) {
           const latencyMs = Math.round(performance.now() - startedAt);
@@ -3148,6 +3371,14 @@ export function App() {
           }
           profileStatus = 'warning';
           profileMessage = `${formatModelListFallbackMessage(error, nextConfig.modelId)} 延迟 ${latencyMs} ms。`;
+          profilePatch = {
+            lastModelProbe: {
+              modelId: nextConfig.modelId.trim(),
+              available: false,
+              checkedAt: new Date().toISOString(),
+              message: profileMessage
+            }
+          };
           push({
             id: 'models',
             label: '模型列表连通性',
@@ -3172,7 +3403,8 @@ export function App() {
         targetProfile?.id ?? selectedProfileId,
         profileStatus,
         Math.round(performance.now() - startedAt),
-        profileMessage
+        profileMessage,
+        profilePatch
       );
       setConfigMessage(profileMessage);
       setIsRunningDiagnostics(false);
@@ -3192,7 +3424,7 @@ export function App() {
 
   async function runProviderTestGeneration() {
     if (!isSelectedServiceConfigurable) {
-      setConfigMessage('当前服务模板尚未接入，暂不能试生图。');
+      setConfigMessage('当前服务模板尚未接入，暂不能真实试生图。');
       return;
     }
     if (!supportsOpenAICompatible) {
@@ -3391,7 +3623,15 @@ export function App() {
               selectedProviderId={selectedProviderId}
               supportsOpenAICompatible={generationSupportsOpenAICompatible}
               isRealProviderReady={isRealProviderReady}
-              providerConfig={providerConfig}
+              providerConfig={activeGenerationConfig}
+              activeProfile={activeGenerationProfile ? {
+                id: activeGenerationProfile.id,
+                displayName: activeGenerationProfile.displayName,
+                enabled: activeGenerationProfile.enabled,
+                lastTestStatus: activeGenerationProfile.lastTestStatus,
+                lastModelProbe: activeGenerationProfile.lastModelProbe
+              } : null}
+              activeProfileSecretAvailable={generationSecretAvailable}
               selectedModelId={selectedModelId}
               prompt={prompt}
               count={count}
@@ -3439,6 +3679,7 @@ export function App() {
             providers={providers}
             selectedProvider={selectedProvider}
             selectedProviderId={selectedProvider.id}
+            generationProviderId={selectedProviderId}
             platformOptions={providerPlatformOptions}
             selectedPlatformType={selectedPlatformType}
             serviceTemplates={getProviderServiceTemplatesForPlatform(selectedPlatformType)}
@@ -3453,6 +3694,7 @@ export function App() {
             configActionState={configActionState}
             isSavingSecret={isSavingSecret}
             isRefreshingModels={isRefreshingModels}
+            isProbingModel={isProbingModel}
             supportsOpenAICompatible={supportsOpenAICompatible}
             onPlatformTypeChange={selectPlatformType}
             onServiceTemplateChange={selectServiceTemplate}
@@ -3460,6 +3702,7 @@ export function App() {
             onSaveSecret={saveActiveProviderSecret}
             onConfigChange={handleConfigChange}
             onRefreshModels={refreshModels}
+            onProbeModel={probeCurrentModel}
             onSaveConfig={() => saveCurrentProviderConfig(true)}
             onSaveOnly={() => saveCurrentProviderConfig(false)}
             onNewProfile={startNewProviderProfile}
@@ -4166,6 +4409,7 @@ function ProviderSettingsPage(props: {
   providers: ReturnType<typeof listProviders>;
   selectedProvider: ReturnType<typeof listProviders>[number];
   selectedProviderId: string;
+  generationProviderId: string;
   platformOptions: ProviderPlatformOption[];
   selectedPlatformType: ProviderPlatformType;
   serviceTemplates: ProviderServiceTemplate[];
@@ -4180,6 +4424,7 @@ function ProviderSettingsPage(props: {
   configActionState: 'idle' | 'saving' | 'saved' | 'failed';
   isSavingSecret: boolean;
   isRefreshingModels: boolean;
+  isProbingModel: boolean;
   supportsOpenAICompatible: boolean;
   onPlatformTypeChange: (platformType: ProviderPlatformType) => void;
   onServiceTemplateChange: (templateId: string) => void;
@@ -4187,6 +4432,7 @@ function ProviderSettingsPage(props: {
   onSaveSecret: () => void;
   onConfigChange: <K extends keyof OpenAICompatibleConfig>(key: K, value: OpenAICompatibleConfig[K]) => void;
   onRefreshModels: () => void;
+  onProbeModel: () => void;
   onSaveConfig: () => void;
   onSaveOnly: () => void;
   onNewProfile: () => void;
@@ -4204,6 +4450,7 @@ function ProviderSettingsPage(props: {
   isRunningTestGeneration: boolean;
   diagnostics: ProviderDiagnosticItem[];
 }) {
+  const [profileFilter, setProfileFilter] = useState<ProviderProfileFilter>('all');
   const diagnosticsSummary = {
     pass: props.diagnostics.filter((item) => item.level === 'pass').length,
     warn: props.diagnostics.filter((item) => item.level === 'warn').length,
@@ -4221,22 +4468,46 @@ function ProviderSettingsPage(props: {
     cells: providerMatrixColumns.map((column) => getProviderCapabilityMatrixCell(template, column, props.providers))
   }));
   const [isCapabilityMatrixOpen, setIsCapabilityMatrixOpen] = useState(false);
-  const summaryColumnKeys: ProviderMatrixCapabilityKey[] = [
-    'textToImage',
-    'imageToImage',
-    'multiReferenceImage',
-    props.selectedPlatformType === 'aggregator'
-      ? 'openAICompatible'
-      : props.selectedPlatformType === 'official'
-        ? 'officialProtocol'
-        : 'localService'
+  const [isReadinessOpen, setIsReadinessOpen] = useState(false);
+  const activeProfile = props.providerProfiles.find((profile) => profile.id === props.selectedProfileId) ?? null;
+  const isGenerationProviderSelected = props.selectedProviderId === props.generationProviderId;
+  const generationProfile = isGenerationProviderSelected
+    ? props.providerProfiles.find((profile) => profile.enabled) ?? props.providerProfiles[0] ?? null
+    : null;
+  const generationProfileSummary = !isGenerationProviderSelected
+    ? 'AI 创作当前使用其他平台'
+    : generationProfile
+      ? `AI 创作使用 ${generationProfile.displayName}`
+      : 'AI 创作暂无配置';
+  const profileFilterOptions = buildProviderProfileFilterOptions(props.providerProfiles);
+  const filteredProviderProfiles = props.providerProfiles.filter((profile) => matchesProviderProfileFilter(profile, profileFilter));
+  const visibleProviderProfiles = props.isSelectedServiceConfigurable ? filteredProviderProfiles : [];
+  const readinessItems = buildProviderReadinessItems({
+    profile: activeProfile,
+    config: props.providerConfig,
+    providerId: props.selectedProviderId,
+    desktopRuntime: props.desktopRuntime,
+    secretAvailable: props.secretAvailable,
+    serviceConfigurable: props.isSelectedServiceConfigurable,
+    supportsOpenAICompatible: props.supportsOpenAICompatible
+  });
+  const offlineDiagnosticItems = [
+    ...readinessItems,
+    buildGenerationUsageReadinessItem({
+      profile: activeProfile,
+      generationProfile,
+      selectedProviderId: props.selectedProviderId,
+      generationProviderId: props.generationProviderId
+    })
   ];
-  const selectedCapabilitySummary = summaryColumnKeys.map((key) => {
-    const column = providerMatrixColumns.find((item) => item.key === key) ?? providerMatrixColumns[0];
-    return {
-      column,
-      cell: getProviderCapabilityMatrixCell(props.selectedServiceTemplate, column, props.providers)
-    };
+  const offlineDiagnosticSummary = buildOfflineDiagnosticSummary({
+    profile: activeProfile,
+    config: props.providerConfig,
+    desktopRuntime: props.desktopRuntime,
+    secretAvailable: props.secretAvailable,
+    generationProfile,
+    selectedProviderId: props.selectedProviderId,
+    generationProviderId: props.generationProviderId
   });
   const protocolOptions = [
     {
@@ -4272,7 +4543,7 @@ function ProviderSettingsPage(props: {
         <div className="pageTitleBlock">
           <p className="eyebrow">Platform Access</p>
           <h1>平台接入</h1>
-          <p>默认从中转站 / 聚合 API 开始；官方和本地待接入模板只展示规划，不会误触保存、启用或试生图。</p>
+          <p>默认从中转站 / 聚合 API 开始；官方和本地待接入模板只展示规划，不会误触保存、启用或真实试生图。</p>
         </div>
       </header>
 
@@ -4308,7 +4579,7 @@ function ProviderSettingsPage(props: {
           <div className="profileListHeader">
             <div>
               <strong>配置实例</strong>
-              <small>{props.providerProfiles.length} 个当前服务模板配置</small>
+              <small>{props.providerProfiles.length} 个配置 · {generationProfileSummary}</small>
             </div>
             <button
               type="button"
@@ -4319,19 +4590,37 @@ function ProviderSettingsPage(props: {
               <Plus size={14} /> 新增
             </button>
           </div>
+          <div className="providerProfileFilters" aria-label="配置实例筛选">
+            {profileFilterOptions.map((option) => (
+              <button
+                type="button"
+                key={option.id}
+                className={profileFilter === option.id ? 'active' : ''}
+                onClick={() => setProfileFilter(option.id)}
+              >
+                <span>{option.label}</span>
+                <strong>{option.count}</strong>
+              </button>
+            ))}
+          </div>
           <div className="profileList">
             {!props.isSelectedServiceConfigurable ? (
               <div className="profileEmpty">
                 <strong>{providerServiceStatusLabel[props.selectedServiceTemplate.status]}</strong>
-                <span>当前模板只展示规划，暂不开放保存、启用或试生图。</span>
+                <span>当前模板只展示规划，暂不开放保存、启用或真实试生图。</span>
               </div>
             ) : props.providerProfiles.length === 0 ? (
               <div className="profileEmpty">
                 <strong>还没有配置</strong>
                 <span>点击新增后保存，配置会出现在这里。</span>
               </div>
+            ) : visibleProviderProfiles.length === 0 ? (
+              <div className="profileEmpty">
+                <strong>没有匹配的配置</strong>
+                <span>切换筛选条件，或新增一个配置实例。</span>
+              </div>
             ) : (
-              props.providerProfiles.map((profile) => (
+              visibleProviderProfiles.map((profile) => (
                 <article
                   className={`profileCard ${profile.id === props.selectedProfileId ? 'selected' : ''}`}
                   key={profile.id}
@@ -4346,8 +4635,18 @@ function ProviderSettingsPage(props: {
                     <small>{profile.baseUrl.replace(/^https?:\/\//, '')} · {profile.modelId}</small>
                     <div className="profileMeta">
                       <span>{protocolLabel(profile.protocol)}</span>
+                      {generationProfile?.id === profile.id ? <span className="activeUse">创作使用</span> : null}
                       {profile.lastLatencyMs ? <span>{profile.lastLatencyMs} ms</span> : null}
                       {profile.enabled ? <span className="enabled">已启用</span> : <span>未启用</span>}
+                    </div>
+                    <div className="profileModelSummary">
+                      {typeof profile.lastModelCount === 'number' ? <span>模型 {profile.lastModelCount}</span> : <span>模型未刷新</span>}
+                      {typeof profile.lastImageModelCount === 'number' ? <span>疑似图片 {profile.lastImageModelCount}</span> : null}
+                      {profile.lastModelProbe ? (
+                        <span className={profile.lastModelProbe.available ? 'matched' : 'missing'}>
+                          {profile.lastModelProbe.available ? '当前模型已命中' : '当前模型未命中'}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="profileActions" onClick={(event) => event.stopPropagation()}>
@@ -4391,53 +4690,34 @@ function ProviderSettingsPage(props: {
         </div>
 
         <div className="settingsPanel">
-          <div className="providerHero">
-            <Globe2 size={22} />
-            <div>
-              <h2>{props.selectedServiceTemplate.label}</h2>
-              <p>
-                {providerServiceStatusLabel[props.selectedServiceTemplate.status]} · {props.selectedServiceTemplate.description}
-              </p>
-            </div>
-            <span className={`serviceStatusBadge ${props.selectedServiceTemplate.status}`}>
-              {providerServiceStatusLabel[props.selectedServiceTemplate.status]}
-            </span>
-          </div>
-
-          <div className="providerCapabilitySummary">
-            <div className="providerCapabilitySummaryText">
-              <strong>当前能力</strong>
-              <small>完整矩阵按需展开，配置详情保持优先。</small>
-            </div>
-            <div className="providerCapabilitySummaryCells" aria-label="当前服务模板关键能力">
-              {selectedCapabilitySummary.map(({ column, cell }) => (
-                <span
-                  className={`capabilityCell ${cell.status}`}
-                  title={`${column.label}：${cell.label}。${cell.detail}`}
-                  key={column.key}
-                >
-                  {column.label} · {cell.label}
-                </span>
-              ))}
-            </div>
-            <button
-              type="button"
-              className={`capabilityMatrixToggle ${isCapabilityMatrixOpen ? 'open' : ''}`}
-              onClick={() => setIsCapabilityMatrixOpen((value) => !value)}
-              aria-expanded={isCapabilityMatrixOpen}
-            >
-              <ChevronRight size={15} /> {isCapabilityMatrixOpen ? '收起矩阵' : '查看矩阵'}
-            </button>
-          </div>
-
           {props.isSelectedServiceConfigurable && props.supportsOpenAICompatible ? (
             <div className="relayBox standalone">
-              <div className="serviceTemplateNotes">
-                {props.selectedServiceTemplate.notes.map((note) => (
-                  <span key={note}>{note}</span>
-                ))}
+              <div className="providerConfigHeader">
+                <div>
+                  <strong>配置详情</strong>
+                  <small>{props.selectedServiceTemplate.label} · {props.selectedServiceTemplate.description}</small>
+                </div>
+                <span className={`serviceStatusBadge ${props.selectedServiceTemplate.status}`}>
+                  {providerServiceStatusLabel[props.selectedServiceTemplate.status]}
+                </span>
               </div>
-              <strong>配置详情</strong>
+              <div className="providerConfigHealth">
+                <span>{activeProfile ? `配置：${profileLabel(activeProfile.lastTestStatus)}` : '配置：草稿'}</span>
+                <span>{props.secretAvailable ? '密钥：已配置' : '密钥：未配置'}</span>
+                <span>{activeProfile?.lastModelProbe ? (activeProfile.lastModelProbe.available ? '模型：已命中' : '模型：未命中') : '模型：未探测'}</span>
+              </div>
+              <section className="providerOfflineDiagnostic" aria-label="非消耗配置诊断">
+                <div className="providerOfflineDiagnosticSummary">
+                  <span>非消耗诊断</span>
+                  <strong>{offlineDiagnosticSummary.title}</strong>
+                  <small>{offlineDiagnosticSummary.detail}</small>
+                </div>
+                <div className="providerOfflineDiagnosticChips">
+                  {offlineDiagnosticSummary.chips.map((chip) => (
+                    <span className={chip.level} key={chip.label}>{chip.label}</span>
+                  ))}
+                </div>
+              </section>
               <label>
                 名称
                 <input
@@ -4494,6 +4774,9 @@ function ProviderSettingsPage(props: {
                   <button className="iconButton" onClick={props.onRefreshModels} disabled={props.isRefreshingModels}>
                     {props.isRefreshingModels ? '…' : '刷新'}
                   </button>
+                  <button className="iconButton" onClick={props.onProbeModel} disabled={props.isProbingModel || props.isRefreshingModels}>
+                    {props.isProbingModel ? '…' : '探测'}
+                  </button>
                   <button className="iconButton" onClick={props.onPinModel}>
                     默认
                   </button>
@@ -4538,7 +4821,7 @@ function ProviderSettingsPage(props: {
                   placeholder='{"X-Trace":"visionhub"}'
                 />
               </label>
-              <div className="relaySaveGrid">
+              <div className="providerPrimaryActions">
                 <button className="ghostButton relaySave" onClick={props.onSaveOnly}>
                   保存
                 </button>
@@ -4551,8 +4834,6 @@ function ProviderSettingsPage(props: {
                         ? '保存失败'
                         : '保存并启用'}
                 </button>
-              </div>
-              <div className="providerConfigActions">
                 <button className="ghostButton" type="button" onClick={props.onCopyConfig}>
                   <Copy size={15} /> 复制配置
                 </button>
@@ -4560,11 +4841,98 @@ function ProviderSettingsPage(props: {
                   <ClipboardPaste size={15} /> 粘贴配置
                 </button>
               </div>
+              <div className="providerAuxToggles">
+                <button
+                  type="button"
+                  className={`capabilityMatrixToggle readinessToggle ${isReadinessOpen ? 'open' : ''}`}
+                  onClick={() => setIsReadinessOpen((value) => !value)}
+                  aria-expanded={isReadinessOpen}
+                >
+                  <ChevronRight size={15} /> {isReadinessOpen ? '收起诊断' : '查看诊断详情'}
+                </button>
+                <button
+                  type="button"
+                  className={`capabilityMatrixToggle ${isCapabilityMatrixOpen ? 'open' : ''}`}
+                  onClick={() => setIsCapabilityMatrixOpen((value) => !value)}
+                  aria-expanded={isCapabilityMatrixOpen}
+                >
+                  <ChevronRight size={15} /> {isCapabilityMatrixOpen ? '收起矩阵' : '查看能力矩阵'}
+                </button>
+              </div>
+              {isReadinessOpen ? (
+                <section className="providerReadinessPanel" aria-label="非消耗配置诊断详情">
+                  <div className="providerReadinessHeader">
+                    <strong>非消耗诊断详情</strong>
+                    <small>只检查本地配置、密钥通道、模型列表记录和创作页生效关系；不执行真实生成。</small>
+                  </div>
+                  <div className="providerReadinessGrid">
+                    {offlineDiagnosticItems.map((item) => (
+                      <div className={`providerReadinessItem ${item.level}`} key={item.id}>
+                        <div>
+                          <div className="providerReadinessTitleRow">
+                            <strong>{item.label}</strong>
+                            <span>{item.level === 'pass' ? '通过' : item.level === 'warn' ? '注意' : item.level === 'fail' ? '错误' : '提示'}</span>
+                          </div>
+                          <small>{item.detail}</small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+              {isCapabilityMatrixOpen ? (
+                <section className="providerCapabilityPanel expanded" aria-label="平台能力矩阵 V2">
+                  <div className="providerCapabilityHeaderBlock">
+                    <div>
+                      <strong>能力矩阵 V2</strong>
+                      <small>按服务模板横向查看真实接入、可配置、待接入和本地规划状态。</small>
+                    </div>
+                    <div className="providerCapabilityLegend" aria-label="能力状态说明">
+                      {(['live', 'configurable', 'partial', 'planned', 'localPlan'] as ProviderMatrixStatus[]).map((status) => (
+                        <span className={`capabilityCell ${status}`} key={status}>{providerMatrixStatusLabel[status]}</span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="providerCapabilityScroll">
+                    <div className="providerCapabilityGrid providerCapabilityTableHead" role="row">
+                      <span>服务模板</span>
+                      {providerMatrixColumns.map((column) => (
+                        <span key={column.key}>{column.label}</span>
+                      ))}
+                    </div>
+                    <div className="providerCapabilityRows">
+                      {providerMatrixRows.map((row) => (
+                        <button
+                          type="button"
+                          className={`providerCapabilityGrid providerCapabilityRow ${row.template.id === props.selectedServiceTemplate.id ? 'selected' : ''}`}
+                          key={row.template.id}
+                          onClick={() => props.onServiceTemplateChange(row.template.id)}
+                          aria-pressed={row.template.id === props.selectedServiceTemplate.id}
+                        >
+                          <span className="providerCapabilityService">
+                            <strong>{row.template.label}</strong>
+                            <small>{providerServiceStatusLabel[row.template.status]} · {row.template.description}</small>
+                          </span>
+                          {row.cells.map((cell, index) => (
+                            <span
+                              className={`capabilityCell ${cell.status}`}
+                              title={`${providerMatrixColumns[index].label}：${cell.label}。${cell.detail}`}
+                              key={providerMatrixColumns[index].key}
+                            >
+                              {cell.label}
+                            </span>
+                          ))}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              ) : null}
               <div className="providerDiagnostics">
                 <div className="diagnosticsHeader">
                   <div>
                     <strong>配置自检报告</strong>
-                    <small>检查配置实例、密钥通道、Base URL、Headers、模型、协议路径、图生图映射、提示词润色凭据、保存目录和模型列表连通性。</small>
+                    <small>默认做非消耗检查；“真实试生图”会调用接口并可能消耗额度，当前 API Key 不可用时先不要点。</small>
                   </div>
                   <div className="diagnosticsActions">
                     <button className="rowActionButton" onClick={props.onRunDiagnostics} disabled={props.isRunningDiagnostics}>
@@ -4577,14 +4945,14 @@ function ProviderSettingsPage(props: {
                       className="rowActionButton primaryAction"
                       onClick={props.onRunTestGeneration}
                       disabled={!props.desktopRuntime || !props.secretAvailable || props.isRunningTestGeneration || !props.isSelectedServiceConfigurable}
-                      title={!props.secretAvailable ? '请先保存 API Key' : '调用真实接口生成 1 张测试小样'}
+                      title={!props.secretAvailable ? '请先保存 API Key' : '调用真实接口生成 1 张测试小样，可能消耗额度'}
                     >
-                      <Sparkles size={15} /> {props.isRunningTestGeneration ? '测试中…' : '试生图'}
+                      <Sparkles size={15} /> {props.isRunningTestGeneration ? '测试中…' : '真实试生图'}
                     </button>
                   </div>
                 </div>
                 {props.diagnostics.length === 0 ? (
-                  <p className="diagnosticsHint">保存配置后可运行自检；如果没有 API Key，也会先给出本地配置、凭据通道、提示词润色和图库目录检查结果。</p>
+                  <p className="diagnosticsHint">保存配置后可运行自检；不会提交生图请求，也不会验证模型一定可生图。</p>
                 ) : (
                   <>
                     <div className="diagnosticsSummary">
@@ -4619,55 +4987,6 @@ function ProviderSettingsPage(props: {
               </div>
             </div>
           )}
-
-          {isCapabilityMatrixOpen ? (
-            <section className="providerCapabilityPanel expanded" aria-label="平台能力矩阵 V2">
-              <div className="providerCapabilityHeaderBlock">
-                <div>
-                  <strong>能力矩阵 V2</strong>
-                  <small>按服务模板横向查看真实接入、可配置、待接入和本地规划状态。</small>
-                </div>
-                <div className="providerCapabilityLegend" aria-label="能力状态说明">
-                  {(['live', 'configurable', 'partial', 'planned', 'localPlan'] as ProviderMatrixStatus[]).map((status) => (
-                    <span className={`capabilityCell ${status}`} key={status}>{providerMatrixStatusLabel[status]}</span>
-                  ))}
-                </div>
-              </div>
-              <div className="providerCapabilityScroll">
-                <div className="providerCapabilityGrid providerCapabilityTableHead" role="row">
-                  <span>服务模板</span>
-                  {providerMatrixColumns.map((column) => (
-                    <span key={column.key}>{column.label}</span>
-                  ))}
-                </div>
-                <div className="providerCapabilityRows">
-                  {providerMatrixRows.map((row) => (
-                    <button
-                      type="button"
-                      className={`providerCapabilityGrid providerCapabilityRow ${row.template.id === props.selectedServiceTemplate.id ? 'selected' : ''}`}
-                      key={row.template.id}
-                      onClick={() => props.onServiceTemplateChange(row.template.id)}
-                      aria-pressed={row.template.id === props.selectedServiceTemplate.id}
-                    >
-                      <span className="providerCapabilityService">
-                        <strong>{row.template.label}</strong>
-                        <small>{providerServiceStatusLabel[row.template.status]} · {row.template.description}</small>
-                      </span>
-                      {row.cells.map((cell, index) => (
-                        <span
-                          className={`capabilityCell ${cell.status}`}
-                          title={`${providerMatrixColumns[index].label}：${cell.label}。${cell.detail}`}
-                          key={providerMatrixColumns[index].key}
-                        >
-                          {cell.label}
-                        </span>
-                      ))}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </section>
-          ) : null}
         </div>
       </section>
     </>
@@ -8830,6 +9149,38 @@ function providerGenerationLabel(provider: ReturnType<typeof listProviders>[numb
   return template && platform ? `${platform.label} · ${template.label}` : provider.name;
 }
 
+type ProviderProfileFilter = 'all' | 'enabled' | 'passed' | 'warning' | 'failed' | 'untested';
+
+function buildProviderProfileFilterOptions(profiles: ProviderConnectionProfile[]) {
+  const counts: Record<ProviderProfileFilter, number> = {
+    all: profiles.length,
+    enabled: profiles.filter((profile) => profile.enabled).length,
+    passed: profiles.filter((profile) => profile.lastTestStatus === 'passed').length,
+    warning: profiles.filter((profile) => profile.lastTestStatus === 'warning').length,
+    failed: profiles.filter((profile) => profile.lastTestStatus === 'failed').length,
+    untested: profiles.filter((profile) => profile.lastTestStatus === 'untested').length
+  };
+  const labels: Record<ProviderProfileFilter, string> = {
+    all: '全部',
+    enabled: '已启用',
+    passed: '已验证',
+    warning: '注意',
+    failed: '失败',
+    untested: '未测试'
+  };
+  return (Object.keys(labels) as ProviderProfileFilter[]).map((id) => ({
+    id,
+    label: labels[id],
+    count: counts[id]
+  }));
+}
+
+function matchesProviderProfileFilter(profile: ProviderConnectionProfile, filter: ProviderProfileFilter) {
+  if (filter === 'all') return true;
+  if (filter === 'enabled') return profile.enabled;
+  return profile.lastTestStatus === filter;
+}
+
 function profileLabel(status: ProviderConnectionProfile['lastTestStatus']) {
   const labels: Record<ProviderConnectionProfile['lastTestStatus'], string> = {
     untested: '未测试',
@@ -8918,6 +9269,190 @@ function ensureManualModelOption(config: OpenAICompatibleConfig): OpenAICompatib
   };
 }
 
+function countLikelyImageModels(modelIds: string[]) {
+  return modelIds.filter((id) => /image|img|flux|sd|seedream|gpt-image|dall|wanx|qwen-image/i.test(id)).length;
+}
+
+function buildModelProbe(modelId: string, modelOptions: string[], source: string) {
+  const normalizedModelId = modelId.trim();
+  const available = Boolean(normalizedModelId) && modelOptions.includes(normalizedModelId);
+  const checkedAt = new Date().toISOString();
+  return {
+    modelId: normalizedModelId,
+    available,
+    checkedAt,
+    message: available
+      ? `当前模型「${normalizedModelId}」已出现在服务商模型列表中。${source}`
+      : modelOptions.length
+        ? `当前模型「${normalizedModelId || '未填写'}」没有出现在模型列表中；可能是模型 ID 写错，也可能是中转站隐藏了图片模型。${source}`
+        : `模型列表为空，已保留当前手动模型「${normalizedModelId || '未填写'}」。${source}`
+  };
+}
+
+function buildProviderReadinessItems(input: {
+  profile: ProviderConnectionProfile | null;
+  config: OpenAICompatibleConfig;
+  providerId: string;
+  desktopRuntime: boolean;
+  secretAvailable: boolean;
+  serviceConfigurable: boolean;
+  supportsOpenAICompatible: boolean;
+}): ProviderDiagnosticItem[] {
+  if (!input.serviceConfigurable || !input.supportsOpenAICompatible) {
+    return [{
+      id: 'route',
+      label: '接入路线',
+      level: 'info',
+      detail: '当前服务模板仍是规划展示，不开放保存、启用或真实能力测试。'
+    }];
+  }
+
+  const modelId = input.config.modelId.trim();
+  const hasBaseUrl = Boolean(input.config.baseUrl.trim());
+  const hasEndpointPath = input.config.endpointPath.trim().startsWith('/');
+  const modelCount = input.profile?.lastModelCount;
+  const modelProbe = input.profile?.lastModelProbe;
+  const generationVerified = Boolean(input.profile?.lastMessage?.includes('测试生成成功'));
+  const resolvedAdapter = resolveImageToImageAdapterForDisplay(input.config, input.providerId);
+  const protocolLabelText = protocolLabel(input.config.protocol);
+
+  return [
+    {
+      id: 'config-profile',
+      label: '配置实例',
+      level: input.profile ? 'pass' : 'info',
+      detail: input.profile
+        ? '已保存为配置实例，并使用当前配置实例的独立密钥。'
+        : '当前仍是编辑草稿；保存后才会绑定独立密钥。'
+    },
+    {
+      id: 'model-list',
+      label: '模型列表',
+      level: typeof modelCount === 'number' ? (modelCount > 0 ? 'pass' : 'warn') : 'info',
+      detail: typeof modelCount === 'number'
+        ? `最近一次读取到 ${modelCount} 个模型，疑似图片模型 ${input.profile?.lastImageModelCount ?? 0} 个。`
+        : '尚未刷新 /v1/models；可点击刷新读取，若服务商不开放该接口也可以手动填写模型。'
+    },
+    {
+      id: 'model-probe',
+      label: '当前模型',
+      level: modelProbe ? (modelProbe.available ? 'pass' : 'warn') : (modelId ? 'info' : 'fail'),
+      detail: modelProbe?.message ?? (modelId ? `当前填写模型：${modelId}，尚未探测是否在模型列表中。` : '模型 ID 为空。')
+    },
+    {
+      id: 'text-to-image',
+      label: '文生图',
+      level: generationVerified
+        ? 'pass'
+        : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
+          ? 'info'
+          : 'warn',
+      detail: generationVerified
+        ? '最近一次真实试生图成功，说明当前配置至少通过了真实文生图链路。'
+        : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
+          ? `基础配置已具备；需要手动点击“真实试生图”才会消耗额度并验证真实 ${protocolLabelText} 文生图链路。`
+          : '需要补齐桌面端、API Key、Base URL、模型 ID 和接口路径后，才能进行真实文生图验证。'
+    },
+    {
+      id: 'image-to-image',
+      label: '图生图',
+      level: hasEndpointPath && modelId ? 'info' : 'warn',
+      detail: hasEndpointPath && modelId
+        ? `当前映射为 ${imageToImageAdapterLabel(resolvedAdapter)}；这是协议映射检查，真实图生图仍需后续带参考图测试。`
+        : '需要先补齐模型和接口路径，再检查图生图映射。'
+    },
+    {
+      id: 'multi-reference',
+      label: '多参考图',
+      level: ['openai-images-edit', 'responses-input-image', 'chat-image-url', 'json-image-array'].includes(resolvedAdapter) ? 'info' : 'warn',
+      detail: `当前会按 ${imageToImageAdapterLabel(resolvedAdapter)} 组织参考图；多参考是否可用取决于服务商协议实现，后续能力测试会单独验证。`
+    }
+  ];
+}
+
+function buildGenerationUsageReadinessItem(input: {
+  profile: ProviderConnectionProfile | null;
+  generationProfile: ProviderConnectionProfile | null;
+  selectedProviderId: string;
+  generationProviderId: string;
+}): ProviderDiagnosticItem {
+  if (input.selectedProviderId !== input.generationProviderId) {
+    return {
+      id: 'generation-usage',
+      label: 'AI 创作页生效',
+      level: 'info',
+      detail: 'AI 创作页当前使用的是其他平台；启用当前配置后会同步切换到该平台。'
+    };
+  }
+  if (!input.profile) {
+    return {
+      id: 'generation-usage',
+      label: 'AI 创作页生效',
+      level: 'warn',
+      detail: '当前仍是编辑草稿，AI 创作页不会读取草稿配置；请先保存并启用。'
+    };
+  }
+  if (input.generationProfile?.id === input.profile.id) {
+    return {
+      id: 'generation-usage',
+      label: 'AI 创作页生效',
+      level: 'pass',
+      detail: `AI 创作页当前会读取「${input.profile.displayName}」及其独立密钥状态。`
+    };
+  }
+  return {
+    id: 'generation-usage',
+    label: 'AI 创作页生效',
+    level: 'warn',
+    detail: input.generationProfile
+      ? `AI 创作页当前读取「${input.generationProfile.displayName}」，不是正在编辑的「${input.profile.displayName}」。`
+      : 'AI 创作页当前没有可读取的配置实例。'
+  };
+}
+
+function buildOfflineDiagnosticSummary(input: {
+  profile: ProviderConnectionProfile | null;
+  config: OpenAICompatibleConfig;
+  desktopRuntime: boolean;
+  secretAvailable: boolean;
+  generationProfile: ProviderConnectionProfile | null;
+  selectedProviderId: string;
+  generationProviderId: string;
+}) {
+  const modelId = input.config.modelId.trim();
+  const hasBaseUrl = Boolean(input.config.baseUrl.trim());
+  const hasEndpointPath = input.config.endpointPath.trim().startsWith('/');
+  const modelProbe = input.profile?.lastModelProbe;
+  const generationMatches =
+    input.selectedProviderId === input.generationProviderId &&
+    Boolean(input.profile && input.generationProfile?.id === input.profile.id);
+  const missing: string[] = [];
+  if (!input.profile) missing.push('未保存实例');
+  if (!input.desktopRuntime) missing.push('非桌面端');
+  if (!input.secretAvailable) missing.push('密钥未保存');
+  if (!hasBaseUrl) missing.push('Base URL 为空');
+  if (!modelId) missing.push('模型为空');
+  if (!hasEndpointPath) missing.push('路径异常');
+  if (!generationMatches) missing.push('创作页未使用');
+  const modelState = modelProbe ? (modelProbe.available ? '模型已命中' : '模型未命中') : '模型未探测';
+  const title = missing.length === 0
+    ? '配置完整，等待真实生成验证'
+    : `还有 ${missing.length} 项需要注意`;
+  const detail = missing.length === 0
+    ? '当前只完成非消耗检查；未执行真实生成，不代表模型一定可生图。'
+    : `${missing.slice(0, 3).join(' / ')}${missing.length > 3 ? ' 等' : ''}；未执行真实生成。`;
+  return {
+    title,
+    detail,
+    chips: [
+      { label: input.profile ? '实例已保存' : '实例草稿', level: input.profile ? 'pass' : 'warn' },
+      { label: input.secretAvailable ? '密钥已保存' : '密钥未保存', level: input.secretAvailable ? 'pass' : 'warn' },
+      { label: modelState, level: modelProbe?.available ? 'pass' : modelProbe ? 'warn' : 'info' },
+      { label: generationMatches ? '创作页使用中' : '创作页未使用', level: generationMatches ? 'pass' : 'info' }
+    ] as Array<{ label: string; level: ProviderDiagnosticLevel }>
+  };
+}
+
 function providerErrorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
@@ -8942,7 +9477,7 @@ function isModelListUnavailableError(error: unknown) {
 function formatModelListFallbackMessage(error: unknown, modelId: string) {
   const mapped = mapProviderErrorMessage(error);
   const modelLabel = modelId.trim() || '当前手动模型 ID';
-  return `模型列表无法读取，但这不影响手动模型使用。已保留「${modelLabel}」；如果中转站不开放 /v1/models 或被 Cloudflare 拦截，请直接保存，再用左侧延迟测试或右侧试生图验证。原始提示：${mapped}`;
+  return `模型列表无法读取，但这不影响手动模型使用。已保留「${modelLabel}」；如果中转站不开放 /v1/models 或被 Cloudflare 拦截，请直接保存，再用左侧延迟测试或右侧真实试生图验证。原始提示：${mapped}`;
 }
 
 function mapProviderErrorMessage(error: unknown) {
@@ -8956,7 +9491,7 @@ function mapProviderErrorMessage(error: unknown) {
       lower.includes('challenges.cloudflare.com') ||
       lower.includes('cloudflare'))
   ) {
-    return '模型列表接口返回了网页验证页，而不是 JSON。通常是中转站的 /v1/models 被 Cloudflare 或权限策略拦截；请手动填写模型 ID 后保存，再用左侧延迟测试或右侧试生图验证。';
+    return '模型列表接口返回了网页验证页，而不是 JSON。通常是中转站的 /v1/models 被 Cloudflare 或权限策略拦截；请手动填写模型 ID 后保存，再用左侧延迟测试或右侧真实试生图验证。';
   }
 
   if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('invalid api key')) {

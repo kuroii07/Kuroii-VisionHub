@@ -69,7 +69,12 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   setSelectedProvider: (providerId) => {
     const provider = listProviders().find((item) => item.id === providerId) ?? firstProvider;
     const useOpenAICompatibleConfig = provider.id === 'openai-gpt-image' || provider.id === 'custom-http-provider';
-    const configuredModelId = useOpenAICompatibleConfig ? loadProviderConfig(provider.id).modelId : undefined;
+    const activeProfile = useOpenAICompatibleConfig ? getActiveProviderProfile(provider.id) : undefined;
+    const configuredModelId = useOpenAICompatibleConfig
+      ? activeProfile
+        ? profileToProviderConfig(activeProfile).modelId
+        : loadProviderConfig(provider.id).modelId
+      : undefined;
     set({ selectedProviderId: provider.id, selectedModelId: configuredModelId ?? provider.models[0].id });
   },
   setPrompt: (prompt) => set({ prompt }),
