@@ -46,6 +46,7 @@ import type { InspirationAsset } from '../domain/inspirationTypes';
 import type { GenerationRecord, ImageToImageAdapter, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
 import { listProviders } from '../providers/registry';
 import {
+  chooseInspirationDir,
   chooseLibraryDir,
   deleteProviderSecret,
   getProviderSecretStatus,
@@ -61,6 +62,7 @@ import {
   listOpenAICompatibleModels,
   openExternalUrl,
   revealGenerationFile,
+  revealInspirationDir,
   revealLibraryDir,
   saveGenerationRecord,
   saveLibraryData,
@@ -126,8 +128,10 @@ import {
 import { getPolishModesForEngine, resolvePolishMode } from '../services/promptAssist';
 import {
   PROMPT_TEMPLATE_CATEGORIES,
+  createPromptTemplate,
   loadPromptTemplates,
   savePromptTemplates,
+  type PromptTemplateCategory,
   type PromptTemplate
 } from '../services/promptTemplates';
 import { importInspirationAsset } from '../services/inspirationApi';
@@ -139,6 +143,8 @@ import { InspirationPage } from './InspirationPage';
 import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
+
+const APP_VERSION = '0.3.3';
 
 type Page = AppPage;
 type ProviderDiagnosticLevel = 'pass' | 'warn' | 'fail' | 'info';
@@ -1086,6 +1092,18 @@ function getRecordPrimaryPath(record: GenerationRecord) {
   return record.localImagePaths?.[0] ?? record.imageUrls[0] ?? '';
 }
 
+function isRevealableLocalPath(value?: string) {
+  if (!value) return false;
+  const trimmed = value.trim();
+  return Boolean(trimmed) && !/^https?:\/\//i.test(trimmed) && !/^data:/i.test(trimmed);
+}
+
+function getRecordRevealPath(record: GenerationRecord) {
+  const localPath = record.localImagePaths?.find(isRevealableLocalPath);
+  if (localPath) return localPath;
+  return record.imageUrls.find(isRevealableLocalPath) ?? '';
+}
+
 function getRecordFileName(record: GenerationRecord) {
   const path = getRecordPrimaryPath(record);
   return path.split(/[\\/]/).filter(Boolean).pop() ?? '';
@@ -1607,6 +1625,7 @@ export function App() {
   const [generatePreviewUrl, setGeneratePreviewUrl] = useState<string | null>(null);
   const [libraryPreview, setLibraryPreview] = useState<ImagePreviewState | null>(null);
   const [inspirationPreview, setInspirationPreview] = useState<ImagePreviewState | null>(null);
+  const [inspirationImportVersion, setInspirationImportVersion] = useState(0);
   const [isLibraryPageMounted, setIsLibraryPageMounted] = useState(() => page === 'library');
   const [isInspirationPageMounted, setIsInspirationPageMounted] = useState(() => page === 'inspiration');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => appSettings.sidebarCollapsed);
@@ -2233,6 +2252,19 @@ export function App() {
     }
   }
 
+  async function openInspirationDirectory() {
+    if (!desktopRuntime) {
+      setSettingsMessage('请在 Tauri 桌面端打开图片收藏目录。');
+      return;
+    }
+    try {
+      await revealInspirationDir();
+      setSettingsMessage('已打开图片收藏目录。');
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async function openAppDataDirectory() {
     if (!desktopRuntime) {
       setSettingsMessage('请在 Tauri 桌面端打开数据目录。');
@@ -2270,9 +2302,47 @@ export function App() {
       return;
     }
     try {
-      const nextSettings = await saveStorageSettings(undefined);
+      const nextSettings = await saveStorageSettings({
+        libraryDirOverride: null,
+        inspirationDirOverride: storageSettings?.inspiration_dir_override ?? undefined
+      });
       setStorageSettings(nextSettings);
       setSettingsMessage(`已恢复默认图库目录：${nextSettings.resolved_library_dir}`);
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function selectInspirationDirectory() {
+    if (!desktopRuntime) {
+      setSettingsMessage('请在 Tauri 桌面端修改图片收藏目录。');
+      return;
+    }
+    try {
+      const nextSettings = await chooseInspirationDir();
+      if (!nextSettings) {
+        setSettingsMessage('已取消选择图片收藏目录。');
+        return;
+      }
+      setStorageSettings(nextSettings);
+      setSettingsMessage(`图片收藏目录已切换：${nextSettings.resolved_inspiration_dir}`);
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function resetInspirationDirectoryOverride() {
+    if (!desktopRuntime) {
+      setSettingsMessage('请在 Tauri 桌面端修改图片收藏目录。');
+      return;
+    }
+    try {
+      const nextSettings = await saveStorageSettings({
+        libraryDirOverride: storageSettings?.library_dir_override ?? undefined,
+        inspirationDirOverride: null
+      });
+      setStorageSettings(nextSettings);
+      setSettingsMessage(`已恢复默认图片收藏目录：${nextSettings.resolved_inspiration_dir}`);
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     }
@@ -2751,6 +2821,7 @@ export function App() {
         licenseStatus: platform.commercialUse === 'allowed' ? 'commercial-confirmed' : 'reference-only'
       });
       setIsInspirationPageMounted(true);
+      setInspirationImportVersion((version) => version + 1);
       setFreePlatformMessage(`已把 ${platform.name} 网页下载图导入图片收藏。`);
     } catch (error) {
       setFreePlatformMessage(error instanceof Error ? error.message : String(error));
@@ -3309,6 +3380,7 @@ export function App() {
             onUsePrompt={useInspirationPrompt}
             onCreateTemplate={createPromptTemplateFromInspiration}
             onRequestConfirm={requestConfirm}
+            importVersion={inspirationImportVersion}
           />
         ) : null}
         {page === 'generate' ? (
@@ -3425,6 +3497,9 @@ export function App() {
             onSelectLibraryPath={selectLibraryDirectory}
             onResetLibraryPath={resetLibraryDirectoryOverride}
             onOpenLibraryDirectory={openLibraryDirectory}
+            onSelectInspirationPath={selectInspirationDirectory}
+            onResetInspirationPath={resetInspirationDirectoryOverride}
+            onOpenInspirationDirectory={openInspirationDirectory}
             onOpenAppDataDirectory={openAppDataDirectory}
             onExportSettingsBackup={exportCurrentSettingsBackup}
             onOpenSystemInfo={() => setActiveUtilityModal('system-info')}
@@ -3625,7 +3700,7 @@ function FreeGenerationPage(props: {
   type FreePlatformPrefs = Record<string, { status: FreePlatformUsageStatus; note: string }>;
 
   const FREE_PLATFORM_PREFS_KEY = 'visionhub.freePlatformPrefs.v1';
-  const FREE_PLATFORM_LOGO_CACHE_KEY = 'visionhub.freePlatformLogoCache.v1';
+  const FREE_PLATFORM_LOGO_CACHE_KEY = 'visionhub.freePlatformLogoCache.v2';
   const statusOptions: Array<{ value: FreePlatformUsageStatus; label: string }> = [
     { value: 'unused', label: '未使用' },
     { value: 'registered', label: '已注册' },
@@ -3814,9 +3889,19 @@ function FreeGenerationPage(props: {
               国内
             </button>
             <button className={regionFilter === 'global' ? 'active' : ''} onClick={() => setRegionFilter('global')}>
-              海外
+              国外
             </button>
           </div>
+        </div>
+        <div className="freeActionGroup">
+          <label className="freeSearchBox">
+            <span>搜索平台 / 标签 / 备注</span>
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="例如：图生图、商用、中文、海报"
+            />
+          </label>
           <StudioSelect
             value={kindFilter}
             onChange={(value) => setKindFilter(value as 'all' | FreePlatform['kind'])}
@@ -3835,26 +3920,22 @@ function FreeGenerationPage(props: {
               ...statusOptions
             ]}
           />
-        </div>
-        <div className="freeActionGroup">
-          <label className="freeSearchBox">
-            <span>搜索平台 / 标签 / 备注</span>
-            <input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="例如：图生图、商用、中文、海报"
-            />
-          </label>
+          <button
+            className={`miniButton favoriteFilterButton ${statusFilter === 'favorite' ? 'active' : ''}`}
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'favorite' ? 'all' : 'favorite')}
+            title={statusFilter === 'favorite' ? '显示全部平台' : '只看收藏平台'}
+            aria-label={statusFilter === 'favorite' ? '显示全部平台' : '只看收藏平台'}
+          >
+            <Star size={13} fill={statusFilter === 'favorite' ? 'currentColor' : 'none'} /> 收藏
+          </button>
           <div className="segmentedControl compactSegment freeViewSwitch" aria-label="免费平台视图切换">
             <button className={viewMode === 'card' ? 'active' : ''} onClick={() => setViewMode('card')}>
-              卡片
+              <Grid2X2 size={13} /> 卡片
             </button>
             <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')}>
-              列表
+              <Layers size={13} /> 列表
             </button>
-          </div>
-          <div className="freeImportHint">
-            网页生成后，在对应平台行点“导入成品”
           </div>
         </div>
       </section>
@@ -4187,7 +4268,7 @@ function ProviderSettingsPage(props: {
 
   return (
     <>
-      <header className="topbar">
+      <header className="topbar providerAccessTopbar">
         <div className="pageTitleBlock">
           <p className="eyebrow">Platform Access</p>
           <h1>平台接入</h1>
@@ -4613,6 +4694,9 @@ function SettingsPage(props: {
   onSelectLibraryPath: () => void;
   onResetLibraryPath: () => void;
   onOpenLibraryDirectory: () => void;
+  onSelectInspirationPath: () => void;
+  onResetInspirationPath: () => void;
+  onOpenInspirationDirectory: () => void;
   onOpenAppDataDirectory: () => void;
   onExportSettingsBackup: () => void;
   onOpenSystemInfo: () => void;
@@ -5153,16 +5237,6 @@ function SettingsPage(props: {
         <div className="settingsListRow">
           <div className="settingsRowMain">
             <strong>作品画廊目录</strong>
-            <small>生成图片会保存到当前图库目录；历史 JSON 仍放在应用数据目录，方便追踪记录。</small>
-          </div>
-          <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onOpenLibraryDirectory}>
-            <HardDrive size={15} /> {'\u6253\u5f00'}
-          </button>
-        </div>
-
-        <div className="settingsListRow settingsTallRow">
-          <div className="settingsRowMain">
-            <strong>本地图库路径</strong>
             <small>
               {props.storageSettings
                 ? `当前：${props.storageSettings.resolved_library_dir}`
@@ -5176,15 +5250,45 @@ function SettingsPage(props: {
               </small>
             ) : null}
           </div>
-          <div className="settingsPathEditor">
-            <div className="settingsPathActions">
-              <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onSelectLibraryPath}>
-                <FolderOpen size={15} /> 选择路径
-              </button>
-              <button className="rowActionButton subtle" disabled={!props.desktopRuntime} onClick={props.onResetLibraryPath}>
-                <RefreshCcw size={15} /> 默认目录
-              </button>
-            </div>
+          <div className="settingsPathActions">
+            <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onSelectLibraryPath}>
+              <FolderOpen size={15} /> 选择路径
+            </button>
+            <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onOpenLibraryDirectory}>
+              <HardDrive size={15} /> 打开
+            </button>
+            <button className="rowActionButton subtle" disabled={!props.desktopRuntime} onClick={props.onResetLibraryPath}>
+              <RefreshCcw size={15} /> 默认目录
+            </button>
+          </div>
+        </div>
+
+        <div className="settingsListRow settingsTallRow">
+          <div className="settingsRowMain">
+            <strong>图片收藏目录</strong>
+            <small>
+              {props.storageSettings
+                ? `当前：${props.storageSettings.resolved_inspiration_dir}`
+                : props.desktopRuntime
+                  ? '正在读取图片收藏路径…'
+                  : '桌面端可自定义图片收藏路径。'}
+            </small>
+            {props.storageSettings ? (
+              <small className="settingsPathMeta">
+                默认：{props.storageSettings.default_inspiration_dir}
+              </small>
+            ) : null}
+          </div>
+          <div className="settingsPathActions">
+            <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onSelectInspirationPath}>
+              <FolderOpen size={15} /> 选择路径
+            </button>
+            <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onOpenInspirationDirectory}>
+              <HardDrive size={15} /> 打开
+            </button>
+            <button className="rowActionButton subtle" disabled={!props.desktopRuntime} onClick={props.onResetInspirationPath}>
+              <RefreshCcw size={15} /> 默认目录
+            </button>
           </div>
         </div>
 
@@ -5215,7 +5319,7 @@ function SettingsPage(props: {
           <div className="settingsRowMain">
             <strong>版本</strong>
           </div>
-          <span className="settingsValue">0.3.0</span>
+          <span className="settingsValue">{APP_VERSION}</span>
         </div>
         <div className="settingsListRow">
           <div className="settingsRowMain">
@@ -5314,8 +5418,11 @@ function Gallery(props: {
                   </button>
                   <button
                     className="miniButton"
-                    disabled={!result.localImagePaths?.[0]}
-                    onClick={() => result.localImagePaths?.[0] && void revealGenerationFile(result.localImagePaths[0])}
+                    disabled={!getRecordRevealPath(result)}
+                    onClick={() => {
+                      const path = getRecordRevealPath(result);
+                      if (path) void revealGenerationFile(path);
+                    }}
                   >
                     <FolderOpen size={13} /> 文件夹
                   </button>
@@ -5384,6 +5491,7 @@ const CachedInspirationPage = memo(function CachedInspirationPage(props: {
   onUsePrompt: (prompt: string) => void;
   onCreateTemplate: (title: string, prompt: string, tags: string[]) => string;
   onRequestConfirm: (request: ConfirmDialogRequest) => void;
+  importVersion: number;
 }) {
   return (
     <section
@@ -5396,6 +5504,7 @@ const CachedInspirationPage = memo(function CachedInspirationPage(props: {
         onUsePrompt={props.onUsePrompt}
         onCreateTemplate={props.onCreateTemplate}
         onRequestConfirm={props.onRequestConfirm}
+        importVersion={props.importVersion}
       />
       {props.isActive && props.preview ? (
         <ImagePreviewModal
@@ -6254,7 +6363,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       setSelectionAnchorId(recordId);
     }
     const menuWidth = 176;
-    const menuHeight = 260;
+    const menuHeight = 430;
     setContextMenu({
       x: Math.min(event.clientX, Math.max(12, window.innerWidth - menuWidth - 12)),
       y: Math.min(event.clientY, Math.max(12, window.innerHeight - menuHeight - 12)),
@@ -7545,7 +7654,10 @@ const LibraryPage = memo(function LibraryPage(props: {
               ) : null}
               <button className="miniButton" onClick={() => void copyText('Prompt', selectedRecord.prompt)}><Copy size={13} /> Prompt</button>
               <button className="miniButton" disabled={!getRecordPrimaryPath(selectedRecord)} onClick={() => void copyText('Path', getRecordPrimaryPath(selectedRecord))}><Copy size={13} /> 路径</button>
-              <button className="miniButton" disabled={!selectedRecord.localImagePaths?.[0]} onClick={() => selectedRecord.localImagePaths?.[0] && void revealGenerationFile(selectedRecord.localImagePaths[0])}><FolderOpen size={13} /> 文件夹</button>
+              <button className="miniButton" disabled={!getRecordRevealPath(selectedRecord)} onClick={() => {
+                const path = getRecordRevealPath(selectedRecord);
+                if (path) void revealGenerationFile(path);
+              }}><FolderOpen size={13} /> 文件夹</button>
               <button className="miniButton danger" onClick={() => void deleteRecord(selectedRecord.id)}><Trash2 size={13} /> 删除记录</button>
             </div>
             {selectedRecord.referenceImages?.length ? (
@@ -7675,85 +7787,445 @@ const LibraryPage = memo(function LibraryPage(props: {
 });
 
 function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void }) {
-  const templates = useMemo(() => loadPromptTemplates(), []);
+  type TemplateSourceFilter = 'all' | 'default' | 'custom' | 'favorite' | 'recent';
+  type TemplateViewMode = 'card' | 'list';
+  type TemplateDraft = {
+    id: string;
+    title: string;
+    category: PromptTemplateCategory;
+    tone: string;
+    description: string;
+    prompt: string;
+    tags: string;
+  };
+
+  const emptyDraft: TemplateDraft = {
+    id: '',
+    title: '',
+    category: 'style',
+    tone: '',
+    description: '',
+    prompt: '',
+    tags: ''
+  };
+  const templateSourceOptions: Array<{ value: TemplateSourceFilter; label: string }> = [
+    { value: 'all', label: '全部来源' },
+    { value: 'default', label: '系统模板' },
+    { value: 'custom', label: '我的模板' },
+    { value: 'favorite', label: '已收藏' },
+    { value: 'recent', label: '最近使用' }
+  ];
+
+  const [templates, setTemplates] = useState<PromptTemplate[]>(() => loadPromptTemplates());
   const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('all');
+  const [category, setCategory] = useState<'all' | PromptTemplateCategory>('all');
+  const [sourceFilter, setSourceFilter] = useState<TemplateSourceFilter>('all');
+  const [viewMode, setViewMode] = useState<TemplateViewMode>('card');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<TemplateDraft>(emptyDraft);
+  const [variableValues, setVariableValues] = useState<Record<string, string>>({});
   const [copyMessage, setCopyMessage] = useState('');
   useToastMessage(copyMessage, setCopyMessage);
+
+  function persistTemplates(nextTemplates: PromptTemplate[]) {
+    setTemplates(nextTemplates);
+    savePromptTemplates(nextTemplates);
+  }
+
   const normalizedQuery = query.trim().toLowerCase();
-  const filteredTemplates = templates.filter((template) => {
-    const matchesCategory = category === 'all' || template.category === category;
-    const haystack = [template.title, template.tone, template.prompt, ...template.tags].join(' ').toLowerCase();
-    const matchesQuery = !normalizedQuery || haystack.includes(normalizedQuery);
-    return matchesCategory && matchesQuery;
-  });
+  const filteredTemplates = useMemo(() => {
+    return templates
+      .filter((template) => {
+        const matchesCategory = category === 'all' || template.category === category;
+        const matchesSource =
+          sourceFilter === 'all' ||
+          (sourceFilter === 'default' && !template.custom) ||
+          (sourceFilter === 'custom' && template.custom) ||
+          (sourceFilter === 'favorite' && template.favorite) ||
+          (sourceFilter === 'recent' && Boolean(template.lastUsedAt));
+        const haystack = [
+          template.title,
+          template.tone,
+          template.description ?? '',
+          template.prompt,
+          ...template.tags,
+          ...(template.variables ?? [])
+        ].join(' ').toLowerCase();
+        return matchesCategory && matchesSource && (!normalizedQuery || haystack.includes(normalizedQuery));
+      })
+      .sort((left, right) => {
+        if (sourceFilter === 'recent') return Number(right.lastUsedAt ?? 0) - Number(left.lastUsedAt ?? 0);
+        if (left.favorite !== right.favorite) return left.favorite ? -1 : 1;
+        return Number(right.lastUsedAt ?? 0) - Number(left.lastUsedAt ?? 0) || left.title.localeCompare(right.title, 'zh-CN');
+      });
+  }, [category, normalizedQuery, sourceFilter, templates]);
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId) ?? filteredTemplates[0] ?? null,
+    [filteredTemplates, selectedTemplateId, templates]
+  );
+  const selectedTemplateVariables = useMemo(() => {
+    if (!selectedTemplate) return [];
+    const fromTemplate = selectedTemplate.variables?.filter((variable) => variable.trim()) ?? [];
+    if (fromTemplate.length) return Array.from(new Set(fromTemplate));
+    return Array.from(new Set(Array.from(selectedTemplate.prompt.matchAll(/\{([^{}]+)\}/g)).map((match) => match[1].trim()).filter(Boolean)));
+  }, [selectedTemplate]);
+  const renderedPrompt = useMemo(() => {
+    if (!selectedTemplate) return '';
+    return selectedTemplate.prompt.replace(/\{([^{}]+)\}/g, (match, key: string) => {
+      const value = variableValues[key.trim()]?.trim();
+      return value || match;
+    });
+  }, [selectedTemplate, variableValues]);
+  const favoriteCount = templates.filter((template) => template.favorite).length;
+  const recentCount = templates.filter((template) => template.lastUsedAt).length;
+
+  useEffect(() => {
+    if (!filteredTemplates.length) {
+      setSelectedTemplateId(null);
+      return;
+    }
+    if (!selectedTemplateId || !filteredTemplates.some((template) => template.id === selectedTemplateId)) {
+      setSelectedTemplateId(filteredTemplates[0].id);
+    }
+  }, [filteredTemplates, selectedTemplateId]);
+
+  useEffect(() => {
+    setVariableValues({});
+  }, [selectedTemplate?.id]);
+
+  function categoryLabel(value: PromptTemplateCategory) {
+    return PROMPT_TEMPLATE_CATEGORIES.find((item) => item.value === value)?.label ?? value;
+  }
+
+  function tagsToText(tags: string[]) {
+    return tags.join('，');
+  }
+
+  function parseTemplateTags(value: string) {
+    return value.split(/[，,]/).map((tag) => tag.trim()).filter(Boolean);
+  }
+
+  function startCreateTemplate() {
+    setEditingTemplateId('new');
+    setDetailOpen(true);
+    setDraft(emptyDraft);
+  }
+
+  function startEditTemplate(template: PromptTemplate) {
+    setEditingTemplateId(template.id);
+    setDetailOpen(true);
+    setDraft({
+      id: template.id,
+      title: template.title,
+      category: template.category,
+      tone: template.tone,
+      description: template.description ?? '',
+      prompt: template.prompt,
+      tags: tagsToText(template.tags)
+    });
+  }
+
+  function cancelEditTemplate() {
+    setEditingTemplateId(null);
+    setDraft(emptyDraft);
+  }
+
+  function saveDraftTemplate() {
+    const title = draft.title.trim();
+    const prompt = draft.prompt.trim();
+    if (!title || !prompt) {
+      setCopyMessage('请填写模板标题和 Prompt。');
+      return;
+    }
+    const previous = draft.id ? templates.find((template) => template.id === draft.id) : undefined;
+    const shouldUpdateExisting = Boolean(previous?.custom);
+    const nextTemplate = createPromptTemplate({
+      id: shouldUpdateExisting ? previous?.id : undefined,
+      title,
+      category: draft.category,
+      tone: draft.tone.trim() || '自定义模板',
+      description: draft.description.trim() || undefined,
+      prompt,
+      tags: parseTemplateTags(draft.tags),
+      favorite: previous?.favorite,
+      lastUsedAt: previous?.lastUsedAt,
+      usedCount: previous?.usedCount
+    });
+    const next = shouldUpdateExisting
+      ? templates.map((template) => (template.id === draft.id ? { ...nextTemplate, createdAt: previous?.createdAt ?? nextTemplate.createdAt } : template))
+      : [nextTemplate, ...templates];
+    persistTemplates(next.slice(0, 300));
+    setSelectedTemplateId(nextTemplate.id);
+    setDetailOpen(true);
+    cancelEditTemplate();
+    setCopyMessage(shouldUpdateExisting ? '模板已更新。' : '已另存为我的模板。');
+  }
+
+  function deleteTemplate(template: PromptTemplate) {
+    if (!template.custom) {
+      setCopyMessage('系统模板不可删除；可以编辑后另存为我的模板。');
+      return;
+    }
+    if (!window.confirm(`确定删除“${template.title}”吗？这只会删除提示词库里的模板，不影响作品和灵感收藏。`)) return;
+    const next = templates.filter((item) => item.id !== template.id);
+    persistTemplates(next);
+    setSelectedTemplateId(next[0]?.id ?? null);
+    setDetailOpen(false);
+    if (editingTemplateId === template.id) cancelEditTemplate();
+    setCopyMessage('模板已删除。');
+  }
+
+  function toggleTemplateFavorite(template: PromptTemplate) {
+    persistTemplates(templates.map((item) => item.id === template.id ? { ...item, favorite: !item.favorite } : item));
+  }
+
+  function markTemplateUsed(template: PromptTemplate) {
+    const now = String(Date.now());
+    persistTemplates(templates.map((item) => item.id === template.id ? {
+      ...item,
+      lastUsedAt: now,
+      usedCount: (item.usedCount ?? 0) + 1
+    } : item));
+  }
+
+  function useTemplate(template: PromptTemplate) {
+    const promptToUse = template.id === selectedTemplate?.id ? renderedPrompt : template.prompt;
+    props.onUseTemplate(promptToUse);
+    markTemplateUsed(template);
+  }
 
   async function copyTemplate(template: PromptTemplate) {
     try {
-      await navigator.clipboard?.writeText(template.prompt);
-      setCopyMessage(`Copied: ${template.title}`);
+      const promptToCopy = template.id === selectedTemplate?.id ? renderedPrompt : template.prompt;
+      await navigator.clipboard?.writeText(promptToCopy);
+      markTemplateUsed(template);
+      setCopyMessage(`已复制：${template.title}`);
     } catch (error) {
       setCopyMessage(error instanceof Error ? error.message : String(error));
     }
   }
 
+  function clearTemplateFilters() {
+    setQuery('');
+    setCategory('all');
+    setSourceFilter('all');
+  }
+
   return (
-    <>
+    <section className="promptLibraryPage">
       <header className="topbar templateTopbar">
         <div className="pageTitleBlock">
-          <p className="eyebrow">Prompt Templates</p>
-          <h1>{'\u63d0\u793a\u8bcd\u5e93'}</h1>
-          <p>{'\u5feb\u901f\u5957\u7528\u89d2\u8272\u3001\u4ea7\u54c1\u3001\u6d77\u62a5\u3001\u573a\u666f\u548c\u98ce\u683c\u63a2\u7d22\u7684\u5e38\u7528\u63d0\u793a\u8bcd\u3002'}</p>
+          <p className="eyebrow">Prompt Library</p>
+          <h1>提示词库</h1>
+          <p>管理可复用 Prompt 模板，支持分类、收藏、最近使用、自定义模板和变量预填。</p>
         </div>
         <div className="statusPills">
-          <span><Layers size={15} /> {templates.length} {'\u4e2a\u6a21\u677f'}</span>
-          <span><Sparkles size={15} /> {filteredTemplates.length} {'\u4e2a\u7ed3\u679c'}</span>
+          <span><Layers size={15} /> {templates.length} 个模板</span>
+          <span><Star size={15} /> {favoriteCount} 个收藏</span>
+          <span><Clock3 size={15} /> {recentCount} 个最近使用</span>
         </div>
       </header>
 
-      <section className="templateToolbar">
+      <section className="templateToolbar promptLibraryToolbar">
         <label className="templateSearchBox">
-          <span>{'\u641c\u7d22\u6807\u9898 / \u6807\u7b7e / Prompt'}</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search prompt templates" />
+          <span>搜索标题 / 标签 / Prompt</span>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="例如：电商、角色、图生图、免费平台" />
         </label>
         <label>
-          <span>{'\u5206\u7c7b'}</span>
-          <StudioSelect value={category} onChange={setCategory} options={PROMPT_TEMPLATE_CATEGORIES} />
+          <span>分类</span>
+          <StudioSelect value={category} onChange={(value) => setCategory(value as 'all' | PromptTemplateCategory)} options={PROMPT_TEMPLATE_CATEGORIES} />
         </label>
+        <label>
+          <span>来源</span>
+          <StudioSelect value={sourceFilter} onChange={(value) => setSourceFilter(value as TemplateSourceFilter)} options={templateSourceOptions} />
+        </label>
+        <div className="promptLibraryToolbarActions">
+          <button
+            className={`miniButton favoriteFilterButton ${sourceFilter === 'favorite' ? 'active' : ''}`}
+            type="button"
+            onClick={() => setSourceFilter(sourceFilter === 'favorite' ? 'all' : 'favorite')}
+            title={sourceFilter === 'favorite' ? '显示全部模板' : '只看收藏模板'}
+            aria-label={sourceFilter === 'favorite' ? '显示全部模板' : '只看收藏模板'}
+          >
+            <Star size={13} fill={sourceFilter === 'favorite' ? 'currentColor' : 'none'} /> 收藏
+          </button>
+          <div className="segmentedControl compactSegment" aria-label="提示词库视图">
+            <button className={viewMode === 'card' ? 'active' : ''} onClick={() => setViewMode('card')} type="button"><Grid2X2 size={13} /> 卡片</button>
+            <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')} type="button"><Layers size={13} /> 列表</button>
+          </div>
+          <button className="miniButton" type="button" onClick={clearTemplateFilters}><X size={13} /> 清空</button>
+          <button className="miniButton primaryMini" type="button" onClick={startCreateTemplate}><Plus size={13} /> 新建模板</button>
+        </div>
       </section>
 
-      {filteredTemplates.length === 0 ? (
-        <div className="emptyState templateEmpty">
-          <Sparkles size={42} />
-          <h3>{'\u6ca1\u6709\u7b26\u5408\u6761\u4ef6\u7684\u6a21\u677f'}</h3>
-          <p>{'\u8bd5\u7740\u6e05\u7a7a\u641c\u7d22\u8bcd\u6216\u5207\u6362\u5206\u7c7b\u3002'}</p>
-        </div>
-      ) : (
-        <section className="templateGrid">
-          {filteredTemplates.map((template) => (
-            <article className="templateCard" key={template.id}>
-              <div className="templateCardHeader">
-                <span className="badge">{PROMPT_TEMPLATE_CATEGORIES.find((item) => item.value === template.category)?.label}</span>
-                <strong>{template.title}</strong>
-                <small>{template.tone}</small>
-              </div>
-              <p>{template.prompt}</p>
-              <div className="templateTags">
-                {template.tags.map((tag) => <span key={tag}>{tag}</span>)}
-              </div>
-              <div className="cardActions templateActions">
-                <button className="miniButton" onClick={() => props.onUseTemplate(template.prompt)}>
-                  <Wand2 size={13} /> {'\u5957\u7528'}
-                </button>
-                <button className="miniButton" onClick={() => void copyTemplate(template)}>
-                  <Copy size={13} /> {'\u590d\u5236'}
-                </button>
-              </div>
-            </article>
-          ))}
+      <section className="promptCategoryStrip" aria-label="提示词库分类">
+          {PROMPT_TEMPLATE_CATEGORIES.map((item) => {
+            const count = item.value === 'all' ? templates.length : templates.filter((template) => template.category === item.value).length;
+            return (
+              <button className={category === item.value ? 'active' : ''} key={item.value} type="button" onClick={() => setCategory(item.value)}>
+                <span>{item.label}</span>
+                <small>{count}</small>
+              </button>
+            );
+          })}
+      </section>
+
+      <section className="promptLibraryLayout">
+        <section className="promptLibraryListPanel">
+          <div className="promptLibraryListHeader">
+            <strong>{filteredTemplates.length} 个结果</strong>
+            <span>{sourceFilter === 'all' ? '全部来源' : templateSourceOptions.find((item) => item.value === sourceFilter)?.label}</span>
+          </div>
+          {filteredTemplates.length === 0 ? (
+            <div className="emptyState templateEmpty">
+              <Sparkles size={42} />
+              <h3>没有符合条件的模板</h3>
+              <p>可以清空筛选，或新建一个自定义模板。</p>
+            </div>
+          ) : (
+            <div className={viewMode === 'list' ? 'promptTemplateList' : 'promptTemplateCards'}>
+              {filteredTemplates.map((template) => (
+                <article
+                  className={`promptTemplateItem ${viewMode === 'list' ? 'listMode' : ''} ${selectedTemplate?.id === template.id ? 'active' : ''}`}
+                  key={template.id}
+                  onClick={() => { setSelectedTemplateId(template.id); setEditingTemplateId(null); setDetailOpen(true); }}
+                >
+                  <div className="promptTemplateItemHeader">
+                    <span className="badge">{categoryLabel(template.category)}</span>
+                    <button
+                      className={`iconMiniButton promptFavoriteButton ${template.favorite ? 'active' : ''}`}
+                      type="button"
+                      title={template.favorite ? '取消收藏' : '收藏模板'}
+                      aria-label={template.favorite ? `取消收藏 ${template.title}` : `收藏 ${template.title}`}
+                      onClick={(event) => { event.stopPropagation(); toggleTemplateFavorite(template); }}
+                    >
+                      <Star size={13} fill={template.favorite ? 'currentColor' : 'none'} />
+                    </button>
+                  </div>
+                  <strong title={template.title}>{template.title}</strong>
+                  <small>{template.tone || '未填写调性'}</small>
+                  <p>{template.description || template.prompt}</p>
+                  <div className="templateTags">
+                    {template.tags.slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}
+                  </div>
+                  <div className="promptTemplateMetaLine">
+                    <span>{template.custom ? '我的模板' : '系统模板'}</span>
+                    <span>{template.usedCount ? `使用 ${template.usedCount} 次` : '尚未使用'}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
-      )}
-    </>
+      </section>
+
+      {detailOpen ? (
+        <div className="templateDrawerBackdrop" onClick={() => { setDetailOpen(false); setEditingTemplateId(null); }}>
+        <aside className="promptTemplateDetail templateDetailDrawer" aria-label="提示词模板详情" onClick={(event) => event.stopPropagation()}>
+          {editingTemplateId ? (
+            <>
+              <div className="panelTitleRow">
+                <div>
+                  <strong>{editingTemplateId === 'new' ? '新建模板' : '编辑模板'}</strong>
+                  <p>先做基础管理；导入 / 导出后续再接。</p>
+                </div>
+                <button className="iconMiniButton" type="button" onClick={() => { setDetailOpen(false); cancelEditTemplate(); }} title="关闭编辑" aria-label="关闭编辑"><X size={13} /></button>
+              </div>
+              <div className="promptTemplateEditor">
+                <label><span>标题</span><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="例如：赛博角色海报" /></label>
+                <label><span>分类</span><StudioSelect value={draft.category} onChange={(value) => setDraft({ ...draft, category: value as PromptTemplateCategory })} options={PROMPT_TEMPLATE_CATEGORIES.filter((item) => item.value !== 'all') as Array<{ value: PromptTemplateCategory; label: string }>} /></label>
+                <label><span>调性</span><input value={draft.tone} onChange={(event) => setDraft({ ...draft, tone: event.target.value })} placeholder="例如：电影感、高级、适合角色展示" /></label>
+                <label><span>说明</span><textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} rows={2} placeholder="这个模板最适合什么场景" /></label>
+                <label><span>标签</span><input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} placeholder="角色，海报，游戏" /></label>
+                <label><span>Prompt</span><textarea value={draft.prompt} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} rows={8} placeholder="支持自定义变量，例如：{产品}、{材质}、{背景}。详情页会自动生成变量预填。" /></label>
+              </div>
+              <div className="sourceEditorActions">
+                <button className="miniButton" type="button" onClick={() => { setDetailOpen(false); cancelEditTemplate(); }}><X size={13} /> 取消</button>
+                <button className="miniButton primaryMini" type="button" onClick={saveDraftTemplate}><Pencil size={13} /> 保存模板</button>
+              </div>
+            </>
+          ) : selectedTemplate ? (
+            <>
+              <div className="panelTitleRow">
+                <div>
+                  <span className="badge">{categoryLabel(selectedTemplate.category)}</span>
+                  <strong>{selectedTemplate.title}</strong>
+                  <p>{selectedTemplate.description || selectedTemplate.tone}</p>
+                </div>
+                <div className="templateDrawerTopActions">
+                  <button
+                    className={`iconMiniButton promptFavoriteButton ${selectedTemplate.favorite ? 'active' : ''}`}
+                    type="button"
+                    title={selectedTemplate.favorite ? '取消收藏' : '收藏模板'}
+                    aria-label={selectedTemplate.favorite ? '取消收藏模板' : '收藏模板'}
+                    onClick={() => toggleTemplateFavorite(selectedTemplate)}
+                  >
+                    <Star size={14} fill={selectedTemplate.favorite ? 'currentColor' : 'none'} />
+                  </button>
+                  <button className="iconMiniButton" type="button" onClick={() => setDetailOpen(false)} title="关闭详情" aria-label="关闭详情"><X size={13} /></button>
+                </div>
+              </div>
+
+              <div className="promptTemplateDetailMeta">
+                <span>{selectedTemplate.custom ? '我的模板' : '系统模板'}</span>
+                <span>{selectedTemplate.usedCount ? `使用 ${selectedTemplate.usedCount} 次` : '尚未使用'}</span>
+                <span>{selectedTemplate.lastUsedAt ? '最近已用' : '未进入最近使用'}</span>
+              </div>
+
+              <div className="promptTemplateVariables">
+                <div className="sectionHeadingRow">
+                  <strong>变量预填</strong>
+                  <small>{selectedTemplateVariables.length} 个模板变量</small>
+                </div>
+                {selectedTemplateVariables.map((variable) => (
+                  <label key={variable}>
+                    <span>{variable}</span>
+                    <input
+                      value={variableValues[variable] ?? ''}
+                      onChange={(event) => setVariableValues((current) => ({ ...current, [variable]: event.target.value }))}
+                      placeholder={`填写${variable}`}
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <label className="promptTemplatePreview">
+                <span>预览 Prompt</span>
+                <textarea value={renderedPrompt} readOnly rows={9} />
+              </label>
+
+              <div className="templateTags promptTemplateDetailTags">
+                {selectedTemplate.tags.map((tag) => <span key={tag}>{tag}</span>)}
+              </div>
+
+              <div className="promptTemplateDetailActions">
+                <button className="miniButton primaryMini" type="button" onClick={() => useTemplate(selectedTemplate)}><Wand2 size={13} /> 套用到创作台</button>
+                <button className="miniButton" type="button" onClick={() => void copyTemplate(selectedTemplate)}><Copy size={13} /> 复制</button>
+                <button className="miniButton" type="button" onClick={() => startEditTemplate(selectedTemplate)}><Pencil size={13} /> {selectedTemplate.custom ? '编辑' : '另存'}</button>
+                <button
+                  className="miniButton dangerText"
+                  type="button"
+                  disabled={!selectedTemplate.custom}
+                  title={selectedTemplate.custom ? '删除模板' : '系统模板不可删除'}
+                  onClick={() => deleteTemplate(selectedTemplate)}
+                >
+                  <Trash2 size={13} /> 删除
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="emptyState templateEmpty">
+              <Layers size={42} />
+              <h3>选择一个模板</h3>
+              <p>左侧选中模板后，这里会显示详情和变量预填。</p>
+            </div>
+          )}
+        </aside>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -8006,7 +8478,7 @@ function SystemInfoModal(props: {
   onClose: () => void;
 }) {
   const rows = [
-    { label: '版本', value: '0.3.0' },
+    { label: '版本', value: APP_VERSION },
     { label: '运行环境', value: props.desktopRuntime ? 'Tauri 桌面端' : 'Web 预览模式' },
     { label: '作品画廊目录', value: props.storageSettings?.resolved_library_dir ?? (props.desktopRuntime ? '正在读取…' : '桌面端可用') },
     { label: '默认图库目录', value: props.storageSettings?.default_library_dir ?? '—' },

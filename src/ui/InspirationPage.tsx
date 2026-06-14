@@ -70,9 +70,25 @@ type AssetImageMeta = {
 };
 
 const SOURCE_PRESET_STATS_KEY = 'visionhub.inspiration.sourcePresetStats';
+const SOURCE_FAVICON_CACHE_KEY = 'visionhub.inspiration.sourceFaviconCache.v4';
 const SOURCE_PRESET_TIMESTAMP = 'preset';
 const ASSET_INITIAL_RENDER_COUNT = 48;
 const ASSET_RENDER_BATCH_SIZE = 72;
+const SOURCE_FAVICON_DOMAIN_ALIASES: Record<string, string[]> = {
+  'jimeng.jianying.com': ['www.jimeng.com', 'jimeng.com'],
+  'klingai.kuaishou.com': ['klingai.com', 'www.klingai.com', 'kling.ai'],
+  'tongyi.aliyun.com': ['tongyi.aliyun.com', 'www.aliyun.com'],
+  'bailian.console.aliyun.com': ['bailian.aliyun.com', 'tongyi.aliyun.com', 'www.aliyun.com'],
+  'www.volcengine.com': ['www.volcengine.com', 'volcengine.com'],
+  'tusiart.com': ['www.tusiart.com', 'tusiart.com'],
+  'modelscope.cn': ['www.modelscope.cn', 'modelscope.cn'],
+  'huaban.com': ['huaban.com', 'www.huaban.com'],
+  'ibaotu.com': ['ibaotu.com', 'www.ibaotu.com'],
+  'www.58pic.com': ['www.58pic.com', '58pic.com'],
+  'www.gaoding.com': ['www.gaoding.com', 'gaoding.com'],
+  'www.zcool.com.cn': ['www.zcool.com.cn', 'zcool.com.cn'],
+  'www.uisdc.com': ['www.uisdc.com', 'uisdc.com']
+};
 
 const sourceCategoryOptions: Array<{ value: InspirationSourceCategory | 'all'; label: string }> = [
   { value: 'all', label: '全部类型' },
@@ -1131,12 +1147,74 @@ function firstImageFile(files: FileList | File[] | null | undefined) {
   return array.find((file) => file.type.startsWith('image/')) ?? null;
 }
 
+function sourceHostname(url?: string) {
+  if (!url) return '';
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function sourceFaviconDomain(url?: string) {
+  if (!url) return '';
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
+}
+
+function sourceFaviconCacheKey(source: InspirationSource) {
+  const explicitFavicon = source.faviconUrl?.trim();
+  const domains = sourceFaviconDomains(source.url);
+  return `${source.id}:${explicitFavicon || domains.join('|') || source.url}`;
+}
+
+function sourceFaviconDomains(url?: string) {
+  const domain = sourceFaviconDomain(url);
+  if (!domain) return [];
+  const withoutWww = domain.replace(/^www\./, '');
+  const withWww = domain.startsWith('www.') ? domain : `www.${domain}`;
+  return Array.from(new Set([
+    ...(SOURCE_FAVICON_DOMAIN_ALIASES[domain] ?? []),
+    domain,
+    withoutWww,
+    withWww
+  ].filter(Boolean)));
+}
+
+function sourceFaviconCandidates(source: InspirationSource) {
+  const explicitFavicon = source.faviconUrl?.trim();
+  const domainUrls = sourceFaviconDomains(source.url).flatMap((domain) => [
+    `https://${domain}/favicon.ico`,
+    `https://${domain}/favicon.png`,
+    `https://${domain}/apple-touch-icon.png`,
+    `https://icons.duckduckgo.com/ip3/${domain}.ico`,
+    `https://www.google.com/s2/favicons?domain=${domain}&sz=64`,
+    `https://icon.horse/icon/${domain}`
+  ]);
+  return Array.from(new Set([
+    explicitFavicon,
+    ...domainUrls
+  ].filter(Boolean) as string[]));
+}
+
+function defaultSourceFaviconUrl(source: InspirationSource) {
+  return sourceFaviconCandidates(source)[0] ?? '';
+}
+
+function fallbackSourceFaviconUrls(source: InspirationSource) {
+  return sourceFaviconCandidates(source).slice(1);
+}
+
 export const InspirationPage = memo(function InspirationPage(props: {
   onPreview: (imageUrl: string, navigation?: ImagePreviewNavigation) => void;
   onUseAsReference: (asset: InspirationAsset) => void;
   onUsePrompt: (prompt: string) => void;
   onCreateTemplate: (title: string, prompt: string, tags: string[]) => string;
   onRequestConfirm: (request: ConfirmDialogRequest) => void;
+  importVersion?: number;
 }) {
   const [activeTab, setActiveTab] = useState<InspirationTab>('sources');
   const [isAssetTabMounted, setIsAssetTabMounted] = useState(false);
@@ -1153,9 +1231,21 @@ export const InspirationPage = memo(function InspirationPage(props: {
   const [sourceLoginFilter, setSourceLoginFilter] = useState<SourceLoginFilter>('all');
   const [sourceCommercialFilter, setSourceCommercialFilter] = useState<InspirationCommercialReference | 'all'>('all');
   const [sourceNavFilter, setSourceNavFilter] = useState<SourceNavFilter>('all');
+  const [sourceViewMode, setSourceViewMode] = useState<'list' | 'card'>('list');
   const [sourceEditorOpen, setSourceEditorOpen] = useState(false);
-  const [sourceAdvancedOpen, setSourceAdvancedOpen] = useState(false);
   const [sourcePresetStats, setSourcePresetStats] = useState<Record<string, { openCount?: number; lastOpenedAt?: string }>>({});
+  const [sourceFaviconCache, setSourceFaviconCache] = useState<Record<string, string | null>>(() => {
+    try {
+      const raw = localStorage.getItem(SOURCE_FAVICON_CACHE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw) as Record<string, string | null>;
+      return Object.fromEntries(
+        Object.entries(parsed).filter(([, value]) => value === null || typeof value === 'string')
+      );
+    } catch {
+      return {};
+    }
+  });
   const [assetLicense, setAssetLicense] = useState<InspirationLicenseStatus | 'all'>('all');
   const [assetSourceFilter, setAssetSourceFilter] = useState<AssetSourceFilter>('all');
   const [assetPromptFilter, setAssetPromptFilter] = useState<AssetPromptFilter>('all');
@@ -1179,6 +1269,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
   const [assetFiltersVisible, setAssetFiltersVisible] = useState(true);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const assetColorFilterRef = useRef<HTMLLabelElement | null>(null);
+  const lastImportVersionRef = useRef(props.importVersion ?? 0);
   const [assetImageMeta, setAssetImageMeta] = useState<Record<string, AssetImageMeta>>({});
   const [renderedAssetCount, setRenderedAssetCount] = useState(ASSET_INITIAL_RENDER_COUNT);
   const pendingAssetImageMetaRef = useRef<Record<string, AssetImageMeta>>({});
@@ -1277,6 +1368,31 @@ export const InspirationPage = memo(function InspirationPage(props: {
       active = false;
     };
   }, [activeTab, assetsLoaded]);
+
+  useEffect(() => {
+    const version = props.importVersion ?? 0;
+    if (version === lastImportVersionRef.current) return;
+    lastImportVersionRef.current = version;
+    let active = true;
+    setIsAssetTabMounted(true);
+    setAssetsLoading(true);
+    loadInspirationAssets()
+      .then((loadedAssets) => {
+        if (!active) return;
+        setAssets(loadedAssets);
+        setAssetsLoaded(true);
+        setRenderedAssetCount(ASSET_INITIAL_RENDER_COUNT);
+      })
+      .catch((error) => {
+        if (active) setMessage(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (active) setAssetsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [props.importVersion]);
 
   useEffect(() => {
     try {
@@ -1502,7 +1618,6 @@ export const InspirationPage = memo(function InspirationPage(props: {
   function resetSourceDraft() {
     setSourceDraft(emptySourceDraft);
     setSourceEditorOpen(false);
-    setSourceAdvancedOpen(false);
   }
 
   function openSourceEditor(source?: InspirationSource) {
@@ -1525,10 +1640,8 @@ export const InspirationPage = memo(function InspirationPage(props: {
         commercialReference: source.commercialReference,
         createdAt: source.sourceKind === 'preset' ? '' : source.createdAt
       });
-      setSourceAdvancedOpen(Boolean(source.sceneNotes || source.membershipNotes || source.copyrightNotes || source.keywords?.length || source.faviconUrl));
     } else {
       setSourceDraft(emptySourceDraft);
-      setSourceAdvancedOpen(false);
     }
     setSourceEditorOpen(true);
   }
@@ -1858,8 +1971,99 @@ export const InspirationPage = memo(function InspirationPage(props: {
 
 
   function sourceDomain(url?: string) {
-    if (!url) return '';
-    try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
+    return sourceHostname(url);
+  }
+
+  function resolveSourceFaviconUrl(source: InspirationSource) {
+    const key = sourceFaviconCacheKey(source);
+    return Object.prototype.hasOwnProperty.call(sourceFaviconCache, key)
+      ? sourceFaviconCache[key]
+      : defaultSourceFaviconUrl(source);
+  }
+
+  function markResolvedSourceFaviconUrl(source: InspirationSource, url: string | null) {
+    const key = sourceFaviconCacheKey(source);
+    setSourceFaviconCache((current) => {
+      if (current[key] === url) return current;
+      const next = { ...current, [key]: url };
+      const persistent = Object.fromEntries(Object.entries(next).filter(([, value]) => typeof value === 'string'));
+      localStorage.setItem(SOURCE_FAVICON_CACHE_KEY, JSON.stringify(persistent));
+      return next;
+    });
+  }
+
+  function renderSourceFavicon(source: InspirationSource) {
+    const faviconUrl = resolveSourceFaviconUrl(source);
+    return (
+      <span className={`sourceFavicon ${faviconUrl ? 'hasImage' : ''}`} aria-hidden="true">
+        {faviconUrl ? (
+          <img
+            src={faviconUrl}
+            alt=""
+            loading="lazy"
+            onLoad={(event) => markResolvedSourceFaviconUrl(source, event.currentTarget.currentSrc || event.currentTarget.src)}
+            onError={(event) => {
+              const image = event.currentTarget;
+              const fallbackIndex = Number(image.dataset.fallbackIndex ?? '0');
+              const fallbackUrls = fallbackSourceFaviconUrls(source);
+              const nextUrl = fallbackUrls[fallbackIndex];
+              if (nextUrl) {
+                image.dataset.fallbackIndex = String(fallbackIndex + 1);
+                image.src = nextUrl;
+                return;
+              }
+              image.style.display = 'none';
+              image.parentElement?.classList.remove('hasImage');
+              markResolvedSourceFaviconUrl(source, null);
+            }}
+          />
+        ) : null}
+        <span>{source.name.slice(0, 1).toUpperCase()}</span>
+      </span>
+    );
+  }
+
+  function sourceLogoText(source: InspirationSource) {
+    const fromName = source.name.trim().replace(/[^\p{L}\p{N}]/gu, '').slice(0, 1);
+    if (fromName) return fromName.toUpperCase();
+    const fromDomain = sourceDomain(source.url).replace(/^www\./, '').split(/[.-]/).find(Boolean)?.slice(0, 1);
+    return (fromDomain || '站').toUpperCase();
+  }
+
+  function renderSourceLogo(source: InspirationSource) {
+    const faviconUrl = resolveSourceFaviconUrl(source);
+    return (
+      <div className={`sourceLogo sourceLogo-${source.category}`} aria-label={`${source.name} Logo`}>
+        {faviconUrl ? (
+          <img
+            src={faviconUrl}
+            alt=""
+            loading="lazy"
+            onLoad={(event) => {
+              const image = event.currentTarget;
+              if (image.naturalWidth <= 1 || image.naturalHeight <= 1) {
+                markResolvedSourceFaviconUrl(source, null);
+                return;
+              }
+              markResolvedSourceFaviconUrl(source, image.currentSrc || image.src);
+            }}
+            onError={(event) => {
+              const image = event.currentTarget;
+              const fallbackIndex = Number(image.dataset.fallbackIndex ?? '0');
+              const fallbackUrls = fallbackSourceFaviconUrls(source);
+              const nextUrl = fallbackUrls[fallbackIndex];
+              if (nextUrl) {
+                image.dataset.fallbackIndex = String(fallbackIndex + 1);
+                image.src = nextUrl;
+                return;
+              }
+              markResolvedSourceFaviconUrl(source, null);
+            }}
+          />
+        ) : null}
+        <span>{sourceLogoText(source)}</span>
+      </div>
+    );
   }
 
   function toggleAssetSelection(assetId: string) {
@@ -1906,7 +2110,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
       setSelectedAssetIds([asset.id]);
     }
     const menuWidth = 178;
-    const menuHeight = 260;
+    const menuHeight = 430;
     setAssetMenuTarget({
       assetId: asset.id,
       x: Math.min(event.clientX, Math.max(12, window.innerWidth - menuWidth - 12)),
@@ -2001,29 +2205,30 @@ export const InspirationPage = memo(function InspirationPage(props: {
       </section>
 
       <section className={`sourceLibraryShell ${activeTab === 'sources' ? 'active' : 'inactive'}`} aria-hidden={activeTab !== 'sources'}>
-          <div className="galleryToolbar sourceLibraryToolbar">
-            <div className="galleryToolbarLeft">
-              <button className="miniButton primaryMini" onClick={() => openSourceEditor()} title="添加自定义网站" type="button">
-                <Plus size={14} /> 添加网站
-              </button>
-              <span className="assetCount">{filteredSources.length} / {allSources.length} 个网站</span>
-              {activeSourceFilterCount > 0 ? <span className="selectionCount">筛选 {activeSourceFilterCount} 项</span> : null}
-            </div>
-            <div className="galleryToolbarRight">
-              <button className="miniButton" onClick={clearSourceFilters} title="清空网站筛选" type="button">
-                <X size={14} /> 清空
-              </button>
-            </div>
-          </div>
-
           <div className="inspirationGallerySearchPanel sourceSearchPanel">
             <label className="librarySearchBox">
               <span>搜索网站</span>
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名称 / 域名 / 标签 / 场景 / 关键词" />
             </label>
-            {query.trim() ? (
-              <button className="iconMiniButton" type="button" title="清空搜索" aria-label="清空搜索" onClick={() => setQuery('')}><X size={13} /></button>
-            ) : null}
+            <div className="sourceSearchActions">
+              <div className="sourceSearchCountLine">
+                <span className="assetCount">{filteredSources.length} / {allSources.length} 个网站</span>
+                {activeSourceFilterCount > 0 ? <span className="selectionCount">筛选 {activeSourceFilterCount} 项</span> : null}
+              </div>
+              <div className="sourceSearchActionRow">
+                <div className="segmentedControl compactSegment sourceViewSwitch" aria-label="提示词网站视图切换">
+                  <button className={sourceViewMode === 'card' ? 'active' : ''} onClick={() => setSourceViewMode('card')} type="button">
+                    <Grid2X2 size={13} /> 卡片
+                  </button>
+                  <button className={sourceViewMode === 'list' ? 'active' : ''} onClick={() => setSourceViewMode('list')} type="button">
+                    <List size={13} /> 列表
+                  </button>
+                </div>
+                <button className="miniButton primaryMini" onClick={() => openSourceEditor()} title="添加自定义网站" type="button">
+                  <Plus size={14} /> 添加网站
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="inspirationGalleryFilterPanel sourceFilterPanel libraryStructuredFilters">
@@ -2068,26 +2273,62 @@ export const InspirationPage = memo(function InspirationPage(props: {
               ))}
             </aside>
 
-            <section className="sourceTablePanel">
-              <div className="sourceTableHeader">
-                <span>网站</span>
-                <span>分类</span>
-                <span>说明</span>
-                <span>状态</span>
-                <span>最近</span>
-                <span>操作</span>
-              </div>
+            <section className={`sourceTablePanel ${sourceViewMode === 'card' ? 'sourceCardPanel' : ''}`}>
+              {sourceViewMode === 'list' ? (
+                <div className="sourceTableHeader">
+                  <span>网站</span>
+                  <span>分类</span>
+                  <span>说明</span>
+                  <span>状态</span>
+                  <span>最近</span>
+                  <span>操作</span>
+                </div>
+              ) : null}
 
               {!sourcesLoaded ? (
                 <div className="emptyState libraryEmpty sourceTableEmpty"><Sparkles size={42} /><h3>正在加载提示词网站</h3></div>
               ) : filteredSources.length === 0 ? (
                 <div className="emptyState libraryEmpty sourceTableEmpty"><Link2 size={42} /><h3>没有匹配的网站</h3><p>可以清空筛选，或添加你自己的高价值网站。</p></div>
+              ) : sourceViewMode === 'card' ? (
+                <div className="sourceCardGrid">
+                  {filteredSources.map((source) => (
+                    <article className="sourceCard" key={source.id}>
+                      <div className="sourceCardHeader">
+                        {renderSourceLogo(source)}
+                        <div>
+                          <strong title={source.name}>{source.name}</strong>
+                          <small title={source.url}>{sourceDomain(source.url) || source.url}</small>
+                        </div>
+                      </div>
+                      <div className="sourceCardMeta">
+                        <span>{categoryLabel(source.category)}</span>
+                        <span>{regionLabel(source.region)}</span>
+                        <span>{sourceKindLabel(source.sourceKind)}</span>
+                      </div>
+                      <p title={source.note || source.sceneNotes}>{source.note || source.sceneNotes || '暂无说明'}</p>
+                      <div className="sourceInlineTags">
+                        {source.tags.slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}
+                      </div>
+                      <div className="sourceCardStatus">
+                        <span className={source.requiresLogin ? 'sourceBadge warning' : 'sourceBadge'}>{source.requiresLogin ? '需登录' : '免登录优先'}</span>
+                        <span className="sourceBadge">{commercialReferenceLabel(source.commercialReference)}</span>
+                        <span className="sourceBadge">打开 {source.openCount ?? 0}</span>
+                      </div>
+                      <div className="sourceRowActions">
+                        <button className="miniButton primaryMini" onClick={() => void openSource(source)} title={`打开 ${source.name}`} type="button"><ExternalLink size={13} /> 打开</button>
+                        <button className="miniButton" onClick={() => void copyText('URL', source.url)} title="复制网站链接" type="button"><Copy size={13} /> 复制</button>
+                        <button className="miniButton" onClick={() => editSource(source)} title={source.sourceKind === 'preset' ? '存为自定义网站' : '编辑网站'} type="button"><Edit3 size={13} /> {source.sourceKind === 'preset' ? '保存' : '编辑'}</button>
+                        {source.sourceKind !== 'preset' ? (
+                          <button className="miniButton dangerText" onClick={() => void removeSource(source.id)} title="删除自定义网站" type="button"><Trash2 size={13} /> 删除</button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
               ) : filteredSources.map((source) => (
                 <article className="sourceTableRow" key={source.id}>
                   <div className="sourceIdentityCell">
-                    <span className="sourceFavicon" aria-hidden="true">
-                      {source.faviconUrl ? <img src={source.faviconUrl} alt="" /> : source.name.slice(0, 1).toUpperCase()}
-                    </span>
+                    {renderSourceFavicon(source)}
                     <div>
                       <strong title={source.name}>{source.name}</strong>
                       <small title={source.url}>{sourceDomain(source.url) || source.url}</small>
@@ -2142,19 +2383,12 @@ export const InspirationPage = memo(function InspirationPage(props: {
                   <label><span>地区</span><StudioSelect value={sourceDraft.region} onChange={(value) => setSourceDraft({ ...sourceDraft, region: value as InspirationRegion })} options={regionOptions.filter((option) => option.value !== 'all') as Array<{ value: InspirationRegion; label: string }>} /></label>
                 </div>
                 <label><span>标签</span><input value={sourceDraft.tags} onChange={(event) => setSourceDraft({ ...sourceDraft, tags: event.target.value })} placeholder="商业，角色，构图" /></label>
-                <button className="miniButton sourceAdvancedToggle" type="button" onClick={() => setSourceAdvancedOpen((value) => !value)} title={sourceAdvancedOpen ? '收起更多信息' : '展开更多信息'}>
-                  <SlidersHorizontal size={13} /> {sourceAdvancedOpen ? '收起更多信息' : '展开更多信息'}
-                </button>
-                {sourceAdvancedOpen ? (
-                  <>
-                    <label><span>常用关键词</span><input value={sourceDraft.keywords} onChange={(event) => setSourceDraft({ ...sourceDraft, keywords: event.target.value })} placeholder="portrait，logo，电商主图" /></label>
-                    <label><span>备注</span><textarea value={sourceDraft.note} onChange={(event) => setSourceDraft({ ...sourceDraft, note: event.target.value })} rows={2} placeholder="这个网站最值得记录的点" /></label>
-                    <label><span>适合场景</span><textarea value={sourceDraft.sceneNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, sceneNotes: event.target.value })} rows={2} placeholder="适合找什么类型的参考" /></label>
-                    <label><span>登录 / 会员说明</span><textarea value={sourceDraft.membershipNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, membershipNotes: event.target.value })} rows={2} placeholder="是否需要登录、会员或额度" /></label>
-                    <label><span>版权 / 商用备注</span><textarea value={sourceDraft.copyrightNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, copyrightNotes: event.target.value })} rows={2} placeholder="商用前要注意什么" /></label>
-                    <label><span>Favicon URL</span><input value={sourceDraft.faviconUrl} onChange={(event) => setSourceDraft({ ...sourceDraft, faviconUrl: event.target.value })} placeholder="可选，https://..." /></label>
-                  </>
-                ) : null}
+                <label><span>常用关键词</span><input value={sourceDraft.keywords} onChange={(event) => setSourceDraft({ ...sourceDraft, keywords: event.target.value })} placeholder="portrait，logo，电商主图" /></label>
+                <label><span>备注</span><textarea value={sourceDraft.note} onChange={(event) => setSourceDraft({ ...sourceDraft, note: event.target.value })} rows={2} placeholder="这个网站最值得记录的点" /></label>
+                <label><span>适合场景</span><textarea value={sourceDraft.sceneNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, sceneNotes: event.target.value })} rows={2} placeholder="适合找什么类型的参考" /></label>
+                <label><span>登录 / 会员说明</span><textarea value={sourceDraft.membershipNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, membershipNotes: event.target.value })} rows={2} placeholder="是否需要登录、会员或额度" /></label>
+                <label><span>版权 / 商用备注</span><textarea value={sourceDraft.copyrightNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, copyrightNotes: event.target.value })} rows={2} placeholder="商用前要注意什么" /></label>
+                <label><span>Favicon URL</span><input value={sourceDraft.faviconUrl} onChange={(event) => setSourceDraft({ ...sourceDraft, faviconUrl: event.target.value })} placeholder="可选，https://..." /></label>
                 <label className="inspirationCheck"><input type="checkbox" checked={sourceDraft.requiresLogin} onChange={(event) => setSourceDraft({ ...sourceDraft, requiresLogin: event.target.checked })} /><span>需要登录</span></label>
                 <label><span>商用备注</span><StudioSelect value={sourceDraft.commercialReference} onChange={(value) => setSourceDraft({ ...sourceDraft, commercialReference: value as InspirationCommercialReference })} options={commercialReferenceOptions} /></label>
               </div>

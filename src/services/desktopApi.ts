@@ -104,8 +104,11 @@ export interface SaveTextFileResult {
 
 export interface StorageSettings {
   library_dir_override?: string | null;
+  inspiration_dir_override?: string | null;
   default_library_dir: string;
   resolved_library_dir: string;
+  default_inspiration_dir: string;
+  resolved_inspiration_dir: string;
   settings_file: string;
 }
 
@@ -388,15 +391,21 @@ export async function revealLibraryDir() {
   await invoke('reveal_library_dir');
 }
 
+export async function revealInspirationDir() {
+  if (!isTauriRuntime()) return;
+  await invoke('reveal_inspiration_dir');
+}
+
 export async function getStorageSettings() {
   if (!isTauriRuntime()) return null;
   return invoke<StorageSettings>('get_storage_settings');
 }
 
-export async function saveStorageSettings(libraryDirOverride?: string) {
+export async function saveStorageSettings(options?: { libraryDirOverride?: string | null; inspirationDirOverride?: string | null }) {
   return invoke<StorageSettings>('save_storage_settings', {
     request: {
-      library_dir_override: libraryDirOverride
+      library_dir_override: options?.libraryDirOverride,
+      inspiration_dir_override: options?.inspirationDirOverride
     }
   });
 }
@@ -404,6 +413,11 @@ export async function saveStorageSettings(libraryDirOverride?: string) {
 export async function chooseLibraryDir() {
   if (!isTauriRuntime()) return null;
   return invoke<StorageSettings | null>('choose_library_dir');
+}
+
+export async function chooseInspirationDir() {
+  if (!isTauriRuntime()) return null;
+  return invoke<StorageSettings | null>('choose_inspiration_dir');
 }
 
 export async function openExternalUrl(url: string) {

@@ -185,11 +185,14 @@ for term in [
     "loadPromptTemplates",
     "PROMPT_TEMPLATE_CATEGORIES",
     "templateToolbar",
-    "templateGrid",
+    "promptLibraryLayout",
+    "promptTemplateDetail",
+    "toggleTemplateFavorite",
+    "markTemplateUsed",
     "copyTemplate",
     "onUseTemplate",
 ]:
-    assert term in app_src, f"Prompt templates v1 interaction missing: {term}"
+    assert term in app_src, f"Prompt templates v2 interaction missing: {term}"
 
 for term in [
     "FreeGenerationPage",

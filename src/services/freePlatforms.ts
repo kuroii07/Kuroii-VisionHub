@@ -31,19 +31,56 @@ export interface FreePlatform {
   tags: string[];
 }
 
+const FAVICON_DOMAIN_ALIASES: Record<string, string[]> = {
+  'www.jimeng.com': ['www.jimeng.com', 'jimeng.com', 'jimeng.jianying.com'],
+  'jimeng.com': ['www.jimeng.com', 'jimeng.com', 'jimeng.jianying.com'],
+  'klingai.com': ['klingai.com', 'www.klingai.com', 'klingai.kuaishou.com', 'kling.ai'],
+  'www.klingai.com': ['klingai.com', 'www.klingai.com', 'klingai.kuaishou.com', 'kling.ai'],
+  'tongyi.aliyun.com': ['tongyi.aliyun.com', 'www.aliyun.com'],
+  'chat.qwen.ai': ['chat.qwen.ai', 'qwen.ai'],
+  'www.liblib.art': ['www.liblib.art', 'liblib.art'],
+  'www.whee.com': ['www.whee.com', 'whee.com'],
+  'creator.nolibox.com': ['creator.nolibox.com', 'nolibox.com'],
+  'www.gaoding.com': ['www.gaoding.com', 'gaoding.com'],
+  'www.chuangkit.com': ['www.chuangkit.com', 'chuangkit.com'],
+  'bot.n.cn': ['bot.n.cn', 'n.cn'],
+  'yiyan.baidu.com': ['yiyan.baidu.com', 'baidu.com'],
+  'www.doubao.com': ['www.doubao.com', 'doubao.com']
+};
+
+function faviconDomains(domain: string) {
+  const normalized = domain.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const withoutWww = normalized.replace(/^www\./, '');
+  const withWww = normalized.startsWith('www.') ? normalized : `www.${normalized}`;
+  return Array.from(new Set([
+    ...(FAVICON_DOMAIN_ALIASES[normalized] ?? []),
+    normalized,
+    withoutWww,
+    withWww
+  ].filter(Boolean)));
+}
+
+function faviconCandidates(domain: string) {
+  return faviconDomains(domain).flatMap((item) => [
+    `https://${item}/favicon.ico`,
+    `https://${item}/favicon.png`,
+    `https://${item}/apple-touch-icon.png`,
+    `https://icons.duckduckgo.com/ip3/${item}.ico`,
+    `https://www.google.com/s2/favicons?domain=${item}&sz=64`,
+    `https://icon.horse/icon/${item}`
+  ]);
+}
+
 function faviconUrl(domain: string) {
-  return `https://${domain}/favicon.ico`;
+  return faviconCandidates(domain)[0] ?? `https://${domain}/favicon.ico`;
 }
 
 function fallbackFaviconUrl(domain: string) {
-  return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+  return fallbackFaviconUrls(domain)[0] ?? `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 }
 
 function fallbackFaviconUrls(domain: string) {
-  return [
-    fallbackFaviconUrl(domain),
-    `https://icons.duckduckgo.com/ip3/${domain}.ico`
-  ];
+  return Array.from(new Set(faviconCandidates(domain).slice(1)));
 }
 
 export const FREE_PLATFORMS: FreePlatform[] = [

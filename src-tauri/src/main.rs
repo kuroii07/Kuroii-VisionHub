@@ -136,6 +136,7 @@ struct AppPaths {
 #[derive(Debug, Deserialize)]
 struct StorageSettingsRequest {
     library_dir_override: Option<String>,
+    inspiration_dir_override: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -147,13 +148,17 @@ struct ReferenceImagesFromPathsRequest {
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 struct StoredStorageSettings {
     library_dir_override: Option<String>,
+    inspiration_dir_override: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
 struct StorageSettings {
     library_dir_override: Option<String>,
+    inspiration_dir_override: Option<String>,
     default_library_dir: String,
     resolved_library_dir: String,
+    default_inspiration_dir: String,
+    resolved_inspiration_dir: String,
     settings_file: String,
 }
 
@@ -1352,6 +1357,11 @@ fn reveal_library_dir(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn reveal_inspiration_dir(app: tauri::AppHandle) -> Result<(), String> {
+    open_path_in_file_manager(inspiration_images_dir(&app)?)
+}
+
+#[tauri::command]
 fn get_storage_settings(app: tauri::AppHandle) -> Result<StorageSettings, String> {
     storage_settings_response(&app)
 }
@@ -1361,7 +1371,11 @@ fn save_storage_settings(
     app: tauri::AppHandle,
     request: StorageSettingsRequest,
 ) -> Result<StorageSettings, String> {
-    save_library_dir_override(&app, request.library_dir_override.as_deref())
+    save_storage_dir_overrides(
+        &app,
+        request.library_dir_override.as_deref(),
+        request.inspiration_dir_override.as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -1369,7 +1383,33 @@ fn choose_library_dir(app: tauri::AppHandle) -> Result<Option<StorageSettings>, 
     let current_dir = library_dir(&app)?;
     let selected_dir = pick_folder_with_system_dialog(&current_dir)?;
     match selected_dir {
-        Some(path) => save_library_dir_override(&app, Some(path.to_string_lossy().as_ref())).map(Some),
+        Some(path) => {
+            let current_settings = read_storage_settings(&app)?;
+            save_storage_dir_overrides(
+                &app,
+                Some(path.to_string_lossy().as_ref()),
+                current_settings.inspiration_dir_override.as_deref(),
+            )
+            .map(Some)
+        }
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
+fn choose_inspiration_dir(app: tauri::AppHandle) -> Result<Option<StorageSettings>, String> {
+    let current_dir = inspiration_images_dir(&app)?;
+    let selected_dir = pick_folder_with_system_dialog(&current_dir)?;
+    match selected_dir {
+        Some(path) => {
+            let current_settings = read_storage_settings(&app)?;
+            save_storage_dir_overrides(
+                &app,
+                current_settings.library_dir_override.as_deref(),
+                Some(path.to_string_lossy().as_ref()),
+            )
+            .map(Some)
+        }
         None => Ok(None),
     }
 }
@@ -2011,6 +2051,13 @@ fn default_library_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir(app)?.join("library"))
 }
 
+fn default_inspiration_images_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app_data_dir(app)?.join("inspirations").join("images");
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("Cannot create default inspiration images directory: {error}"))?;
+    Ok(dir)
+}
+
 fn library_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let settings = read_storage_settings(app)?;
     let dir = match settings
@@ -2019,11 +2066,27 @@ fn library_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        Some(path) => resolve_library_override(path)?,
+        Some(path) => resolve_storage_override(path, "图库目录")?,
         None => default_library_dir(app)?,
     };
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("Cannot create local image library: {error}"))?;
+    Ok(dir)
+}
+
+fn inspiration_images_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let settings = read_storage_settings(app)?;
+    let dir = match settings
+        .inspiration_dir_override
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(path) => resolve_storage_override(path, "图片收藏目录")?,
+        None => default_inspiration_images_dir(app)?,
+    };
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("Cannot create inspiration images directory: {error}"))?;
     Ok(dir)
 }
 
@@ -2046,13 +2109,6 @@ fn inspirations_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app_data_dir(app)?.join("inspirations");
     std::fs::create_dir_all(&dir)
         .map_err(|error| format!("Cannot create inspirations directory: {error}"))?;
-    Ok(dir)
-}
-
-fn inspiration_images_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let dir = inspirations_dir(app)?.join("images");
-    std::fs::create_dir_all(&dir)
-        .map_err(|error| format!("Cannot create inspiration images directory: {error}"))?;
     Ok(dir)
 }
 
@@ -2098,6 +2154,8 @@ fn storage_settings_response(app: &tauri::AppHandle) -> Result<StorageSettings, 
     let stored = read_storage_settings(app)?;
     let default_library_dir = default_library_dir(app)?;
     let resolved_library_dir = library_dir(app)?;
+    let default_inspiration_dir = default_inspiration_images_dir(app)?;
+    let resolved_inspiration_dir = inspiration_images_dir(app)?;
     let settings_file = storage_settings_file_path(app)?;
 
     Ok(StorageSettings {
@@ -2105,20 +2163,36 @@ fn storage_settings_response(app: &tauri::AppHandle) -> Result<StorageSettings, 
             .library_dir_override
             .as_deref()
             .map(strip_windows_extended_path_prefix),
+        inspiration_dir_override: stored
+            .inspiration_dir_override
+            .as_deref()
+            .map(strip_windows_extended_path_prefix),
         default_library_dir: path_to_user_string(&default_library_dir),
         resolved_library_dir: path_to_user_string(&resolved_library_dir),
+        default_inspiration_dir: path_to_user_string(&default_inspiration_dir),
+        resolved_inspiration_dir: path_to_user_string(&resolved_inspiration_dir),
         settings_file: path_to_user_string(&settings_file),
     })
 }
 
-fn save_library_dir_override(
+fn save_storage_dir_overrides(
     app: &tauri::AppHandle,
-    override_path: Option<&str>,
+    library_override_path: Option<&str>,
+    inspiration_override_path: Option<&str>,
 ) -> Result<StorageSettings, String> {
-    let override_path = override_path.map(str::trim).filter(|value| !value.is_empty());
+    let library_override_path = library_override_path
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let inspiration_override_path = inspiration_override_path
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
     let stored = StoredStorageSettings {
-        library_dir_override: match override_path {
-            Some(path) => Some(path_to_user_string(&resolve_library_override(path)?)),
+        library_dir_override: match library_override_path {
+            Some(path) => Some(path_to_user_string(&resolve_storage_override(path, "图库目录")?)),
+            None => None,
+        },
+        inspiration_dir_override: match inspiration_override_path {
+            Some(path) => Some(path_to_user_string(&resolve_storage_override(path, "图片收藏目录")?)),
             None => None,
         },
     };
@@ -2126,18 +2200,18 @@ fn save_library_dir_override(
     storage_settings_response(app)
 }
 
-fn resolve_library_override(path: &str) -> Result<PathBuf, String> {
+fn resolve_storage_override(path: &str, label: &str) -> Result<PathBuf, String> {
     let dir = PathBuf::from(path.trim());
     if !dir.is_absolute() {
-        return Err("图库目录必须是绝对路径，例如 D:\\VisionHub\\library。".to_string());
+        return Err(format!("{label}必须是绝对路径，例如 D:\\VisionHub\\library。"));
     }
     if dir.is_file() {
-        return Err("图库目录不能指向一个文件，请选择文件夹。".to_string());
+        return Err(format!("{label}不能指向一个文件，请选择文件夹。"));
     }
     std::fs::create_dir_all(&dir)
-        .map_err(|error| format!("Cannot create custom library directory: {error}"))?;
+        .map_err(|error| format!("Cannot create custom storage directory: {error}"))?;
     dir.canonicalize()
-        .map_err(|error| format!("Cannot resolve custom library directory: {error}"))
+        .map_err(|error| format!("Cannot resolve custom storage directory: {error}"))
 }
 
 fn path_to_user_string(path: &Path) -> String {
@@ -2753,7 +2827,10 @@ fn is_allowed_inspiration_image_path(app: &tauri::AppHandle, path: &Path) -> Res
     let root = inspiration_images_dir(app)?
         .canonicalize()
         .map_err(|error| format!("Cannot resolve inspiration image directory: {error}"))?;
-    Ok(file.starts_with(root))
+    let default_root = default_inspiration_images_dir(app)?
+        .canonicalize()
+        .map_err(|error| format!("Cannot resolve default inspiration image directory: {error}"))?;
+    Ok(file.starts_with(root) || file.starts_with(default_root))
 }
 
 fn optional_trimmed_string(value: Option<String>) -> Option<String> {
@@ -3506,9 +3583,11 @@ pub fn run() {
             get_app_paths,
             reveal_app_data_dir,
             reveal_library_dir,
+            reveal_inspiration_dir,
             get_storage_settings,
             save_storage_settings,
             choose_library_dir,
+            choose_inspiration_dir,
             open_external_url,
             export_settings_backup,
             save_text_file_with_dialog
