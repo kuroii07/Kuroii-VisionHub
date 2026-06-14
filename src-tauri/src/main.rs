@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::ffi::c_void;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tauri::Manager;
 
 const KEYRING_SERVICE: &str = "visionhub-studio";
@@ -116,6 +117,57 @@ struct ListModelsRequest {
     base_url: String,
     extra_headers: Option<std::collections::HashMap<String, String>>,
     secret_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ComfyUIDiagnosisRequest {
+    base_url: String,
+    timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ComfyUIGenerationRequest {
+    base_url: String,
+    workflow: Value,
+    workflow_name: Option<String>,
+    prompt: String,
+    negative_prompt: Option<String>,
+    size: String,
+    seed: Option<u64>,
+    output_format: Option<String>,
+    output_compression: Option<u8>,
+    count: Option<u8>,
+    timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+struct ComfyUIDiagnosisEndpoint {
+    path: String,
+    ok: bool,
+    status: Option<u16>,
+    detail: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ComfyUIDiagnosisResult {
+    base_url: String,
+    resolved_base_url: String,
+    checked_at: String,
+    latency_ms: u128,
+    online: bool,
+    system_stats: Option<Value>,
+    object_info_node_count: Option<usize>,
+    queue_running: Option<usize>,
+    queue_pending: Option<usize>,
+    endpoints: Vec<ComfyUIDiagnosisEndpoint>,
+    message: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct ComfyUIImageRef {
+    filename: String,
+    subfolder: String,
+    image_type: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -659,6 +711,762 @@ async fn list_openai_compatible_models(request: ListModelsRequest) -> Result<Vec
             Some(ModelInfo { id, owned_by })
         })
         .collect())
+}
+
+#[tauri::command]
+async fn diagnose_comfyui_connection(request: ComfyUIDiagnosisRequest) -> Result<ComfyUIDiagnosisResult, String> {
+    let started = std::time::Instant::now();
+    let base_url = request.base_url.trim();
+    if base_url.is_empty() {
+        return Err("请先填写 ComfyUI Base URL。".to_string());
+    }
+    let resolved_base_url = normalize_base_url(base_url)?;
+    let timeout_ms = request.timeout_ms.unwrap_or(8_000).clamp(2_000, 20_000);
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(timeout_ms))
+        .build()
+        .map_err(|error| format!("Cannot create ComfyUI diagnosis client: {error}"))?;
+
+    let mut endpoints = Vec::new();
+    let mut system_stats: Option<Value> = None;
+    let mut object_info_node_count: Option<usize> = None;
+    let mut queue_running: Option<usize> = None;
+    let mut queue_pending: Option<usize> = None;
+
+    let system_stats_result = fetch_comfyui_json(&client, &resolved_base_url, "/system_stats").await;
+    match system_stats_result {
+        Ok((status, raw)) => {
+            system_stats = Some(raw.clone());
+            endpoints.push(ComfyUIDiagnosisEndpoint {
+                path: "/system_stats".to_string(),
+                ok: true,
+                status: Some(status.as_u16()),
+                detail: summarize_comfyui_system_stats(&raw),
+            });
+        }
+        Err(error) => {
+            endpoints.push(ComfyUIDiagnosisEndpoint {
+                path: "/system_stats".to_string(),
+                ok: false,
+                status: error.status,
+                detail: error.detail,
+            });
+        }
+    }
+
+    let object_info_result = fetch_comfyui_json(&client, &resolved_base_url, "/object_info").await;
+    match object_info_result {
+        Ok((status, raw)) => {
+            object_info_node_count = raw.as_object().map(|value| value.len());
+            endpoints.push(ComfyUIDiagnosisEndpoint {
+                path: "/object_info".to_string(),
+                ok: true,
+                status: Some(status.as_u16()),
+                detail: match object_info_node_count {
+                    Some(count) => format!("读取到 {count} 个节点定义。"),
+                    None => "读取到对象信息，但没有可统计的节点定义。".to_string(),
+                },
+            });
+        }
+        Err(error) => {
+            endpoints.push(ComfyUIDiagnosisEndpoint {
+                path: "/object_info".to_string(),
+                ok: false,
+                status: error.status,
+                detail: error.detail,
+            });
+        }
+    }
+
+    let queue_result = fetch_comfyui_json(&client, &resolved_base_url, "/queue").await;
+    match queue_result {
+        Ok((status, raw)) => {
+            let (running, pending) = extract_comfyui_queue_counts(&raw);
+            queue_running = running;
+            queue_pending = pending;
+            endpoints.push(ComfyUIDiagnosisEndpoint {
+                path: "/queue".to_string(),
+                ok: true,
+                status: Some(status.as_u16()),
+                detail: match (running, pending) {
+                    (Some(running), Some(pending)) => format!("队列运行 {running} 个，待处理 {pending} 个。"),
+                    (Some(running), None) => format!("队列运行 {running} 个。"),
+                    (None, Some(pending)) => format!("队列待处理 {pending} 个。"),
+                    _ => "读取到队列信息，但未识别运行中或待处理数量。".to_string(),
+                },
+            });
+        }
+        Err(error) => {
+            endpoints.push(ComfyUIDiagnosisEndpoint {
+                path: "/queue".to_string(),
+                ok: false,
+                status: error.status,
+                detail: error.detail,
+            });
+        }
+    }
+
+    let online = endpoints.iter().any(|endpoint| endpoint.ok);
+    let success_count = endpoints.iter().filter(|endpoint| endpoint.ok).count();
+    let message = if online {
+        let mut fragments: Vec<String> = Vec::new();
+        if system_stats.is_some() {
+            fragments.push("系统信息已读到".to_string());
+        }
+        if let Some(count) = object_info_node_count {
+            fragments.push(format!("节点 {count} 个"));
+        }
+        if queue_running.is_some() || queue_pending.is_some() {
+            fragments.push("队列已探测".to_string());
+        }
+        format!(
+            "ComfyUI 连接正常：{success_count}/3 个基础接口可访问，{}。",
+            fragments.join("，")
+        )
+    } else {
+        "ComfyUI 暂时未连通：三个基础接口都没有成功返回。请检查地址、端口和服务是否已启动。".to_string()
+    };
+
+    Ok(ComfyUIDiagnosisResult {
+        base_url: base_url.to_string(),
+        resolved_base_url,
+        checked_at: chrono_like_timestamp(),
+        latency_ms: started.elapsed().as_millis(),
+        online,
+        system_stats,
+        object_info_node_count,
+        queue_running,
+        queue_pending,
+        endpoints,
+        message,
+    })
+}
+
+#[tauri::command]
+async fn generate_comfyui_image(
+    app: tauri::AppHandle,
+    request: ComfyUIGenerationRequest,
+) -> Result<ImageGenerationResult, String> {
+    let started = std::time::Instant::now();
+    let base_url = request.base_url.trim();
+    if base_url.is_empty() {
+        return Err("请先填写 ComfyUI Base URL。".to_string());
+    }
+    if request.prompt.trim().is_empty() {
+        return Err("请先输入 Prompt。".to_string());
+    }
+
+    let resolved_base_url = normalize_base_url(base_url)?;
+    let timeout_ms = request.timeout_ms.unwrap_or(180_000).clamp(10_000, 600_000);
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(20_000))
+        .build()
+        .map_err(|error| format!("Cannot create ComfyUI client: {error}"))?;
+    let workflow_name = request
+        .workflow_name
+        .clone()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "ComfyUI Workflow".to_string());
+    let mut workflow = request.workflow.clone();
+    let mapping = match apply_comfyui_workflow_inputs(&mut workflow, &request) {
+        Ok(mapping) => mapping,
+        Err(error) => {
+            return Ok(comfyui_failed_result(
+                &request,
+                &workflow_name,
+                started.elapsed().as_millis(),
+                error,
+                serde_json::json!({
+                    "visionhub_comfyui_error": "workflow_mapping_failed",
+                    "workflow_name": workflow_name
+                }),
+            ));
+        }
+    };
+
+    let prompt_payload = serde_json::json!({
+        "prompt": workflow,
+        "client_id": format!("visionhub-studio-{}", chrono_like_timestamp_millis())
+    });
+    let prompt_response = match post_comfyui_prompt(&client, &resolved_base_url, &prompt_payload).await {
+        Ok(raw) => raw,
+        Err(error) => {
+            return Ok(comfyui_failed_result(
+                &request,
+                &workflow_name,
+                started.elapsed().as_millis(),
+                error,
+                serde_json::json!({
+                    "visionhub_comfyui_mapping": mapping,
+                    "visionhub_comfyui_error": "prompt_submit_failed"
+                }),
+            ));
+        }
+    };
+    let Some(prompt_id) = prompt_response
+        .get("prompt_id")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+    else {
+        return Ok(comfyui_failed_result(
+            &request,
+            &workflow_name,
+            started.elapsed().as_millis(),
+            "ComfyUI 已返回响应，但没有 prompt_id，无法继续轮询结果。".to_string(),
+            serde_json::json!({
+                "prompt_response": prompt_response,
+                "visionhub_comfyui_mapping": mapping
+            }),
+        ));
+    };
+
+    let history = match poll_comfyui_history(&client, &resolved_base_url, &prompt_id, timeout_ms).await {
+        Ok(history) => history,
+        Err(error) => {
+            return Ok(comfyui_failed_result(
+                &request,
+                &workflow_name,
+                started.elapsed().as_millis(),
+                error,
+                serde_json::json!({
+                    "prompt_id": prompt_id,
+                    "prompt_response": prompt_response,
+                    "visionhub_comfyui_mapping": mapping
+                }),
+            ));
+        }
+    };
+    let image_refs = extract_comfyui_image_refs(&history);
+    if image_refs.is_empty() {
+        return Ok(comfyui_failed_result(
+            &request,
+            &workflow_name,
+            started.elapsed().as_millis(),
+            "ComfyUI 任务完成，但 history 里没有找到输出图片。请确认 workflow 里有 SaveImage 或 PreviewImage 输出节点。".to_string(),
+            serde_json::json!({
+                "prompt_id": prompt_id,
+                "prompt_response": prompt_response,
+                "history": history,
+                "visionhub_comfyui_mapping": mapping
+            }),
+        ));
+    }
+
+    let local_image_paths = match save_comfyui_images_to_library(&app, &client, &resolved_base_url, &image_refs, &request, &workflow_name).await {
+        Ok(paths) => paths,
+        Err(error) => {
+            return Ok(comfyui_failed_result(
+                &request,
+                &workflow_name,
+                started.elapsed().as_millis(),
+                error,
+                serde_json::json!({
+                    "prompt_id": prompt_id,
+                    "prompt_response": prompt_response,
+                    "history": history,
+                    "images": image_refs.iter().map(comfyui_image_ref_raw).collect::<Vec<Value>>(),
+                    "visionhub_comfyui_mapping": mapping
+                }),
+            ));
+        }
+    };
+    let display_image_urls = display_library_image_urls_for_paths(&app, &local_image_paths, &[]);
+
+    Ok(ImageGenerationResult {
+        id: format!("comfyui-{}", chrono_like_timestamp_millis()),
+        provider_id: "comfyui-local".to_string(),
+        model_id: workflow_name,
+        status: "succeeded".to_string(),
+        prompt: request.prompt,
+        image_urls: display_image_urls,
+        local_image_paths,
+        cost_hint: Some("本地 ComfyUI 生成，不消耗在线 API 额度。".to_string()),
+        duration_ms: Some(started.elapsed().as_millis()),
+        error: None,
+        raw: serde_json::json!({
+            "prompt_id": prompt_id,
+            "prompt_response": prompt_response,
+            "history": history,
+            "images": image_refs.iter().map(comfyui_image_ref_raw).collect::<Vec<Value>>(),
+            "visionhub_comfyui_mapping": mapping
+        }),
+        created_at: chrono_like_timestamp(),
+        generation_mode: Some("text-to-image".to_string()),
+        reference_images: Some(Vec::new()),
+    })
+}
+
+struct ComfyUIDiagnosisError {
+    status: Option<u16>,
+    detail: String,
+}
+
+async fn fetch_comfyui_json(
+    client: &reqwest::Client,
+    base_url: &str,
+    path: &str,
+) -> Result<(reqwest::StatusCode, Value), ComfyUIDiagnosisError> {
+    let endpoint = format!("{base_url}{path}");
+    let response = client
+        .get(endpoint)
+        .send()
+        .await
+        .map_err(|error| ComfyUIDiagnosisError {
+            status: None,
+            detail: format!("请求失败：{error}"),
+        })?;
+    let status = response.status();
+    let body_text = response
+        .text()
+        .await
+        .map_err(|error| ComfyUIDiagnosisError {
+            status: Some(status.as_u16()),
+            detail: format!("响应读取失败：{error}"),
+        })?;
+    let trimmed_body = body_text.trim_start();
+    if trimmed_body.starts_with('<') {
+        let preview: String = body_text.chars().take(180).collect();
+        return Err(ComfyUIDiagnosisError {
+            status: Some(status.as_u16()),
+            detail: format!("返回了网页而不是 JSON，可能不是 ComfyUI 服务。预览：{preview}"),
+        });
+    }
+    let raw: Value = serde_json::from_str(&body_text).map_err(|error| ComfyUIDiagnosisError {
+        status: Some(status.as_u16()),
+        detail: format!("JSON 解析失败：{error}"),
+    })?;
+    if !status.is_success() {
+        return Err(ComfyUIDiagnosisError {
+            status: Some(status.as_u16()),
+            detail: extract_error_message(&raw)
+                .unwrap_or_else(|| format!("HTTP {status}")),
+        });
+    }
+    Ok((status, raw))
+}
+
+fn summarize_comfyui_system_stats(raw: &Value) -> String {
+    let system = raw.get("system").and_then(|value| value.as_object());
+    let os = system
+        .and_then(|value| value.get("os"))
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    let python_version = system
+        .and_then(|value| value.get("python_version"))
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+    let devices = raw
+        .get("devices")
+        .and_then(|value| value.as_array())
+        .map(|value| value.len());
+    let device_names = raw
+        .get("devices")
+        .and_then(|value| value.as_array())
+        .map(|devices| {
+            devices
+                .iter()
+                .filter_map(|device| {
+                    device
+                        .get("name")
+                        .or_else(|| device.get("type"))
+                        .and_then(|value| value.as_str())
+                })
+                .take(2)
+                .collect::<Vec<_>>()
+                .join(" / ")
+        })
+        .unwrap_or_default();
+    let mut parts = Vec::new();
+    if !os.is_empty() {
+        parts.push(format!("系统 {os}"));
+    }
+    if !python_version.is_empty() {
+        parts.push(format!("Python {python_version}"));
+    }
+    if let Some(count) = devices {
+        let device_detail = if device_names.is_empty() {
+            format!("设备 {count} 个")
+        } else {
+            format!("设备 {count} 个：{device_names}")
+        };
+        parts.push(device_detail);
+    }
+    if parts.is_empty() {
+        "系统信息接口已返回。".to_string()
+    } else {
+        parts.join("，")
+    }
+}
+
+fn extract_comfyui_queue_counts(raw: &Value) -> (Option<usize>, Option<usize>) {
+    let running = raw
+        .get("queue_running")
+        .and_then(|value| value.as_array())
+        .map(|value| value.len());
+    let pending = raw
+        .get("queue_pending")
+        .and_then(|value| value.as_array())
+        .map(|value| value.len());
+    (running, pending)
+}
+
+fn comfyui_failed_result(
+    request: &ComfyUIGenerationRequest,
+    workflow_name: &str,
+    duration_ms: u128,
+    error: String,
+    raw: Value,
+) -> ImageGenerationResult {
+    ImageGenerationResult {
+        id: format!("comfyui-{}", chrono_like_timestamp_millis()),
+        provider_id: "comfyui-local".to_string(),
+        model_id: workflow_name.to_string(),
+        status: "failed".to_string(),
+        prompt: request.prompt.clone(),
+        image_urls: Vec::new(),
+        local_image_paths: Vec::new(),
+        cost_hint: Some("本地 ComfyUI 生成，不消耗在线 API 额度。".to_string()),
+        duration_ms: Some(duration_ms),
+        error: Some(error),
+        raw,
+        created_at: chrono_like_timestamp(),
+        generation_mode: Some("text-to-image".to_string()),
+        reference_images: Some(Vec::new()),
+    }
+}
+
+async fn post_comfyui_prompt(
+    client: &reqwest::Client,
+    base_url: &str,
+    payload: &Value,
+) -> Result<Value, String> {
+    let endpoint = format!("{base_url}/prompt");
+    let response = client
+        .post(endpoint)
+        .json(payload)
+        .send()
+        .await
+        .map_err(|error| format!("ComfyUI /prompt 提交失败：{error}"))?;
+    let status = response.status();
+    let body_text = response
+        .text()
+        .await
+        .map_err(|error| format!("ComfyUI /prompt 响应读取失败：{error}"))?;
+    let raw: Value = serde_json::from_str(&body_text).map_err(|error| {
+        let preview: String = body_text.chars().take(500).collect();
+        format!("ComfyUI /prompt 返回不是 JSON：{error}。预览：{preview}")
+    })?;
+    if !status.is_success() {
+        return Err(extract_error_message(&raw).unwrap_or_else(|| format!("ComfyUI /prompt HTTP {status}")));
+    }
+    Ok(raw)
+}
+
+async fn poll_comfyui_history(
+    client: &reqwest::Client,
+    base_url: &str,
+    prompt_id: &str,
+    timeout_ms: u64,
+) -> Result<Value, String> {
+    let started = std::time::Instant::now();
+    let endpoint = format!("{base_url}/history/{prompt_id}");
+    loop {
+        let response = client
+            .get(&endpoint)
+            .send()
+            .await
+            .map_err(|error| format!("ComfyUI history 轮询失败：{error}"))?;
+        let status = response.status();
+        let body_text = response
+            .text()
+            .await
+            .map_err(|error| format!("ComfyUI history 响应读取失败：{error}"))?;
+        let raw: Value = serde_json::from_str(&body_text).map_err(|error| {
+            let preview: String = body_text.chars().take(500).collect();
+            format!("ComfyUI history 返回不是 JSON：{error}。预览：{preview}")
+        })?;
+        if !status.is_success() {
+            return Err(extract_error_message(&raw).unwrap_or_else(|| format!("ComfyUI history HTTP {status}")));
+        }
+        if let Some(entry) = raw.get(prompt_id) {
+            return Ok(entry.clone());
+        }
+        if started.elapsed() >= Duration::from_millis(timeout_ms) {
+            return Err(format!("ComfyUI 任务已提交，但 {timeout_ms}ms 内没有从 history 取回结果。可稍后到 ComfyUI 界面或作品目录确认。"));
+        }
+        tokio::time::sleep(Duration::from_millis(1_500)).await;
+    }
+}
+
+fn apply_comfyui_workflow_inputs(
+    workflow: &mut Value,
+    request: &ComfyUIGenerationRequest,
+) -> Result<Value, String> {
+    let Some(nodes) = workflow.as_object_mut() else {
+        return Err("当前导入的 workflow 不是 ComfyUI API workflow。请在 ComfyUI 里启用 Dev mode 后导出 API 格式 workflow。".to_string());
+    };
+    let has_api_nodes = nodes.values().any(|node| {
+        node.get("class_type").and_then(Value::as_str).is_some()
+            && node.get("inputs").and_then(Value::as_object).is_some()
+    });
+    if !has_api_nodes {
+        return Err("当前 workflow 看起来是 UI workflow，不是可直接提交的 API workflow。请从 ComfyUI 导出 API workflow 后再测试。".to_string());
+    }
+
+    let (width, height) = parse_image_size(&request.size).unwrap_or((1024, 1024));
+    let batch_size = request.count.unwrap_or(1).max(1).min(4);
+    let seed = request.seed.unwrap_or_else(|| (chrono_like_timestamp_millis() % (u64::MAX as u128)) as u64);
+    let mut positive_node_ids: Vec<String> = Vec::new();
+    let mut negative_node_ids: Vec<String> = Vec::new();
+    let mut sampler_node_ids: Vec<String> = Vec::new();
+    let mut size_node_ids: Vec<String> = Vec::new();
+
+    for (node_id, node) in nodes.iter() {
+        let class_type = node.get("class_type").and_then(Value::as_str).unwrap_or("");
+        let lower = class_type.to_ascii_lowercase();
+        let inputs = node.get("inputs").and_then(Value::as_object);
+        if lower.contains("ksampler") || lower.contains("sampler") {
+            sampler_node_ids.push(node_id.clone());
+            if let Some(id) = inputs.and_then(|inputs| connected_comfyui_node_id(inputs.get("positive"))) {
+                positive_node_ids.push(id);
+            }
+            if let Some(id) = inputs.and_then(|inputs| connected_comfyui_node_id(inputs.get("negative"))) {
+                negative_node_ids.push(id);
+            }
+        }
+        if lower.contains("emptylatent") || lower.contains("latentsize") {
+            size_node_ids.push(node_id.clone());
+        }
+    }
+
+    if positive_node_ids.is_empty() {
+        positive_node_ids = nodes
+            .iter()
+            .filter_map(|(node_id, node)| {
+                let class_type = node.get("class_type").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
+                let has_text = node
+                    .get("inputs")
+                    .and_then(Value::as_object)
+                    .and_then(|inputs| inputs.get("text"))
+                    .is_some();
+                if class_type.contains("cliptextencode") && has_text {
+                    Some(node_id.clone())
+                } else {
+                    None
+                }
+            })
+            .take(1)
+            .collect();
+    }
+    if negative_node_ids.is_empty() {
+        negative_node_ids = nodes
+            .iter()
+            .filter_map(|(node_id, node)| {
+                let class_type = node.get("class_type").and_then(Value::as_str).unwrap_or("").to_ascii_lowercase();
+                let has_text = node
+                    .get("inputs")
+                    .and_then(Value::as_object)
+                    .and_then(|inputs| inputs.get("text"))
+                    .is_some();
+                if class_type.contains("cliptextencode") && has_text && !positive_node_ids.contains(node_id) {
+                    Some(node_id.clone())
+                } else {
+                    None
+                }
+            })
+            .take(1)
+            .collect();
+    }
+
+    for node_id in &positive_node_ids {
+        if let Some(inputs) = nodes
+            .get_mut(node_id)
+            .and_then(|node| node.get_mut("inputs"))
+            .and_then(Value::as_object_mut)
+        {
+            inputs.insert("text".to_string(), Value::String(request.prompt.clone()));
+        }
+    }
+    for node_id in &negative_node_ids {
+        if let Some(inputs) = nodes
+            .get_mut(node_id)
+            .and_then(|node| node.get_mut("inputs"))
+            .and_then(Value::as_object_mut)
+        {
+            inputs.insert(
+                "text".to_string(),
+                Value::String(request.negative_prompt.clone().unwrap_or_default()),
+            );
+        }
+    }
+    for node_id in &sampler_node_ids {
+        if let Some(inputs) = nodes
+            .get_mut(node_id)
+            .and_then(|node| node.get_mut("inputs"))
+            .and_then(Value::as_object_mut)
+        {
+            if inputs.contains_key("seed") {
+                inputs.insert("seed".to_string(), serde_json::json!(seed));
+            }
+            if inputs.contains_key("noise_seed") {
+                inputs.insert("noise_seed".to_string(), serde_json::json!(seed));
+            }
+        }
+    }
+    for node_id in &size_node_ids {
+        if let Some(inputs) = nodes
+            .get_mut(node_id)
+            .and_then(|node| node.get_mut("inputs"))
+            .and_then(Value::as_object_mut)
+        {
+            if inputs.contains_key("width") {
+                inputs.insert("width".to_string(), serde_json::json!(width));
+            }
+            if inputs.contains_key("height") {
+                inputs.insert("height".to_string(), serde_json::json!(height));
+            }
+            if inputs.contains_key("batch_size") {
+                inputs.insert("batch_size".to_string(), serde_json::json!(batch_size));
+            }
+        }
+    }
+
+    Ok(serde_json::json!({
+        "format": "comfyui-api-workflow",
+        "positive_nodes": positive_node_ids,
+        "negative_nodes": negative_node_ids,
+        "sampler_nodes": sampler_node_ids,
+        "size_nodes": size_node_ids,
+        "width": width,
+        "height": height,
+        "seed": seed,
+        "batch_size": batch_size
+    }))
+}
+
+fn connected_comfyui_node_id(value: Option<&Value>) -> Option<String> {
+    let value = value?;
+    if let Some(items) = value.as_array() {
+        return items.first().and_then(|item| {
+            if let Some(text) = item.as_str() {
+                Some(text.to_string())
+            } else {
+                item.as_i64().map(|number| number.to_string())
+            }
+        });
+    }
+    value.as_str().map(str::to_string)
+}
+
+fn extract_comfyui_image_refs(history: &Value) -> Vec<ComfyUIImageRef> {
+    let mut refs = Vec::new();
+    collect_comfyui_image_refs(history, &mut refs);
+    let mut unique: Vec<ComfyUIImageRef> = Vec::new();
+    for image_ref in refs {
+        if !unique.contains(&image_ref) {
+            unique.push(image_ref);
+        }
+    }
+    unique
+}
+
+fn collect_comfyui_image_refs(value: &Value, refs: &mut Vec<ComfyUIImageRef>) {
+    match value {
+        Value::Object(map) => {
+            if let Some(filename) = map.get("filename").and_then(Value::as_str) {
+                refs.push(ComfyUIImageRef {
+                    filename: filename.to_string(),
+                    subfolder: map
+                        .get("subfolder")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string(),
+                    image_type: map
+                        .get("type")
+                        .and_then(Value::as_str)
+                        .unwrap_or("output")
+                        .to_string(),
+                });
+            }
+            for child in map.values() {
+                collect_comfyui_image_refs(child, refs);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_comfyui_image_refs(item, refs);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn comfyui_image_ref_raw(image_ref: &ComfyUIImageRef) -> Value {
+    serde_json::json!({
+        "filename": image_ref.filename,
+        "subfolder": image_ref.subfolder,
+        "type": image_ref.image_type
+    })
+}
+
+async fn save_comfyui_images_to_library(
+    app: &tauri::AppHandle,
+    client: &reqwest::Client,
+    base_url: &str,
+    images: &[ComfyUIImageRef],
+    request: &ComfyUIGenerationRequest,
+    workflow_name: &str,
+) -> Result<Vec<String>, String> {
+    let dir = library_dir(app)?;
+    let mut saved_paths = Vec::new();
+    for (index, image_ref) in images.iter().enumerate() {
+        let endpoint = format!("{base_url}/view");
+        let response = client
+            .get(endpoint)
+            .query(&[
+                ("filename", image_ref.filename.as_str()),
+                ("subfolder", image_ref.subfolder.as_str()),
+                ("type", image_ref.image_type.as_str()),
+            ])
+            .send()
+            .await
+            .map_err(|error| format!("ComfyUI 图片下载失败：{error}"))?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(format!("ComfyUI 图片下载失败：HTTP {status}"));
+        }
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+        let source_extension = extension_from_content_type(&content_type);
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|error| format!("ComfyUI 图片内容读取失败：{error}"))?
+            .to_vec();
+        let (bytes, extension) = convert_generated_image_bytes(
+            bytes,
+            &source_extension,
+            request.output_format.as_deref(),
+            request.output_compression,
+        )?;
+        let filename = format!(
+            "{}-comfyui-{}-{}.{}",
+            chrono_like_timestamp_millis(),
+            sanitize_filename(workflow_name),
+            index + 1,
+            extension
+        );
+        let path = dir.join(filename);
+        std::fs::write(&path, bytes)
+            .map_err(|error| format!("Cannot save ComfyUI generated image: {error}"))?;
+        saved_paths.push(path_to_user_string(&path));
+    }
+    Ok(saved_paths)
 }
 
 #[tauri::command]
@@ -3561,6 +4369,8 @@ pub fn run() {
             delete_provider_secret,
             generate_openai_image,
             list_openai_compatible_models,
+            diagnose_comfyui_connection,
+            generate_comfyui_image,
             polish_prompt_with_provider,
             load_generation_history,
             load_library_data,

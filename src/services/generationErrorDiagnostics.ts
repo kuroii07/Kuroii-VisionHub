@@ -72,6 +72,32 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
   const details = buildDetails({ httpStatus, protocolMapping, traceId, requestId, generationMode, referenceCount, modelId: record?.modelId });
   const potentialBackground = isPotentialBackgroundCompletionText(lower, httpStatus, raw);
 
+  if (record?.providerId === 'comfyui-local' || lower.includes('visionhub_comfyui') || lower.includes('comfyui')) {
+    const needsApiWorkflow = lower.includes('没有可提交的 api workflow') || lower.includes('frontend_preflight_failed') || lower.includes('api workflow');
+    return buildDiagnosis({
+      category: needsApiWorkflow ? 'protocol' : 'unknown',
+      severity: 'error',
+      title: needsApiWorkflow ? 'ComfyUI workflow 需要重新导入' : 'ComfyUI 本地生成失败',
+      summary: record?.error || extractRawErrorMessage(raw) || '本地 ComfyUI 任务没有完成，需要查看 raw 响应确认是 workflow、队列还是取图问题。',
+      actions: needsApiWorkflow
+        ? [
+            '到平台接入 > 本地模型 > ComfyUI，重新导入 API workflow。',
+            '在 ComfyUI 里启用 Dev mode 后，使用导出 API 格式 workflow 的 JSON，不要用普通 UI workflow。',
+            '重新导入后回到 AI 创作台再点生成。'
+          ]
+        : [
+            '先确认 ComfyUI 界面里这个 workflow 能独立运行成功。',
+            '检查平台接入里的 Base URL 是否是当前 ComfyUI 地址。',
+            '打开失败记录详情，查看 raw 里的 prompt_id、history 或 ComfyUI 返回错误。'
+          ],
+      details,
+      rawMessage,
+      httpStatus,
+      traceId,
+      requestId
+    });
+  }
+
   if (potentialBackground) {
     return buildDiagnosis({
       category: 'timeout-background',

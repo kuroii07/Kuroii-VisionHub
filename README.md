@@ -126,12 +126,15 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-本仓库当前处在“平台接入 V3 已收口，下一步进入本地模型路线 MVP”阶段：
+本仓库当前处在“0.3.5 本地模型路线 MVP 已收口，下一步进入工作区首页 V2 / 偏好设置 V2”阶段：
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
 - 平台接入页已加入能力矩阵 V2，并将完整矩阵改为按需展开，配置详情保持优先显示。
 - 平台接入 V3 已完成本轮收口：配置实例支持模型列表刷新、当前模型探测、非消耗诊断、真实试生图区分，以及与 AI 创作页当前启用配置的状态同步。
+- 本地模型路线 MVP 已完成 ComfyUI 优先接入：连接诊断、API workflow 导入、workflow 管理、AI 创作台文生图提交、任务轮询、结果下载和作品画廊保存均已跑通。
+- ComfyUI 诊断会在本地模板页自动刷新；本地服务关闭后会从旧的在线状态回落到离线 / 未连通提示，避免继续显示旧的测试通过结果。
+- ComfyUI 目前要求导入 API Format workflow；普通 UI workflow 会保留解析预览，但不会误导为可直接生成。
 - 图生图协议映射 V2 已接入配置和生成链路，可在平台配置中切换参考图字段结构，并在生成结果 raw 中记录实际映射摘要。
 - 旧中转站配置迁移会保留 profile id，避免丢失 `profile:${profileId}` 系统凭据绑定。
 - 作品画廊 V2 已完成一轮可用化：隐藏式分类、文件夹、收藏集、评分、颜色取样、详情信息和筛选栏都已接入。
@@ -149,6 +152,17 @@ visionhub-studio/
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.3.5 本地模型路线 MVP
+
+- 本地模型路线以 ComfyUI 为第一优先级完成 MVP 接入，保持中转站 / 聚合 API 主流程不受影响。
+- 平台接入页新增 ComfyUI 连接诊断和自动刷新，读取 `/system_stats`、`/object_info`、`/queue`，本地服务关闭后会刷新为离线 / 未连通状态。
+- 支持导入 ComfyUI API Format workflow，并提供 workflow 管理器查看已导入工作流、格式、节点数量和可生成状态。
+- AI 创作台选择 ComfyUI 后可使用已导入 API workflow 执行文生图，自动填充 Prompt、负面提示词、尺寸、Seed 和数量等基础参数。
+- ComfyUI 生成链路已接入 `/prompt` 提交、`/history` 轮询、`/view` 下载，结果会保存到作品画廊并记录本地 workflow 来源摘要。
+- 普通 UI workflow 与 API workflow 已做明确区分：UI workflow 可解析预览，但真实生成前需要在 ComfyUI 里另存为 API Format。
+- ComfyUI 图生图、参考图上传、手动节点映射、UI workflow 自动转换、Stable Diffusion WebUI / Forge / InvokeAI 接入继续作为后续本地模型增强，等具备可测本地环境后再推进。
+- 本轮继续只收口源码、路线文档和 README，不生成安装包；正式发布准备仍后移到 `v1.0` 前。
 
 ### v0.3.4 平台接入 V3
 
@@ -537,7 +551,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.3.4
+- 版本：0.3.5
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前，`0.3.x` 阶段继续打磨功能和工作流
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。
@@ -638,12 +652,12 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - ~~非消耗诊断：本地配置、密钥状态、模型列表记录、图生图映射和 AI 创作页生效关系。~~
   - ~~真实试生图与非消耗诊断分层，避免误触消耗额度。~~
   - 真实图生图、多参考图和 Responses / Images 路径能力测试待可用 API Key 后继续补充。
-- `0.3.5` 本地模型路线 MVP
-  - ComfyUI 连接诊断优先。
-  - Stable Diffusion WebUI / Forge 连接诊断其次。
-  - InvokeAI 连接诊断作为后续补充。
-  - Ollama 优先用于本地文本润色或提示词辅助，不作为生图主入口。
-  - 本地模型作为“本地实验室”，不影响中转站 / 聚合 API 主流程。
+- ~~`0.3.5` 本地模型路线 MVP~~
+  - 状态：已完成 ComfyUI MVP 并收口；高级本地模型能力后续等可测环境再推进。
+  - ~~ComfyUI 连接诊断和自动刷新，避免服务关闭后继续显示旧的在线状态。~~
+  - ~~ComfyUI API workflow 导入、管理和可生成状态提示。~~
+  - ~~AI 创作台通过 ComfyUI 执行文生图，并将结果保存到作品画廊。~~
+  - Stable Diffusion WebUI / Forge、InvokeAI、ComfyUI 图生图、参考图上传和节点映射继续后排。
 - `0.3.6` 工作区首页 V2
   - 将当前“当前任务 / 后续预留”区域升级为工作区总览。
   - 项目资产库入口：管理项目参考图、Prompt、生成图和风格说明。

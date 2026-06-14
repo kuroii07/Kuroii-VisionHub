@@ -188,6 +188,7 @@ function providerAccessLabel(provider: ReturnType<typeof listProviders>[number])
 function providerAccessDescription(provider: ReturnType<typeof listProviders>[number]) {
   if (provider.id === 'custom-http-provider') return '默认主入口，使用平台接入页保存的中转站 / 聚合 API 配置。';
   if (provider.id === 'openai-gpt-image') return '官方 OpenAI API，使用 https://api.openai.com。';
+  if (provider.id === 'comfyui-local') return '本地 ComfyUI：使用平台接入页导入的 API workflow 提交本地生成。';
   if (provider.phase === 'local-lab') return '本地模型路线暂为规划入口，不作为当前生图主通道。';
   return provider.notes[0] ?? '平台能力以当前模板和服务商文档为准。';
 }
@@ -407,9 +408,14 @@ export function ModernGeneratePage(props: {
           extraHeadersJson: selectedQuickPolishConfig?.extraHeadersJson ?? props.promptPolishSettings.extraHeadersJson,
           protocol: selectedQuickPolishConfig?.protocol ?? props.promptPolishSettings.protocol
         };
+  const isComfyUILocalProvider = props.selectedProvider.id === 'comfyui-local';
   const modelValue = props.supportsOpenAICompatible ? props.providerConfig.modelId : props.selectedModelId;
-  const activeProfileName = props.activeProfile?.displayName ?? (props.supportsOpenAICompatible ? '未保存配置实例' : props.selectedProvider.name);
-  const activeProfileStatus = props.activeProfile
+  const activeProfileName = isComfyUILocalProvider
+    ? 'ComfyUI 本地 workflow'
+    : props.activeProfile?.displayName ?? (props.supportsOpenAICompatible ? '未保存配置实例' : props.selectedProvider.name);
+  const activeProfileStatus = isComfyUILocalProvider
+    ? '本地服务'
+    : props.activeProfile
     ? props.activeProfile.lastTestStatus === 'passed'
       ? '已验证'
       : props.activeProfile.lastTestStatus === 'warning'
@@ -418,8 +424,12 @@ export function ModernGeneratePage(props: {
           ? '失败'
           : '未测试'
     : props.supportsOpenAICompatible ? '草稿 / 旧配置' : '内置平台';
-  const activeProfileSecretText = props.activeProfileSecretAvailable ? '密钥已绑定' : '密钥未绑定';
-  const activeProfileModelProbeText = props.activeProfile?.lastModelProbe
+  const activeProfileSecretText = isComfyUILocalProvider
+    ? '无需密钥'
+    : props.activeProfileSecretAvailable ? '密钥已绑定' : '密钥未绑定';
+  const activeProfileModelProbeText = isComfyUILocalProvider
+    ? props.isRealProviderReady ? 'API workflow 可提交' : '需导入 API workflow'
+    : props.activeProfile?.lastModelProbe
     ? props.activeProfile.lastModelProbe.available ? '当前模型已命中' : '当前模型未命中'
     : '模型未探测';
   const topbarProviderSummary = props.supportsOpenAICompatible
@@ -1304,7 +1314,9 @@ export function ModernGeneratePage(props: {
             />
           </label>
           <div className={`connectionState ${props.isRealProviderReady ? 'ready' : ''}`}>
-            <ShieldCheck size={14} /> {props.isRealProviderReady ? '真实通道已就绪' : '未配置密钥时使用演示模式'}
+            <ShieldCheck size={14} /> {isComfyUILocalProvider
+              ? props.isRealProviderReady ? 'ComfyUI API workflow 已就绪' : '需要 API workflow 才能提交'
+              : props.isRealProviderReady ? '真实通道已就绪' : '未配置密钥时使用演示模式'}
           </div>
           <div className="activeProfileSummary">
             <div className="activeProfileLine">

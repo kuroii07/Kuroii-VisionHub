@@ -54,6 +54,43 @@ interface BackendModelInfo {
   owned_by?: string;
 }
 
+export interface ComfyUIDiagnosisEndpoint {
+  path: string;
+  ok: boolean;
+  status: number | null;
+  detail: string;
+}
+
+export interface ComfyUIDiagnosisResult {
+  baseUrl: string;
+  resolvedBaseUrl: string;
+  checkedAt: string;
+  latencyMs: number;
+  online: boolean;
+  systemStats?: unknown;
+  objectInfoNodeCount?: number | null;
+  queueRunning?: number | null;
+  queuePending?: number | null;
+  endpoints: ComfyUIDiagnosisEndpoint[];
+  message: string;
+}
+
+interface BackendComfyUIGenerationResult extends BackendImageGenerationResult {}
+
+interface BackendComfyUIDiagnosisResult {
+  base_url: string;
+  resolved_base_url: string;
+  checked_at: string;
+  latency_ms: number;
+  online: boolean;
+  system_stats?: unknown;
+  object_info_node_count?: number | null;
+  queue_running?: number | null;
+  queue_pending?: number | null;
+  endpoints: ComfyUIDiagnosisEndpoint[];
+  message: string;
+}
+
 interface BackendPromptPolishResult {
   provider_id: string;
   model_id: string;
@@ -244,6 +281,59 @@ export async function listOpenAICompatibleModels(
     }
   });
   return models;
+}
+
+export async function diagnoseComfyUIConnection(request: { baseUrl: string; timeoutMs?: number }): Promise<ComfyUIDiagnosisResult> {
+  const result = await invoke<BackendComfyUIDiagnosisResult>('diagnose_comfyui_connection', {
+    request: {
+      base_url: request.baseUrl,
+      timeout_ms: request.timeoutMs
+    }
+  });
+  return {
+    baseUrl: result.base_url,
+    resolvedBaseUrl: result.resolved_base_url,
+    checkedAt: result.checked_at,
+    latencyMs: result.latency_ms,
+    online: result.online,
+    systemStats: result.system_stats,
+    objectInfoNodeCount: result.object_info_node_count,
+    queueRunning: result.queue_running,
+    queuePending: result.queue_pending,
+    endpoints: result.endpoints,
+    message: result.message
+  };
+}
+
+export async function generateComfyUIImage(request: {
+  baseUrl: string;
+  workflow: unknown;
+  workflowName?: string;
+  prompt: string;
+  negativePrompt?: string;
+  size: string;
+  seed?: number;
+  count?: number;
+  outputFormat?: ImageGenerationRequest['outputFormat'];
+  outputCompression?: ImageGenerationRequest['outputCompression'];
+  timeoutMs?: number;
+}) {
+  const result = await invoke<BackendComfyUIGenerationResult>('generate_comfyui_image', {
+    request: {
+      base_url: request.baseUrl,
+      workflow: request.workflow,
+      workflow_name: request.workflowName,
+      prompt: request.prompt,
+      negative_prompt: request.negativePrompt,
+      size: request.size,
+      seed: request.seed,
+      count: request.count,
+      output_format: request.outputFormat,
+      output_compression: request.outputCompression,
+      timeout_ms: request.timeoutMs
+    }
+  });
+  return mapBackendResult(result);
 }
 
 export async function polishPromptWithProvider(request: PromptPolishRequest): Promise<PromptPolishResult> {

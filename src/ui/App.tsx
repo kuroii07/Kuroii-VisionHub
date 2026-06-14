@@ -49,8 +49,10 @@ import {
   chooseInspirationDir,
   chooseLibraryDir,
   deleteProviderSecret,
+  diagnoseComfyUIConnection,
   getProviderSecretStatus,
   exportSettingsBackup,
+  generateComfyUIImage,
   generateOpenAIImage,
   getStorageSettings,
   importLibraryImagesFromFiles,
@@ -70,6 +72,7 @@ import {
   saveTextFileWithDialog,
   saveStorageSettings,
   type LibraryDataPayload,
+  type ComfyUIDiagnosisResult,
   type StorageSettings
 } from '../services/desktopApi';
 import { diagnoseGenerationFailure, type GenerationFailureCategory, type GenerationFailureSeverity } from '../services/generationErrorDiagnostics';
@@ -151,6 +154,7 @@ type ProviderDiagnosticLevel = 'pass' | 'warn' | 'fail' | 'info';
 type ProviderPlatformType = 'aggregator' | 'official' | 'local';
 type ProviderServiceTemplateStatus = 'connected' | 'configurable' | 'planned' | 'local-plan';
 type ProviderMatrixStatus = 'live' | 'configurable' | 'partial' | 'planned' | 'localPlan' | 'unsupported' | 'unknown';
+type LocalModelDiagnosticStatus = 'idle' | 'checking' | 'online' | 'offline' | 'failed';
 type ProviderMatrixCapabilityKey =
   | 'textToImage'
   | 'imageToImage'
@@ -313,11 +317,59 @@ type ToastItem = {
   level: ToastLevel;
   durationMs: number;
 };
+type LocalComfyUIConfig = {
+  baseUrl: string;
+};
+type LocalComfyUIDiagnosticState = {
+  status: LocalModelDiagnosticStatus;
+  result: ComfyUIDiagnosisResult | null;
+  error: string;
+};
+type LocalComfyUIWorkflowFormat = 'api' | 'ui' | 'unknown';
+type LocalComfyUIWorkflowNodeRole = 'prompt' | 'sampler' | 'checkpoint' | 'size' | 'output' | 'loader' | 'other';
+type LocalComfyUIWorkflowNode = {
+  id: string;
+  type: string;
+  title?: string;
+  role: LocalComfyUIWorkflowNodeRole;
+  summary: string;
+};
+type LocalComfyUIWorkflowSummary = {
+  fileName: string;
+  importedAt: string;
+  format: LocalComfyUIWorkflowFormat;
+  nodeCount: number;
+  linkCount: number | null;
+  promptNodes: LocalComfyUIWorkflowNode[];
+  samplerNodes: LocalComfyUIWorkflowNode[];
+  checkpointNodes: LocalComfyUIWorkflowNode[];
+  sizeNodes: LocalComfyUIWorkflowNode[];
+  outputNodes: LocalComfyUIWorkflowNode[];
+  loaderNodes: LocalComfyUIWorkflowNode[];
+  otherKeyNodes: LocalComfyUIWorkflowNode[];
+  warnings: string[];
+};
+type LocalComfyUIWorkflowPreset = {
+  id: string;
+  name: string;
+  summary: LocalComfyUIWorkflowSummary;
+  rawWorkflow?: unknown;
+  createdAt: string;
+  updatedAt: string;
+};
+type LocalComfyUIWorkflowStore = {
+  activeId: string | null;
+  presets: LocalComfyUIWorkflowPreset[];
+};
 
 const LIBRARY_META_STORAGE_KEY = 'visionhub.library.meta.v1';
 const LIBRARY_DISPLAY_STORAGE_KEY = 'visionhub.library.display.v1';
 const LIBRARY_CUSTOM_QUICK_FILTERS_STORAGE_KEY = 'visionhub.library.customQuickFilters.v1';
 const LIBRARY_ORGANIZATION_STORAGE_KEY = 'visionhub.library.organization.v1';
+const LOCAL_COMFYUI_CONFIG_STORAGE_KEY = 'visionhub.local.comfyui.config.v1';
+const LOCAL_COMFYUI_WORKFLOW_STORAGE_KEY = 'visionhub.local.comfyui.workflow.v1';
+const DEFAULT_COMFYUI_BASE_URL = 'http://127.0.0.1:8188';
+const LOCAL_COMFYUI_DIAGNOSTIC_TIMEOUT_MS = 12_000;
 
 const providerPlatformOptions: ProviderPlatformOption[] = [
   {
@@ -494,9 +546,9 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'local-comfyui',
     platformType: 'local',
     label: 'ComfyUI',
-    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
+    description: '本地 ComfyUI 已支持连接诊断、API workflow 导入和 AI 创作台最小文生图测试。',
     status: 'local-plan',
-    notes: ['后续需要工作流 JSON、节点参数映射和本地队列轮询。']
+    notes: ['先支持 ComfyUI API workflow；UI workflow 需要从 ComfyUI 重新导出 API 格式。', '当前 MVP 会自动写入 Prompt、负面提示词、尺寸和 Seed。']
   },
   {
     id: 'local-sd-webui',
@@ -592,6 +644,240 @@ const libraryViewOptions: Array<{ value: LibraryViewMode; label: string }> = [
   { value: 'contain', label: '完整宽高比' },
   { value: 'list', label: '列表视图' }
 ];
+
+function loadLocalComfyUIConfig(): LocalComfyUIConfig {
+  const raw = readStorageValue(LOCAL_COMFYUI_CONFIG_STORAGE_KEY);
+  if (!raw) return { baseUrl: DEFAULT_COMFYUI_BASE_URL };
+  try {
+    const parsed = JSON.parse(raw) as Partial<LocalComfyUIConfig>;
+    return {
+      baseUrl: typeof parsed.baseUrl === 'string' && parsed.baseUrl.trim()
+        ? parsed.baseUrl.trim()
+        : DEFAULT_COMFYUI_BASE_URL
+    };
+  } catch (error) {
+    console.warn('[VisionHub] local ComfyUI config parse failed; using default', error);
+    return { baseUrl: DEFAULT_COMFYUI_BASE_URL };
+  }
+}
+
+function saveLocalComfyUIConfig(config: LocalComfyUIConfig) {
+  writeStorageValue(LOCAL_COMFYUI_CONFIG_STORAGE_KEY, JSON.stringify(config));
+}
+
+function createLocalWorkflowPreset(summary: LocalComfyUIWorkflowSummary, name?: string, rawWorkflow?: unknown): LocalComfyUIWorkflowPreset {
+  const now = new Date().toISOString();
+  return {
+    id: `comfyui-workflow-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: name?.trim() || summary.fileName.replace(/\.json$/i, '') || 'ComfyUI workflow',
+    summary,
+    rawWorkflow,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function normalizeLocalComfyUIWorkflowStore(value: unknown): LocalComfyUIWorkflowStore {
+  const record = asRecord(value);
+  if (!record) return { activeId: null, presets: [] };
+  if (typeof record.fileName === 'string') {
+    const preset = createLocalWorkflowPreset(record as unknown as LocalComfyUIWorkflowSummary);
+    return { activeId: preset.id, presets: [preset] };
+  }
+  const presets = Array.isArray(record.presets)
+    ? record.presets
+        .map((item) => {
+          const preset = asRecord(item);
+          const summary = asRecord(preset?.summary);
+          if (!preset || !summary || typeof preset.id !== 'string' || typeof preset.name !== 'string' || typeof summary.fileName !== 'string') return null;
+          return {
+            ...preset,
+            rawWorkflow: 'rawWorkflow' in preset ? preset.rawWorkflow : undefined
+          } as unknown as LocalComfyUIWorkflowPreset;
+        })
+        .filter((item): item is LocalComfyUIWorkflowPreset => Boolean(item))
+    : [];
+  const activeId = typeof record.activeId === 'string' && presets.some((preset) => preset.id === record.activeId)
+    ? record.activeId
+    : presets[0]?.id ?? null;
+  return { activeId, presets };
+}
+
+function loadLocalComfyUIWorkflowStore(): LocalComfyUIWorkflowStore {
+  const raw = readStorageValue(LOCAL_COMFYUI_WORKFLOW_STORAGE_KEY);
+  if (!raw) return { activeId: null, presets: [] };
+  try {
+    return normalizeLocalComfyUIWorkflowStore(JSON.parse(raw) as unknown);
+  } catch (error) {
+    console.warn('[VisionHub] local ComfyUI workflow store parse failed; ignoring saved workflows', error);
+    return { activeId: null, presets: [] };
+  }
+}
+
+function saveLocalComfyUIWorkflowStore(store: LocalComfyUIWorkflowStore) {
+  if (!store.presets.length) {
+    window.localStorage.removeItem(LOCAL_COMFYUI_WORKFLOW_STORAGE_KEY);
+    return;
+  }
+  writeStorageValue(LOCAL_COMFYUI_WORKFLOW_STORAGE_KEY, JSON.stringify(store));
+}
+
+function readTextFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(reader.error ?? new Error('读取文件失败'));
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function stringifyWorkflowValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map(stringifyWorkflowValue).filter(Boolean).join(', ');
+  if (value && typeof value === 'object') return JSON.stringify(value);
+  return '';
+}
+
+function summarizeApiWorkflowInputs(inputs: Record<string, unknown> | null, keys: string[]) {
+  if (!inputs) return '';
+  return keys
+    .filter((key) => key in inputs)
+    .map((key) => `${key}: ${stringifyWorkflowValue(inputs[key])}`)
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function classifyComfyUIRole(type: string): LocalComfyUIWorkflowNodeRole {
+  const lowerType = type.toLowerCase();
+  if (lowerType.includes('cliptextencode') || lowerType.includes('prompt')) return 'prompt';
+  if (lowerType.includes('ksampler') || lowerType.includes('sampler')) return 'sampler';
+  if (lowerType.includes('checkpoint') || lowerType.includes('unetloader')) return 'checkpoint';
+  if (lowerType.includes('emptylatent') || lowerType.includes('latentsize') || lowerType.includes('resize')) return 'size';
+  if (lowerType.includes('saveimage') || lowerType.includes('previewimage')) return 'output';
+  if (lowerType.includes('loader') || lowerType.includes('lora') || lowerType.includes('vae')) return 'loader';
+  return 'other';
+}
+
+function makeWorkflowNode(id: string, type: string, title: string | undefined, inputs: Record<string, unknown> | null): LocalComfyUIWorkflowNode {
+  const role = classifyComfyUIRole(type);
+  const summaryKeysByRole: Record<LocalComfyUIWorkflowNodeRole, string[]> = {
+    prompt: ['text', 'clip'],
+    sampler: ['seed', 'steps', 'cfg', 'sampler_name', 'scheduler', 'denoise', 'latent_image'],
+    checkpoint: ['ckpt_name', 'unet_name', 'model_name'],
+    size: ['width', 'height', 'batch_size', 'pixels'],
+    output: ['filename_prefix', 'images'],
+    loader: ['lora_name', 'vae_name', 'ckpt_name', 'model_name'],
+    other: []
+  };
+  const summary = summarizeApiWorkflowInputs(inputs, summaryKeysByRole[role]) || '已识别节点，后续映射时可展开查看完整字段。';
+  return {
+    id,
+    type,
+    title,
+    role,
+    summary
+  };
+}
+
+function parseComfyUIApiWorkflow(fileName: string, raw: Record<string, unknown>): LocalComfyUIWorkflowSummary | null {
+  const entries = Object.entries(raw).filter(([, value]) => {
+    const node = asRecord(value);
+    return typeof node?.class_type === 'string';
+  });
+  if (!entries.length) return null;
+  const nodes = entries.map(([id, value]) => {
+    const node = asRecord(value);
+    const type = String(node?.class_type ?? 'Unknown');
+    return makeWorkflowNode(id, type, undefined, asRecord(node?.inputs));
+  });
+  return buildComfyUIWorkflowSummary(fileName, 'api', nodes, null);
+}
+
+function parseComfyUIUiWorkflow(fileName: string, raw: Record<string, unknown>): LocalComfyUIWorkflowSummary | null {
+  const rawNodes = Array.isArray(raw.nodes) ? raw.nodes : [];
+  if (!rawNodes.length) return null;
+  const nodes = rawNodes
+    .map((value, index) => {
+      const node = asRecord(value);
+      if (!node) return null;
+      const type = typeof node.type === 'string' ? node.type : typeof node.class_type === 'string' ? node.class_type : 'Unknown';
+      const title = typeof node.title === 'string' ? node.title : undefined;
+      const widgetsValues = Array.isArray(node.widgets_values)
+        ? Object.fromEntries(node.widgets_values.map((item, valueIndex) => [`widget_${valueIndex + 1}`, item]))
+        : null;
+      return makeWorkflowNode(String(node.id ?? index + 1), type, title, widgetsValues);
+    })
+    .filter((node): node is LocalComfyUIWorkflowNode => Boolean(node));
+  const linkCount = Array.isArray(raw.links) ? raw.links.length : null;
+  return buildComfyUIWorkflowSummary(fileName, 'ui', nodes, linkCount);
+}
+
+function buildComfyUIWorkflowSummary(
+  fileName: string,
+  format: LocalComfyUIWorkflowFormat,
+  nodes: LocalComfyUIWorkflowNode[],
+  linkCount: number | null
+): LocalComfyUIWorkflowSummary {
+  const promptNodes = nodes.filter((node) => node.role === 'prompt');
+  const samplerNodes = nodes.filter((node) => node.role === 'sampler');
+  const checkpointNodes = nodes.filter((node) => node.role === 'checkpoint');
+  const sizeNodes = nodes.filter((node) => node.role === 'size');
+  const outputNodes = nodes.filter((node) => node.role === 'output');
+  const loaderNodes = nodes.filter((node) => node.role === 'loader');
+  const otherKeyNodes = nodes
+    .filter((node) => node.role === 'other')
+    .slice(0, 6);
+  const warnings: string[] = [];
+  if (!promptNodes.length) warnings.push('未识别到文本提示词节点，后续需要手动指定 Prompt 写入位置。');
+  if (!samplerNodes.length) warnings.push('未识别到采样器节点，后续真实生成前需要手动确认任务入口。');
+  if (!outputNodes.length) warnings.push('未识别到保存或预览图片节点，后续需要确认输出结果读取方式。');
+  return {
+    fileName,
+    importedAt: new Date().toISOString(),
+    format,
+    nodeCount: nodes.length,
+    linkCount,
+    promptNodes,
+    samplerNodes,
+    checkpointNodes,
+    sizeNodes,
+    outputNodes,
+    loaderNodes,
+    otherKeyNodes,
+    warnings
+  };
+}
+
+function parseComfyUIWorkflow(fileName: string, content: string): LocalComfyUIWorkflowSummary {
+  const raw = JSON.parse(content) as unknown;
+  const record = asRecord(raw);
+  if (!record) {
+    throw new Error('workflow JSON 顶层不是对象，无法识别。');
+  }
+  const apiSummary = parseComfyUIApiWorkflow(fileName, record);
+  if (apiSummary) return apiSummary;
+  const uiSummary = parseComfyUIUiWorkflow(fileName, record);
+  if (uiSummary) return uiSummary;
+  return buildComfyUIWorkflowSummary(fileName, 'unknown', [], null);
+}
+
+function workflowFormatLabel(format: LocalComfyUIWorkflowFormat) {
+  if (format === 'api') return 'API Workflow';
+  if (format === 'ui') return 'UI Workflow';
+  return '未知格式';
+}
+
+function comfyUIWorkflowRunStatus(preset: LocalComfyUIWorkflowPreset) {
+  if (preset.summary.format === 'api' && preset.rawWorkflow) return '可用于创作台生成';
+  if (preset.summary.format === 'api') return '旧记录需重新导入';
+  if (preset.summary.format === 'ui') return '需导出 API workflow';
+  return '暂不可生成';
+}
 
 const librarySortOptions: Array<{ value: LibrarySortMode; label: string }> = [
   { value: 'newest', label: '最新优先' },
@@ -1624,6 +1910,15 @@ export function App() {
   const [isRunningDiagnostics, setIsRunningDiagnostics] = useState(false);
   const [isRunningTestGeneration, setIsRunningTestGeneration] = useState(false);
   const [providerDiagnostics, setProviderDiagnostics] = useState<ProviderDiagnosticItem[]>([]);
+  const [localComfyUIConfig, setLocalComfyUIConfig] = useState<LocalComfyUIConfig>(() => loadLocalComfyUIConfig());
+  const [localComfyUIDiagnostic, setLocalComfyUIDiagnostic] = useState<LocalComfyUIDiagnosticState>({
+    status: 'idle',
+    result: null,
+    error: ''
+  });
+  const [localComfyUIWorkflowStore, setLocalComfyUIWorkflowStore] = useState<LocalComfyUIWorkflowStore>(() => loadLocalComfyUIWorkflowStore());
+  const [isComfyUIWorkflowManagerOpen, setIsComfyUIWorkflowManagerOpen] = useState(false);
+  const [localComfyUIWorkflowError, setLocalComfyUIWorkflowError] = useState('');
   const [generatePreviewUrl, setGeneratePreviewUrl] = useState<string | null>(null);
   const [libraryPreview, setLibraryPreview] = useState<ImagePreviewState | null>(null);
   const [inspirationPreview, setInspirationPreview] = useState<ImagePreviewState | null>(null);
@@ -1637,6 +1932,8 @@ export function App() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [generateSessionStartedAt] = useState(() => Date.now());
   const autoRecheckedRecordIdsRef = useRef<Set<string>>(new Set());
+  const localComfyUIDiagnosticRequestRef = useRef(0);
+  const localComfyUIAutoCheckRunningRef = useRef(false);
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() =>
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   );
@@ -1700,7 +1997,18 @@ export function App() {
     selectedProvider.id === 'openai-gpt-image' || selectedProvider.id === 'custom-http-provider';
   const generationSupportsOpenAICompatible =
     selectedProviderId === 'openai-gpt-image' || selectedProviderId === 'custom-http-provider';
-  const isRealProviderReady = desktopRuntime && generationSupportsOpenAICompatible && generationSecretAvailable;
+  const activeComfyUIWorkflowPreset =
+    localComfyUIWorkflowStore.presets.find((item) => item.id === localComfyUIWorkflowStore.activeId) ??
+    localComfyUIWorkflowStore.presets[0] ??
+    null;
+  const isComfyUIGenerationReady =
+    desktopRuntime &&
+    selectedProviderId === 'comfyui-local' &&
+    Boolean(activeComfyUIWorkflowPreset?.rawWorkflow);
+  const isRealProviderReady = desktopRuntime && (
+    (generationSupportsOpenAICompatible && generationSecretAvailable) ||
+    isComfyUIGenerationReady
+  );
   const openLibraryPreview = useCallback((imageUrl: string, navigation?: ImagePreviewNavigation) => {
     setLibraryPreview({ imageUrl, navigation });
   }, []);
@@ -1908,8 +2216,192 @@ export function App() {
     setConfigMessage('');
     setConfigActionState('idle');
     setProviderDiagnostics([]);
+    setLocalComfyUIDiagnostic({ status: 'idle', result: null, error: '' });
     if (template.providerId) {
       setSelectedProvider(template.providerId);
+    }
+  }
+
+  function updateLocalComfyUIBaseUrl(baseUrl: string) {
+    const nextConfig = { baseUrl };
+    setLocalComfyUIConfig(nextConfig);
+    saveLocalComfyUIConfig(nextConfig);
+    localComfyUIDiagnosticRequestRef.current += 1;
+    setLocalComfyUIDiagnostic((current) => ({ ...current, status: 'idle', error: '' }));
+  }
+
+  async function runLocalComfyUIDiagnostics(options?: { silent?: boolean }) {
+    const silent = Boolean(options?.silent);
+    if (!desktopRuntime) {
+      setLocalComfyUIDiagnostic({
+        status: 'failed',
+        result: null,
+        error: 'ComfyUI 连接诊断需要 Tauri 桌面端运行时。'
+      });
+      return;
+    }
+    const requestId = localComfyUIDiagnosticRequestRef.current + 1;
+    localComfyUIDiagnosticRequestRef.current = requestId;
+    if (!silent) {
+      setLocalComfyUIDiagnostic((current) => ({ ...current, status: 'checking', error: '' }));
+    }
+    try {
+      const result = await Promise.race([
+        diagnoseComfyUIConnection({
+          baseUrl: localComfyUIConfig.baseUrl,
+          timeoutMs: 4000
+        }),
+        new Promise<never>((_, reject) => {
+          window.setTimeout(() => {
+            reject(new Error('ComfyUI 连接诊断超时：本次请求超过 12 秒没有返回，请确认地址是否为当前可访问的本地服务。'));
+          }, LOCAL_COMFYUI_DIAGNOSTIC_TIMEOUT_MS);
+        })
+      ]);
+      if (requestId !== localComfyUIDiagnosticRequestRef.current) return;
+      setLocalComfyUIDiagnostic({
+        status: result.online ? 'online' : 'offline',
+        result,
+        error: ''
+      });
+      if (!silent) setConfigMessage(result.message);
+    } catch (error) {
+      if (requestId !== localComfyUIDiagnosticRequestRef.current) return;
+      const message = error instanceof Error ? error.message : String(error);
+      setLocalComfyUIDiagnostic({
+        status: 'failed',
+        result: null,
+        error: message
+      });
+      if (!silent) setConfigMessage(message);
+    }
+  }
+
+  async function importLocalComfyUIWorkflow(file: File | null) {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.json')) {
+      const message = '请选择 ComfyUI 导出的 JSON workflow 文件。';
+      setLocalComfyUIWorkflowError(message);
+      setConfigMessage(message);
+      return;
+    }
+    try {
+      const text = await readTextFile(file);
+      const summary = parseComfyUIWorkflow(file.name, text);
+      const rawWorkflow = JSON.parse(text) as unknown;
+      const preset = createLocalWorkflowPreset(summary, undefined, summary.format === 'api' ? rawWorkflow : undefined);
+      const nextStore: LocalComfyUIWorkflowStore = {
+        activeId: preset.id,
+        presets: [...localComfyUIWorkflowStore.presets.filter((item) => item.name !== preset.name), preset]
+      };
+      setLocalComfyUIWorkflowStore(nextStore);
+      saveLocalComfyUIWorkflowStore(nextStore);
+      setLocalComfyUIWorkflowError('');
+      setConfigMessage(summary.format === 'api'
+        ? `已导入 API workflow：识别到 ${summary.nodeCount} 个节点，可在 AI 创作台选择 ComfyUI 后测试生成。`
+        : `已导入 workflow：识别到 ${summary.nodeCount} 个节点。当前文件不是 API workflow，真实生成前需要重新导出 API 格式。`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setLocalComfyUIWorkflowError(`workflow 解析失败：${message}`);
+      setConfigMessage(`workflow 解析失败：${message}`);
+    }
+  }
+
+  function clearLocalComfyUIWorkflow() {
+    const nextStore: LocalComfyUIWorkflowStore = { activeId: null, presets: [] };
+    setLocalComfyUIWorkflowStore(nextStore);
+    setLocalComfyUIWorkflowError('');
+    saveLocalComfyUIWorkflowStore(nextStore);
+    setConfigMessage('已清除 ComfyUI workflow 解析预览。');
+  }
+
+  useEffect(() => {
+    if (!desktopRuntime || page !== 'providers' || selectedServiceTemplate.id !== 'local-comfyui') return;
+
+    const runSilentCheck = () => {
+      if (localComfyUIAutoCheckRunningRef.current) return;
+      localComfyUIAutoCheckRunningRef.current = true;
+      void runLocalComfyUIDiagnostics({ silent: true })
+        .finally(() => {
+          localComfyUIAutoCheckRunningRef.current = false;
+        });
+    };
+
+    runSilentCheck();
+    const timer = window.setInterval(runSilentCheck, 10_000);
+    return () => window.clearInterval(timer);
+  }, [desktopRuntime, page, selectedServiceTemplate.id, localComfyUIConfig.baseUrl]);
+
+  async function runCreativeDeskGenerate(options?: Parameters<typeof generate>[0]) {
+    if (selectedProviderId !== 'comfyui-local') {
+      await generate(options);
+      return;
+    }
+
+    useStudioStore.setState({ isGenerating: true });
+    const activeWorkflowPreset =
+      localComfyUIWorkflowStore.presets.find((item) => item.id === localComfyUIWorkflowStore.activeId) ??
+      localComfyUIWorkflowStore.presets[0] ??
+      null;
+    try {
+      if (!desktopRuntime) {
+        throw new Error('ComfyUI 本地生成需要 Tauri 桌面端运行时。');
+      }
+      if ((options?.mode ?? 'text-to-image') === 'image-to-image') {
+        throw new Error('ComfyUI 创作台 MVP 先支持文生图；图生图需要后续单独做图片上传和节点映射。');
+      }
+      if (!activeWorkflowPreset) {
+        throw new Error('请先到平台接入 > 本地模型 > ComfyUI 导入 API workflow。');
+      }
+      if (activeWorkflowPreset.summary.format !== 'api' || !activeWorkflowPreset.rawWorkflow) {
+        throw new Error('当前 ComfyUI 预设没有可提交的 API workflow。请在 ComfyUI 里启用 Dev mode 后重新导出 API 格式 workflow。');
+      }
+      const result = await generateComfyUIImage({
+        baseUrl: localComfyUIConfig.baseUrl,
+        workflow: activeWorkflowPreset.rawWorkflow,
+        workflowName: activeWorkflowPreset.name,
+        prompt,
+        negativePrompt: options?.negativePrompt,
+        size,
+        seed: options?.seed,
+        count,
+        outputFormat: options?.outputFormat,
+        outputCompression: options?.outputCompression,
+        timeoutMs: 180_000
+      });
+      const saved = await saveGenerationRecord(result, 'ComfyUI / 本地模型');
+      addResult(saved);
+      if (saved.status === 'succeeded' && saved.imageUrls[0]) {
+        setGeneratePreviewUrl(saved.imageUrls[0]);
+        setConfigMessage('ComfyUI 生成成功：结果已保存到作品画廊。');
+      } else {
+        setConfigMessage(`ComfyUI 生成未成功：${saved.error ?? '没有返回图片。'} 已写入作品画廊失败记录。`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const failed: GenerationRecord = {
+        id: `comfyui-error-${Date.now()}`,
+        providerId: 'comfyui-local',
+        providerName: 'ComfyUI / 本地模型',
+        modelId: activeWorkflowPreset?.name ?? 'ComfyUI Workflow',
+        status: 'failed',
+        prompt,
+        imageUrls: [],
+        localImagePaths: [],
+        costHint: '本地 ComfyUI 生成，不消耗在线 API 额度。',
+        error: message,
+        raw: {
+          visionhub_comfyui_error: 'frontend_preflight_failed',
+          workflow: activeWorkflowPreset?.summary.fileName ?? null
+        },
+        createdAt: new Date().toISOString(),
+        generationMode: options?.mode ?? 'text-to-image',
+        referenceImages: []
+      };
+      const saved = await saveGenerationRecord(failed, failed.providerName);
+      addResult(saved);
+      setConfigMessage(`ComfyUI 生成未成功：${message} 已写入作品画廊失败记录。`);
+    } finally {
+      useStudioStore.setState({ isGenerating: false });
     }
   }
 
@@ -3654,7 +4146,7 @@ export function App() {
               onCountChange={setCount}
               onSizeChange={setSize}
               onQualityChange={setQuality}
-              onGenerate={generate}
+              onGenerate={runCreativeDeskGenerate}
               onPreview={setGeneratePreviewUrl}
               onReloadHistory={loadHistory}
               onOpenLibrary={() => navigateTo('library')}
@@ -3719,6 +4211,15 @@ export function App() {
             isRunningDiagnostics={isRunningDiagnostics}
             isRunningTestGeneration={isRunningTestGeneration}
             diagnostics={providerDiagnostics}
+            localComfyUIConfig={localComfyUIConfig}
+            localComfyUIDiagnostic={localComfyUIDiagnostic}
+            localComfyUIWorkflowStore={localComfyUIWorkflowStore}
+            localComfyUIWorkflowError={localComfyUIWorkflowError}
+            onLocalComfyUIBaseUrlChange={updateLocalComfyUIBaseUrl}
+            onRunLocalComfyUIDiagnostics={runLocalComfyUIDiagnostics}
+            onImportLocalComfyUIWorkflow={importLocalComfyUIWorkflow}
+            onClearLocalComfyUIWorkflow={clearLocalComfyUIWorkflow}
+            onToggleComfyUIWorkflowManager={() => setIsComfyUIWorkflowManagerOpen(true)}
           />
         ) : page === 'settings' ? (
           <SettingsPage
@@ -3773,6 +4274,26 @@ export function App() {
           storageSettings={storageSettings}
           settingsMessage={settingsMessage}
           onClose={() => setActiveUtilityModal(null)}
+        />
+      ) : null}
+      {isComfyUIWorkflowManagerOpen ? (
+        <ComfyUIWorkflowManagerModal
+          store={localComfyUIWorkflowStore}
+          onClose={() => setIsComfyUIWorkflowManagerOpen(false)}
+          onSelect={(presetId) => {
+            const nextStore = { ...localComfyUIWorkflowStore, activeId: presetId };
+            setLocalComfyUIWorkflowStore(nextStore);
+            saveLocalComfyUIWorkflowStore(nextStore);
+          }}
+          onDelete={(presetId) => {
+            const nextPresets = localComfyUIWorkflowStore.presets.filter((preset: LocalComfyUIWorkflowPreset) => preset.id !== presetId);
+            const nextStore = {
+              activeId: localComfyUIWorkflowStore.activeId === presetId ? nextPresets[0]?.id ?? null : localComfyUIWorkflowStore.activeId,
+              presets: nextPresets
+            };
+            setLocalComfyUIWorkflowStore(nextStore);
+            saveLocalComfyUIWorkflowStore(nextStore);
+          }}
         />
       ) : null}
       {confirmDialog ? (
@@ -4446,6 +4967,15 @@ function ProviderSettingsPage(props: {
   onCopyDiagnostics: () => void;
   onImportConfig: () => void;
   onPinModel: () => void;
+  localComfyUIConfig: LocalComfyUIConfig;
+  localComfyUIDiagnostic: LocalComfyUIDiagnosticState;
+  localComfyUIWorkflowStore: LocalComfyUIWorkflowStore;
+  localComfyUIWorkflowError: string;
+  onLocalComfyUIBaseUrlChange: (baseUrl: string) => void;
+  onRunLocalComfyUIDiagnostics: () => void;
+  onImportLocalComfyUIWorkflow: (file: File | null) => void;
+  onClearLocalComfyUIWorkflow: () => void;
+  onToggleComfyUIWorkflowManager: () => void;
   isRunningDiagnostics: boolean;
   isRunningTestGeneration: boolean;
   diagnostics: ProviderDiagnosticItem[];
@@ -4536,6 +5066,17 @@ function ProviderSettingsPage(props: {
     label: imageToImageAdapterLabel(adapter),
     description: imageToImageAdapterDescription(adapter)
   }));
+  const workflowFileInputRef = useRef<HTMLInputElement | null>(null);
+  const isComfyUITemplate = props.selectedServiceTemplate.id === 'local-comfyui';
+  const comfyUIResult = props.localComfyUIDiagnostic.result;
+  const activeWorkflowPreset = props.localComfyUIWorkflowStore.presets.find((item) => item.id === props.localComfyUIWorkflowStore.activeId) ?? props.localComfyUIWorkflowStore.presets[0] ?? null;
+  const comfyUIStatusLabel: Record<LocalModelDiagnosticStatus, string> = {
+    idle: '未测试',
+    checking: '测试中',
+    online: '在线',
+    offline: '离线',
+    failed: '失败'
+  };
 
   return (
     <>
@@ -4690,7 +5231,130 @@ function ProviderSettingsPage(props: {
         </div>
 
         <div className="settingsPanel">
-          {props.isSelectedServiceConfigurable && props.supportsOpenAICompatible ? (
+          {isComfyUITemplate ? (
+            <div className="localLabBox">
+              <div className="providerConfigHeader">
+                <div>
+                  <strong>ComfyUI 连接诊断</strong>
+                  <small>只读取本地服务基础信息，不提交 workflow，不加入生成队列。</small>
+                </div>
+                <span className={`serviceStatusBadge localDiagnostic-${props.localComfyUIDiagnostic.status}`}>
+                  {comfyUIStatusLabel[props.localComfyUIDiagnostic.status]}
+                </span>
+              </div>
+              <div className="localLabNotice">
+                <HardDrive size={18} />
+                <div>
+                  <strong>本地实验室 MVP</strong>
+                  <span>已支持 API workflow 文生图测试；普通 UI workflow 需要重新导出 API 格式后才能在创作台提交。</span>
+                </div>
+              </div>
+              <label>
+                本地服务地址
+                <div className="localEndpointRow">
+                  <input
+                    value={props.localComfyUIConfig.baseUrl}
+                    onChange={(event) => props.onLocalComfyUIBaseUrlChange(event.target.value)}
+                    placeholder={DEFAULT_COMFYUI_BASE_URL}
+                  />
+                  <button
+                    type="button"
+                    className="iconButton"
+                    onClick={props.onRunLocalComfyUIDiagnostics}
+                    disabled={!props.desktopRuntime || props.localComfyUIDiagnostic.status === 'checking'}
+                  >
+                    <Gauge size={15} /> {props.localComfyUIDiagnostic.status === 'checking' ? '测试中…' : '测试连接'}
+                  </button>
+                </div>
+                <small className="providerFieldHint">
+                  默认 ComfyUI 地址通常是 {DEFAULT_COMFYUI_BASE_URL}；如果改过监听端口，请填写实际地址。
+                </small>
+              </label>
+              {props.localComfyUIDiagnostic.error ? (
+                <div className="localDiagnosticMessage failed">{props.localComfyUIDiagnostic.error}</div>
+              ) : comfyUIResult ? (
+                <section className={`localDiagnosticMessage ${comfyUIResult.online ? 'online' : 'offline'}`}>
+                  <strong>{comfyUIResult.message}</strong>
+                  <span>{comfyUIResult.resolvedBaseUrl} · {comfyUIResult.latencyMs} ms</span>
+                </section>
+              ) : (
+                <div className="localDiagnosticMessage idle">填写地址后点击测试连接；未启动本地服务不会影响中转站 / 聚合 API 主流程。</div>
+              )}
+              {comfyUIResult ? (
+                <div className="localDiagnosticStats">
+                  <span>节点 {comfyUIResult.objectInfoNodeCount ?? '-'}</span>
+                  <span>运行 {comfyUIResult.queueRunning ?? '-'}</span>
+                  <span>待处理 {comfyUIResult.queuePending ?? '-'}</span>
+                </div>
+              ) : null}
+              {comfyUIResult ? (
+                <div className="localEndpointList">
+                  {comfyUIResult.endpoints.map((endpoint) => (
+                    <div className={`localEndpointItem ${endpoint.ok ? 'pass' : 'fail'}`} key={endpoint.path}>
+                      <span>{endpoint.ok ? '通过' : '失败'}</span>
+                      <div>
+                        <strong>{endpoint.path}{endpoint.status ? ` · HTTP ${endpoint.status}` : ''}</strong>
+                        <small>{endpoint.detail}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <section className="localWorkflowBox" aria-label="ComfyUI workflow JSON 解析预览">
+                <div className="localWorkflowHeader">
+                  <div>
+                    <strong>Workflow JSON</strong>
+                    <small>导入 API workflow 后，AI 创作台会写入 Prompt、尺寸和 Seed 并提交本地队列。</small>
+                  </div>
+                  <div className="localWorkflowActions">
+                    <input
+                      ref={workflowFileInputRef}
+                      type="file"
+                      accept=".json,application/json"
+                      className="hiddenFileInput"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] ?? null;
+                        void props.onImportLocalComfyUIWorkflow(file);
+                        event.target.value = '';
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="miniButton"
+                      onClick={() => workflowFileInputRef.current?.click()}
+                    >
+                      <Upload size={14} /> 导入 JSON
+                    </button>
+                    {props.localComfyUIWorkflowStore.presets.length ? (
+                      <button type="button" className="miniButton" onClick={props.onToggleComfyUIWorkflowManager}>
+                        <Layers size={14} /> 管理器
+                      </button>
+                    ) : null}
+                    {props.localComfyUIWorkflowStore.presets.length ? (
+                      <button type="button" className="miniButton" onClick={props.onClearLocalComfyUIWorkflow}>
+                        <X size={14} /> 清除
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                {props.localComfyUIWorkflowError ? (
+                  <div className="localDiagnosticMessage failed">{props.localComfyUIWorkflowError}</div>
+                ) : null}
+                {activeWorkflowPreset ? (
+                  <ComfyUIWorkflowSummaryPanel preset={activeWorkflowPreset} />
+                ) : (
+                  <div className="localDiagnosticMessage idle">
+                    导入 ComfyUI API workflow JSON 后，会预览 Prompt、KSampler、尺寸、Checkpoint 和输出节点候选。
+                  </div>
+                )}
+              </section>
+              <div className="serviceTemplateNotes">
+                {props.selectedServiceTemplate.notes.map((note) => (
+                  <span key={note}>{note}</span>
+                ))}
+              </div>
+            </div>
+          ) : props.isSelectedServiceConfigurable && props.supportsOpenAICompatible ? (
             <div className="relayBox standalone">
               <div className="providerConfigHeader">
                 <div>
@@ -4990,6 +5654,124 @@ function ProviderSettingsPage(props: {
         </div>
       </section>
     </>
+  );
+}
+
+function ComfyUIWorkflowSummaryPanel({ preset }: { preset: LocalComfyUIWorkflowPreset }) {
+  const summary = preset.summary;
+  const groups: Array<{ label: string; nodes: LocalComfyUIWorkflowNode[] }> = [
+    { label: '提示词', nodes: summary.promptNodes },
+    { label: '采样器', nodes: summary.samplerNodes },
+    { label: 'Checkpoint', nodes: summary.checkpointNodes },
+    { label: '尺寸', nodes: summary.sizeNodes },
+    { label: '输出', nodes: summary.outputNodes },
+    { label: '加载器', nodes: summary.loaderNodes }
+  ].filter((group) => group.nodes.length > 0);
+
+  return (
+    <div className="localWorkflowSummary">
+      <div className="localWorkflowMeta">
+        <span>{workflowFormatLabel(summary.format)}</span>
+        <span>{comfyUIWorkflowRunStatus(preset)}</span>
+        <span>节点 {summary.nodeCount}</span>
+        <span>连线 {summary.linkCount ?? '-'}</span>
+      </div>
+      <div className="localWorkflowFile">
+        <strong>{preset.name}</strong>
+        <small>{summary.fileName} · {preset.rawWorkflow ? '已保存完整 API workflow，可在创作台测试。' : '当前只保存了解析摘要，需要重新导入 API workflow 才能生成。'}</small>
+      </div>
+      {summary.format === 'api' && !preset.rawWorkflow ? (
+        <div className="localDiagnosticMessage failed">这是旧版导入记录，缺少完整 workflow JSON。请重新导入同一个 API workflow 文件。</div>
+      ) : null}
+      {summary.warnings.length ? (
+        <div className="localWorkflowWarnings">
+          {summary.warnings.map((warning) => (
+            <span key={warning}>{warning}</span>
+          ))}
+        </div>
+      ) : null}
+      {groups.length ? (
+        <div className="localWorkflowNodeGroups">
+          {groups.map((group) => (
+            <section className="localWorkflowNodeGroup" key={group.label}>
+              <div className="localWorkflowNodeGroupHeader">
+                <strong>{group.label}</strong>
+                <span>{group.nodes.length}</span>
+              </div>
+              <div className="localWorkflowNodeList">
+                {group.nodes.slice(0, 4).map((node) => (
+                  <div className="localWorkflowNodeItem" key={`${group.label}-${node.id}`}>
+                    <strong>#{node.id} · {node.title || node.type}</strong>
+                    <small>{node.title ? node.type : node.summary}</small>
+                    {node.title ? <small>{node.summary}</small> : null}
+                  </div>
+                ))}
+                {group.nodes.length > 4 ? <span className="localWorkflowMore">还有 {group.nodes.length - 4} 个候选节点</span> : null}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <div className="localDiagnosticMessage failed">没有识别到可用节点，请确认导出的是 ComfyUI workflow JSON。</div>
+      )}
+    </div>
+  );
+}
+
+function ComfyUIWorkflowManagerModal(props: {
+  store: LocalComfyUIWorkflowStore;
+  onClose: () => void;
+  onSelect: (presetId: string) => void;
+  onDelete: (presetId: string) => void;
+}) {
+  const activePreset = props.store.presets.find((preset) => preset.id === props.store.activeId) ?? props.store.presets[0] ?? null;
+
+  return (
+    <UtilityModalShell title="ComfyUI 工作流管理器" eyebrow="Local Workflow" className="comfyWorkflowModal" onClose={props.onClose}>
+      <div className="comfyWorkflowManager">
+        <aside className="comfyWorkflowList" aria-label="已添加的 ComfyUI 工作流">
+          {props.store.presets.length ? (
+            props.store.presets.map((preset) => (
+              <button
+                type="button"
+                className={preset.id === activePreset?.id ? 'active' : ''}
+                onClick={() => props.onSelect(preset.id)}
+                key={preset.id}
+              >
+                <strong>{preset.name}</strong>
+                <span>{workflowFormatLabel(preset.summary.format)} · {comfyUIWorkflowRunStatus(preset)} · 节点 {preset.summary.nodeCount}</span>
+              </button>
+            ))
+          ) : (
+            <div className="comfyWorkflowEmpty">
+              <strong>还没有工作流</strong>
+              <span>回到平台接入页导入 ComfyUI workflow JSON。</span>
+            </div>
+          )}
+        </aside>
+        <section className="comfyWorkflowDetail" aria-label="ComfyUI 工作流详情">
+          {activePreset ? (
+            <>
+              <div className="comfyWorkflowDetailHeader">
+                <div>
+                  <strong>{activePreset.name}</strong>
+                  <small>{activePreset.summary.fileName} · {workflowFormatLabel(activePreset.summary.format)}</small>
+                </div>
+                <button type="button" className="miniButton dangerMiniButton" onClick={() => props.onDelete(activePreset.id)}>
+                  <Trash2 size={14} /> 删除
+                </button>
+              </div>
+              <ComfyUIWorkflowSummaryPanel preset={activePreset} />
+            </>
+          ) : (
+            <div className="comfyWorkflowEmpty">
+              <strong>请选择工作流</strong>
+              <span>导入后可以在这里查看每个 workflow 的节点详情。</span>
+            </div>
+          )}
+        </section>
+      </div>
+    </UtilityModalShell>
   );
 }
 
@@ -8739,7 +9521,7 @@ function ConfirmDialog(props: {
 }
 
 
-function UtilityModalShell(props: { title: string; eyebrow?: string; onClose: () => void; children: ReactNode }) {
+function UtilityModalShell(props: { title: string; eyebrow?: string; className?: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') props.onClose();
@@ -8750,7 +9532,7 @@ function UtilityModalShell(props: { title: string; eyebrow?: string; onClose: ()
 
   return (
     <div className="modalBackdrop utilityModalBackdrop" onClick={props.onClose}>
-      <section className="utilityModal" role="dialog" aria-modal="true" aria-label={props.title} onClick={(event) => event.stopPropagation()}>
+      <section className={`utilityModal ${props.className ?? ''}`} role="dialog" aria-modal="true" aria-label={props.title} onClick={(event) => event.stopPropagation()}>
         <header className="utilityModalHeader">
           <div>
             {props.eyebrow ? <p className="eyebrow">{props.eyebrow}</p> : null}
