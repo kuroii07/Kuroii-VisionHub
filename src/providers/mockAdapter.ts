@@ -29,6 +29,11 @@ export class MockProviderAdapter implements ProviderAdapter {
   normalizeResult(raw: unknown, request: ImageGenerationRequest): ImageGenerationResult {
     const hue =
       Array.from(request.prompt).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
+    const count = Math.max(1, Math.min(4, Math.round(Number.isFinite(request.count) ? request.count : 1)));
+    const imageUrls = Array.from({ length: count }, (_, index) => {
+      const imageHue = (hue + index * 38) % 360;
+      return `data:image/svg+xml;utf8,${encodeURIComponent(renderDemoSvg(request.prompt, imageHue, index + 1, count))}`;
+    });
 
     return {
       id: `demo-${Date.now()}`,
@@ -36,7 +41,7 @@ export class MockProviderAdapter implements ProviderAdapter {
       modelId: request.modelId,
       status: 'succeeded',
       prompt: request.prompt,
-      imageUrls: [`data:image/svg+xml;utf8,${encodeURIComponent(renderDemoSvg(request.prompt, hue))}`],
+      imageUrls,
       costHint: 'Demo 模式未消耗额度',
       durationMs: 350,
       raw,
@@ -47,7 +52,7 @@ export class MockProviderAdapter implements ProviderAdapter {
   }
 }
 
-function renderDemoSvg(prompt: string, hue: number) {
+function renderDemoSvg(prompt: string, hue: number, index: number, total: number) {
   const safePrompt = prompt
     .replace(/[<>&]/g, (char) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[char]!)
     .slice(0, 120);
@@ -73,6 +78,6 @@ function renderDemoSvg(prompt: string, hue: number) {
       <div xmlns="http://www.w3.org/1999/xhtml" style="font: 34px/1.35 Inter,Arial; color: white; font-weight: 650; word-break: break-word;">${safePrompt || '输入 Prompt 后生成预览'}</div>
     </foreignObject>
     <rect x="156" y="692" width="260" height="52" rx="18" fill="rgba(255,255,255,.16)"/>
-    <text x="184" y="727" font-size="22" fill="#fff" font-family="Inter, Arial">Demo 模式</text>
+    <text x="184" y="727" font-size="22" fill="#fff" font-family="Inter, Arial">Demo 模式 · ${index}/${total}</text>
   </svg>`;
 }

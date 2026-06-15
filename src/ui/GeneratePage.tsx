@@ -1,5 +1,7 @@
 ﻿import {
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   GalleryHorizontal,
   History,
@@ -27,7 +29,7 @@ import type {
   PromptHistorySettings,
   PromptPolishSettings
 } from '../services/appSettings';
-import type { GenerationMode, ReferenceImage } from '../domain/providerTypes';
+import type { GenerationMode, GenerationRecord, ReferenceImage } from '../domain/providerTypes';
 import { getDefaultPolishMode, polishPrompt, PROMPT_STYLE_PRESETS, resolvePolishMode, type PromptAssistMode } from '../services/promptAssist';
 import { isTauriRuntime, polishPromptWithProvider, referenceImagesFromPaths } from '../services/desktopApi';
 import { PROMPT_POLISH_SECRET_ID, promptPolishConfigId } from '../services/appSettings';
@@ -125,9 +127,26 @@ type PromptDraft = {
   createdAt: string;
 };
 
+type CanvasPreviewBatchMeta = {
+  sourceResultId?: string;
+  imageIndex?: number;
+  total?: number;
+};
+
+type CanvasPreviewItem = {
+  record: GenerationRecord;
+  imageUrl: string;
+  localPath?: string;
+  imageIndex: number;
+  total: number;
+};
+
 const SUPPORTED_REFERENCE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const SUPPORTED_REFERENCE_PATH_PATTERN = /\.(png|jpe?g|webp)$/i;
 const PROMPT_DRAFT_STORAGE_KEY = 'visionhub.generate.promptDrafts.v1';
+const CANVAS_CLEARED_STORAGE_KEY = 'visionhub.generate.canvasClearedAfter.v1';
+const CANVAS_GENERATION_MODES = ['text-to-image', 'image-to-image'] as const;
+type CanvasGenerationMode = (typeof CANVAS_GENERATION_MODES)[number];
 
 const RATIO_OPTIONS = [
   { label: '1:1', size: '1024x1024', w: 18, h: 18 },
@@ -176,6 +195,29 @@ function generationTimeMs(createdAt: string) {
   if (Number.isFinite(numeric) && numeric > 0) return numeric;
   const parsed = new Date(createdAt).getTime();
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function readCanvasPreviewBatchMeta(record: GenerationRecord): CanvasPreviewBatchMeta | null {
+  const raw = record.raw;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const maybeMeta = (raw as { visionhub_split_image_record?: unknown }).visionhub_split_image_record;
+  if (!maybeMeta || typeof maybeMeta !== 'object' || Array.isArray(maybeMeta)) return null;
+  const meta = maybeMeta as Record<string, unknown>;
+  const imageIndex = typeof meta.imageIndex === 'number' && Number.isFinite(meta.imageIndex) ? meta.imageIndex : undefined;
+  const total = typeof meta.total === 'number' && Number.isFinite(meta.total) ? meta.total : undefined;
+  return {
+    sourceResultId: typeof meta.sourceResultId === 'string' ? meta.sourceResultId : undefined,
+    imageIndex: imageIndex && imageIndex > 0 ? imageIndex : undefined,
+    total: total && total > 0 ? total : undefined
+  };
+}
+
+function canvasPreviewBatchKey(record: GenerationRecord) {
+  return readCanvasPreviewBatchMeta(record)?.sourceResultId ?? record.id;
+}
+
+function canvasPreviewSortIndex(record: GenerationRecord, fallbackIndex: number) {
+  return readCanvasPreviewBatchMeta(record)?.imageIndex ?? fallbackIndex + 1;
 }
 
 function providerAccessLabel(provider: ReturnType<typeof listProviders>[number]) {
@@ -260,6 +302,39 @@ function loadPromptDrafts() {
 function savePromptDrafts(drafts: PromptDraft[]) {
   const normalized = normalizePromptDrafts(drafts).slice(0, 12);
   writeStorageValue(PROMPT_DRAFT_STORAGE_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+
+function normalizeCanvasClearedAfter(value: unknown): Partial<Record<CanvasGenerationMode, number>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+
+  const source = value as Record<string, unknown>;
+  const normalized: Partial<Record<CanvasGenerationMode, number>> = {};
+  for (const mode of CANVAS_GENERATION_MODES) {
+    const raw = source[mode];
+    const numeric = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : Number.NaN;
+    if (Number.isFinite(numeric) && numeric > 0) {
+      normalized[mode] = numeric;
+    }
+  }
+  return normalized;
+}
+
+function loadCanvasClearedAfter(): Partial<Record<CanvasGenerationMode, number>> {
+  const raw = readStorageValue(CANVAS_CLEARED_STORAGE_KEY);
+  if (!raw) return {};
+
+  try {
+    return normalizeCanvasClearedAfter(JSON.parse(raw));
+  } catch (error) {
+    console.warn('[VisionHub] canvas cleared state parse failed; using empty state', error);
+    return {};
+  }
+}
+
+function saveCanvasClearedAfter(value: Partial<Record<CanvasGenerationMode, number>>) {
+  const normalized = normalizeCanvasClearedAfter(value);
+  writeStorageValue(CANVAS_CLEARED_STORAGE_KEY, JSON.stringify(normalized));
   return normalized;
 }
 
@@ -361,6 +436,9 @@ export function ModernGeneratePage(props: {
   const [promptDrafts, setPromptDrafts] = useState<PromptDraft[]>(() => loadPromptDrafts());
   const [draftNotice, setDraftNotice] = useState('');
   const [isDraftLibraryOpen, setIsDraftLibraryOpen] = useState(false);
+  const [canvasPreviewIndex, setCanvasPreviewIndex] = useState(0);
+  const [activeGeneratingMode, setActiveGeneratingMode] = useState<GenerationMode | null>(null);
+  const [canvasClearedAfterByMode, setCanvasClearedAfterByMode] = useState<Partial<Record<CanvasGenerationMode, number>>>(() => loadCanvasClearedAfter());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
   const referenceNoticeTimerRef = useRef<number | null>(null);
@@ -442,14 +520,56 @@ export function ModernGeneratePage(props: {
     () => props.results.filter((result) => generationTimeMs(result.createdAt) >= props.sessionStartedAtMs),
     [props.results, props.sessionStartedAtMs]
   );
-  const currentGenerationMode: GenerationMode = mode === 'image' ? 'image-to-image' : 'text-to-image';
+  const currentGenerationMode: CanvasGenerationMode = mode === 'image' ? 'image-to-image' : 'text-to-image';
+  const currentModeCanvasClearedAt = canvasClearedAfterByMode[currentGenerationMode] ?? 0;
   const currentModeSessionResults = useMemo(
-    () => sessionResults.filter((result) => (result.generationMode ?? 'text-to-image') === currentGenerationMode),
-    [currentGenerationMode, sessionResults]
+    () => sessionResults.filter((result) => (
+      (result.generationMode ?? 'text-to-image') === currentGenerationMode
+      && generationTimeMs(result.createdAt) > currentModeCanvasClearedAt
+    )),
+    [currentGenerationMode, currentModeCanvasClearedAt, sessionResults]
   );
-  const latestImage = sessionResults.find((result) => result.imageUrls[0]);
+  const latestCanvasRecord = currentModeSessionResults.find((result) => result.imageUrls[0]);
+  const latestCanvasBatchKey = latestCanvasRecord ? canvasPreviewBatchKey(latestCanvasRecord) : null;
+  const canvasPreviewItems = useMemo<CanvasPreviewItem[]>(() => {
+    if (!latestCanvasBatchKey) return [];
+    const sameBatchRecords = currentModeSessionResults.filter((record) => {
+      if (!record.imageUrls[0]) return false;
+      return canvasPreviewBatchKey(record) === latestCanvasBatchKey;
+    });
+    const fallbackTotal = sameBatchRecords.reduce((total, record) => total + Math.max(1, record.imageUrls.length), 0);
+    const declaredTotal = sameBatchRecords
+      .map((record) => readCanvasPreviewBatchMeta(record)?.total)
+      .find((total): total is number => typeof total === 'number' && total > 0);
+
+    const items = sameBatchRecords.flatMap((record) =>
+      record.imageUrls.map((imageUrl, index) => ({
+        record,
+        imageUrl,
+        localPath: record.localImagePaths?.[index],
+        imageIndex: canvasPreviewSortIndex(record, index),
+        total: declaredTotal ?? fallbackTotal
+      }))
+    );
+
+    return items.sort(
+      (a, b) => a.imageIndex - b.imageIndex || generationTimeMs(b.record.createdAt) - generationTimeMs(a.record.createdAt)
+    );
+  }, [currentModeSessionResults, latestCanvasBatchKey]);
+  const safeCanvasPreviewIndex = Math.min(canvasPreviewIndex, Math.max(canvasPreviewItems.length - 1, 0));
+  const activeCanvasPreviewItem = canvasPreviewItems[safeCanvasPreviewIndex] ?? canvasPreviewItems[0];
+  const canvasPreviewTotal = canvasPreviewItems.length;
+  const canvasPreviewPosition = activeCanvasPreviewItem ? safeCanvasPreviewIndex + 1 : 0;
   const latestCurrentModeResult = currentModeSessionResults[0];
-  const failedLatest = !props.isGenerating && latestCurrentModeResult?.status === 'failed'
+  const isCurrentModeGenerating = props.isGenerating && activeGeneratingMode === currentGenerationMode;
+  const generateButtonLabel = isCurrentModeGenerating
+    ? '画布渲染中…'
+    : props.isGenerating
+      ? '另一模式处理中…'
+      : mode === 'image'
+        ? '参考重绘'
+        : '点亮画布';
+  const failedLatest = !isCurrentModeGenerating && latestCurrentModeResult?.status === 'failed'
     ? latestCurrentModeResult
     : undefined;
   const failedLatestDiagnosis = failedLatest ? diagnoseGenerationFailure(failedLatest) : null;
@@ -467,6 +587,20 @@ export function ModernGeneratePage(props: {
       : props.referenceImages.length > 0
         ? '拖拽缩略图可调整顺序'
         : '拖拽到此处或 Ctrl+V 粘贴');
+
+  useEffect(() => {
+    setCanvasPreviewIndex((index) => {
+      if (!latestCanvasBatchKey || canvasPreviewItems.length <= 1) return 0;
+      return Math.min(index, canvasPreviewItems.length - 1);
+    });
+  }, [canvasPreviewItems.length, latestCanvasBatchKey]);
+
+  useEffect(() => {
+    if (!props.isGenerating) {
+      setActiveGeneratingMode(null);
+    }
+  }, [props.isGenerating]);
+
   useEffect(() => {
     setMode(props.defaultMode);
   }, [props.defaultMode]);
@@ -819,28 +953,43 @@ export function ModernGeneratePage(props: {
   }
 
   function useLatestImageAsReference() {
-    if (!latestImage?.imageUrls[0]) return;
-    const hasSameLatestReference = props.referenceImages.some((reference) => reference.sourceGenerationId === latestImage.id);
+    if (!activeCanvasPreviewItem?.imageUrl) return;
+    const sourceRecord = activeCanvasPreviewItem.record;
+    const sourceReferenceId = canvasPreviewTotal > 1
+      ? `${sourceRecord.id}:${activeCanvasPreviewItem.imageIndex}`
+      : sourceRecord.id;
+    const hasSameLatestReference = props.referenceImages.some((reference) => reference.sourceGenerationId === sourceReferenceId);
     if (props.referenceImages.length >= 4 && !hasSameLatestReference) {
       setMode('image');
       showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
       return;
     }
-    const imageUrl = latestImage.imageUrls[0];
+    const imageUrl = activeCanvasPreviewItem.imageUrl;
     const nextReference: ReferenceImage = {
-      id: `generated-${latestImage.id}-${Date.now()}`,
-      name: '最近生成图',
+      id: `generated-${sourceRecord.id}-${activeCanvasPreviewItem.imageIndex}-${Date.now()}`,
+      name: canvasPreviewTotal > 1 ? `最近生成图 ${canvasPreviewPosition}/${canvasPreviewTotal}` : '最近生成图',
       mimeType: imageUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : imageUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/png',
       dataUrl: imageUrl.startsWith('data:image/') ? imageUrl : undefined,
-      localPath: latestImage.localImagePaths?.[0],
+      localPath: activeCanvasPreviewItem.localPath,
       previewUrl: imageUrl,
       source: 'generated-result',
-      sourceGenerationId: latestImage.id,
+      sourceGenerationId: sourceReferenceId,
       addedAt: new Date().toISOString()
     };
-    updateReferences([nextReference, ...props.referenceImages.filter((reference) => reference.sourceGenerationId !== latestImage.id)]);
+    updateReferences([nextReference, ...props.referenceImages.filter((reference) => reference.sourceGenerationId !== sourceReferenceId)]);
     setMode('image');
     showReferenceNotice('最近生成图已加入参考。');
+  }
+
+  function clearCurrentCanvas() {
+    const clearedAt = Date.now();
+    setCanvasClearedAfterByMode((current) =>
+      saveCanvasClearedAfter({
+        ...current,
+        [currentGenerationMode]: clearedAt
+      })
+    );
+    setCanvasPreviewIndex(0);
   }
 
   useEffect(() => {
@@ -940,6 +1089,7 @@ export function ModernGeneratePage(props: {
       seed
     };
     if (mode === 'image') {
+      setActiveGeneratingMode('image-to-image');
       const referenceRoleMap = Object.fromEntries(props.referenceImages.map((reference) => [
         reference.id,
         referenceRoles[reference.id] ?? reference.role ?? 'auto'
@@ -964,6 +1114,7 @@ export function ModernGeneratePage(props: {
       updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', '已提交图生图')));
       return;
     }
+    setActiveGeneratingMode('text-to-image');
     props.onGenerate({ mode: 'text-to-image', references: [], outputFormat, outputCompression, ...advancedGenerationOptions });
     updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', '已提交文生图')));
   }
@@ -982,7 +1133,7 @@ export function ModernGeneratePage(props: {
           <div className="workspaceTitleBlock">
             <span className="tealLabel">AI 创作工作台</span>
             <div className="workspaceTitleLine">
-              <strong>{props.isGenerating ? '渲染进行中' : latestImage ? '最近画面' : '准备生成'}</strong>
+              <strong>{isCurrentModeGenerating ? '当前模式渲染中' : activeCanvasPreviewItem ? '当前模式最近画面' : '准备生成'}</strong>
               <small>{topbarProviderSummary}</small>
             </div>
           </div>
@@ -997,7 +1148,7 @@ export function ModernGeneratePage(props: {
             <span>{props.size}</span>
             <span>{outputFormat}</span>
             <span className="sessionCount">
-              <Clock3 size={13} /> {sessionResults.length}
+              <Clock3 size={13} /> {currentModeSessionResults.length}
             </span>
           </div>
         </header>
@@ -1024,22 +1175,58 @@ export function ModernGeneratePage(props: {
             </defs>
             <rect width="100%" height="100%" fill="url(#previewSparkleMeshPattern)" />
           </svg>
-          {latestImage?.imageUrls[0] ? (
+          {activeCanvasPreviewItem?.imageUrl ? (
             <>
-              <button className="latestPreview" onClick={() => props.onPreview(latestImage.imageUrls[0])}>
-                <img src={latestImage.imageUrls[0]} alt={latestImage.prompt} />
+              <button
+                className="latestPreview"
+                type="button"
+                onClick={() => props.onPreview(activeCanvasPreviewItem.imageUrl)}
+                aria-label="预览当前生成结果"
+              >
+                <img src={activeCanvasPreviewItem.imageUrl} alt={activeCanvasPreviewItem.record.prompt} />
                 <span className="previewAction">
                   <Maximize2 size={15} /> 预览
                 </span>
               </button>
+              {canvasPreviewTotal > 1 ? (
+                <div className="canvasPreviewSwitcher" aria-label="生成结果切换">
+                  <button
+                    type="button"
+                    className="canvasPreviewNav previous"
+                    onClick={() => setCanvasPreviewIndex((index) => (index - 1 + canvasPreviewTotal) % canvasPreviewTotal)}
+                    aria-label="上一张生成结果"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span>{canvasPreviewPosition}/{canvasPreviewTotal}</span>
+                  <button
+                    type="button"
+                    className="canvasPreviewNav next"
+                    onClick={() => setCanvasPreviewIndex((index) => (index + 1) % canvasPreviewTotal)}
+                    aria-label="下一张生成结果"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              ) : null}
               <button
                 className="useAsReferenceButton"
                 type="button"
-                data-tooltip={props.referenceImages.length >= 4 ? '参考图已满 4 张，请先移除或清空' : '将最近生成图加入参考'}
+                data-tooltip={props.referenceImages.length >= 4 ? '参考图已满 4 张，请先移除或清空' : '将当前预览图加入参考'}
                 onClick={useLatestImageAsReference}
                 disabled={props.isGenerating || props.referenceImages.length >= 4}
               >
                 <ImagePlus size={15} /> 作为参考
+              </button>
+              <button
+                className="clearCanvasButton"
+                type="button"
+                data-tooltip="只清空当前模式画布，不删除作品画廊记录"
+                aria-label="清空当前模式画布"
+                onClick={clearCurrentCanvas}
+                disabled={isCurrentModeGenerating}
+              >
+                <XCircle size={15} /> 清空画布
               </button>
             </>
           ) : (
@@ -1049,7 +1236,7 @@ export function ModernGeneratePage(props: {
               </div>
               <h2>{mode === 'image' ? '等待参考图' : '画布待点亮'}</h2>
               <p>{mode === 'image' ? '加入参考图后，说明要保留或改变的部分，再开始重绘。' : '写下主体、场景和氛围，选好比例与风格后开始生成。'}</p>
-              {props.isGenerating ? (
+              {isCurrentModeGenerating ? (
                 <div className="generationOverlay inlineGenerationOverlay">
                   <span>
                     <Sparkles size={16} /> 画布渲染中
@@ -1059,7 +1246,7 @@ export function ModernGeneratePage(props: {
               ) : null}
             </div>
           )}
-          {failedLatest && !latestImage ? (
+          {failedLatest && !activeCanvasPreviewItem ? (
             <div className={`previewError ${failedLatestNeedsCheck ? 'pendingRecovery' : ''}`}>
               <div>
                 <strong>{failedLatestDiagnosis?.title ?? (failedLatestNeedsCheck ? '上一轮待核查' : '上一轮失败')}</strong>
@@ -1081,7 +1268,7 @@ export function ModernGeneratePage(props: {
               </div>
             </div>
           ) : null}
-          {props.isGenerating && latestImage?.imageUrls[0] ? (
+          {isCurrentModeGenerating && activeCanvasPreviewItem?.imageUrl ? (
             <div className="generationOverlay centerGenerationOverlay">
               <span>
                 <Sparkles size={16} /> 画布渲染中
@@ -1284,7 +1471,7 @@ export function ModernGeneratePage(props: {
                 onClick={runGenerate}
                 disabled={props.isGenerating}
               >
-                <Sparkles size={17} /> {props.isGenerating ? '画布渲染中…' : mode === 'image' ? '参考重绘' : '点亮画布'}
+                <Sparkles size={17} /> {generateButtonLabel}
               </button>
             </div>
           </div>

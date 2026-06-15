@@ -1,4 +1,4 @@
-﻿import {
+import {
   ChevronLeft,
   ChevronRight,
   ClipboardPaste,
@@ -40,10 +40,10 @@
   ZoomIn,
   ZoomOut
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { InspirationAsset } from '../domain/inspirationTypes';
-import type { GenerationRecord, ImageToImageAdapter, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
+import type { GenerationRecord, ImageGenerationResult, ImageToImageAdapter, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
 import { listProviders } from '../providers/registry';
 import {
   chooseInspirationDir,
@@ -147,7 +147,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
-const APP_VERSION = '0.3.3';
+const APP_VERSION = '0.3.6';
 
 type Page = AppPage;
 type ProviderDiagnosticLevel = 'pass' | 'warn' | 'fail' | 'info';
@@ -173,6 +173,28 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+function splitImageResultIntoSingleImageRecords(result: ImageGenerationResult): ImageGenerationResult[] {
+  if (result.status !== 'succeeded' || result.imageUrls.length <= 1) return [result];
+
+  const localImagePaths = result.localImagePaths ?? [];
+  const total = result.imageUrls.length;
+  return result.imageUrls.map((imageUrl, index) => ({
+    ...result,
+    id: `${result.id}-${index + 1}`,
+    imageUrls: [imageUrl],
+    localImagePaths: localImagePaths[index] ? [localImagePaths[index]] : [],
+    raw: {
+      visionhub_split_image_record: {
+        sourceResultId: result.id,
+        imageIndex: index + 1,
+        total
+      },
+      originalRaw: result.raw ?? null
+    }
+  }));
+}
+
 type LibraryTimeFilter = 'all' | 'today' | '7d' | '30d';
 type LibraryViewMode = 'masonry' | 'adaptive' | 'square' | 'contain' | 'list';
 type LibrarySortMode = 'newest' | 'oldest' | 'favorites' | 'provider' | 'model' | 'duration' | 'size' | 'filename';
@@ -1797,6 +1819,7 @@ const shortcutGroups: Array<{ title: string; items: Array<{ keys: string[]; acti
       { keys: ['Ctrl', '/'], action: '打开快捷键说明' },
       { keys: ['Ctrl', 'B'], action: '展开 / 收起侧边栏' },
       { keys: ['Ctrl', ','], action: '打开平台接入' },
+      { keys: ['Ctrl', '0'], action: '打开工作台首页' },
       { keys: ['Ctrl', '1'], action: '打开 AI 创作' },
       { keys: ['Ctrl', '2'], action: '打开免费平台' },
       { keys: ['Ctrl', '3'], action: '打开作品画廊' },
@@ -1926,6 +1949,7 @@ export function App() {
   const [isLibraryPageMounted, setIsLibraryPageMounted] = useState(() => page === 'library');
   const [isInspirationPageMounted, setIsInspirationPageMounted] = useState(() => page === 'inspiration');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => appSettings.sidebarCollapsed);
+  const [isThemeSwitching, setIsThemeSwitching] = useState(false);
   const [storageSettings, setStorageSettings] = useState<StorageSettings | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -1934,11 +1958,35 @@ export function App() {
   const autoRecheckedRecordIdsRef = useRef<Set<string>>(new Set());
   const localComfyUIDiagnosticRequestRef = useRef(0);
   const localComfyUIAutoCheckRunningRef = useRef(false);
+  const themeSwitchTimerRef = useRef<number | null>(null);
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() =>
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   );
   const themeMode = appSettings.themeMode;
   const resolvedThemeMode = themeMode === 'system' ? systemTheme : themeMode;
+
+  function syncDocumentTheme(mode: 'dark' | 'light') {
+    if (typeof document === 'undefined') return;
+    document.documentElement.dataset.theme = mode;
+    document.documentElement.style.colorScheme = mode;
+    document.documentElement.style.removeProperty('--app-bg');
+    document.documentElement.style.removeProperty('--app-text');
+    document.body.dataset.theme = mode;
+  }
+
+  function beginThemeSwitchLock() {
+    if (typeof window === 'undefined') return;
+    setIsThemeSwitching(true);
+    document.documentElement.dataset.themeSwitching = 'true';
+    if (themeSwitchTimerRef.current !== null) {
+      window.clearTimeout(themeSwitchTimerRef.current);
+    }
+    themeSwitchTimerRef.current = window.setTimeout(() => {
+      setIsThemeSwitching(false);
+      delete document.documentElement.dataset.themeSwitching;
+      themeSwitchTimerRef.current = null;
+    }, 180);
+  }
 
   useToastMessage(secretMessage, setSecretMessage);
   useToastMessage(configMessage, setConfigMessage);
@@ -2009,6 +2057,49 @@ export function App() {
     (generationSupportsOpenAICompatible && generationSecretAvailable) ||
     isComfyUIGenerationReady
   );
+  const homeProviderNameMap = useMemo(
+    () => new Map(providers.map((provider) => [provider.id, provider.name])),
+    [providers]
+  );
+  const homeLibraryMeta = useMemo(() => loadLibraryMeta(), [page, results]);
+  const homeSortedRecords = useMemo(
+    () => [...results].sort((a, b) => getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt)),
+    [results]
+  );
+  const homeRecentSuccessRecords = useMemo(
+    () => homeSortedRecords.filter((record) => record.status === 'succeeded' && Boolean(record.imageUrls[0])).slice(0, 4),
+    [homeSortedRecords]
+  );
+  const homeRecentFailureRecords = useMemo(
+    () => homeSortedRecords.filter((record) => record.status === 'failed' || isPotentialBackgroundCompletion(record)).slice(0, 3),
+    [homeSortedRecords]
+  );
+  const homeFavoriteRecords = useMemo(
+    () => homeSortedRecords
+      .filter((record) => Boolean(homeLibraryMeta[record.id]?.favorite && record.imageUrls[0]))
+      .sort((a, b) => {
+        const left = homeLibraryMeta[a.id];
+        const right = homeLibraryMeta[b.id];
+        const leftTime = getRecordTimeMs(left?.lastViewedAt ?? left?.lastUsedAsReferenceAt ?? a.createdAt);
+        const rightTime = getRecordTimeMs(right?.lastViewedAt ?? right?.lastUsedAsReferenceAt ?? b.createdAt);
+        return rightTime - leftTime;
+      })
+      .slice(0, 4),
+    [homeLibraryMeta, homeSortedRecords]
+  );
+  const homeReferenceRecords = useMemo(
+    () => homeSortedRecords
+      .filter((record) => Boolean(homeLibraryMeta[record.id]?.lastUsedAsReferenceAt && record.imageUrls[0]))
+      .sort((a, b) => getRecordTimeMs(homeLibraryMeta[b.id]?.lastUsedAsReferenceAt ?? '') - getRecordTimeMs(homeLibraryMeta[a.id]?.lastUsedAsReferenceAt ?? ''))
+      .slice(0, 4),
+    [homeLibraryMeta, homeSortedRecords]
+  );
+  const homeResultSummary = useMemo(() => ({
+    total: results.length,
+    succeeded: results.filter((record) => record.status === 'succeeded').length,
+    failed: results.filter((record) => record.status === 'failed').length,
+    pending: results.filter(isPotentialBackgroundCompletion).length
+  }), [results]);
   const openLibraryPreview = useCallback((imageUrl: string, navigation?: ImagePreviewNavigation) => {
     setLibraryPreview({ imageUrl, navigation });
   }, []);
@@ -2368,13 +2459,24 @@ export function App() {
         outputCompression: options?.outputCompression,
         timeoutMs: 180_000
       });
-      const saved = await saveGenerationRecord(result, 'ComfyUI / 本地模型');
-      addResult(saved);
-      if (saved.status === 'succeeded' && saved.imageUrls[0]) {
-        setGeneratePreviewUrl(saved.imageUrls[0]);
-        setConfigMessage('ComfyUI 生成成功：结果已保存到作品画廊。');
+      const recordsToSave = splitImageResultIntoSingleImageRecords({
+        ...result,
+        generationMode: 'text-to-image',
+        referenceImages: []
+      });
+      const savedRecords: GenerationRecord[] = [];
+      for (const record of recordsToSave) {
+        savedRecords.push(await saveGenerationRecord(record, 'ComfyUI / 本地模型'));
+      }
+      for (const saved of [...savedRecords].reverse()) {
+        addResult(saved);
+      }
+      const firstSaved = savedRecords[0];
+      if (firstSaved?.status === 'succeeded' && firstSaved.imageUrls[0]) {
+        setGeneratePreviewUrl(firstSaved.imageUrls[0]);
+        setConfigMessage(savedRecords.length > 1 ? `ComfyUI 生成成功：${savedRecords.length} 张结果已保存到作品画廊。` : 'ComfyUI 生成成功：结果已保存到作品画廊。');
       } else {
-        setConfigMessage(`ComfyUI 生成未成功：${saved.error ?? '没有返回图片。'} 已写入作品画廊失败记录。`);
+        setConfigMessage(`ComfyUI 生成未成功：${firstSaved?.error ?? '没有返回图片。'} 已写入作品画廊失败记录。`);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -2526,6 +2628,7 @@ export function App() {
     }
 
     const pageShortcuts: Record<string, Page> = {
+      '0': 'home',
       '1': 'generate',
       '2': 'free',
       '3': 'library',
@@ -2579,6 +2682,15 @@ export function App() {
   const useRecordAsReference = useCallback((record: GenerationRecord) => {
     const reference = generationRecordToReference(record);
     if (!reference) return;
+    const usedAt = new Date().toISOString();
+    const meta = loadLibraryMeta();
+    saveLibraryMeta({
+      ...meta,
+      [record.id]: compactLibraryMetaEntry({
+        ...meta[record.id],
+        lastUsedAsReferenceAt: usedAt
+      })
+    });
     setReferenceImages((current) => [
       reference,
       ...current.filter((item) => item.sourceGenerationId !== record.id)
@@ -2716,6 +2828,9 @@ export function App() {
     if (typeof patch.sidebarCollapsed === 'boolean') {
       setIsSidebarCollapsed(patch.sidebarCollapsed);
     }
+    if (patch.themeMode && patch.themeMode !== appSettings.themeMode && typeof window !== 'undefined') {
+      beginThemeSwitchLock();
+    }
     setAppSettings((current) => saveAppSettings({ ...current, ...patch }));
   }
 
@@ -2745,6 +2860,19 @@ export function App() {
     updateSystemTheme();
     mediaQuery.addEventListener?.('change', updateSystemTheme);
     return () => mediaQuery.removeEventListener?.('change', updateSystemTheme);
+  }, []);
+
+  useLayoutEffect(() => {
+    syncDocumentTheme(resolvedThemeMode);
+  }, [resolvedThemeMode]);
+
+  useEffect(() => () => {
+    if (typeof window !== 'undefined' && themeSwitchTimerRef.current !== null) {
+      window.clearTimeout(themeSwitchTimerRef.current);
+    }
+    if (typeof document !== 'undefined') {
+      delete document.documentElement.dataset.themeSwitching;
+    }
   }, []);
 
   useEffect(() => {
@@ -3991,6 +4119,7 @@ export function App() {
   }
 
   const navItems: Array<{ page: Page; label: string; icon: ReactNode }> = [
+    { page: 'home', label: '工作台', icon: <Grid2X2 size={18} /> },
     { page: 'generate', label: 'AI 创作', icon: <Wand2 size={18} /> },
     { page: 'free', label: '免费平台', icon: <Gift size={18} /> },
     { page: 'library', label: '作品画廊', icon: <Image size={18} /> },
@@ -4010,7 +4139,7 @@ export function App() {
 
   return (
     <div
-      className={`appShell theme-${resolvedThemeMode} ${isSidebarCollapsed ? 'sidebarCollapsed' : ''}`}
+      className={`appShell theme-${resolvedThemeMode} ${isSidebarCollapsed ? 'sidebarCollapsed' : ''} ${isThemeSwitching ? 'themeSwitching' : ''}`}
       style={appShellStyle}
     >
       <aside className="sidebar">
@@ -4042,12 +4171,12 @@ export function App() {
         <div className="sidebarDock">
           <div className="sectionTitle">工作区</div>
           <div className="dockCard">
-            <strong>当前任务</strong>
-            <span>AI 创作、作品画廊、提示词库与平台接入从左侧导航进入。</span>
+            <strong>当前状态</strong>
+            <span>{homeResultSummary.total} 条记录，{homeResultSummary.failed} 条失败，{homeResultSummary.pending} 条待核查。</span>
           </div>
           <div className="dockCard subtle">
-            <strong>后续预留</strong>
-            <span>项目资产库、批量队列、多模型对比会放在这里。</span>
+            <strong>首页 V2</strong>
+            <span>项目资产库、批量队列、多模型对比已整理为首页入口。</span>
           </div>
         </div>
         <div className="sidebarFooter">
@@ -4074,7 +4203,7 @@ export function App() {
         </div>
       </aside>
 
-      <main className={`workspace ${page === 'generate' ? 'workspaceGenerate' : ''}`}>
+      <main className={`workspace ${page === 'generate' ? 'workspaceGenerate' : page === 'home' ? 'workspaceHomeShell' : ''}`}>
         {isLibraryPageMounted ? (
           <CachedLibraryPage
             providers={providers}
@@ -4107,7 +4236,30 @@ export function App() {
             importVersion={inspirationImportVersion}
           />
         ) : null}
-        {page === 'generate' ? (
+        {page === 'home' ? (
+          <WorkspaceHomePage
+            appVersion={APP_VERSION}
+            providerName={generationSelectedProvider.name}
+            providerProfileName={activeGenerationProfile?.displayName ?? '未保存配置'}
+            providerModelId={activeGenerationConfig.modelId || selectedModelId || '未选择模型'}
+            selectedProviderId={selectedProviderId}
+            isRealProviderReady={isRealProviderReady}
+            secretAvailable={generationSecretAvailable}
+            desktopRuntime={desktopRuntime}
+            localComfyUIDiagnostic={localComfyUIDiagnostic}
+            localComfyUIWorkflowStore={localComfyUIWorkflowStore}
+            activeComfyUIWorkflowPreset={activeComfyUIWorkflowPreset}
+            resultSummary={homeResultSummary}
+            recentSuccessRecords={homeRecentSuccessRecords}
+            recentFailureRecords={homeRecentFailureRecords}
+            favoriteRecords={homeFavoriteRecords}
+            referenceRecords={homeReferenceRecords}
+            providerNameMap={homeProviderNameMap}
+            onNavigate={navigateTo}
+            onUseRecordAsReference={useRecordAsReference}
+            onOpenComfyUIWorkflowManager={() => setIsComfyUIWorkflowManagerOpen(true)}
+          />
+        ) : page === 'generate' ? (
           <>
             <ModernGeneratePage
               providers={providers}
@@ -4255,14 +4407,14 @@ export function App() {
           null
         ) : page === 'inspiration' ? (
           null
-        ) : (
+        ) : page === 'templates' ? (
           <PromptTemplatesPage
             onUseTemplate={(templatePrompt) => {
               setPrompt(templatePrompt);
               navigateTo('generate');
             }}
           />
-        )}
+        ) : null}
       </main>
 
       {activeUtilityModal === 'shortcuts' ? (
@@ -4318,6 +4470,295 @@ export function App() {
       ) : null}
     </div>
   );
+}
+
+function WorkspaceHomePage(props: {
+  appVersion: string;
+  providerName: string;
+  providerProfileName: string;
+  providerModelId: string;
+  selectedProviderId: string;
+  isRealProviderReady: boolean;
+  secretAvailable: boolean;
+  desktopRuntime: boolean;
+  localComfyUIDiagnostic: LocalComfyUIDiagnosticState;
+  localComfyUIWorkflowStore: LocalComfyUIWorkflowStore;
+  activeComfyUIWorkflowPreset: LocalComfyUIWorkflowPreset | null;
+  resultSummary: { total: number; succeeded: number; failed: number; pending: number };
+  recentSuccessRecords: GenerationRecord[];
+  recentFailureRecords: GenerationRecord[];
+  favoriteRecords: GenerationRecord[];
+  referenceRecords: GenerationRecord[];
+  providerNameMap: Map<string, string>;
+  onNavigate: (page: Page) => void;
+  onUseRecordAsReference: (record: GenerationRecord) => void;
+  onOpenComfyUIWorkflowManager: () => void;
+}) {
+  const runnableWorkflowCount = props.localComfyUIWorkflowStore.presets.filter((preset) => Boolean(preset.rawWorkflow)).length;
+  const comfyStatusLabel =
+    props.localComfyUIDiagnostic.status === 'online'
+      ? 'ComfyUI 在线'
+      : props.localComfyUIDiagnostic.status === 'offline'
+        ? 'ComfyUI 离线'
+        : props.localComfyUIDiagnostic.status === 'failed'
+          ? '连接失败'
+          : props.localComfyUIDiagnostic.status === 'checking'
+            ? '检查中'
+            : '未检查';
+  const comfyStatusTone =
+    props.localComfyUIDiagnostic.status === 'online'
+      ? 'ready'
+      : props.localComfyUIDiagnostic.status === 'offline' || props.localComfyUIDiagnostic.status === 'failed'
+        ? 'warning'
+        : 'idle';
+  const providerStatusTone = props.isRealProviderReady ? 'ready' : props.selectedProviderId === 'comfyui-local' || props.secretAvailable ? 'warning' : 'idle';
+  const providerStatusLabel = props.isRealProviderReady
+    ? '生成通道可用'
+    : props.selectedProviderId === 'comfyui-local'
+      ? '本地工作流待就绪'
+      : '等待密钥或配置';
+  const activeWorkflow = props.activeComfyUIWorkflowPreset;
+  const activeWorkflowStatus = activeWorkflow ? comfyUIWorkflowRunStatus(activeWorkflow) : null;
+  const continueRecord = props.recentSuccessRecords[0] ?? props.referenceRecords[0] ?? props.favoriteRecords[0] ?? null;
+  const materialRecords = mergeWorkspaceRecords([
+    ...props.recentSuccessRecords,
+    ...props.referenceRecords,
+    ...props.favoriteRecords
+  ]).slice(0, 8);
+  const pendingTaskCount = props.recentFailureRecords.length + props.resultSummary.pending;
+  const quickActions: Array<{ page: Page; label: string; detail: string; icon: ReactNode }> = [
+    { page: 'generate', label: 'AI 创作', detail: '继续生成', icon: <Wand2 size={16} /> },
+    { page: 'library', label: '作品画廊', detail: '管理结果', icon: <Image size={16} /> },
+    { page: 'inspiration', label: '灵感中心', detail: '收集素材', icon: <Bookmark size={16} /> },
+    { page: 'templates', label: '提示词库', detail: '复用模板', icon: <Layers size={16} /> },
+    { page: 'providers', label: '平台接入', detail: '检查配置', icon: <Database size={16} /> }
+  ];
+  const roadmapItems = [
+    { title: '项目资产库', state: '入口 MVP', page: 'library' as Page },
+    { title: '批量队列', state: '规划中', page: 'generate' as Page },
+    { title: '多模型对比', state: '规划中', page: 'providers' as Page }
+  ];
+
+  function useRecordAsReferenceAndCreate(record: GenerationRecord) {
+    props.onUseRecordAsReference(record);
+    props.onNavigate('generate');
+  }
+
+  return (
+    <section className="workspaceHome workspaceHomeV21" aria-label="工作台首页">
+      <header className="workspaceCommandBar">
+        <div className="workspaceCommandTitle">
+          <span>Workspace Control</span>
+          <h1>工作台首页</h1>
+        </div>
+        <div className="workspaceCommandStatus" aria-label="当前状态">
+          <span className={`workspaceStatusPill ${providerStatusTone}`}>
+            <ShieldCheck size={14} /> {providerStatusLabel}
+          </span>
+          <span className={`workspaceStatusPill ${comfyStatusTone}`}>
+            <HardDrive size={14} /> {comfyStatusLabel}
+          </span>
+          <span className="workspaceStatusPill neutral">v{props.appVersion} / 首页 V2 已收口</span>
+        </div>
+        <div className="workspaceCommandActions">
+          <button type="button" className="workspaceCommandButton primary" onClick={() => props.onNavigate('generate')}>
+            <Wand2 size={15} /> 开始创作
+          </button>
+          <button type="button" className="workspaceCommandButton" onClick={() => props.onNavigate('library')}>
+            <Image size={15} /> 打开画廊
+          </button>
+          <button type="button" className="workspaceCommandButton" onClick={() => props.onNavigate('providers')}>
+            <Gauge size={15} /> 检查配置
+          </button>
+        </div>
+      </header>
+
+      <section className="workspaceFlowGrid" aria-label="继续工作与待处理">
+        <article className={`workspaceContinuePanel ${continueRecord ? '' : 'isEmpty'}`}>
+          <div className="workspaceSectionHeading">
+            <div>
+              <p className="eyebrow">Resume</p>
+              <h2>继续上次创作</h2>
+            </div>
+            <span className="workspaceSoftCounter">{props.resultSummary.succeeded} 张成功作品</span>
+          </div>
+          {continueRecord ? (
+            <div className="workspaceContinueBody">
+              <button
+                type="button"
+                className="workspaceContinuePreview"
+                onClick={() => props.onNavigate('library')}
+                aria-label="打开作品画廊查看最近作品"
+              >
+                <img src={continueRecord.imageUrls[0]} alt={continueRecord.prompt || getRecordFileName(continueRecord) || '最近生成作品'} loading="lazy" decoding="async" />
+              </button>
+              <div className="workspaceContinueInfo">
+                <strong>{getRecordFileName(continueRecord) || continueRecord.prompt || '未命名作品'}</strong>
+                <p>{continueRecord.prompt || '这条记录没有保存 Prompt，可以从画廊查看详情。'}</p>
+                <div className="workspaceContinueMeta">
+                  <span>{props.providerNameMap.get(continueRecord.providerId) ?? continueRecord.providerName ?? props.providerName}</span>
+                  <span>{continueRecord.modelId || props.providerModelId}</span>
+                  <span>{formatWorkspaceHomeTime(continueRecord.createdAt)}</span>
+                </div>
+                <div className="workspaceContinueActions">
+                  <button type="button" className="workspaceCommandButton primary" onClick={() => useRecordAsReferenceAndCreate(continueRecord)}>
+                    <ImagePlus size={15} /> 设为参考并创作
+                  </button>
+                  <button type="button" className="workspaceCommandButton" onClick={() => props.onNavigate('library')}>
+                    <ExternalLink size={15} /> 打开详情
+                  </button>
+                  <button type="button" className="workspaceCommandButton" onClick={() => props.onNavigate('generate')}>
+                    <Wand2 size={15} /> 继续创作台
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <WorkspaceHomeEmpty title="还没有可继续的作品" hint="进入 AI 创作生成第一张图后，这里会显示最近任务。" actionLabel="开始创作" onAction={() => props.onNavigate('generate')} />
+          )}
+        </article>
+
+        <aside className="workspaceTaskRail" aria-label="待处理与运行状态">
+          <div className="workspaceMiniStats">
+            <span><strong>{props.resultSummary.total}</strong>生成记录</span>
+            <span><strong>{props.favoriteRecords.length}</strong>最近收藏</span>
+            <span><strong>{props.referenceRecords.length}</strong>最近参考</span>
+          </div>
+          <div className="workspaceTodoPanel">
+            <div className="workspaceSectionHeading compact">
+              <div>
+                <p className="eyebrow">Attention</p>
+                <h2>待处理</h2>
+              </div>
+              <span className={pendingTaskCount ? 'workspaceSoftCounter warning' : 'workspaceSoftCounter'}>{pendingTaskCount} 项</span>
+            </div>
+            {props.recentFailureRecords.length || props.resultSummary.pending ? (
+              <div className="workspaceTodoList">
+                {props.resultSummary.pending ? (
+                  <button type="button" className="workspaceTodoItem" onClick={() => props.onNavigate('library')}>
+                    <span className="workspaceTodoDot pending" />
+                    <span><strong>{props.resultSummary.pending} 条后台待核查</strong><small>可能需要重新检查生成状态</small></span>
+                  </button>
+                ) : null}
+                {props.recentFailureRecords.map((record) => {
+                  const diagnosis = diagnoseGenerationFailure(record);
+                  return (
+                    <button type="button" className="workspaceTodoItem" key={record.id} onClick={() => props.onNavigate('library')}>
+                      <span className={`workspaceTodoDot ${generationStatusClass(record)}`} />
+                      <span>
+                        <strong>{generationStatusLabel(record)} · {generationFailureCategoryLabels[diagnosis.category]}</strong>
+                        <small>{diagnosis.title} · {formatWorkspaceHomeTime(record.createdAt)}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <WorkspaceHomeEmpty title="暂无异常" hint="失败、待核查和需要配置的任务会集中出现在这里。" />
+            )}
+          </div>
+          <div className="workspaceLocalSummary">
+            <div>
+              <strong>本地模型</strong>
+              <span>{props.localComfyUIWorkflowStore.presets.length} 个 workflow / {runnableWorkflowCount} 个可生成</span>
+              <small>{activeWorkflow ? `${activeWorkflow.name} · ${workflowFormatLabel(activeWorkflow.summary.format)} · ${activeWorkflowStatus ?? '未检查'}` : '未选择 workflow'}</small>
+            </div>
+            <button type="button" className="workspaceIconAction" onClick={props.onOpenComfyUIWorkflowManager} aria-label="打开 workflow 管理" title="打开 workflow 管理">
+              <SlidersHorizontal size={15} />
+            </button>
+          </div>
+        </aside>
+      </section>
+
+      <section className="workspaceAssetStripPanel" aria-label="最近素材">
+        <div className="workspaceSectionHeading">
+          <div>
+            <p className="eyebrow">Material Strip</p>
+            <h2>最近素材</h2>
+          </div>
+          <div className="workspaceStripFilters" aria-label="素材来源">
+            <span>最近生成</span>
+            <span>参考图</span>
+            <span>收藏</span>
+          </div>
+        </div>
+        {materialRecords.length ? (
+          <div className="workspaceAssetStrip">
+            {materialRecords.map((record) => (
+              <article className="workspaceAssetTile" key={record.id}>
+                <button type="button" className="workspaceAssetThumb" onClick={() => props.onNavigate('library')} aria-label="打开作品画廊查看素材">
+                  <img src={record.imageUrls[0]} alt={record.prompt || getRecordFileName(record) || '素材缩略图'} loading="lazy" decoding="async" />
+                </button>
+                <div className="workspaceAssetMeta">
+                  <strong>{getRecordFileName(record) || record.prompt || '未命名素材'}</strong>
+                  <span>{formatWorkspaceHomeTime(record.createdAt)}</span>
+                </div>
+                <div className="workspaceAssetActions">
+                  <button type="button" onClick={() => useRecordAsReferenceAndCreate(record)}>参考</button>
+                  <button type="button" onClick={() => props.onNavigate('library')}>详情</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <WorkspaceHomeEmpty title="暂无素材" hint="生成、收藏或设为参考后，素材会以横向条带展示。" actionLabel="进入画廊" onAction={() => props.onNavigate('library')} />
+        )}
+      </section>
+
+      <section className="workspaceCommandDock" aria-label="常用入口">
+        <span className="workspaceDockLabel">常用入口</span>
+        {quickActions.map((item) => (
+          <button type="button" key={item.page} className="workspaceDockButton" onClick={() => props.onNavigate(item.page)}>
+            {item.icon}
+            <span><strong>{item.label}</strong><small>{item.detail}</small></span>
+          </button>
+        ))}
+      </section>
+
+      <section className="workspaceRouteStrip" aria-label="后续路线">
+        <span className="workspaceDockLabel">后续路线</span>
+        {roadmapItems.map((item) => (
+          <button type="button" key={item.title} className="workspaceRouteItem" onClick={() => props.onNavigate(item.page)}>
+            <strong>{item.title}</strong>
+            <small>{item.state}</small>
+          </button>
+        ))}
+      </section>
+    </section>
+  );
+}
+
+function mergeWorkspaceRecords(records: GenerationRecord[]) {
+  const seen = new Set<string>();
+  return records.filter((record) => {
+    if (!record.imageUrls[0] || seen.has(record.id)) return false;
+    seen.add(record.id);
+    return true;
+  });
+}
+
+function WorkspaceHomeEmpty(props: { title: string; hint: string; actionLabel?: string; onAction?: () => void }) {
+  return (
+    <div className="workspaceHomeEmpty">
+      <Sparkles size={18} />
+      <strong>{props.title}</strong>
+      <small>{props.hint}</small>
+      {props.actionLabel && props.onAction ? (
+        <button type="button" className="workspaceCommandButton" onClick={props.onAction}>{props.actionLabel}</button>
+      ) : null}
+    </div>
+  );
+}
+
+function formatWorkspaceHomeTime(value: string) {
+  const time = getRecordTimeMs(value);
+  if (!time) return '时间未知';
+  const diffMs = Date.now() - time;
+  if (diffMs < 60 * 1000) return '刚刚';
+  if (diffMs < 60 * 60 * 1000) return `${Math.max(1, Math.round(diffMs / (60 * 1000)))} 分钟前`;
+  if (diffMs < 24 * 60 * 60 * 1000) return `${Math.max(1, Math.round(diffMs / (60 * 60 * 1000)))} 小时前`;
+  if (diffMs < 7 * 24 * 60 * 60 * 1000) return `${Math.max(1, Math.round(diffMs / (24 * 60 * 60 * 1000)))} 天前`;
+  return new Date(time).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 }
 
 function GeneratePage(props: {
@@ -8680,42 +9121,6 @@ const LibraryPage = memo(function LibraryPage(props: {
             ) : (
               <div className="libraryDetailMissing">没有可预览图片</div>
             )}
-            <div className="libraryDetailOrganizerSection">
-              <div className="libraryDetailOrganizerHeader">
-                <strong>归类</strong>
-                <div>
-                  <button className="iconMiniButton" type="button" data-tooltip="移至文件夹" aria-label="移至文件夹" onClick={() => setAssignDialog({ type: 'folder', recordIds: [selectedRecord.id] })}><FolderOpen size={14} /></button>
-                  <button className="iconMiniButton" type="button" data-tooltip="加入收藏集" aria-label="加入收藏集" onClick={() => setAssignDialog({ type: 'collection', recordIds: [selectedRecord.id] })}><Bookmark size={14} /></button>
-                  {(libraryScope.type === 'folder' || libraryScope.type === 'collection') ? (
-                    <button className="iconMiniButton" type="button" data-tooltip="移出当前分类" aria-label="移出当前分类" onClick={() => removeRecordsFromCurrentScope([selectedRecord.id])}><X size={14} /></button>
-                  ) : null}
-                </div>
-              </div>
-              <div className="libraryDetailOrganizerChips">
-                {selectedRecordFolder ? (
-                  <button type="button" onClick={() => {
-                    selectLibraryScope({ type: 'folder', id: selectedRecordFolder.id });
-                    setSelectedRecordId(null);
-                  }}>
-                    <span className="libraryFolderDot" style={{ background: selectedRecordFolder.color }} />
-                    <span>{selectedRecordFolder.name}</span>
-                  </button>
-                ) : (
-                  <span><FolderOpen size={13} /> 未归入文件夹</span>
-                )}
-                {selectedRecordCollections.length ? selectedRecordCollections.map((collection) => (
-                  <button key={collection.id} type="button" onClick={() => {
-                    selectLibraryScope({ type: 'collection', id: collection.id });
-                    setSelectedRecordId(null);
-                  }}>
-                    <Bookmark size={13} />
-                    <span>{collection.name}</span>
-                  </button>
-                )) : (
-                  <span><Bookmark size={13} /> 未加入收藏集</span>
-                )}
-              </div>
-            </div>
             <div className="libraryDetailColorSection">
               <span>主色</span>
               {selectedRecordMeta?.colorPalette?.length ? (
@@ -8727,6 +9132,53 @@ const LibraryPage = memo(function LibraryPage(props: {
               ) : (
                 <small>{selectedRecordMeta?.colorAnalysisFailed ? '未识别' : '分析中'}</small>
               )}
+            </div>
+            <div className="libraryDetailSection promptDetailSection">
+              <div className="libraryPromptHeader">
+                <strong>Prompt</strong>
+                <button className="miniButton libraryPromptCopyButton" type="button" onClick={() => void copyText('Prompt', selectedRecord.prompt)}>
+                  <Copy size={12} /> 复制
+                </button>
+              </div>
+              <p>{selectedRecord.prompt}</p>
+            </div>
+            <div className="libraryDetailOrganizerSection">
+              <div className="libraryDetailOrganizerHeader">
+                <div className="libraryDetailOrganizerTitleLine">
+                  <strong>归类</strong>
+                  <div className="libraryDetailOrganizerChips">
+                    {selectedRecordFolder ? (
+                      <button type="button" onClick={() => {
+                        selectLibraryScope({ type: 'folder', id: selectedRecordFolder.id });
+                        setSelectedRecordId(null);
+                      }}>
+                        <span className="libraryFolderDot" style={{ background: selectedRecordFolder.color }} />
+                        <span>{selectedRecordFolder.name}</span>
+                      </button>
+                    ) : (
+                      <span><FolderOpen size={13} /> 未归入文件夹</span>
+                    )}
+                    {selectedRecordCollections.length ? selectedRecordCollections.map((collection) => (
+                      <button key={collection.id} type="button" onClick={() => {
+                        selectLibraryScope({ type: 'collection', id: collection.id });
+                        setSelectedRecordId(null);
+                      }}>
+                        <Bookmark size={13} />
+                        <span>{collection.name}</span>
+                      </button>
+                    )) : (
+                      <span><Bookmark size={13} /> 未加入收藏集</span>
+                    )}
+                  </div>
+                </div>
+                <div className="libraryDetailOrganizerActions">
+                  <button className="iconMiniButton" type="button" data-tooltip="移至文件夹" aria-label="移至文件夹" onClick={() => setAssignDialog({ type: 'folder', recordIds: [selectedRecord.id] })}><FolderOpen size={14} /></button>
+                  <button className="iconMiniButton" type="button" data-tooltip="加入收藏集" aria-label="加入收藏集" onClick={() => setAssignDialog({ type: 'collection', recordIds: [selectedRecord.id] })}><Bookmark size={14} /></button>
+                  {(libraryScope.type === 'folder' || libraryScope.type === 'collection') ? (
+                    <button className="iconMiniButton" type="button" data-tooltip="移出当前分类" aria-label="移出当前分类" onClick={() => removeRecordsFromCurrentScope([selectedRecord.id])}><X size={14} /></button>
+                  ) : null}
+                </div>
+              </div>
             </div>
             {selectedRecordRecoveryAdvice ? (
               <div className="libraryDetailSection libraryRecoveryAdvicePanel">
@@ -8742,24 +9194,19 @@ const LibraryPage = memo(function LibraryPage(props: {
                 </ul>
               </div>
             ) : null}
-            <div className="libraryDetailSection promptDetailSection">
-              <strong>Prompt</strong>
-              <p>{selectedRecord.prompt}</p>
-            </div>
             <div className="libraryDetailActions">
-              <button className={`miniButton ${libraryMeta[selectedRecord.id]?.favorite ? 'active' : ''}`} onClick={() => toggleFavorite(selectedRecord.id)}><Star size={13} /> {libraryMeta[selectedRecord.id]?.favorite ? '已收藏' : '收藏'}</button>
-              <button className="miniButton" disabled={!selectedRecord.imageUrls[0]} onClick={() => useRecordAsReference(selectedRecord)}><ImagePlus size={13} /> 设为参考图</button>
-              <button className="miniButton" onClick={() => props.onRetryRecord(selectedRecord)}><RefreshCcw size={13} /> 重新生成</button>
+              <button className={`miniButton ${libraryMeta[selectedRecord.id]?.favorite ? 'active' : ''}`} type="button" onClick={() => toggleFavorite(selectedRecord.id)}><Star size={13} /> {libraryMeta[selectedRecord.id]?.favorite ? '已收藏' : '收藏'}</button>
+              <button className="miniButton" type="button" disabled={!selectedRecord.imageUrls[0]} onClick={() => useRecordAsReference(selectedRecord)}><ImagePlus size={13} /> 设为参考图</button>
+              <button className="miniButton" type="button" onClick={() => props.onRetryRecord(selectedRecord)}><RefreshCcw size={13} /> 重新生成</button>
               {selectedRecord.error || selectedRecord.status === 'failed' ? (
-                <button className="miniButton" onClick={() => openRecordDiagnostics(selectedRecord)}><Gauge size={13} /> 查看诊断</button>
+                <button className="miniButton" type="button" onClick={() => openRecordDiagnostics(selectedRecord)}><Gauge size={13} /> 查看诊断</button>
               ) : null}
-              <button className="miniButton" onClick={() => void copyText('Prompt', selectedRecord.prompt)}><Copy size={13} /> Prompt</button>
-              <button className="miniButton" disabled={!getRecordPrimaryPath(selectedRecord)} onClick={() => void copyText('Path', getRecordPrimaryPath(selectedRecord))}><Copy size={13} /> 路径</button>
-              <button className="miniButton" disabled={!getRecordRevealPath(selectedRecord)} onClick={() => {
+              <button className="miniButton" type="button" disabled={!getRecordPrimaryPath(selectedRecord)} onClick={() => void copyText('Path', getRecordPrimaryPath(selectedRecord))}><Copy size={13} /> 路径</button>
+              <button className="miniButton" type="button" disabled={!getRecordRevealPath(selectedRecord)} onClick={() => {
                 const path = getRecordRevealPath(selectedRecord);
                 if (path) void revealGenerationFile(path);
               }}><FolderOpen size={13} /> 文件夹</button>
-              <button className="miniButton danger" onClick={() => void deleteRecord(selectedRecord.id)}><Trash2 size={13} /> 删除记录</button>
+              <button className="miniButton danger" type="button" onClick={() => void deleteRecord(selectedRecord.id)}><Trash2 size={13} /> 删除记录</button>
             </div>
             {selectedRecord.referenceImages?.length ? (
               <div

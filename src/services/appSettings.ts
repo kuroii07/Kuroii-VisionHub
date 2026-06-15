@@ -1,6 +1,6 @@
 import { readStorageValue, writeStorageValue } from './safeStorage';
 
-export type AppPage = 'generate' | 'free' | 'library' | 'inspiration' | 'templates' | 'providers' | 'settings';
+export type AppPage = 'home' | 'generate' | 'free' | 'library' | 'inspiration' | 'templates' | 'providers' | 'settings';
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type DefaultGenerationMode = 'text' | 'image';
 export type OutputFormat = 'PNG' | 'JPEG' | 'WebP';
@@ -118,6 +118,7 @@ export const REFRESH_INTERVAL_OPTIONS = [
 ];
 
 export const STARTUP_PAGE_OPTIONS: Array<{ value: AppPage; label: string }> = [
+  { value: 'home', label: '工作台首页' },
   { value: 'generate', label: 'AI 创作' },
   { value: 'free', label: '免费平台' },
   { value: 'library', label: '作品画廊' },
@@ -191,7 +192,7 @@ const LEGACY_THEME_KEY = 'visionhub.themeMode';
 
 export const defaultAppSettings: AppSettings = {
   themeMode: 'dark',
-  startupPage: 'generate',
+  startupPage: 'home',
   sidebarCollapsed: false,
   primaryAccent: PRIMARY_ACCENT_OPTIONS[0].value,
   generatorAccent: getRecommendedGlobalAccent(PRIMARY_ACCENT_OPTIONS[0].value),

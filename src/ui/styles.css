@@ -1,8 +1,11 @@
-﻿:root {
+:root {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: #070a11;
   color: #f7f8fb;
+  --app-bg: #070a11;
+  --app-surface: #070a11;
+  --app-text: #f7f8fb;
   --panel: rgba(16, 22, 36, 0.78);
   --line: rgba(255, 255, 255, 0.1);
   --muted: rgba(242, 246, 255, 0.62);
@@ -10,15 +13,38 @@
   --accent2: #29d6c8;
 }
 
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  background: #070a11;
+  color: #f7f8fb;
+  --app-bg: #070a11;
+  --app-surface: #070a11;
+  --app-text: #f7f8fb;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  background: #f4f7fb;
+  color: #111827;
+  --app-bg: #f4f7fb;
+  --app-surface: #f4f7fb;
+  --app-text: #111827;
+}
+
 * {
   box-sizing: border-box;
+}
+
+html {
+  background: var(--app-bg, #070a11);
 }
 
 body {
   margin: 0;
   min-width: 1180px;
   min-height: 100vh;
-  background: var(--app-surface);
+  background: var(--app-bg, #070a11);
+  color: var(--app-text, #f7f8fb);
 }
 
 button,
@@ -3314,7 +3340,19 @@ select option {
 
 .appShell {
   color: var(--app-text);
-  transition: grid-template-columns 0.22s ease, background 0.22s ease, color 0.22s ease;
+  transition: grid-template-columns 0.22s ease;
+}
+
+:root[data-theme-switching='true'],
+:root[data-theme-switching='true'] *,
+:root[data-theme-switching='true'] *::before,
+:root[data-theme-switching='true'] *::after,
+.appShell.themeSwitching,
+.appShell.themeSwitching *,
+.appShell.themeSwitching *::before,
+.appShell.themeSwitching *::after {
+  transition: none !important;
+  animation: none !important;
 }
 
 .appShell,
@@ -3350,11 +3388,11 @@ select option {
 }
 
 .appShell.theme-dark {
-  background: var(--app-surface);
+  background: var(--app-bg);
 }
 
 .appShell.theme-light {
-  background: var(--app-surface);
+  background: var(--app-bg);
 }
 
 .sidebar {
@@ -7344,7 +7382,8 @@ kbd {
 
 /* Global solid visual system: no gradients in VisionHub. */
 body {
-  background: #070a11;
+  background: var(--app-bg, #070a11);
+  color: var(--app-text, #f7f8fb);
 }
 
 .appShell.theme-light,
@@ -9518,7 +9557,7 @@ body {
 
 .libraryInlineFilters {
   position: relative;
-  z-index: 220;
+  z-index: 320;
   display: grid;
   gap: 8px;
   margin: 0 0 16px;
@@ -9557,11 +9596,11 @@ body {
 }
 
 .libraryStructuredFilters .studioSelect.open {
-  z-index: 260;
+  z-index: 340;
 }
 
 .libraryStructuredFilters .studioSelectMenu {
-  z-index: 280;
+  z-index: 360;
   width: 168px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -9569,7 +9608,7 @@ body {
   padding: 10px;
   border: 1px solid var(--app-line-strong);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--app-surface) 92%, transparent);
+  background: var(--app-surface);
   box-shadow: 0 18px 54px rgba(2, 6, 23, 0.19);
   backdrop-filter: blur(18px) saturate(1.08);
 }
@@ -9705,7 +9744,12 @@ body {
 
 .libraryColorFilter {
   position: relative;
+  z-index: 1;
   min-width: 92px;
+}
+
+.libraryColorFilter:has(.libraryColorFilterMenu) {
+  z-index: 350;
 }
 
 .libraryColorFilterButton {
@@ -9773,7 +9817,7 @@ body {
   position: absolute;
   top: calc(100% + 7px);
   left: 0;
-  z-index: 290;
+  z-index: 370;
   width: 168px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -9781,7 +9825,7 @@ body {
   padding: 10px;
   border: 1px solid var(--app-line-strong);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--app-surface) 92%, transparent);
+  background: var(--app-surface);
   box-shadow: 0 18px 54px rgba(2, 6, 23, 0.19);
   backdrop-filter: blur(18px) saturate(1.08);
 }
@@ -10956,11 +11000,11 @@ body {
   z-index: 760;
   width: min(420px, calc(100vw - 36px));
   display: grid;
-  grid-template-rows: auto auto minmax(0, auto) auto;
+  grid-auto-rows: max-content;
   align-content: start;
-  gap: 14px;
+  gap: 12px;
   overflow-y: auto;
-  padding: 18px;
+  padding: 16px;
   border: 1px solid var(--app-line-strong);
   border-radius: 24px;
   color: var(--app-text);
@@ -11052,7 +11096,10 @@ body {
 .libraryDetailPreview {
   position: relative;
   width: 100%;
-  max-height: 300px;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  min-height: 0;
+  max-height: none;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -11064,7 +11111,7 @@ body {
 .libraryDetailPreviewImageButton {
   width: 100%;
   height: 100%;
-  min-height: 180px;
+  min-height: 0;
   display: grid;
   place-items: center;
   border: 0;
@@ -11073,10 +11120,13 @@ body {
 }
 
 .libraryDetailPreview img {
+  width: 100%;
+  height: 100%;
   max-width: 100%;
-  max-height: 300px;
+  max-height: 100%;
   display: block;
   object-fit: contain;
+  object-position: center;
 }
 
 .libraryDetailImageMetaOverlay {
@@ -11110,12 +11160,15 @@ body {
 }
 
 .libraryDetailOrganizerSection {
+  position: relative;
+  z-index: 1;
   display: grid;
-  gap: 9px;
+  gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--app-line);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--app-surface-2) 78%, transparent);
+  background: var(--app-surface-2);
+  overflow: hidden;
 }
 
 .libraryDetailOrganizerHeader {
@@ -11183,15 +11236,18 @@ body {
 }
 
 .libraryDetailColorSection {
+  position: relative;
+  z-index: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
+  margin-top: 2px;
   padding: 10px 12px;
   border: 1px solid var(--app-line);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--app-surface-2) 78%, transparent);
+  background: var(--app-surface-2);
 }
 
 .libraryDetailColorSection > span {
@@ -11273,12 +11329,28 @@ body {
 }
 
 .libraryDetailSection.promptDetailSection {
-  min-height: 0;
+  min-height: 132px;
+  gap: 10px;
+  align-content: start;
+  padding: 14px;
+}
+
+.libraryDetailSection.promptDetailSection strong {
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 920;
 }
 
 .libraryDetailSection.promptDetailSection p {
-  max-height: min(300px, 36vh);
+  min-height: 76px;
+  max-height: min(240px, 30vh);
+  display: block;
   overflow: auto;
+  color: var(--app-text-2);
+  line-height: 1.65;
+  white-space: normal;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: initial;
 }
 
 .libraryReferenceDetailSection {
@@ -15051,7 +15123,9 @@ body {
 }
 
 .appShell .libraryDetailSection.promptDetailSection p {
-  max-height: min(320px, 38vh);
+  min-height: 76px;
+  max-height: min(240px, 30vh);
+  white-space: normal;
 }
 
 .appShell .libraryReferenceDetailSection {
@@ -15141,7 +15215,7 @@ body {
 }
 
 .appShell .libraryQuickMenu {
-  z-index: 2200 !important;
+  z-index: 350 !important;
   overflow: visible !important;
   max-height: none !important;
   clip-path: none !important;
@@ -15583,6 +15657,819 @@ body {
     width: auto;
     margin: 10px 16px 0;
     flex-wrap: wrap;
+  }
+}
+
+/* ── Workspace Home V2.1 final overrides (工作流中枢 + 轻动效) ── */
+
+.workspaceHomeShell {
+  background: var(--app-bg);
+}
+
+.workspaceHome.workspaceHomeV21 {
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+  padding-bottom: 30px;
+  animation: workspaceHomeEnter 0.34s cubic-bezier(0.18, 0.88, 0.28, 1) both;
+}
+
+.workspaceCommandBar,
+.workspaceContinuePanel,
+.workspaceTaskRail,
+.workspaceAssetStripPanel,
+.workspaceCommandDock,
+.workspaceRouteStrip {
+  min-width: 0;
+  border: 1px solid var(--app-line);
+  background: color-mix(in srgb, var(--app-surface) 78%, var(--app-bg));
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.07);
+  animation: workspacePanelRise 0.36s cubic-bezier(0.18, 0.88, 0.28, 1) both;
+}
+
+.workspaceCommandBar {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.6fr) minmax(280px, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 24px;
+  animation-delay: 0.02s;
+}
+
+.workspaceCommandTitle,
+.workspaceContinueInfo,
+.workspaceLocalSummary div,
+.workspaceAssetMeta,
+.workspaceTodoItem span:last-child {
+  min-width: 0;
+  display: grid;
+}
+
+.workspaceCommandTitle {
+  gap: 2px;
+}
+
+.workspaceCommandTitle span,
+.workspaceDockLabel {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.workspaceCommandTitle h1,
+.workspaceSectionHeading h2 {
+  margin: 0;
+  color: var(--app-text);
+}
+
+.workspaceCommandTitle h1 {
+  font-size: 24px;
+  line-height: 1.12;
+}
+
+.workspaceCommandStatus,
+.workspaceCommandActions,
+.workspaceContinueActions,
+.workspaceStripFilters,
+.workspaceCommandDock,
+.workspaceRouteStrip {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspaceCommandActions {
+  justify-content: flex-end;
+}
+
+.workspaceStatusPill,
+.workspaceSoftCounter,
+.workspaceStripFilters span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-muted);
+  background: color-mix(in srgb, var(--app-surface-2) 76%, var(--app-surface));
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.workspaceStatusPill.ready {
+  color: #047857;
+  border-color: color-mix(in srgb, #10b981 38%, var(--app-line));
+  background: color-mix(in srgb, #10b981 12%, var(--app-surface));
+}
+
+.workspaceStatusPill.warning,
+.workspaceSoftCounter.warning {
+  color: #b45309;
+  border-color: color-mix(in srgb, #f59e0b 38%, var(--app-line));
+  background: color-mix(in srgb, #f59e0b 12%, var(--app-surface));
+}
+
+.workspaceStatusPill.ready svg,
+.workspaceStatusPill.warning svg {
+  animation: workspaceStatusBreath 2.4s ease-in-out infinite;
+}
+
+.workspaceFlowGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.75fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.workspaceContinuePanel,
+.workspaceTaskRail,
+.workspaceAssetStripPanel {
+  border-radius: 28px;
+}
+
+.workspaceContinuePanel {
+  display: grid;
+  align-content: start;
+  padding: 18px;
+  animation-delay: 0.06s;
+}
+
+.workspaceTaskRail {
+  display: grid;
+  align-self: start;
+  gap: 10px;
+  padding: 12px;
+  animation-delay: 0.1s;
+}
+
+.workspaceSectionHeading {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.workspaceSectionHeading.compact {
+  margin-bottom: 10px;
+}
+
+.workspaceSectionHeading .eyebrow {
+  margin: 0 0 4px;
+}
+
+.workspaceSectionHeading h2 {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.workspaceContinueBody {
+  display: grid;
+  grid-template-columns: minmax(220px, 330px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.workspaceContinuePreview,
+.workspaceAssetThumb {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  background: var(--app-surface-2);
+  cursor: pointer;
+}
+
+.workspaceContinuePreview {
+  height: 248px;
+  min-height: 0;
+  max-height: 248px;
+  align-self: center;
+  border: 0;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--app-surface-2) 42%, transparent);
+  transition:
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.workspaceContinuePreview::after,
+.workspaceAssetTile::after,
+.workspaceRouteItem::after,
+.workspaceCommandButton::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.workspaceContinuePreview::after {
+  inset: auto 0 0 0;
+  height: 3px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-accent) 54%, transparent);
+  transform: scaleX(0.12);
+  transform-origin: left;
+}
+
+.workspaceContinuePreview img,
+.workspaceAssetThumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.42s cubic-bezier(0.18, 0.88, 0.28, 1), filter 0.22s ease;
+}
+
+.workspaceContinuePreview img {
+  object-fit: contain;
+}
+
+.workspaceContinueInfo {
+  align-content: center;
+  gap: 12px;
+}
+
+.workspaceContinueInfo > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-text);
+  font-size: 22px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceContinueInfo p {
+  display: -webkit-box;
+  max-width: 760px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.workspaceContinueMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspaceContinueMeta span {
+  max-width: 260px;
+  overflow: hidden;
+  padding: 6px 9px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-muted);
+  background: color-mix(in srgb, var(--app-surface-2) 64%, transparent);
+  font-size: 11px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceCommandButton,
+.workspaceDockButton,
+.workspaceRouteItem,
+.workspaceIconAction,
+.workspaceAssetActions button,
+.workspaceTodoItem {
+  position: relative;
+  border: 1px solid var(--app-line);
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-bg));
+  cursor: pointer;
+  transition:
+    transform 0.18s cubic-bezier(0.18, 0.88, 0.28, 1),
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.workspaceCommandButton {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.workspaceCommandButton.primary {
+  color: color-mix(in srgb, var(--app-accent) 22%, var(--app-text));
+  border-color: color-mix(in srgb, var(--app-accent) 36%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent) 12%, var(--app-surface));
+}
+
+.workspaceCommandButton::after {
+  left: 14px;
+  right: 14px;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: scaleX(0.18);
+  transform-origin: center;
+}
+
+.workspaceCommandButton:hover,
+.workspaceDockButton:hover,
+.workspaceRouteItem:hover,
+.workspaceIconAction:hover,
+.workspaceAssetActions button:hover,
+.workspaceTodoItem:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--app-accent) 40%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent) 9%, var(--app-surface));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.workspaceCommandButton:hover::after {
+  opacity: 0.7;
+  transform: scaleX(1);
+}
+
+.workspaceAssetTile:hover .workspaceAssetThumb img {
+  transform: scale(1.045);
+  filter: saturate(1.04);
+}
+
+.workspaceContinuePreview:hover {
+  background: color-mix(in srgb, var(--app-accent) 5%, var(--app-surface-2));
+  box-shadow: none;
+}
+
+.workspaceContinuePreview:hover img {
+  transform: none;
+  filter: none;
+}
+
+.workspaceContinuePreview:hover::after {
+  opacity: 0.9;
+  transform: scaleX(1);
+}
+
+.workspaceMiniStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.workspaceMiniStats span {
+  min-width: 0;
+  min-height: 46px;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid var(--app-line);
+  border-radius: 16px;
+  color: var(--app-muted);
+  background: color-mix(in srgb, var(--app-surface-2) 66%, transparent);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.workspaceMiniStats strong {
+  color: var(--app-text);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.workspaceTodoPanel,
+.workspaceLocalSummary {
+  border: 1px solid var(--app-line);
+  background: color-mix(in srgb, var(--app-surface-2) 56%, transparent);
+}
+
+.workspaceTodoPanel {
+  min-height: 0;
+  padding: 10px;
+  border-radius: 20px;
+}
+
+.workspaceTodoList {
+  display: grid;
+  gap: 7px;
+}
+
+.workspaceTodoItem {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 15px;
+  text-align: left;
+}
+
+.workspaceTodoItem span:last-child {
+  gap: 3px;
+}
+
+.workspaceTodoItem strong,
+.workspaceLocalSummary strong,
+.workspaceAssetMeta strong,
+.workspaceDockButton strong,
+.workspaceRouteItem strong,
+.workspaceHomeEmpty strong {
+  overflow: hidden;
+  color: var(--app-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceTodoItem small,
+.workspaceLocalSummary span,
+.workspaceLocalSummary small,
+.workspaceAssetMeta span,
+.workspaceDockButton small,
+.workspaceRouteItem small,
+.workspaceHomeEmpty small {
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceTodoDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--app-muted);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-muted) 14%, transparent);
+}
+
+.workspaceTodoDot.failed {
+  background: #ef4444;
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+}
+
+.workspaceTodoDot.pending,
+.workspaceTodoDot.pendingRecovery {
+  background: #f59e0b;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.14);
+  animation: workspaceDotPulse 1.8s ease-in-out infinite;
+}
+
+.workspaceLocalSummary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 18px;
+}
+
+.workspaceLocalSummary div {
+  gap: 3px;
+}
+
+.workspaceIconAction {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+}
+
+.workspaceAssetStripPanel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 26px;
+  animation-delay: 0.14s;
+}
+
+.workspaceStripFilters {
+  justify-content: flex-end;
+}
+
+.workspaceAssetStrip {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.workspaceAssetTile {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--app-surface-2) 66%, transparent);
+  transition: transform 0.18s cubic-bezier(0.18, 0.88, 0.28, 1), border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.workspaceAssetTile::after {
+  display: none;
+}
+
+.workspaceAssetTile:hover {
+  transform: translateY(-3px) scale(1.01);
+  border-color: color-mix(in srgb, var(--app-accent) 36%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent) 8%, var(--app-surface));
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.1);
+}
+
+.workspaceAssetThumb {
+  width: 100%;
+  aspect-ratio: 1 / 0.72;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  transition: box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.workspaceAssetTile:hover .workspaceAssetThumb {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--app-accent) 32%, transparent);
+}
+
+.workspaceAssetMeta {
+  gap: 3px;
+  padding: 9px;
+}
+
+.workspaceAssetMeta strong {
+  font-size: 12px;
+}
+
+.workspaceAssetActions {
+  position: absolute;
+  left: 7px;
+  right: 7px;
+  bottom: 8px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 5px;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.workspaceAssetTile:hover .workspaceAssetActions,
+.workspaceAssetTile:focus-within .workspaceAssetActions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.workspaceAssetActions button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 26px;
+  padding: 4px 5px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.workspaceCommandDock,
+.workspaceRouteStrip {
+  padding: 12px;
+  border-radius: 22px;
+  animation-delay: 0.18s;
+}
+
+.workspaceDockLabel {
+  min-width: 76px;
+}
+
+.workspaceDockButton,
+.workspaceRouteItem {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 8px 11px;
+  border-radius: 16px;
+  text-align: left;
+}
+
+.workspaceDockButton span,
+.workspaceRouteItem {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.workspaceDockButton svg {
+  flex: 0 0 auto;
+  color: var(--app-accent-strong);
+  transition: transform 0.18s ease;
+}
+
+.workspaceDockButton:hover svg {
+  transform: translateX(2px) rotate(-4deg);
+}
+
+.workspaceRouteStrip {
+  gap: 10px;
+}
+
+.workspaceRouteItem {
+  min-width: 160px;
+  flex: 1 1 180px;
+}
+
+.workspaceRouteItem::after {
+  display: none;
+}
+
+.workspaceRouteItem small {
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-surface-2) 68%, transparent);
+  transition:
+    transform 0.18s cubic-bezier(0.18, 0.88, 0.28, 1),
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
+}
+
+.workspaceRouteItem:hover {
+  transform: translateY(-2px) scale(1.01);
+}
+
+.workspaceRouteItem:hover small {
+  color: color-mix(in srgb, var(--app-accent) 36%, var(--app-text));
+  border-color: color-mix(in srgb, var(--app-accent) 38%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent) 10%, var(--app-surface));
+  transform: translateX(4px);
+}
+
+.workspaceHomeEmpty {
+  min-height: 138px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  padding: 18px;
+  border: 1px dashed color-mix(in srgb, var(--app-line) 78%, transparent);
+  border-radius: 20px;
+  color: var(--app-muted);
+  background: color-mix(in srgb, var(--app-surface-2) 48%, transparent);
+  text-align: center;
+}
+
+.workspaceHomeEmpty .workspaceCommandButton {
+  margin-top: 4px;
+}
+
+.appShell.theme-dark .workspaceCommandBar,
+.appShell.theme-dark .workspaceContinuePanel,
+.appShell.theme-dark .workspaceTaskRail,
+.appShell.theme-dark .workspaceAssetStripPanel,
+.appShell.theme-dark .workspaceCommandDock,
+.appShell.theme-dark .workspaceRouteStrip {
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.18);
+}
+
+@keyframes workspaceHomeEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes workspacePanelRise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes workspaceStatusBreath {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes workspaceDotPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(245, 158, 11, 0.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspaceHomeV21,
+  .workspaceCommandBar,
+  .workspaceContinuePanel,
+  .workspaceTaskRail,
+  .workspaceAssetStripPanel,
+  .workspaceCommandDock,
+  .workspaceRouteStrip,
+  .workspaceStatusPill.ready svg,
+  .workspaceStatusPill.warning svg,
+  .workspaceTodoDot.pending,
+  .workspaceTodoDot.pendingRecovery {
+    animation: none;
+  }
+
+  .workspaceCommandButton,
+  .workspaceDockButton,
+  .workspaceRouteItem,
+  .workspaceIconAction,
+  .workspaceAssetActions button,
+  .workspaceTodoItem,
+  .workspaceContinuePreview img,
+  .workspaceAssetThumb img,
+  .workspaceAssetTile {
+    transition: none;
+  }
+}
+
+@media (max-width: 1280px) {
+  .workspaceCommandBar,
+  .workspaceFlowGrid,
+  .workspaceContinueBody {
+    grid-template-columns: 1fr;
+  }
+
+  .workspaceCommandActions,
+  .workspaceCommandStatus {
+    justify-content: flex-start;
+  }
+
+  .workspaceAssetStrip {
+    grid-template-columns: repeat(4, minmax(120px, 1fr));
+  }
+}
+
+@media (max-width: 840px) {
+  .workspaceMiniStats,
+  .workspaceAssetStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workspaceSectionHeading,
+  .workspaceCommandDock,
+  .workspaceRouteStrip {
+    align-items: stretch;
+  }
+
+  .workspaceContinueActions,
+  .workspaceCommandActions,
+  .workspaceStripFilters {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 620px) {
+  .workspaceMiniStats,
+  .workspaceAssetStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .workspaceCommandButton,
+  .workspaceDockButton,
+  .workspaceRouteItem {
+    width: 100%;
   }
 }
 
@@ -17041,20 +17928,22 @@ body {
 }
 
 .inspirationDetailDrawer .libraryDetailPreview {
-  max-height: 300px;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  max-height: none;
   overflow: hidden;
 }
 
 .inspirationDetailDrawer .libraryDetailPreviewImageButton {
   height: 100%;
-  min-height: 180px;
+  min-height: 0;
 }
 
 .inspirationDetailDrawer .libraryDetailPreview img {
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 100%;
   max-width: 100%;
-  max-height: 300px;
+  max-height: 100%;
   object-fit: contain;
   object-position: center;
 }
@@ -17837,6 +18726,18 @@ body {
 .workspaceGenerate .previewStage > * {
   position: relative;
   z-index: 1;
+}
+
+/* Keep the generating status anchored to the canvas overlay layer.
+   The generic previewStage child rule above is for images/empty states and
+   must not turn the loading toast into normal document flow. */
+.workspaceGenerate .previewStage > .generationOverlay,
+.appShell.theme-light .workspaceGenerate .previewStage > .generationOverlay,
+.appShell.theme-dark .workspaceGenerate .previewStage > .generationOverlay {
+  position: absolute !important;
+  z-index: 4;
+  animation: none !important;
+  transform: translate(-50%, -50%) !important;
 }
 
 /* AI creation V4 sparkle mesh density pass: theme-aware, denser and lighter. */
@@ -18729,4 +19630,223 @@ body {
     flex-basis: 100%;
     flex-direction: row;
   }
+}
+
+/* AI creation canvas multi-result switcher: compact, non-gradient and anchored inside the canvas. */
+.workspaceGenerate .canvasPreviewSwitcher {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 30%, var(--app-line));
+  border-radius: 999px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 88%, transparent);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.13);
+  backdrop-filter: blur(14px) saturate(1.05);
+  animation: studioFadeUp 0.2s ease both;
+}
+
+.workspaceGenerate .canvasPreviewSwitcher + .useAsReferenceButton {
+  top: 62px;
+}
+
+.workspaceGenerate .canvasPreviewSwitcher span {
+  min-width: 34px;
+  text-align: center;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.workspaceGenerate .canvasPreviewNav {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--app-text-2);
+  background: transparent;
+  cursor: pointer;
+  transition: transform 0.16s ease, color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.workspaceGenerate .canvasPreviewNav:hover {
+  transform: translateY(-1px);
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 38%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+}
+
+.workspaceGenerate .canvasPreviewNav:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.workspaceGenerate .clearCanvasButton {
+  position: absolute;
+  left: 22px;
+  top: 22px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--app-line) 82%, var(--app-accent-strong));
+  border-radius: 999px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface) 86%, transparent);
+  backdrop-filter: blur(12px) saturate(1.04);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.workspaceGenerate .clearCanvasButton:hover:not(:disabled) {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface));
+}
+
+.workspaceGenerate .clearCanvasButton:disabled {
+  opacity: 0.54;
+  cursor: not-allowed;
+}
+
+.workspaceGenerate .clearCanvasButton[data-tooltip]::after {
+  left: 0;
+  top: calc(100% + 8px);
+  bottom: auto;
+  transform: translateY(-2px);
+}
+
+.workspaceGenerate .clearCanvasButton[data-tooltip]:hover::after,
+.workspaceGenerate .clearCanvasButton[data-tooltip]:focus-visible::after {
+  transform: translateY(0);
+}
+
+/* Library detail drawer V2.2: tighter metadata order, inline organizer chips and compact actions. */
+.appShell .libraryDetailDrawer {
+  overflow-x: visible;
+}
+
+.appShell .libraryDetailColorSection {
+  margin-top: 0;
+  padding: 9px 12px;
+}
+
+.appShell .libraryDetailOrganizerSection {
+  z-index: 2;
+  gap: 0;
+  overflow: visible;
+}
+
+.appShell .libraryDetailOrganizerHeader {
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.appShell .libraryDetailOrganizerTitleLine {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.appShell .libraryDetailOrganizerTitleLine > strong {
+  flex: 0 0 auto;
+}
+
+.appShell .libraryDetailOrganizerActions {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.appShell .libraryDetailOrganizerActions [data-tooltip]::after {
+  top: calc(100% + 8px);
+  bottom: auto;
+  z-index: 9999;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.appShell .libraryDetailOrganizerActions [data-tooltip]:hover::after,
+.appShell .libraryDetailOrganizerActions [data-tooltip]:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+.appShell .libraryDetailOrganizerChips {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.appShell .libraryDetailOrganizerChips button,
+.appShell .libraryDetailOrganizerChips > span {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 128px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 10.5px;
+}
+
+.appShell .libraryDetailOrganizerChips button span:last-child,
+.appShell .libraryDetailOrganizerChips > span span {
+  min-width: 0;
+}
+
+.appShell .libraryPromptHeader {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.appShell .libraryPromptCopyButton {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.appShell .libraryDetailActions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.appShell .libraryDetailActions .miniButton {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 7px;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.appShell .libraryDetailActions .miniButton svg {
+  flex: 0 0 auto;
 }

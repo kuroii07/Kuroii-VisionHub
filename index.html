@@ -5,6 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VisionHub Studio</title>
     <script>
+      (function applyVisionHubBootTheme() {
+        try {
+          var searchParams = new URLSearchParams(window.location.search || '');
+          var storedMode = searchParams.get('theme');
+          if (!/^(dark|light|system)$/.test(storedMode || '')) {
+            var rawSettings = window.localStorage.getItem('visionhub.app.settings');
+            if (rawSettings) {
+              var parsedSettings = JSON.parse(rawSettings);
+              storedMode = parsedSettings && parsedSettings.themeMode;
+            }
+          }
+          if (!/^(dark|light|system)$/.test(storedMode || '')) {
+            storedMode = window.localStorage.getItem('visionhub.themeMode');
+          }
+          if (!/^(dark|light|system)$/.test(storedMode || '')) {
+            storedMode = 'dark';
+          }
+          var resolvedMode =
+            storedMode === 'system'
+              ? window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : storedMode;
+          var root = document.documentElement;
+          root.dataset.theme = resolvedMode;
+          root.style.colorScheme = resolvedMode;
+        } catch (error) {
+          document.documentElement.dataset.theme = 'dark';
+          document.documentElement.style.colorScheme = 'dark';
+        }
+      })();
+
       window.__visionhubBootErrors = [];
 
       function escapeBootText(value) {

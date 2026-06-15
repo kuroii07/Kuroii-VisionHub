@@ -1,5 +1,5 @@
 ﻿import { create } from 'zustand';
-import type { GenerationMode, GenerationRecord, ImageGenerationRequest, ImageGenerationResult, ReferenceImage } from '../domain/providerTypes';
+import type { GenerationMode, GenerationRecord, ImageGenerationRequest, ImageGenerationResult, ProviderAdapter, ReferenceImage } from '../domain/providerTypes';
 import { createProviderAdapter, listProviders } from '../providers/registry';
 import { loadAppSettings } from '../services/appSettings';
 import { deleteGenerationRecord, isTauriRuntime, loadGenerationHistory, saveGenerationRecord } from '../services/desktopApi';
@@ -48,7 +48,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   selectedProviderId: initialProvider.id,
   selectedModelId: initialModel,
   prompt: initialPrompt,
-  count: initialGenerationDefaults.defaultCount,
+  count: normalizeGenerationCount(initialGenerationDefaults.defaultCount),
   size: initialGenerationDefaults.defaultSize,
   quality: initialGenerationDefaults.defaultQuality,
   isGenerating: false,
@@ -78,7 +78,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     set({ selectedProviderId: provider.id, selectedModelId: configuredModelId ?? provider.models[0].id });
   },
   setPrompt: (prompt) => set({ prompt }),
-  setCount: (count) => set({ count }),
+  setCount: (count) => set({ count: normalizeGenerationCount(count) }),
   setSize: (size) => set({ size }),
   setQuality: (quality) => set({ quality }),
   setSelectedModel: (modelId) => set({ selectedModelId: modelId }),
@@ -125,6 +125,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     const negativePrompt = options?.negativePrompt;
     const seed = options?.seed;
     const metadata = options?.metadata;
+    const requestedCount = normalizeGenerationCount(state.count);
 
     set({ isGenerating: true });
     try {
@@ -132,7 +133,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         providerId: state.selectedProviderId,
         modelId: useOpenAICompatibleConfig ? providerConfig.modelId : state.selectedModelId,
         prompt: state.prompt,
-        count: state.count,
+        count: requestedCount,
         size: state.size,
         quality: state.quality,
         negativePrompt,
@@ -153,17 +154,24 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       };
 
       validateGenerationRequest(request, useOpenAICompatibleConfig);
-      const result =
-        generationMode === 'image-to-image'
-          ? await (adapter.imageToImage?.(request) ?? Promise.reject(new Error('当前平台暂不支持图生图。')))
-          : await adapter.textToImage(request);
+      const result = await completeRequestedImageCount(
+        adapter,
+        request,
+        generationMode,
+        await runProviderGeneration(adapter, request, generationMode)
+      );
       const providerName = listProviders().find((provider) => provider.id === result.providerId)?.name;
-      const savedResult = await saveGenerationRecord({
+      const recordsToSave = splitImageResultIntoRecords({
         ...result,
         generationMode,
         referenceImages: references
-      }, providerName);
-      set({ results: [savedResult, ...get().results.filter((item) => item.id !== savedResult.id)] });
+      });
+      const savedResults: GenerationRecord[] = [];
+      for (const record of recordsToSave) {
+        savedResults.push(await saveGenerationRecord(record, providerName));
+      }
+      const savedIds = new Set(savedResults.map((item) => item.id));
+      set({ results: [...savedResults, ...get().results.filter((item) => !savedIds.has(item.id))] });
     } catch (error) {
       const failedModelId = useOpenAICompatibleConfig ? providerConfig.modelId : state.selectedModelId;
       const failedResult: GenerationRecord = {
@@ -186,6 +194,105 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     }
   }
 }));
+
+function normalizeGenerationCount(count: number) {
+  if (!Number.isFinite(count)) return 1;
+  return Math.max(1, Math.min(4, Math.round(count)));
+}
+
+async function runProviderGeneration(
+  adapter: ProviderAdapter,
+  request: ImageGenerationRequest,
+  generationMode: GenerationMode
+) {
+  if (generationMode === 'image-to-image') {
+    return adapter.imageToImage?.(request) ?? Promise.reject(new Error('当前平台暂不支持图生图。'));
+  }
+  return adapter.textToImage(request);
+}
+
+async function completeRequestedImageCount(
+  adapter: ProviderAdapter,
+  request: ImageGenerationRequest,
+  generationMode: GenerationMode,
+  firstResult: ImageGenerationResult
+): Promise<ImageGenerationResult> {
+  const requestedCount = normalizeGenerationCount(request.count);
+  if (firstResult.status !== 'succeeded' || firstResult.imageUrls.length >= requestedCount) {
+    return firstResult;
+  }
+
+  const imageUrls = [...firstResult.imageUrls];
+  const localImagePaths = [...(firstResult.localImagePaths ?? [])];
+  const rawResponses = [firstResult.raw ?? null];
+  let durationMs = firstResult.durationMs ?? 0;
+  let warning: string | undefined;
+
+  while (imageUrls.length < requestedCount) {
+    const remainingCount = requestedCount - imageUrls.length;
+    try {
+      const nextResult = await runProviderGeneration(
+        adapter,
+        { ...request, count: Math.max(1, Math.min(remainingCount, requestedCount)) },
+        generationMode
+      );
+      rawResponses.push(nextResult.raw ?? null);
+      durationMs += nextResult.durationMs ?? 0;
+
+      if (nextResult.status !== 'succeeded' || nextResult.imageUrls.length === 0) {
+        warning = nextResult.error || `服务商只返回了 ${imageUrls.length} 张图片，未能补齐到 ${requestedCount} 张。`;
+        break;
+      }
+
+      const availableSlots = requestedCount - imageUrls.length;
+      imageUrls.push(...nextResult.imageUrls.slice(0, availableSlots));
+      localImagePaths.push(...(nextResult.localImagePaths ?? []).slice(0, availableSlots));
+    } catch (error) {
+      warning = error instanceof Error ? error.message : String(error);
+      break;
+    }
+  }
+
+  return {
+    ...firstResult,
+    imageUrls: imageUrls.slice(0, requestedCount),
+    localImagePaths: localImagePaths.slice(0, requestedCount),
+    durationMs: durationMs || firstResult.durationMs,
+    raw: {
+      visionhub_count_completion: {
+        requestedCount,
+        receivedCount: Math.min(imageUrls.length, requestedCount),
+        extraRequestCount: Math.max(0, rawResponses.length - 1),
+        warning
+      },
+      responses: rawResponses
+    },
+    costHint: warning
+      ? `${firstResult.costHint ?? '以供应商实际账单为准'}；请求 ${requestedCount} 张，实际返回 ${Math.min(imageUrls.length, requestedCount)} 张。`
+      : firstResult.costHint
+  };
+}
+
+function splitImageResultIntoRecords(result: ImageGenerationResult): ImageGenerationResult[] {
+  if (result.status !== 'succeeded' || result.imageUrls.length <= 1) return [result];
+
+  const localImagePaths = result.localImagePaths ?? [];
+  const total = result.imageUrls.length;
+  return result.imageUrls.map((imageUrl, index) => ({
+    ...result,
+    id: `${result.id}-${index + 1}`,
+    imageUrls: [imageUrl],
+    localImagePaths: localImagePaths[index] ? [localImagePaths[index]] : [],
+    raw: {
+      visionhub_split_image_record: {
+        sourceResultId: result.id,
+        imageIndex: index + 1,
+        total
+      },
+      originalRaw: result.raw ?? null
+    }
+  }));
+}
 
 function resolveInitialProviderId(providerId: string) {
   if (providerId !== 'openai-gpt-image') return providerId;
