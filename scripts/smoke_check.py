@@ -240,7 +240,11 @@ for term in [
     "平台类型",
     "服务模板",
     "OpenAI 兼容中转",
-    "OpenRouter",
+    "MiniMax 官方",
+    "小米 MiMo 官方",
+    "providerServiceRegionLabel",
+    "sortRank",
+    "serviceTemplateMeta",
     "本地规划",
     "serviceTemplateId",
 ]:

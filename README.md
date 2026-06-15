@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-本仓库当前处在“0.3.7 偏好设置 V2 与近期 UI 收尾已完成，下一步进入批量队列与多模型对比 V1”阶段：
+本仓库当前处在“0.3.7 偏好设置 V2 与近期 UI 收尾已完成，下一步进入 0.3.8 平台接入 V4”阶段：
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -190,7 +190,7 @@ visionhub-studio/
 - AI 创作台选择 ComfyUI 后可使用已导入 API workflow 执行文生图，自动填充 Prompt、负面提示词、尺寸、Seed 和数量等基础参数。
 - ComfyUI 生成链路已接入 `/prompt` 提交、`/history` 轮询、`/view` 下载，结果会保存到作品画廊并记录本地 workflow 来源摘要。
 - 普通 UI workflow 与 API workflow 已做明确区分：UI workflow 可解析预览，但真实生成前需要在 ComfyUI 里另存为 API Format。
-- ComfyUI 图生图、参考图上传、手动节点映射、UI workflow 自动转换、Stable Diffusion WebUI / Forge / InvokeAI 接入继续作为后续本地模型增强，等具备可测本地环境后再推进。
+- ComfyUI 图生图、参考图上传、手动节点映射、UI workflow 自动转换、Stable Diffusion WebUI / Forge 接入继续作为后续本地模型增强；其他小众本地 UI 暂不列入默认模板。
 - 本轮继续只收口源码、路线文档和 README，不生成安装包；正式发布准备仍后移到 `v1.0` 前。
 
 ### v0.3.4 平台接入 V3
@@ -686,7 +686,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - ~~ComfyUI 连接诊断和自动刷新，避免服务关闭后继续显示旧的在线状态。~~
   - ~~ComfyUI API workflow 导入、管理和可生成状态提示。~~
   - ~~AI 创作台通过 ComfyUI 执行文生图，并将结果保存到作品画廊。~~
-  - Stable Diffusion WebUI / Forge、InvokeAI、ComfyUI 图生图、参考图上传和节点映射继续后排。
+  - Stable Diffusion WebUI / Forge、ComfyUI 图生图、参考图上传和节点映射继续后排；其他小众本地 UI 暂不列入默认模板。
 - ~~`0.3.6` 工作区首页 V2~~
   - 状态：已完成并收口；首页已从占位区升级为真实总览页。
   - ~~项目资产库入口：管理项目参考图、Prompt、生成图和风格说明。~~
@@ -702,7 +702,16 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - ~~界面偏好：首页模块控制、紧凑模式、启动页、侧边栏状态，以及简体中文 / English 手动切换；不做跟随系统。~~
   - ~~数据管理：打开 AppData、打开图库目录、导出设置备份，后续支持导入设置备份。~~
   - 完整页面文案国际化后续单独推进。
-- `0.3.8` 批量队列与多模型对比 V1
+- `0.3.8` 平台接入 V4
+  - 目标：把官方 API 从“规划模板”推进到多平台真实接入，同时保持中转站 / 聚合 API 仍是默认主入口。
+  - 第一阶段先改平台模板结构：增加国内 / 国外标识、接入状态、排序权重、官方文档入口和能力字段；已接入 / 可配置模板靠上，待接入模板自动靠下。
+  - 默认服务模板主流优先，不堆用户没听过、短期不用、也没有真实接入计划的小众平台。
+  - 官方 API 多平台真实接入：MiniMax、小米 MiMo 候选核验、Gemini / Nano Banana、xAI、火山方舟 / Seedream、阿里百炼 / 通义万相、可灵企业 API、即梦企业 API。
+  - 小米 MiMo 先作为国内主流候选核验：确认是否有公开文生图 / 图生图 API endpoint；确认前只展示候选说明，不开放真实生图。
+  - 每个官方平台单独 adapter，不把官方 API 强塞进 OpenAI-compatible；共用任务轮询、图片下载、错误归一化和作品画廊保存链路。
+  - 官方 API 第一批稳定后，再推进聚合网站 API、硅基流动等聚合站真实能力，以及 Stable Diffusion WebUI / Forge 本地模型路线。
+  - 未确认真实 API、账号权限或企业文档的平台，不显示“保存并启用 / 真实试生图”等会误导用户的操作。
+- `0.3.9` 批量队列与多模型对比 V1
   - 多 Prompt 队列、多尺寸队列和失败任务重试。
   - 同一 Prompt 多模型 / 多配置档案横向对比。
   - 生成前明确数量、模型和可能消耗，不默认自动连发。

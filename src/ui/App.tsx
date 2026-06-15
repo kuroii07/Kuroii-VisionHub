@@ -157,6 +157,7 @@ type Page = AppPage;
 type ProviderDiagnosticLevel = 'pass' | 'warn' | 'fail' | 'info';
 type ProviderPlatformType = 'aggregator' | 'official' | 'local';
 type ProviderServiceTemplateStatus = 'connected' | 'configurable' | 'planned' | 'local-plan';
+type ProviderServiceRegion = 'domestic' | 'overseas' | 'local' | 'custom';
 type ProviderMatrixStatus = 'live' | 'configurable' | 'partial' | 'planned' | 'localPlan' | 'unsupported' | 'unknown';
 type LocalModelDiagnosticStatus = 'idle' | 'checking' | 'online' | 'offline' | 'failed';
 type ProviderMatrixCapabilityKey =
@@ -234,8 +235,14 @@ type ProviderServiceTemplate = {
   label: string;
   description: string;
   status: ProviderServiceTemplateStatus;
+  region: ProviderServiceRegion;
+  sortRank: number;
   providerId?: string;
   defaultDisplayName?: string;
+  apiDocUrl?: string;
+  supportsTextToImage?: boolean;
+  supportsImageToImage?: boolean;
+  requiresPolling?: boolean;
   notes: string[];
 };
 type ProviderCapabilityMatrixCell = {
@@ -422,8 +429,12 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     label: 'OpenAI 兼容中转',
     description: '当前真实可用。适合把 GPT Image、Nano Banana、Qwen、豆包、Grok、Midjourney、可灵等包装成 OpenAI-compatible 的中转站。',
     status: 'connected',
+    region: 'custom',
+    sortRank: 10,
     providerId: 'custom-http-provider',
     defaultDisplayName: 'OpenAI 兼容中转',
+    supportsTextToImage: true,
+    supportsImageToImage: true,
     notes: ['Base URL、模型 ID、协议路径以服务商文档为准。', '旧的中转站配置会自动归到这里，profile id 不会变化。']
   },
   {
@@ -432,49 +443,28 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     label: '聚合网站 API',
     description: '通用聚合站模板；能保存配置，图片能力取决于服务商实际支持。',
     status: 'configurable',
+    region: 'custom',
+    sortRank: 20,
     providerId: 'custom-http-provider',
     defaultDisplayName: '聚合网站 API',
+    supportsTextToImage: true,
+    supportsImageToImage: true,
     notes: ['适合没有明确品牌模板的聚合 API。', '保存前请按服务商文档填写 Base URL、模型 ID 和协议。']
-  },
-  {
-    id: 'openrouter',
-    platformType: 'aggregator',
-    label: 'OpenRouter',
-    description: '先作为 OpenAI-compatible 模板；图片能力待按服务商实际接口验证。',
-    status: 'configurable',
-    providerId: 'custom-http-provider',
-    defaultDisplayName: 'OpenRouter',
-    notes: ['可保存连接配置；是否能生成图片取决于 OpenRouter 当前模型与图片接口支持。']
-  },
-  {
-    id: 'dmxapi',
-    platformType: 'aggregator',
-    label: 'DMXAPI',
-    description: '先作为聚合站模板；图片能力待验证。',
-    status: 'configurable',
-    providerId: 'custom-http-provider',
-    defaultDisplayName: 'DMXAPI',
-    notes: ['可保存连接配置；真实试生图前请确认服务商文档中的模型 ID 和路径。']
   },
   {
     id: 'siliconflow',
     platformType: 'aggregator',
     label: '硅基流动',
-    description: '先作为聚合站模板；图片能力待验证。',
+    description: '国内主流聚合站候选；先作为可配置模板，图片能力待按实际模型验证。',
     status: 'configurable',
+    region: 'domestic',
+    sortRank: 30,
     providerId: 'custom-http-provider',
     defaultDisplayName: '硅基流动',
+    apiDocUrl: 'https://docs.siliconflow.cn/',
+    supportsTextToImage: true,
+    supportsImageToImage: false,
     notes: ['可保存连接配置；图片模型和 OpenAI-compatible 兼容程度以服务商为准。']
-  },
-  {
-    id: 'lmrouter',
-    platformType: 'aggregator',
-    label: 'LMRouter',
-    description: '先作为聚合站模板；图片能力待验证。',
-    status: 'configurable',
-    providerId: 'custom-http-provider',
-    defaultDisplayName: 'LMRouter',
-    notes: ['可保存连接配置；图片能力需要按实际模型返回验证。']
   },
   {
     id: 'aggregator-custom',
@@ -482,8 +472,12 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     label: '其他聚合站',
     description: '通用自定义模板，适合其他 OpenAI-compatible 聚合 API。',
     status: 'configurable',
+    region: 'custom',
+    sortRank: 90,
     providerId: 'custom-http-provider',
     defaultDisplayName: '其他聚合站',
+    supportsTextToImage: true,
+    supportsImageToImage: true,
     notes: ['保留最大手动配置空间，适合服务商文档比较特殊的场景。']
   },
   {
@@ -492,9 +486,40 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     label: 'OpenAI 官方',
     description: '当前真实可用；仅用于 https://api.openai.com。',
     status: 'connected',
+    region: 'overseas',
+    sortRank: 10,
     providerId: 'openai-gpt-image',
     defaultDisplayName: 'OpenAI 官方',
+    apiDocUrl: 'https://platform.openai.com/docs/guides/images',
+    supportsTextToImage: true,
+    supportsImageToImage: true,
     notes: ['ChatGPT Plus 网页额度不等于 API 额度。', '旧官方 OpenAI 配置会自动归到这里，profile id 不会变化。']
+  },
+  {
+    id: 'official-minimax',
+    platformType: 'official',
+    label: 'MiniMax 官方',
+    description: '国内官方 API V4 第一批候选；后续按官方图片接口接入真实文生图。',
+    status: 'planned',
+    region: 'domestic',
+    sortRank: 20,
+    apiDocUrl: 'https://platform.minimaxi.com/',
+    supportsTextToImage: true,
+    supportsImageToImage: false,
+    notes: ['先核验 image-01 / image-01-live 等官方接口、鉴权和图片返回格式。', '未实接前不开放保存启用或真实试生图。']
+  },
+  {
+    id: 'official-mimo',
+    platformType: 'official',
+    label: '小米 MiMo 官方',
+    description: '国内主流候选；先核验是否开放文生图 / 图生图 API endpoint。',
+    status: 'planned',
+    region: 'domestic',
+    sortRank: 30,
+    apiDocUrl: 'https://mimo.xiaomi.com/',
+    supportsTextToImage: false,
+    supportsImageToImage: false,
+    notes: ['MiMo 官网有 API Access 入口，但需确认图片生成 API 是否公开。', '确认前只展示候选说明，不开放真实生图。']
   },
   {
     id: 'official-gemini',
@@ -502,6 +527,11 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     label: 'Google Gemini / Nano Banana 官方',
     description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
+    region: 'overseas',
+    sortRank: 40,
+    apiDocUrl: 'https://ai.google.dev/gemini-api/docs/image-generation',
+    supportsTextToImage: true,
+    supportsImageToImage: true,
     notes: ['后续需要单独实现官方 API adapter、鉴权和图片返回解析。']
   },
   {
@@ -510,6 +540,11 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     label: 'xAI 官方',
     description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
+    region: 'overseas',
+    sortRank: 50,
+    apiDocUrl: 'https://docs.x.ai/docs/guides/image-generations',
+    supportsTextToImage: true,
+    supportsImageToImage: false,
     notes: ['后续按官方图片接口能力接入。']
   },
   {
@@ -518,6 +553,11 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     label: '火山方舟 / Seedream 官方',
     description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
+    region: 'domestic',
+    sortRank: 60,
+    supportsTextToImage: true,
+    supportsImageToImage: true,
+    requiresPolling: true,
     notes: ['后续需要接入火山鉴权、模型参数和结果落盘链路。']
   },
   {
@@ -526,31 +566,13 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     label: '阿里百炼 / 通义万相官方',
     description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
+    region: 'domestic',
+    sortRank: 70,
+    apiDocUrl: 'https://help.aliyun.com/zh/model-studio/',
+    supportsTextToImage: true,
+    supportsImageToImage: true,
+    requiresPolling: true,
     notes: ['后续需要接入官方鉴权与异步任务轮询。']
-  },
-  {
-    id: 'official-fal',
-    platformType: 'official',
-    label: 'fal.ai',
-    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
-    status: 'planned',
-    notes: ['后续按 fal.ai 图片任务接口实现。']
-  },
-  {
-    id: 'official-replicate',
-    platformType: 'official',
-    label: 'Replicate',
-    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
-    status: 'planned',
-    notes: ['后续需要模型级参数表单和任务轮询。']
-  },
-  {
-    id: 'official-stability',
-    platformType: 'official',
-    label: 'Stability AI',
-    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
-    status: 'planned',
-    notes: ['后续按官方生图与编辑接口拆分配置。']
   },
   {
     id: 'official-kling',
@@ -558,6 +580,11 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     label: '可灵企业 API',
     description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
+    region: 'domestic',
+    sortRank: 80,
+    supportsTextToImage: true,
+    supportsImageToImage: true,
+    requiresPolling: true,
     notes: ['后续可作为图像 / 视频生成企业 API 路线。']
   },
   {
@@ -566,6 +593,11 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     label: '即梦企业 API',
     description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
     status: 'planned',
+    region: 'domestic',
+    sortRank: 90,
+    supportsTextToImage: true,
+    supportsImageToImage: true,
+    requiresPolling: true,
     notes: ['后续可作为国内官方企业 API 路线。']
   },
   {
@@ -574,55 +606,25 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     label: 'ComfyUI',
     description: '本地 ComfyUI 已支持连接诊断、API workflow 导入和 AI 创作台最小文生图测试。',
     status: 'local-plan',
+    region: 'local',
+    sortRank: 10,
+    providerId: 'comfyui-local',
+    supportsTextToImage: true,
+    supportsImageToImage: false,
+    requiresPolling: true,
     notes: ['先支持 ComfyUI API workflow；UI workflow 需要从 ComfyUI 重新导出 API 格式。', '当前 MVP 会自动写入 Prompt、负面提示词、尺寸和 Seed。']
   },
   {
     id: 'local-sd-webui',
     platformType: 'local',
     label: 'Stable Diffusion WebUI / Forge',
-    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
+    description: '本地主流候选；V4 后续先做连接诊断和 txt2img。',
     status: 'local-plan',
+    region: 'local',
+    sortRank: 20,
+    supportsTextToImage: true,
+    supportsImageToImage: true,
     notes: ['后续接入本地 endpoint、采样器、尺寸和 ControlNet 参数。']
-  },
-  {
-    id: 'local-invokeai',
-    platformType: 'local',
-    label: 'InvokeAI',
-    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
-    status: 'local-plan',
-    notes: ['后续按 InvokeAI API 能力接入。']
-  },
-  {
-    id: 'local-swarmui',
-    platformType: 'local',
-    label: 'SwarmUI',
-    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
-    status: 'local-plan',
-    notes: ['后续按本地任务队列和模型列表接入。']
-  },
-  {
-    id: 'local-fooocus',
-    platformType: 'local',
-    label: 'Fooocus',
-    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
-    status: 'local-plan',
-    notes: ['后续评估可用 API 与参数覆盖范围。']
-  },
-  {
-    id: 'local-openai-compatible',
-    platformType: 'local',
-    label: 'LocalAI / OpenAI-compatible 本地服务',
-    description: '本地模型路线规划；暂不允许保存启用或真实试生图。',
-    status: 'local-plan',
-    notes: ['后续可复用 OpenAI-compatible 调用层，但需要独立本地服务发现和安全提示。']
-  },
-  {
-    id: 'local-ollama',
-    platformType: 'local',
-    label: 'Ollama',
-    description: '本地文本润色优先，不作为生图主入口。',
-    status: 'local-plan',
-    notes: ['后续优先接入提示词润色，不默认作为图片生成平台。']
   }
 ];
 
@@ -631,6 +633,20 @@ const providerServiceStatusLabel: Record<ProviderServiceTemplateStatus, string> 
   configurable: '可配置',
   planned: '待接入',
   'local-plan': '本地规划'
+};
+
+const providerServiceRegionLabel: Record<ProviderServiceRegion, string> = {
+  domestic: '国内',
+  overseas: '国外',
+  local: '本地',
+  custom: '自定义'
+};
+
+const providerServiceStatusRank: Record<ProviderServiceTemplateStatus, number> = {
+  connected: 0,
+  configurable: 1,
+  'local-plan': 2,
+  planned: 3
 };
 
 const providerMatrixStatusLabel: Record<ProviderMatrixStatus, string> = {
@@ -5474,8 +5490,8 @@ function ProviderSettingsPage(props: {
   const selectedPlatform = props.platformOptions.find((item) => item.id === props.selectedPlatformType);
   const serviceTemplateOptions = props.serviceTemplates.map((template) => ({
     value: template.id,
-    label: `${template.label} · ${providerServiceStatusLabel[template.status]}`,
-    description: template.description
+    label: `${providerServiceRegionLabel[template.region]} · ${template.label}`,
+    description: `${providerServiceStatusLabel[template.status]} · ${template.description}`
   }));
   const providerMatrixRows = props.serviceTemplates.map((template) => ({
     template,
@@ -5726,6 +5742,7 @@ function ProviderSettingsPage(props: {
                   {comfyUIStatusLabel[props.localComfyUIDiagnostic.status]}
                 </span>
               </div>
+              <ServiceTemplateMeta template={props.selectedServiceTemplate} />
               <div className="localLabNotice">
                 <HardDrive size={18} />
                 <div>
@@ -5849,6 +5866,7 @@ function ProviderSettingsPage(props: {
                   {providerServiceStatusLabel[props.selectedServiceTemplate.status]}
                 </span>
               </div>
+              <ServiceTemplateMeta template={props.selectedServiceTemplate} />
               <div className="providerConfigHealth">
                 <span>{activeProfile ? `配置：${profileLabel(activeProfile.lastTestStatus)}` : '配置：草稿'}</span>
                 <span>{props.secretAvailable ? '密钥：已配置' : '密钥：未配置'}</span>
@@ -6059,7 +6077,7 @@ function ProviderSettingsPage(props: {
                         >
                           <span className="providerCapabilityService">
                             <strong>{row.template.label}</strong>
-                            <small>{providerServiceStatusLabel[row.template.status]} · {row.template.description}</small>
+                            <small>{providerServiceRegionLabel[row.template.region]} · {providerServiceStatusLabel[row.template.status]} · {row.template.description}</small>
                           </span>
                           {row.cells.map((cell, index) => (
                             <span
@@ -6128,6 +6146,7 @@ function ProviderSettingsPage(props: {
             <div className="integrationBox">
               <strong>接入状态</strong>
               <p>{props.selectedServiceTemplate.description}</p>
+              <ServiceTemplateMeta template={props.selectedServiceTemplate} />
               <div className="serviceTemplateNotes">
                 {props.selectedServiceTemplate.notes.map((note) => (
                   <span key={note}>{note}</span>
@@ -6138,6 +6157,25 @@ function ProviderSettingsPage(props: {
         </div>
       </section>
     </>
+  );
+}
+
+function ServiceTemplateMeta({ template }: { template: ProviderServiceTemplate }) {
+  const capabilityLabels = [
+    template.supportsTextToImage ? '文生图' : null,
+    template.supportsImageToImage ? '图生图' : null,
+    template.requiresPolling ? '异步任务' : null
+  ].filter(Boolean);
+
+  return (
+    <div className="serviceTemplateMeta" aria-label="服务模板信息">
+      <span className={`regionBadge ${template.region}`}>{providerServiceRegionLabel[template.region]}</span>
+      <span className={`serviceStatusBadge ${template.status}`}>{providerServiceStatusLabel[template.status]}</span>
+      {capabilityLabels.length ? <span>{capabilityLabels.join(' / ')}</span> : <span>能力待确认</span>}
+      {template.apiDocUrl ? (
+        <span className="serviceDocHint">文档已登记</span>
+      ) : null}
+    </div>
   );
 }
 
@@ -10479,7 +10517,13 @@ function createEmptyProviderDraftConfig(
 }
 
 function getProviderServiceTemplatesForPlatform(platformType: ProviderPlatformType) {
-  return providerServiceTemplates.filter((template) => template.platformType === platformType);
+  return [...providerServiceTemplates]
+    .filter((template) => template.platformType === platformType)
+    .sort((a, b) =>
+      providerServiceStatusRank[a.status] - providerServiceStatusRank[b.status] ||
+      a.sortRank - b.sortRank ||
+      a.label.localeCompare(b.label, 'zh-CN')
+    );
 }
 
 function getProviderServiceTemplate(templateId: string) {
