@@ -38,6 +38,7 @@ import type { ProviderConnectionProfile } from '../services/providerProfiles';
 import { diagnoseGenerationFailure, isPotentialBackgroundCompletion } from '../services/generationErrorDiagnostics';
 import { readStorageValue, writeStorageValue } from '../services/safeStorage';
 import { useStudioStore } from '../store/useStudioStore';
+import type { ConfirmDialogRequest } from './confirmDialog';
 import { PromptAssistModal } from './PromptAssistModal';
 import { StudioSelect } from './StudioSelect';
 
@@ -410,6 +411,7 @@ export function ModernGeneratePage(props: {
   onReloadHistory: () => void | Promise<void>;
   onOpenLibrary: () => void;
   onDeleteResult: (recordId: string) => Promise<void>;
+  onRequestConfirm: (request: ConfirmDialogRequest) => void;
   referenceImages: ReferenceImage[];
   onReferenceImagesChange: (references: ReferenceImage[]) => void;
 }) {
@@ -1656,6 +1658,7 @@ export function ModernGeneratePage(props: {
           onClose={() => setAssistMode(null)}
           onApplyPrompt={applyAssistedPrompt}
           onDeleteRecord={props.onDeleteResult}
+          onRequestConfirm={props.onRequestConfirm}
         />
       ) : null}
       {isDraftLibraryOpen ? (

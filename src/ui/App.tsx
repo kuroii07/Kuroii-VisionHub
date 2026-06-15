@@ -4277,7 +4277,6 @@ export function App() {
         ) : null}
         {page === 'home' ? (
           <WorkspaceHomePage
-            appVersion={APP_VERSION}
             providerName={generationSelectedProvider.name}
             providerProfileName={activeGenerationProfile?.displayName ?? '未保存配置'}
             providerModelId={activeGenerationConfig.modelId || selectedModelId || '未选择模型'}
@@ -4344,6 +4343,7 @@ export function App() {
               onReloadHistory={loadHistory}
               onOpenLibrary={() => navigateTo('library')}
               onDeleteResult={removeResult}
+              onRequestConfirm={requestConfirm}
               referenceImages={referenceImages}
               onReferenceImagesChange={setReferenceImages}
             />
@@ -4514,7 +4514,6 @@ export function App() {
 }
 
 function WorkspaceHomePage(props: {
-  appVersion: string;
   providerName: string;
   providerProfileName: string;
   providerModelId: string;
@@ -4546,7 +4545,7 @@ function WorkspaceHomePage(props: {
           ? '连接失败'
           : props.localComfyUIDiagnostic.status === 'checking'
             ? '检查中'
-            : '未检查';
+            : '本地服务待检查';
   const comfyStatusTone =
     props.localComfyUIDiagnostic.status === 'online'
       ? 'ready'
@@ -4600,7 +4599,7 @@ function WorkspaceHomePage(props: {
           <span className={`workspaceStatusPill ${comfyStatusTone}`}>
             <HardDrive size={14} /> {comfyStatusLabel}
           </span>
-          <span className="workspaceStatusPill neutral">v{props.appVersion} / 首页 V2 已收口</span>
+          <span className="workspaceStatusPill neutral">本地优先 · Key 不导出</span>
         </div>
         <div className="workspaceCommandActions">
           <button type="button" className="workspaceCommandButton primary" onClick={() => props.onNavigate('generate')}>
@@ -4704,7 +4703,7 @@ function WorkspaceHomePage(props: {
             <div>
               <strong>本地模型</strong>
               <span>{props.localComfyUIWorkflowStore.presets.length} 个 workflow / {runnableWorkflowCount} 个可生成</span>
-              <small>{activeWorkflow ? `${activeWorkflow.name} · ${workflowFormatLabel(activeWorkflow.summary.format)} · ${activeWorkflowStatus ?? '未检查'}` : '未选择 workflow'}</small>
+              <small>{activeWorkflow ? `${activeWorkflow.name} · ${workflowFormatLabel(activeWorkflow.summary.format)} · ${activeWorkflowStatus ?? '待检查'}` : '未选择 workflow'}</small>
             </div>
             <button type="button" className="workspaceIconAction" onClick={props.onOpenComfyUIWorkflowManager} aria-label="打开 workflow 管理" title="打开 workflow 管理">
               <SlidersHorizontal size={15} />
@@ -6303,7 +6302,6 @@ function SettingsPage(props: {
     ? generationDefaults.defaultModelId
     : defaultModelOptions[0]?.value ?? generationDefaults.defaultModelId;
   const [developerMode, setDeveloperMode] = useState(false);
-  const enabledHomeModuleCount = Object.values(homeModules).filter(Boolean).length;
 
   function updateGenerationDefaults(patch: Partial<GenerationDefaults>) {
     props.onSettingsChange({ generationDefaults: { ...generationDefaults, ...patch } });
@@ -6374,7 +6372,7 @@ function SettingsPage(props: {
       <header className="systemSettingsHeader">
         <div>
           <p className="eyebrow">Preferences</p>
-          <h1>偏好设置 V2</h1>
+          <h1>偏好设置</h1>
           <span>把默认工作流、语言、首页模块和数据管理集中到一个配置中心。</span>
         </div>
         <div className="settingsHeaderActions">
@@ -6389,29 +6387,6 @@ function SettingsPage(props: {
           </button>
         </div>
       </header>
-
-      <div className="settingsOverviewGrid" aria-label="偏好设置概览">
-        <article>
-          <span>默认工作流</span>
-          <strong>{generationDefaults.defaultMode === 'image' ? '图生图' : '文生图'} · {generationDefaults.defaultCount} 张</strong>
-          <small>{defaultProvider.name} / {selectedDefaultModel}</small>
-        </article>
-        <article>
-          <span>语言</span>
-          <strong>{LANGUAGE_OPTIONS.find((option) => option.value === settings.language)?.label ?? '简体中文'}</strong>
-          <small>手动切换，不跟随系统。</small>
-        </article>
-        <article>
-          <span>首页模块</span>
-          <strong>{enabledHomeModuleCount}/5 已显示</strong>
-          <small>{settings.compactMode ? '紧凑模式已开启' : '标准密度'}</small>
-        </article>
-        <article>
-          <span>数据安全</span>
-          <strong>Key 不导出</strong>
-          <small>备份只包含非敏感设置。</small>
-        </article>
-      </div>
 
       <div className="settingsSectionLabel">外观设置</div>
       <article className="settingsGroupCard">
@@ -6690,18 +6665,18 @@ function SettingsPage(props: {
             <strong>提示词润色引擎</strong>
             <small>本地规则不消耗额度；模型润色使用下方独立配置，不复用生图平台 Key。</small>
           </div>
-          <div className="settingsInlineGrid">
-            <StudioSelect
-              value={promptPolish.engine}
-              onChange={(value) => updatePromptPolish({ engine: value as PromptPolishSettings['engine'] }, { commit: true })}
-              options={PROMPT_POLISH_ENGINE_OPTIONS}
-            />
+          <div className="settingsInlineGrid promptPolishEngineControls">
             <button
               className={promptPolish.fallbackToLocal ? 'settingsTogglePill active' : 'settingsTogglePill'}
               onClick={() => updatePromptPolish({ fallbackToLocal: !promptPolish.fallbackToLocal }, { commit: true })}
             >
               失败时本地兜底
             </button>
+            <StudioSelect
+              value={promptPolish.engine}
+              onChange={(value) => updatePromptPolish({ engine: value as PromptPolishSettings['engine'] }, { commit: true })}
+              options={PROMPT_POLISH_ENGINE_OPTIONS}
+            />
           </div>
         </div>
 
@@ -6823,6 +6798,12 @@ function SettingsPage(props: {
                 onChange={(event) => updatePromptPolish({ extraHeadersJson: event.target.value })}
               />
             </details>
+            <div className="settingsConfigActions settingsWideField">
+              <button type="button" className="rowActionButton" onClick={props.onSavePromptPolishConfig}>
+                <ShieldCheck size={14} /> 保存润色配置
+              </button>
+              <small>保存配置不会保存 API Key；API Key 仍需单独点击上方“保存”。</small>
+            </div>
             <div className="promptPolishConfigInstances settingsWideField">
               <strong>已保存配置实例</strong>
               {promptPolish.savedConfigs.length === 0 ? (
@@ -6852,12 +6833,6 @@ function SettingsPage(props: {
                   ))}
                 </div>
               )}
-            </div>
-            <div className="settingsConfigActions settingsWideField">
-              <button type="button" className="rowActionButton" onClick={props.onSavePromptPolishConfig}>
-                <ShieldCheck size={14} /> 保存润色配置
-              </button>
-              <small>保存配置不会保存 API Key；API Key 仍需单独点击上方“保存”。</small>
             </div>
           </div>
         </div>
@@ -6909,7 +6884,7 @@ function SettingsPage(props: {
             <strong>分组策略</strong>
             <small>用于后续导出、项目资产库和批量整理；不会移动现有图库文件。</small>
           </div>
-          <div className="settingsBooleanGrid">
+          <div className="settingsBooleanGrid compactTwo">
             <button className={savePreferences.groupByDate ? 'active' : ''} onClick={() => updateSavePreferences({ groupByDate: !savePreferences.groupByDate })}>按日期分组</button>
             <button className={savePreferences.groupByProject ? 'active' : ''} onClick={() => updateSavePreferences({ groupByProject: !savePreferences.groupByProject })}>按项目分组</button>
           </div>
@@ -7017,7 +6992,7 @@ function SettingsPage(props: {
 
       <div className="settingsSectionLabel">软件升级</div>
       <article className="settingsGroupCard">
-        <div className="settingsListRow themeSettingsRow">
+        <div className="settingsListRow versionSettingsRow">
           <div className="settingsRowMain">
             <strong>版本</strong>
           </div>

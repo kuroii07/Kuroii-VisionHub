@@ -3946,6 +3946,7 @@ kbd {
 
 /* System settings: single-column settings center */
 .systemSettingsPage {
+  --settings-select-width: 146px;
   max-width: 1000px;
   margin: 0 auto;
   padding: 18px 0 44px;
@@ -3979,42 +3980,6 @@ kbd {
   background: transparent;
 }
 .settingsHeaderActions button:disabled { border-color: var(--app-line); background: var(--app-surface-2); opacity: .8; }
-.settingsOverviewGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 24px;
-}
-.settingsOverviewGrid article {
-  min-height: 104px;
-  display: grid;
-  align-content: center;
-  gap: 7px;
-  padding: 16px;
-  border: 1px solid var(--app-line);
-  border-radius: 18px;
-  background: color-mix(in srgb, var(--app-surface) 86%, var(--app-accent) 5%);
-  box-shadow: 0 18px 50px color-mix(in srgb, #000 12%, transparent);
-}
-.settingsOverviewGrid span {
-  color: var(--app-muted);
-  font-size: 12px;
-  font-weight: 850;
-}
-.settingsOverviewGrid strong {
-  color: var(--app-text);
-  font-size: 15px;
-  line-height: 1.25;
-}
-.settingsOverviewGrid small {
-  min-width: 0;
-  color: var(--app-text-2);
-  font-size: 12px;
-  line-height: 1.45;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .settingsSectionLabel {
   margin: 24px 0 10px;
   padding-left: 4px;
@@ -4100,14 +4065,16 @@ kbd {
   overflow-wrap: anywhere;
 }
 .settingsInlineGrid {
-  width: min(460px, 100%);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: auto;
+  max-width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: nowrap;
   gap: 10px;
 }
 .settingsInlineGrid.triple {
-  width: min(640px, 100%);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: auto;
 }
 .settingsConfigBlock {
   display: grid;
@@ -4385,6 +4352,12 @@ kbd {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
+.settingsBooleanGrid.compactTwo {
+  width: auto;
+  grid-template-columns: repeat(2, var(--settings-select-width));
+  justify-content: end;
+  margin-left: auto;
+}
 .settingsBooleanGrid button {
   min-height: 34px;
   border: 1px solid var(--app-line);
@@ -4422,6 +4395,15 @@ kbd {
   line-height: 1.6;
 }
 .settingsValue { color: var(--app-text-2); font-weight: 850; }
+.versionSettingsRow {
+  min-height: 54px;
+  align-items: center;
+}
+
+.versionSettingsRow .settingsValue {
+  margin-left: auto;
+}
+
 .appShell.compactMode .systemSettingsPage {
   padding-top: 8px;
 }
@@ -4430,8 +4412,7 @@ kbd {
   padding-top: 12px;
   padding-bottom: 12px;
 }
-.appShell.compactMode .settingsGroupCard,
-.appShell.compactMode .settingsOverviewGrid article {
+.appShell.compactMode .settingsGroupCard {
   border-radius: 14px;
 }
 .appShell.compactMode .workspaceHome {
@@ -4473,10 +4454,86 @@ kbd {
   font-weight: 900;
 }
 
+/* Preferences V2 compact controls: keep right-side controls tidy and aligned. */
+.systemSettingsPage .settingsListRow > :not(.settingsRowMain) {
+  margin-left: auto;
+}
+
+.systemSettingsPage .settingsControlSlim {
+  width: var(--settings-select-width);
+  flex: 0 0 var(--settings-select-width);
+}
+
+.systemSettingsPage .settingsInlineGrid {
+  margin-left: auto;
+}
+
+.systemSettingsPage .settingsInlineGrid .studioSelect {
+  width: var(--settings-select-width);
+  flex: 0 0 var(--settings-select-width);
+}
+
+.systemSettingsPage .settingsControlSlim .studioSelectButton,
+.systemSettingsPage .settingsInlineGrid .studioSelectButton {
+  min-height: 38px;
+  border-radius: 13px;
+  padding: 0 11px;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.systemSettingsPage .settingsControlSlim .studioSelectButton svg,
+.systemSettingsPage .settingsInlineGrid .studioSelectButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.systemSettingsPage .studioSelectValue > span,
+.systemSettingsPage .studioSelectOptionText > span {
+  font-size: 12px;
+}
+
+.systemSettingsPage .settingsPathActions {
+  gap: 8px;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.systemSettingsPage .settingsPathActions .rowActionButton,
+.systemSettingsPage .settingsListRow > .rowActionButton,
+.systemSettingsPage .settingsConfigActions .rowActionButton {
+  min-height: 34px;
+  border-radius: 12px;
+  padding: 0 12px;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.systemSettingsPage .promptPolishEngineControls {
+  width: auto;
+}
+
+.systemSettingsPage .promptPolishEngineControls .settingsTogglePill {
+  min-width: 134px;
+  padding: 0 13px;
+  white-space: nowrap;
+}
+
+.systemSettingsPage .settingsPathActions .rowActionButton svg,
+.systemSettingsPage .settingsListRow > .rowActionButton svg,
+.systemSettingsPage .settingsConfigActions .rowActionButton svg {
+  width: 13px;
+  height: 13px;
+}
+
 @media (max-width: 1280px) {
-  .settingsOverviewGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .settingsListRow { align-items: flex-start; flex-direction: column; }
   .settingsControlSlim { width: 100%; }
+  .systemSettingsPage .settingsControlSlim {
+    width: 100%;
+    flex-basis: auto;
+  }
   .settingsPathEditor { width: 100%; }
   .settingsPathActions { justify-content: flex-start; }
   .settingsInlineGrid,
@@ -4486,6 +4543,19 @@ kbd {
   .settingsBooleanGrid.homeModuleGrid {
     width: 100%;
     grid-template-columns: 1fr;
+  }
+  .systemSettingsPage .settingsInlineGrid {
+    display: grid;
+    justify-content: stretch;
+  }
+  .systemSettingsPage .settingsInlineGrid .studioSelect {
+    width: 100%;
+    flex-basis: auto;
+  }
+  .settingsBooleanGrid.compactTwo {
+    width: 100%;
+    grid-template-columns: 1fr;
+    justify-content: stretch;
   }
   .settingsStatusPills { justify-content: flex-start; }
   .promptPolishConfigHeader { grid-template-columns: 1fr; }
@@ -9668,9 +9738,6 @@ body {
   z-index: 340;
 }
 
-@media (max-width: 720px) {
-  .settingsOverviewGrid { grid-template-columns: 1fr; }
-}
 .settingsBooleanGrid.homeModuleGrid {
   width: min(620px, 100%);
   grid-template-columns: repeat(5, minmax(0, 1fr));

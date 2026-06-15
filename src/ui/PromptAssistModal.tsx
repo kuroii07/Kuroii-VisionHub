@@ -19,6 +19,7 @@ import {
   type PromptAssistMode
 } from '../services/promptAssist';
 import { StudioSelect } from './StudioSelect';
+import type { ConfirmDialogRequest } from './confirmDialog';
 import { useToastMessage } from './toast';
 
 interface PromptAssistModalProps {
@@ -32,6 +33,7 @@ interface PromptAssistModalProps {
   onClose: () => void;
   onApplyPrompt: (prompt: string, placement: 'replace' | 'append') => void;
   onDeleteRecord?: (recordId: string) => Promise<void>;
+  onRequestConfirm: (request: ConfirmDialogRequest) => void;
 }
 
 type ReuseModeFilter = 'all' | 'text-to-image' | 'image-to-image' | 'with-references';
@@ -287,14 +289,16 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
       setCopiedMessage('当前环境暂不支持删除记录');
       return;
     }
-    const ok = window.confirm('确定删除这条复用记录吗？这只会从 VisionHub 软件记录中移除，不会删除磁盘上的图片文件。');
-    if (!ok) return;
-    try {
-      await props.onDeleteRecord(record.id);
-      setCopiedMessage('已删除软件记录，磁盘图片未删除');
-    } catch (error) {
-      setCopiedMessage(error instanceof Error ? error.message : String(error));
-    }
+    props.onRequestConfirm({
+      title: '删除复用记录',
+      message: '这条记录只会从 VisionHub 软件记录中移除，不会删除磁盘上的图片文件。',
+      confirmLabel: '删除记录',
+      tone: 'danger',
+      onConfirm: async () => {
+        await props.onDeleteRecord?.(record.id);
+        setCopiedMessage('已删除软件记录，磁盘图片未删除');
+      }
+    });
   }
 
   function handleSourcePromptChange(nextPrompt: string) {
