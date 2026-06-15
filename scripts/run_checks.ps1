@@ -15,6 +15,6 @@ function Invoke-NativeCommand {
   }
 }
 
-python scripts/smoke_check.py
+Invoke-NativeCommand { python scripts/smoke_check.py } "smoke check"
 Invoke-NativeCommand { npm.cmd run build } "npm run build"
 Invoke-NativeCommand { cargo.exe check --manifest-path src-tauri/Cargo.toml } "cargo check"

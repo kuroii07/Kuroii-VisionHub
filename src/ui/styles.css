@@ -3960,6 +3960,13 @@ kbd {
   padding: 0 2px;
 }
 .systemSettingsHeader h1 { margin: 6px 0 0; font-size: 34px; line-height: 1.12; color: var(--app-text); }
+.systemSettingsHeader span {
+  display: block;
+  margin-top: 8px;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
 .settingsHeaderActions { display: flex; gap: 10px; }
 .settingsHeaderActions button {
   width: 34px;
@@ -3972,6 +3979,42 @@ kbd {
   background: transparent;
 }
 .settingsHeaderActions button:disabled { border-color: var(--app-line); background: var(--app-surface-2); opacity: .8; }
+.settingsOverviewGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.settingsOverviewGrid article {
+  min-height: 104px;
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  padding: 16px;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--app-surface) 86%, var(--app-accent) 5%);
+  box-shadow: 0 18px 50px color-mix(in srgb, #000 12%, transparent);
+}
+.settingsOverviewGrid span {
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+.settingsOverviewGrid strong {
+  color: var(--app-text);
+  font-size: 15px;
+  line-height: 1.25;
+}
+.settingsOverviewGrid small {
+  min-width: 0;
+  color: var(--app-text-2);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .settingsSectionLabel {
   margin: 24px 0 10px;
   padding-left: 4px;
@@ -4379,6 +4422,30 @@ kbd {
   line-height: 1.6;
 }
 .settingsValue { color: var(--app-text-2); font-weight: 850; }
+.appShell.compactMode .systemSettingsPage {
+  padding-top: 8px;
+}
+.appShell.compactMode .settingsListRow {
+  min-height: 58px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.appShell.compactMode .settingsGroupCard,
+.appShell.compactMode .settingsOverviewGrid article {
+  border-radius: 14px;
+}
+.appShell.compactMode .workspaceHome {
+  gap: 12px;
+}
+.appShell.compactMode .workspaceCommandBar,
+.appShell.compactMode .workspaceContinuePanel,
+.appShell.compactMode .workspaceAssetStripPanel {
+  border-radius: 22px;
+}
+.appShell.compactMode .workspaceContinuePanel,
+.appShell.compactMode .workspaceAssetStripPanel {
+  padding: 14px;
+}
 .rowActionButton {
   min-height: 38px;
   display: inline-flex;
@@ -4407,6 +4474,7 @@ kbd {
 }
 
 @media (max-width: 1280px) {
+  .settingsOverviewGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .settingsListRow { align-items: flex-start; flex-direction: column; }
   .settingsControlSlim { width: 100%; }
   .settingsPathEditor { width: 100%; }
@@ -4414,7 +4482,8 @@ kbd {
   .settingsInlineGrid,
   .settingsInlineGrid.triple,
   .settingsConfigGrid,
-  .settingsBooleanGrid {
+  .settingsBooleanGrid,
+  .settingsBooleanGrid.homeModuleGrid {
     width: 100%;
     grid-template-columns: 1fr;
   }
@@ -9597,6 +9666,14 @@ body {
 
 .libraryStructuredFilters .studioSelect.open {
   z-index: 340;
+}
+
+@media (max-width: 720px) {
+  .settingsOverviewGrid { grid-template-columns: 1fr; }
+}
+.settingsBooleanGrid.homeModuleGrid {
+  width: min(620px, 100%);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .libraryStructuredFilters .studioSelectMenu {
@@ -15789,6 +15866,10 @@ body {
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.75fr);
   gap: 16px;
   align-items: stretch;
+}
+
+.workspaceFlowGrid.singleModule {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .workspaceContinuePanel,

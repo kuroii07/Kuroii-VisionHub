@@ -395,6 +395,7 @@ export function ModernGeneratePage(props: {
   results: ReturnType<typeof useStudioStore.getState>['results'];
   defaultMode: DefaultGenerationMode;
   defaultOutputFormat: OutputFormat;
+  defaultReferenceRole: NonNullable<ReferenceImage['role']>;
   promptHistorySettings: PromptHistorySettings;
   promptPolishSettings: PromptPolishSettings;
   sessionStartedAtMs: number;
@@ -774,7 +775,8 @@ export function ModernGeneratePage(props: {
       return;
     }
     try {
-      const references = await Promise.all(selectedFiles.map((file) => fileToReferenceImage(file, source)));
+      const references = (await Promise.all(selectedFiles.map((file) => fileToReferenceImage(file, source))))
+        .map((reference) => ({ ...reference, role: props.defaultReferenceRole }));
       const nextReferences = normalizeReferences([...props.referenceImages, ...references]);
       props.onReferenceImagesChange(nextReferences);
       setMode('image');
@@ -1092,7 +1094,7 @@ export function ModernGeneratePage(props: {
       setActiveGeneratingMode('image-to-image');
       const referenceRoleMap = Object.fromEntries(props.referenceImages.map((reference) => [
         reference.id,
-        referenceRoles[reference.id] ?? reference.role ?? 'auto'
+        referenceRoles[reference.id] ?? reference.role ?? props.defaultReferenceRole
       ]));
       props.onGenerate({
         mode: 'image-to-image',

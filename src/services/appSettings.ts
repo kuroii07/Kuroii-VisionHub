@@ -2,12 +2,15 @@ import { readStorageValue, writeStorageValue } from './safeStorage';
 
 export type AppPage = 'home' | 'generate' | 'free' | 'library' | 'inspiration' | 'templates' | 'providers' | 'settings';
 export type ThemeMode = 'dark' | 'light' | 'system';
+export type AppLanguage = 'zh-CN' | 'en-US';
 export type DefaultGenerationMode = 'text' | 'image';
 export type OutputFormat = 'PNG' | 'JPEG' | 'WebP';
 export type PromptPolishEngine = 'local' | 'provider';
 export type PromptPolishLanguage = 'zh' | 'en' | 'bilingual';
 export type PromptPolishProtocol = 'chat-completions' | 'responses';
 export type PromptPolishStrength = 'concise' | 'detailed' | 'professional' | 'cinematic' | 'commercial';
+export type DefaultReferenceRole = 'auto' | 'composition' | 'style' | 'character' | 'color';
+export type FileNamingRule = 'timestamp' | 'prompt-timestamp' | 'provider-date';
 
 export const PROMPT_POLISH_SECRET_ID = 'prompt-polish:default';
 
@@ -25,6 +28,7 @@ export interface GenerationDefaults {
   defaultCount: number;
   defaultQuality: string;
   outputFormat: OutputFormat;
+  defaultReferenceRole: DefaultReferenceRole;
 }
 
 export interface PromptHistorySettings {
@@ -60,16 +64,34 @@ export interface PromptPolishConfig {
   protocol: PromptPolishProtocol;
 }
 
+export interface SavePreferences {
+  fileNamingRule: FileNamingRule;
+  groupByDate: boolean;
+  groupByProject: boolean;
+}
+
+export interface HomeModuleSettings {
+  resume: boolean;
+  attention: boolean;
+  materials: boolean;
+  quickActions: boolean;
+  roadmap: boolean;
+}
+
 export interface AppSettings {
+  language: AppLanguage;
   themeMode: ThemeMode;
   startupPage: AppPage;
   sidebarCollapsed: boolean;
+  compactMode: boolean;
   primaryAccent: string;
   generatorAccent: string;
   refreshIntervalSeconds: number;
   generationDefaults: GenerationDefaults;
   promptHistory: PromptHistorySettings;
   promptPolish: PromptPolishSettings;
+  savePreferences: SavePreferences;
+  homeModules: HomeModuleSettings;
 }
 
 export const PRIMARY_ACCENT_OPTIONS: ColorOption[] = [
@@ -117,6 +139,11 @@ export const REFRESH_INTERVAL_OPTIONS = [
   { value: 300, label: '5 分钟' }
 ];
 
+export const LANGUAGE_OPTIONS: Array<{ value: AppLanguage; label: string; shortLabel: string }> = [
+  { value: 'zh-CN', label: '简体中文', shortLabel: '中文' },
+  { value: 'en-US', label: 'English', shortLabel: 'EN' }
+];
+
 export const STARTUP_PAGE_OPTIONS: Array<{ value: AppPage; label: string }> = [
   { value: 'home', label: '工作台首页' },
   { value: 'generate', label: 'AI 创作' },
@@ -157,6 +184,20 @@ export const OUTPUT_FORMAT_OPTIONS: Array<{ value: OutputFormat; label: string }
   { value: 'WebP', label: 'WebP' }
 ];
 
+export const DEFAULT_REFERENCE_ROLE_OPTIONS: Array<{ value: DefaultReferenceRole; label: string }> = [
+  { value: 'auto', label: '自动' },
+  { value: 'composition', label: '构图' },
+  { value: 'style', label: '风格' },
+  { value: 'character', label: '角色' },
+  { value: 'color', label: '色彩' }
+];
+
+export const FILE_NAMING_RULE_OPTIONS: Array<{ value: FileNamingRule; label: string }> = [
+  { value: 'timestamp', label: '时间戳' },
+  { value: 'prompt-timestamp', label: 'Prompt + 时间' },
+  { value: 'provider-date', label: '平台 + 日期' }
+];
+
 export const PROMPT_HISTORY_LIMIT_OPTIONS = [
   { value: 50, label: '50 条' },
   { value: 100, label: '100 条' },
@@ -191,9 +232,11 @@ const STORAGE_KEY = 'visionhub.app.settings';
 const LEGACY_THEME_KEY = 'visionhub.themeMode';
 
 export const defaultAppSettings: AppSettings = {
+  language: 'zh-CN',
   themeMode: 'dark',
   startupPage: 'home',
   sidebarCollapsed: false,
+  compactMode: false,
   primaryAccent: PRIMARY_ACCENT_OPTIONS[0].value,
   generatorAccent: getRecommendedGlobalAccent(PRIMARY_ACCENT_OPTIONS[0].value),
   refreshIntervalSeconds: 60,
@@ -204,7 +247,8 @@ export const defaultAppSettings: AppSettings = {
     defaultSize: '1024x1024',
     defaultCount: 1,
     defaultQuality: 'auto',
-    outputFormat: 'JPEG'
+    outputFormat: 'JPEG',
+    defaultReferenceRole: 'auto'
   },
   promptHistory: {
     enabled: true,
@@ -226,6 +270,18 @@ export const defaultAppSettings: AppSettings = {
     strength: 'professional',
     protocol: 'chat-completions',
     fallbackToLocal: true
+  },
+  savePreferences: {
+    fileNamingRule: 'timestamp',
+    groupByDate: true,
+    groupByProject: false
+  },
+  homeModules: {
+    resume: true,
+    attention: true,
+    materials: true,
+    quickActions: true,
+    roadmap: true
   }
 };
 
@@ -235,6 +291,10 @@ function isAppPage(value: unknown): value is AppPage {
 
 function isThemeMode(value: unknown): value is ThemeMode {
   return value === 'dark' || value === 'light' || value === 'system';
+}
+
+function isAppLanguage(value: unknown): value is AppLanguage {
+  return LANGUAGE_OPTIONS.some((option) => option.value === value);
 }
 
 function pickColor(value: unknown, options: ColorOption[], fallback: string, migrations: Record<string, string> = {}) {
@@ -274,7 +334,8 @@ function normalizeGenerationDefaults(value: Partial<GenerationDefaults> | null |
     defaultSize: pickStringOption(value?.defaultSize, DEFAULT_SIZE_OPTIONS, fallback.defaultSize),
     defaultCount: pickNumberOption(value?.defaultCount, DEFAULT_COUNT_OPTIONS, fallback.defaultCount),
     defaultQuality: pickStringOption(value?.defaultQuality, DEFAULT_QUALITY_OPTIONS, fallback.defaultQuality),
-    outputFormat: pickStringOption<OutputFormat>(value?.outputFormat, OUTPUT_FORMAT_OPTIONS, fallback.outputFormat)
+    outputFormat: pickStringOption<OutputFormat>(value?.outputFormat, OUTPUT_FORMAT_OPTIONS, fallback.outputFormat),
+    defaultReferenceRole: pickStringOption<DefaultReferenceRole>(value?.defaultReferenceRole, DEFAULT_REFERENCE_ROLE_OPTIONS, fallback.defaultReferenceRole)
   };
 }
 
@@ -332,6 +393,26 @@ function normalizePromptPolish(value: Partial<PromptPolishSettings> | null | und
   };
 }
 
+function normalizeSavePreferences(value: Partial<SavePreferences> | null | undefined): SavePreferences {
+  const fallback = defaultAppSettings.savePreferences;
+  return {
+    fileNamingRule: pickStringOption<FileNamingRule>(value?.fileNamingRule, FILE_NAMING_RULE_OPTIONS, fallback.fileNamingRule),
+    groupByDate: typeof value?.groupByDate === 'boolean' ? value.groupByDate : fallback.groupByDate,
+    groupByProject: typeof value?.groupByProject === 'boolean' ? value.groupByProject : fallback.groupByProject
+  };
+}
+
+function normalizeHomeModules(value: Partial<HomeModuleSettings> | null | undefined): HomeModuleSettings {
+  const fallback = defaultAppSettings.homeModules;
+  return {
+    resume: typeof value?.resume === 'boolean' ? value.resume : fallback.resume,
+    attention: typeof value?.attention === 'boolean' ? value.attention : fallback.attention,
+    materials: typeof value?.materials === 'boolean' ? value.materials : fallback.materials,
+    quickActions: typeof value?.quickActions === 'boolean' ? value.quickActions : fallback.quickActions,
+    roadmap: typeof value?.roadmap === 'boolean' ? value.roadmap : fallback.roadmap
+  };
+}
+
 export function promptPolishConfigId(displayName: string, baseUrl: string) {
   const slug = `${displayName.trim() || 'prompt-polish'}:${baseUrl.trim() || 'local'}`;
   return slug.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'prompt-polish';
@@ -383,6 +464,7 @@ export function normalizeAppSettings(value: Partial<AppSettings> | null | undefi
   const legacyTheme = readStorageValue(LEGACY_THEME_KEY);
 
   return {
+    language: isAppLanguage(value?.language) ? value.language : defaultAppSettings.language,
     themeMode: isThemeMode(value?.themeMode)
       ? value.themeMode
       : isThemeMode(legacyTheme)
@@ -393,12 +475,15 @@ export function normalizeAppSettings(value: Partial<AppSettings> | null | undefi
       typeof value?.sidebarCollapsed === 'boolean'
         ? value.sidebarCollapsed
         : defaultAppSettings.sidebarCollapsed,
+    compactMode: typeof value?.compactMode === 'boolean' ? value.compactMode : defaultAppSettings.compactMode,
     primaryAccent: pickColor(value?.primaryAccent, PRIMARY_ACCENT_OPTIONS, defaultAppSettings.primaryAccent, LEGACY_PRIMARY_COLOR_MIGRATIONS),
     generatorAccent: pickColor(value?.generatorAccent, GENERATOR_ACCENT_OPTIONS, defaultAppSettings.generatorAccent, LEGACY_GENERATOR_COLOR_MIGRATIONS),
     refreshIntervalSeconds: pickRefreshInterval(value?.refreshIntervalSeconds),
     generationDefaults: normalizeGenerationDefaults(value?.generationDefaults),
     promptHistory: normalizePromptHistory(value?.promptHistory),
-    promptPolish: normalizePromptPolish(value?.promptPolish)
+    promptPolish: normalizePromptPolish(value?.promptPolish),
+    savePreferences: normalizeSavePreferences(value?.savePreferences),
+    homeModules: normalizeHomeModules(value?.homeModules)
   };
 }
 

@@ -51,7 +51,7 @@ for term in ["promptPolish", "textModels", "gpt-4o-mini", "中转站文本模型
 app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
 for term in ["平台接入", "AI 创作", "Base URL", "API Key"]:
     assert term in app_src, f"UI term missing: {term}"
-assert "'AI \\u751f\\u56fe\\u5de5\\u4f5c\\u53f0'" in app_src, "Brand subtitle should be shortened to one line"
+assert "AI 生图工作台" in app_src and "AI image workspace" in app_src, "Brand subtitle should support zh/en shell labels"
 for term in [
     "loadAppSettings",
     "saveAppSettings",
@@ -68,13 +68,25 @@ for term in [
     "PROMPT_POLISH_PROTOCOL_OPTIONS",
     "STARTUP_PAGE_OPTIONS",
     "REFRESH_INTERVAL_OPTIONS",
+    "LANGUAGE_OPTIONS",
+    "DEFAULT_REFERENCE_ROLE_OPTIONS",
+    "FILE_NAMING_RULE_OPTIONS",
     "settings.startupPage",
     "settings.refreshIntervalSeconds",
     "settings.sidebarCollapsed",
+    "settings.compactMode",
+    "settings.language",
+    "settings.savePreferences",
+    "settings.homeModules",
     "updateGenerationDefaults",
     "updatePromptHistory",
+    "updateSavePreferences",
+    "updateHomeModules",
     "默认生成模式",
+    "默认参考图角色",
     "默认平台与模型",
+    "首页模块",
+    "作品保存偏好",
     "复用记录策略",
     "默认润色模式",
     "提示词润色引擎",
@@ -245,12 +257,21 @@ for term in [
     "sidebarCollapsed",
     "primaryAccent",
     "generatorAccent",
+    "language",
+    "compactMode",
     "'free'",
+    "AppLanguage",
     "GenerationDefaults",
+    "DefaultReferenceRole",
     "PromptHistorySettings",
+    "SavePreferences",
+    "HomeModuleSettings",
     "DEFAULT_SIZE_OPTIONS",
     "DEFAULT_COUNT_OPTIONS",
     "OUTPUT_FORMAT_OPTIONS",
+    "DEFAULT_REFERENCE_ROLE_OPTIONS",
+    "FILE_NAMING_RULE_OPTIONS",
+    "LANGUAGE_OPTIONS",
     "PROMPT_HISTORY_LIMIT_OPTIONS",
     "PromptPolishSettings",
     "PROMPT_POLISH_ENGINE_OPTIONS",
@@ -260,6 +281,8 @@ for term in [
     "generationDefaults",
     "promptHistory",
     "promptPolish",
+    "savePreferences",
+    "homeModules",
 ]:
     assert term in settings_src, f"App settings persistence missing: {term}"
 

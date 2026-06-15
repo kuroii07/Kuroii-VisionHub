@@ -105,9 +105,12 @@ import {
 import {
   DEFAULT_COUNT_OPTIONS,
   DEFAULT_QUALITY_OPTIONS,
+  DEFAULT_REFERENCE_ROLE_OPTIONS,
   DEFAULT_SIZE_OPTIONS,
+  FILE_NAMING_RULE_OPTIONS,
   GENERATOR_ACCENT_OPTIONS,
   getRecommendedGlobalAccent,
+  LANGUAGE_OPTIONS,
   promptPolishConfigId,
   OUTPUT_FORMAT_OPTIONS,
   PRIMARY_ACCENT_OPTIONS,
@@ -124,6 +127,7 @@ import {
   type AppPage,
   type AppSettings,
   type GenerationDefaults,
+  type HomeModuleSettings,
   type PromptHistorySettings,
   type PromptPolishSettings,
   type ThemeMode
@@ -147,7 +151,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
-const APP_VERSION = '0.3.6';
+const APP_VERSION = '0.3.7';
 
 type Page = AppPage;
 type ProviderDiagnosticLevel = 'pass' | 'warn' | 'fail' | 'info';
@@ -2828,6 +2832,18 @@ export function App() {
     if (typeof patch.sidebarCollapsed === 'boolean') {
       setIsSidebarCollapsed(patch.sidebarCollapsed);
     }
+    if (patch.generationDefaults) {
+      const nextGenerationDefaults = { ...appSettings.generationDefaults, ...patch.generationDefaults };
+      if (nextGenerationDefaults.defaultProviderId !== selectedProviderId) {
+        setSelectedProvider(nextGenerationDefaults.defaultProviderId);
+      }
+      if (nextGenerationDefaults.defaultModelId) {
+        setSelectedModel(nextGenerationDefaults.defaultModelId);
+      }
+      setCount(nextGenerationDefaults.defaultCount);
+      setSize(nextGenerationDefaults.defaultSize);
+      setQuality(nextGenerationDefaults.defaultQuality);
+    }
     if (patch.themeMode && patch.themeMode !== appSettings.themeMode && typeof window !== 'undefined') {
       beginThemeSwitchLock();
     }
@@ -4118,15 +4134,37 @@ export function App() {
     }
   }
 
+  const shellIsEnglish = appSettings.language === 'en-US';
+  const navLabels: Record<Page, string> = shellIsEnglish
+    ? {
+        home: 'Workspace',
+        generate: 'AI Create',
+        free: 'Free Tools',
+        library: 'Gallery',
+        inspiration: 'Inspiration',
+        templates: 'Prompt Library',
+        providers: 'Providers',
+        settings: 'Preferences'
+      }
+    : {
+        home: '工作台',
+        generate: 'AI 创作',
+        free: '免费平台',
+        library: '作品画廊',
+        inspiration: '灵感中心',
+        templates: '提示词库',
+        providers: '平台接入',
+        settings: '偏好设置'
+      };
   const navItems: Array<{ page: Page; label: string; icon: ReactNode }> = [
-    { page: 'home', label: '工作台', icon: <Grid2X2 size={18} /> },
-    { page: 'generate', label: 'AI 创作', icon: <Wand2 size={18} /> },
-    { page: 'free', label: '免费平台', icon: <Gift size={18} /> },
-    { page: 'library', label: '作品画廊', icon: <Image size={18} /> },
-    { page: 'inspiration', label: '灵感中心', icon: <Bookmark size={18} /> },
-    { page: 'templates', label: '提示词库', icon: <Layers size={18} /> },
-    { page: 'providers', label: '平台接入', icon: <Database size={18} /> },
-    { page: 'settings', label: '偏好设置', icon: <Settings size={18} /> }
+    { page: 'home', label: navLabels.home, icon: <Grid2X2 size={18} /> },
+    { page: 'generate', label: navLabels.generate, icon: <Wand2 size={18} /> },
+    { page: 'free', label: navLabels.free, icon: <Gift size={18} /> },
+    { page: 'library', label: navLabels.library, icon: <Image size={18} /> },
+    { page: 'inspiration', label: navLabels.inspiration, icon: <Bookmark size={18} /> },
+    { page: 'templates', label: navLabels.templates, icon: <Layers size={18} /> },
+    { page: 'providers', label: navLabels.providers, icon: <Database size={18} /> },
+    { page: 'settings', label: navLabels.settings, icon: <Settings size={18} /> }
   ];
 
   const appShellStyle = {
@@ -4139,7 +4177,8 @@ export function App() {
 
   return (
     <div
-      className={`appShell theme-${resolvedThemeMode} ${isSidebarCollapsed ? 'sidebarCollapsed' : ''} ${isThemeSwitching ? 'themeSwitching' : ''}`}
+      className={`appShell theme-${resolvedThemeMode} ${isSidebarCollapsed ? 'sidebarCollapsed' : ''} ${appSettings.compactMode ? 'compactMode' : ''} ${isThemeSwitching ? 'themeSwitching' : ''}`}
+      data-language={appSettings.language}
       style={appShellStyle}
     >
       <aside className="sidebar">
@@ -4149,7 +4188,7 @@ export function App() {
           </div>
           <div className="brandText">
             <strong>VisionHub Studio</strong>
-            <span>{'AI \u751f\u56fe\u5de5\u4f5c\u53f0'}</span>
+            <span>{shellIsEnglish ? 'AI image workspace' : 'AI 生图工作台'}</span>
           </div>
           
         </div>
@@ -4255,6 +4294,7 @@ export function App() {
             favoriteRecords={homeFavoriteRecords}
             referenceRecords={homeReferenceRecords}
             providerNameMap={homeProviderNameMap}
+            homeModules={appSettings.homeModules}
             onNavigate={navigateTo}
             onUseRecordAsReference={useRecordAsReference}
             onOpenComfyUIWorkflowManager={() => setIsComfyUIWorkflowManagerOpen(true)}
@@ -4286,6 +4326,7 @@ export function App() {
               isHistoryLoaded={isHistoryLoaded}
               defaultMode={appSettings.generationDefaults.defaultMode}
               defaultOutputFormat={appSettings.generationDefaults.outputFormat}
+              defaultReferenceRole={appSettings.generationDefaults.defaultReferenceRole}
               promptHistorySettings={appSettings.promptHistory}
               promptPolishSettings={appSettings.promptPolish}
               sessionStartedAtMs={generateSessionStartedAt}
@@ -4490,6 +4531,7 @@ function WorkspaceHomePage(props: {
   favoriteRecords: GenerationRecord[];
   referenceRecords: GenerationRecord[];
   providerNameMap: Map<string, string>;
+  homeModules: HomeModuleSettings;
   onNavigate: (page: Page) => void;
   onUseRecordAsReference: (record: GenerationRecord) => void;
   onOpenComfyUIWorkflowManager: () => void;
@@ -4573,8 +4615,9 @@ function WorkspaceHomePage(props: {
         </div>
       </header>
 
-      <section className="workspaceFlowGrid" aria-label="继续工作与待处理">
-        <article className={`workspaceContinuePanel ${continueRecord ? '' : 'isEmpty'}`}>
+      {props.homeModules.resume || props.homeModules.attention ? (
+      <section className={`workspaceFlowGrid ${!props.homeModules.resume || !props.homeModules.attention ? 'singleModule' : ''}`} aria-label="继续工作与待处理">
+        {props.homeModules.resume ? <article className={`workspaceContinuePanel ${continueRecord ? '' : 'isEmpty'}`}>
           <div className="workspaceSectionHeading">
             <div>
               <p className="eyebrow">Resume</p>
@@ -4616,9 +4659,9 @@ function WorkspaceHomePage(props: {
           ) : (
             <WorkspaceHomeEmpty title="还没有可继续的作品" hint="进入 AI 创作生成第一张图后，这里会显示最近任务。" actionLabel="开始创作" onAction={() => props.onNavigate('generate')} />
           )}
-        </article>
+        </article> : null}
 
-        <aside className="workspaceTaskRail" aria-label="待处理与运行状态">
+        {props.homeModules.attention ? <aside className="workspaceTaskRail" aria-label="待处理与运行状态">
           <div className="workspaceMiniStats">
             <span><strong>{props.resultSummary.total}</strong>生成记录</span>
             <span><strong>{props.favoriteRecords.length}</strong>最近收藏</span>
@@ -4667,10 +4710,11 @@ function WorkspaceHomePage(props: {
               <SlidersHorizontal size={15} />
             </button>
           </div>
-        </aside>
+        </aside> : null}
       </section>
+      ) : null}
 
-      <section className="workspaceAssetStripPanel" aria-label="最近素材">
+      {props.homeModules.materials ? <section className="workspaceAssetStripPanel" aria-label="最近素材">
         <div className="workspaceSectionHeading">
           <div>
             <p className="eyebrow">Material Strip</p>
@@ -4703,9 +4747,9 @@ function WorkspaceHomePage(props: {
         ) : (
           <WorkspaceHomeEmpty title="暂无素材" hint="生成、收藏或设为参考后，素材会以横向条带展示。" actionLabel="进入画廊" onAction={() => props.onNavigate('library')} />
         )}
-      </section>
+      </section> : null}
 
-      <section className="workspaceCommandDock" aria-label="常用入口">
+      {props.homeModules.quickActions ? <section className="workspaceCommandDock" aria-label="常用入口">
         <span className="workspaceDockLabel">常用入口</span>
         {quickActions.map((item) => (
           <button type="button" key={item.page} className="workspaceDockButton" onClick={() => props.onNavigate(item.page)}>
@@ -4713,9 +4757,9 @@ function WorkspaceHomePage(props: {
             <span><strong>{item.label}</strong><small>{item.detail}</small></span>
           </button>
         ))}
-      </section>
+      </section> : null}
 
-      <section className="workspaceRouteStrip" aria-label="后续路线">
+      {props.homeModules.roadmap ? <section className="workspaceRouteStrip" aria-label="后续路线">
         <span className="workspaceDockLabel">后续路线</span>
         {roadmapItems.map((item) => (
           <button type="button" key={item.title} className="workspaceRouteItem" onClick={() => props.onNavigate(item.page)}>
@@ -4723,7 +4767,7 @@ function WorkspaceHomePage(props: {
             <small>{item.state}</small>
           </button>
         ))}
-      </section>
+      </section> : null}
     </section>
   );
 }
@@ -6248,6 +6292,8 @@ function SettingsPage(props: {
   const settings = props.appSettings;
   const generationDefaults = settings.generationDefaults;
   const promptHistory = settings.promptHistory;
+  const savePreferences = settings.savePreferences;
+  const homeModules = settings.homeModules;
   const promptPolish = props.promptPolishDraft;
   const promptPolishDefaultMode = resolvePolishMode(promptHistory.defaultPolishMode, promptPolish.engine);
   const promptPolishModeOptions = getPolishModesForEngine(promptPolish.engine);
@@ -6257,6 +6303,7 @@ function SettingsPage(props: {
     ? generationDefaults.defaultModelId
     : defaultModelOptions[0]?.value ?? generationDefaults.defaultModelId;
   const [developerMode, setDeveloperMode] = useState(false);
+  const enabledHomeModuleCount = Object.values(homeModules).filter(Boolean).length;
 
   function updateGenerationDefaults(patch: Partial<GenerationDefaults>) {
     props.onSettingsChange({ generationDefaults: { ...generationDefaults, ...patch } });
@@ -6264,6 +6311,14 @@ function SettingsPage(props: {
 
   function updatePromptHistory(patch: Partial<PromptHistorySettings>) {
     props.onSettingsChange({ promptHistory: { ...promptHistory, ...patch } });
+  }
+
+  function updateSavePreferences(patch: Partial<AppSettings['savePreferences']>) {
+    props.onSettingsChange({ savePreferences: { ...savePreferences, ...patch } });
+  }
+
+  function updateHomeModules(patch: Partial<HomeModuleSettings>) {
+    props.onSettingsChange({ homeModules: { ...homeModules, ...patch } });
   }
 
   function updatePromptPolish(patch: Partial<PromptPolishSettings>, options?: { commit?: boolean }) {
@@ -6319,7 +6374,8 @@ function SettingsPage(props: {
       <header className="systemSettingsHeader">
         <div>
           <p className="eyebrow">Preferences</p>
-          <h1>偏好设置</h1>
+          <h1>偏好设置 V2</h1>
+          <span>把默认工作流、语言、首页模块和数据管理集中到一个配置中心。</span>
         </div>
         <div className="settingsHeaderActions">
           <button type="button" data-tooltip="系统信息" aria-label="系统信息" onClick={props.onOpenSystemInfo}>
@@ -6333,6 +6389,29 @@ function SettingsPage(props: {
           </button>
         </div>
       </header>
+
+      <div className="settingsOverviewGrid" aria-label="偏好设置概览">
+        <article>
+          <span>默认工作流</span>
+          <strong>{generationDefaults.defaultMode === 'image' ? '图生图' : '文生图'} · {generationDefaults.defaultCount} 张</strong>
+          <small>{defaultProvider.name} / {selectedDefaultModel}</small>
+        </article>
+        <article>
+          <span>语言</span>
+          <strong>{LANGUAGE_OPTIONS.find((option) => option.value === settings.language)?.label ?? '简体中文'}</strong>
+          <small>手动切换，不跟随系统。</small>
+        </article>
+        <article>
+          <span>首页模块</span>
+          <strong>{enabledHomeModuleCount}/5 已显示</strong>
+          <small>{settings.compactMode ? '紧凑模式已开启' : '标准密度'}</small>
+        </article>
+        <article>
+          <span>数据安全</span>
+          <strong>Key 不导出</strong>
+          <small>备份只包含非敏感设置。</small>
+        </article>
+      </div>
 
       <div className="settingsSectionLabel">外观设置</div>
       <article className="settingsGroupCard">
@@ -6356,10 +6435,19 @@ function SettingsPage(props: {
         <div className="settingsListRow">
           <div className="settingsRowMain">
             <strong>语言</strong>
+            <small>只提供中文和英文手动切换，本轮不做跟随系统，避免启动判断分支和闪烁。</small>
           </div>
           <div className="segmentedControl compactSegment">
-            <button className="active">中文</button>
-            <button disabled>English</button>
+            {LANGUAGE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={settings.language === option.value ? 'active' : ''}
+                onClick={() => props.onSettingsChange({ language: option.value })}
+              >
+                {option.shortLabel}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -6405,6 +6493,66 @@ function SettingsPage(props: {
         </div>
       </article>
 
+      <div className="settingsSectionLabel">界面与首页</div>
+      <article className="settingsGroupCard">
+        <div className="settingsListRow">
+          <div className="settingsRowMain">
+            <strong>启动页面</strong>
+            <small>打开软件后默认进入哪个工作区。</small>
+          </div>
+          <div className="settingsControlSlim">
+            <StudioSelect
+              value={settings.startupPage}
+              onChange={(value) => props.onSettingsChange({ startupPage: value as AppPage })}
+              options={STARTUP_PAGE_OPTIONS}
+            />
+          </div>
+        </div>
+
+        <div className="settingsListRow">
+          <div className="settingsRowMain">
+            <strong>侧边栏默认状态</strong>
+            <small>记住你上一次选择的展开或收缩状态。</small>
+          </div>
+          <div className="segmentedControl compactSegment">
+            <button className={!settings.sidebarCollapsed ? 'active' : ''} onClick={() => props.onSettingsChange({ sidebarCollapsed: false })}>
+              展开
+            </button>
+            <button className={settings.sidebarCollapsed ? 'active' : ''} onClick={() => props.onSettingsChange({ sidebarCollapsed: true })}>
+              收缩
+            </button>
+          </div>
+        </div>
+
+        <div className="settingsListRow">
+          <div className="settingsRowMain">
+            <strong>界面密度</strong>
+            <small>紧凑模式会压缩首页和设置页间距，适合小屏或多窗口工作。</small>
+          </div>
+          <button
+            className={settings.compactMode ? 'settingsTogglePill active' : 'settingsTogglePill'}
+            type="button"
+            onClick={() => props.onSettingsChange({ compactMode: !settings.compactMode })}
+          >
+            {settings.compactMode ? '紧凑模式' : '标准模式'}
+          </button>
+        </div>
+
+        <div className="settingsListRow settingsTallRow">
+          <div className="settingsRowMain">
+            <strong>首页模块</strong>
+            <small>控制工作台首页显示哪些区域；隐藏后不影响对应功能页。</small>
+          </div>
+          <div className="settingsBooleanGrid homeModuleGrid">
+            <button className={homeModules.resume ? 'active' : ''} onClick={() => updateHomeModules({ resume: !homeModules.resume })}>继续创作</button>
+            <button className={homeModules.attention ? 'active' : ''} onClick={() => updateHomeModules({ attention: !homeModules.attention })}>待处理</button>
+            <button className={homeModules.materials ? 'active' : ''} onClick={() => updateHomeModules({ materials: !homeModules.materials })}>最近素材</button>
+            <button className={homeModules.quickActions ? 'active' : ''} onClick={() => updateHomeModules({ quickActions: !homeModules.quickActions })}>常用入口</button>
+            <button className={homeModules.roadmap ? 'active' : ''} onClick={() => updateHomeModules({ roadmap: !homeModules.roadmap })}>后续路线</button>
+          </div>
+        </div>
+      </article>
+
       <div className="settingsSectionLabel">生成默认值</div>
       <article className="settingsGroupCard">
         <div className="settingsListRow">
@@ -6419,6 +6567,20 @@ function SettingsPage(props: {
             <button className={generationDefaults.defaultMode === 'image' ? 'active' : ''} onClick={() => updateGenerationDefaults({ defaultMode: 'image' })}>
               图生图
             </button>
+          </div>
+        </div>
+
+        <div className="settingsListRow">
+          <div className="settingsRowMain">
+            <strong>默认参考图角色</strong>
+            <small>新加入参考图时优先使用的角色标记；仍可在创作台单张调整。</small>
+          </div>
+          <div className="settingsControlSlim">
+            <StudioSelect
+              value={generationDefaults.defaultReferenceRole}
+              onChange={(value) => updateGenerationDefaults({ defaultReferenceRole: value as GenerationDefaults['defaultReferenceRole'] })}
+              options={DEFAULT_REFERENCE_ROLE_OPTIONS}
+            />
           </div>
         </div>
 
@@ -6727,37 +6889,35 @@ function SettingsPage(props: {
         <p className="settingsNotice">模型润色不会读取或导出你的 API Key；密钥由桌面端安全凭据存储在独立的润色通道。未配置或请求失败时，会按设置自动回退到本地规则润色。</p>
       </article>
 
-      <div className="settingsSectionLabel">数据与缓存</div>
+      <div className="settingsSectionLabel">作品保存偏好</div>
       <article className="settingsGroupCard">
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>启动页面</strong>
-            <small>打开软件后默认进入哪个工作区。</small>
+            <strong>文件命名规则</strong>
+            <small>记录为默认保存策略；当前桌面落盘仍会保留安全的唯一文件名，后续批量导出优先读取这里。</small>
           </div>
           <div className="settingsControlSlim">
             <StudioSelect
-              value={settings.startupPage}
-              onChange={(value) => props.onSettingsChange({ startupPage: value as AppPage })}
-              options={STARTUP_PAGE_OPTIONS}
+              value={savePreferences.fileNamingRule}
+              onChange={(value) => updateSavePreferences({ fileNamingRule: value as AppSettings['savePreferences']['fileNamingRule'] })}
+              options={FILE_NAMING_RULE_OPTIONS}
             />
           </div>
         </div>
-
-        <div className="settingsListRow">
+        <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
-            <strong>{'\u4fa7\u8fb9\u680f\u9ed8\u8ba4\u72b6\u6001'}</strong>
-            <small>{'\u8bb0\u4f4f\u4f60\u4e0a\u4e00\u6b21\u9009\u62e9\u7684\u5c55\u5f00\u6216\u6536\u7f29\u72b6\u6001\u3002'}</small>
+            <strong>分组策略</strong>
+            <small>用于后续导出、项目资产库和批量整理；不会移动现有图库文件。</small>
           </div>
-          <div className="segmentedControl compactSegment">
-            <button className={!settings.sidebarCollapsed ? 'active' : ''} onClick={() => props.onSettingsChange({ sidebarCollapsed: false })}>
-              {'\u5c55\u5f00'}
-            </button>
-            <button className={settings.sidebarCollapsed ? 'active' : ''} onClick={() => props.onSettingsChange({ sidebarCollapsed: true })}>
-              {'\u6536\u7f29'}
-            </button>
+          <div className="settingsBooleanGrid">
+            <button className={savePreferences.groupByDate ? 'active' : ''} onClick={() => updateSavePreferences({ groupByDate: !savePreferences.groupByDate })}>按日期分组</button>
+            <button className={savePreferences.groupByProject ? 'active' : ''} onClick={() => updateSavePreferences({ groupByProject: !savePreferences.groupByProject })}>按项目分组</button>
           </div>
         </div>
+      </article>
 
+      <div className="settingsSectionLabel">数据与缓存</div>
+      <article className="settingsGroupCard">
         <div className="settingsListRow">
           <div className="settingsRowMain">
             <strong>数据刷新频率</strong>
