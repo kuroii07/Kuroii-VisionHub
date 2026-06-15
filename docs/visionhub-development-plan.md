@@ -537,13 +537,13 @@
 主要任务：
 
 - 接入前资料核验：逐个确认官方 API 文档、鉴权方式、请求 endpoint、同步 / 异步任务、图片返回格式、尺寸 / 数量 / Seed / 负面提示词 / 参考图支持边界。
-- 服务模板结构升级：为模板增加 `region`、`availabilityRank`、`integrationLevel`、`apiDocUrl`、`supportsTextToImage`、`supportsImageToImage`、`requiresPolling` 等字段。
+- 服务模板结构升级：为模板增加 `region`、`status`、`sortRank`、`apiDocUrl`、`supportsTextToImage`、`supportsImageToImage`、`requiresPolling` 等字段。
 - 模板排序规则：同一平台类型内按“已接入 → 可配置 → 实验中 → 待接入 / 仅规划”排序；同状态下再按常用程度和用户最近使用排序。
 - 模板瘦身：默认列表只保留主流或用户明确点名的平台；`fal.ai`、`Replicate`、`Stability AI`、`InvokeAI`、`SwarmUI`、`Fooocus` 等非当前主线模板先从默认服务模板移除，后续只有在用户明确需要或确认 API 价值后再加回。
 - 国内 / 国外标识：国内服务商显示“国内”，海外服务商显示“国外”；名称旁使用紧凑徽标，不挤压卡片标题。
 - 官方 API 第一批接入清单：
   - OpenAI 官方（国外）：保持现有真实接入能力，并作为官方 Adapter 基准。
-  - MiniMax 官方（国内）：接入 `image-01` / `image-01-live` 文生图，后续补图生图；支持 `url` / `base64` 结果解析。
+  - MiniMax 官方（国内）：第一条新增官方 API 已进入实接代码链路，接入 `image-01` / `image-01-live` 文生图，后续补图生图；当前优先请求 URL 结果并落盘，仍需真实账号 Key 做最终联调。
   - 小米 MiMo 官方（国内）：加入主流国内候选；先验证 MiMo API 是否开放文生图 / 图生图 endpoint，若仅提供多模态理解、文本或设备端能力，则保留为待接入说明，不开放真实生图。
   - Google Gemini / Nano Banana 官方（国外）：接入 Gemini 图片生成 / 编辑，处理 inline image/base64 返回。
   - xAI 官方（国外）：接入 Grok Imagine 图片生成，处理数量、比例、分辨率和结果 URL。
@@ -569,7 +569,7 @@
 建议执行顺序：
 
 1. 先做服务模板数据结构和排序 UI，保证“已接入在上、待接入在下、国内 / 国外标识”先落地。
-2. 再接 MiniMax 官方，作为 V4 第一条新增官方图片 API，因为它的文生图接口较直接，适合验证新 adapter 骨架。
+2. MiniMax 官方作为 V4 第一条新增官方图片 API：先完成配置实例、独立密钥、文生图请求、结果落盘和错误归一化，再等真实账号 Key 做最终联调。
 3. 同步核验小米 MiMo 官方 API：确认是否有公开生图 endpoint、图片返回格式和账号权限；确认前只做候选模板，不开放真实生图。
 4. 接 Gemini / Nano Banana 和 xAI 官方，覆盖海外官方同步 / 近同步图片返回。
 5. 接阿里百炼 / 通义万相和火山方舟 / Seedream，覆盖国内官方异步任务轮询。

@@ -68,9 +68,9 @@ export const useStudioStore = create<StudioState>((set, get) => ({
   },
   setSelectedProvider: (providerId) => {
     const provider = listProviders().find((item) => item.id === providerId) ?? firstProvider;
-    const useOpenAICompatibleConfig = provider.id === 'openai-gpt-image' || provider.id === 'custom-http-provider';
-    const activeProfile = useOpenAICompatibleConfig ? getActiveProviderProfile(provider.id) : undefined;
-    const configuredModelId = useOpenAICompatibleConfig
+    const useProviderConfig = providerUsesConfig(provider.id);
+    const activeProfile = useProviderConfig ? getActiveProviderProfile(provider.id) : undefined;
+    const configuredModelId = useProviderConfig
       ? activeProfile
         ? profileToProviderConfig(activeProfile).modelId
         : loadProviderConfig(provider.id).modelId
@@ -115,8 +115,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     const providerConfig = activeProfile
       ? profileToProviderConfig(activeProfile)
       : loadProviderConfig(state.selectedProviderId);
-    const useOpenAICompatibleConfig =
-      state.selectedProviderId === 'openai-gpt-image' || state.selectedProviderId === 'custom-http-provider';
+    const useProviderConfig = providerUsesConfig(state.selectedProviderId);
 
     const generationMode = options?.mode ?? 'text-to-image';
     const references = options?.references ?? [];
@@ -131,7 +130,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
     try {
       const request: ImageGenerationRequest = {
         providerId: state.selectedProviderId,
-        modelId: useOpenAICompatibleConfig ? providerConfig.modelId : state.selectedModelId,
+        modelId: useProviderConfig ? providerConfig.modelId : state.selectedModelId,
         prompt: state.prompt,
         count: requestedCount,
         size: state.size,
@@ -143,17 +142,17 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         generationMode,
         references,
         metadata,
-        baseUrl: useOpenAICompatibleConfig ? providerConfig.baseUrl : undefined,
-        protocol: useOpenAICompatibleConfig ? providerConfig.protocol : undefined,
-        imageToImageAdapter: useOpenAICompatibleConfig ? providerConfig.imageToImageAdapter : undefined,
-        endpointPath: useOpenAICompatibleConfig ? providerConfig.endpointPath : undefined,
-        extraHeaders: useOpenAICompatibleConfig
+        baseUrl: useProviderConfig ? providerConfig.baseUrl : undefined,
+        protocol: useProviderConfig ? providerConfig.protocol : undefined,
+        imageToImageAdapter: useProviderConfig ? providerConfig.imageToImageAdapter : undefined,
+        endpointPath: useProviderConfig ? providerConfig.endpointPath : undefined,
+        extraHeaders: useProviderConfig
           ? parseExtraHeaders(providerConfig.extraHeadersJson)
           : undefined,
         secretId: activeProfile ? providerProfileSecretId(activeProfile.id) : undefined
       };
 
-      validateGenerationRequest(request, useOpenAICompatibleConfig);
+      validateGenerationRequest(request, useProviderConfig);
       const result = await completeRequestedImageCount(
         adapter,
         request,
@@ -173,7 +172,7 @@ export const useStudioStore = create<StudioState>((set, get) => ({
       const savedIds = new Set(savedResults.map((item) => item.id));
       set({ results: [...savedResults, ...get().results.filter((item) => !savedIds.has(item.id))] });
     } catch (error) {
-      const failedModelId = useOpenAICompatibleConfig ? providerConfig.modelId : state.selectedModelId;
+      const failedModelId = useProviderConfig ? providerConfig.modelId : state.selectedModelId;
       const failedResult: GenerationRecord = {
         id: `error-${Date.now()}`,
         providerId: state.selectedProviderId,
@@ -299,6 +298,10 @@ function resolveInitialProviderId(providerId: string) {
   const officialProfile = getActiveProviderProfile('openai-gpt-image');
   const relayProfile = getActiveProviderProfile('custom-http-provider');
   return !officialProfile && relayProfile ? 'custom-http-provider' : providerId;
+}
+
+function providerUsesConfig(providerId: string) {
+  return providerId === 'openai-gpt-image' || providerId === 'custom-http-provider' || providerId === 'minimax-image';
 }
 
 function readSearchParam(name: string) {

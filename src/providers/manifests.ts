@@ -51,6 +51,50 @@ export const providerManifests: ProviderManifest[] = [
     ]
   },
   {
+    id: 'minimax-image',
+    name: 'MiniMax 官方',
+    vendor: 'MiniMax',
+    region: 'china',
+    phase: 'official-api',
+    executionModes: ['sync', 'custom-http'],
+    homepage: 'https://platform.minimaxi.com/',
+    docs: 'https://platform.minimaxi.com/',
+    auth: { type: 'bearer-token', label: 'MiniMax API Key', secretStorageKey: 'provider.minimax.apiKey' },
+    capabilities: {
+      textToImage: 'supported',
+      imageToImage: 'planned',
+      editImage: 'planned',
+      multiReferenceImage: 'unsupported',
+      generateSeries: 'partial',
+      imageToVideo: 'planned',
+      promptPolish: 'unsupported',
+      chineseTextRendering: 'unknown',
+      localWorkflow: 'unsupported'
+    },
+    models: [
+      {
+        id: 'image-01',
+        label: 'image-01',
+        description: 'MiniMax 官方文生图模型。',
+        defaultSize: '1024x1024',
+        defaultQuality: 'auto',
+        tags: ['official', 'domestic', 'text-to-image']
+      },
+      {
+        id: 'image-01-live',
+        label: 'image-01-live',
+        description: 'MiniMax 官方实时图片生成模型，能力以官方文档和账号权限为准。',
+        defaultSize: '1024x1024',
+        defaultQuality: 'auto',
+        tags: ['official', 'domestic', 'text-to-image']
+      }
+    ],
+    notes: [
+      'MiniMax 官方 API 使用独立凭据通道，不复用中转站 Key。',
+      '当前先接入文生图；图生图和多参考图待官方能力确认后再补。'
+    ]
+  },
+  {
     id: 'custom-http-provider',
     name: '聚合站 / OpenAI 兼容',
     vendor: 'Relay / Aggregator',

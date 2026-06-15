@@ -241,6 +241,8 @@ for term in [
     "服务模板",
     "OpenAI 兼容中转",
     "MiniMax 官方",
+    "minimax-image",
+    "/v1/image_generation",
     "小米 MiMo 官方",
     "providerServiceRegionLabel",
     "sortRank",
@@ -316,8 +318,12 @@ store_src = (ROOT / "src/store/useStudioStore.ts").read_text(encoding="utf-8")
 for term in ["validateGenerationRequest", "请先在平台接入设置 Base URL", "not-configured"]:
     assert term in store_src, f"Generation preflight missing: {term}"
 
+manifests_src = (ROOT / "src/providers/manifests.ts").read_text(encoding="utf-8")
+for term in ["minimax-image", "MiniMax API Key", "image-01-live"]:
+    assert term in manifests_src, f"Provider manifest missing: {term}"
+
 tauri_src = (ROOT / "src-tauri/src/main.rs").read_text(encoding="utf-8")
-for term in ["get_app_paths", "reveal_app_data_dir", "reveal_library_dir", "export_settings_backup", "open_external_url", "polish_prompt_with_provider", "PromptPolishRequest", "extract_text_response", "prompt_polish_mode_rules", "ensure_prompt_polish_changed"]:
+for term in ["get_app_paths", "reveal_app_data_dir", "reveal_library_dir", "export_settings_backup", "open_external_url", "polish_prompt_with_provider", "PromptPolishRequest", "extract_text_response", "prompt_polish_mode_rules", "ensure_prompt_polish_changed", "generate_minimax_image", "visionhub_minimax_request"]:
     assert term in tauri_src, f"Tauri settings command missing: {term}"
 
 styles_src = (ROOT / "src/ui/styles.css").read_text(encoding="utf-8")

@@ -436,6 +436,10 @@ async fn generate_openai_image(
     app: tauri::AppHandle,
     request: OpenAIImageRequest,
 ) -> Result<ImageGenerationResult, String> {
+    if request.provider_id == "minimax-image" {
+        return generate_minimax_image(app, request).await;
+    }
+
     let started = std::time::Instant::now();
     let api_key = read_provider_secret(request.secret_id.as_deref(), &request.provider_id)
         .map_err(|_| "OpenAI API Key is not configured. Save it in Provider settings first.".to_string())?;
@@ -641,6 +645,163 @@ async fn generate_openai_image(
         duration_ms: Some(started.elapsed().as_millis()),
         error,
         raw,
+        created_at: chrono_like_timestamp(),
+        generation_mode: Some(generation_mode),
+        reference_images: Some(reference_images),
+    })
+}
+
+async fn generate_minimax_image(
+    app: tauri::AppHandle,
+    request: OpenAIImageRequest,
+) -> Result<ImageGenerationResult, String> {
+    let started = std::time::Instant::now();
+    let provider_id = request.provider_id.clone();
+    let model_id = request.model_id.clone();
+    let prompt = request.prompt.clone();
+    let api_key = read_provider_secret(request.secret_id.as_deref(), &request.provider_id)
+        .map_err(|_| "MiniMax API Key is not configured. Save it in Provider settings first.".to_string())?;
+    let generation_mode = request
+        .generation_mode
+        .clone()
+        .unwrap_or_else(|| "text-to-image".to_string());
+    let reference_images = request.reference_images.clone().unwrap_or_default();
+    if generation_mode == "image-to-image" || !reference_images.is_empty() {
+        return Ok(ImageGenerationResult {
+            id: format!("minimax-{}", chrono_like_timestamp_millis()),
+            provider_id: provider_id.clone(),
+            model_id: model_id.clone(),
+            status: "failed".to_string(),
+            prompt: prompt.clone(),
+            image_urls: Vec::new(),
+            local_image_paths: Vec::new(),
+            cost_hint: Some("未提交 MiniMax 请求。".to_string()),
+            duration_ms: Some(started.elapsed().as_millis()),
+            error: Some("MiniMax 官方图生图 / 参考图能力尚未接入，当前仅支持文生图。".to_string()),
+            raw: serde_json::json!({
+                "provider": "minimax",
+                "blocked_reason": "image_to_image_not_supported_yet"
+            }),
+            created_at: chrono_like_timestamp(),
+            generation_mode: Some(generation_mode),
+            reference_images: Some(reference_images),
+        });
+    }
+
+    let base_url = normalize_base_url(
+        request
+            .base_url
+            .as_deref()
+            .unwrap_or("https://api.minimaxi.com"),
+    )?;
+    let endpoint_path = normalize_endpoint_path(
+        request.endpoint_path.as_deref().or(Some("/v1/image_generation")),
+        "custom-images",
+    )?;
+    let endpoint = format!("{base_url}{endpoint_path}");
+    let client = reqwest::Client::new();
+    let api_size = normalize_minimax_image_size(&request.size);
+    let payload = serde_json::json!({
+        "model": model_id,
+        "prompt": prompt,
+        "aspect_ratio": minimax_aspect_ratio(&api_size),
+        "n": request.count.max(1).min(9),
+        "prompt_optimizer": false,
+        "response_format": "url"
+    });
+
+    let mut builder = client.post(&endpoint).bearer_auth(&api_key).json(&payload);
+    if let Some(headers) = request.extra_headers.clone() {
+        for (name, value) in headers {
+            if name.eq_ignore_ascii_case("authorization") || name.eq_ignore_ascii_case("content-type") {
+                continue;
+            }
+            builder = builder.header(name, value);
+        }
+    }
+
+    let response = builder
+        .send()
+        .await
+        .map_err(|error| format!("MiniMax request failed: {error}"))?;
+    let status = response.status();
+    let body_text = response
+        .text()
+        .await
+        .map_err(|error| format!("Cannot read MiniMax response body: {error}"))?;
+    let raw: serde_json::Value = match serde_json::from_str(&body_text) {
+        Ok(raw) => raw,
+        Err(parse_error) => {
+            let preview: String = body_text.chars().take(600).collect();
+            return Ok(ImageGenerationResult {
+                id: format!("minimax-{}", chrono_like_timestamp_millis()),
+                provider_id: provider_id.clone(),
+                model_id: model_id.clone(),
+                status: "failed".to_string(),
+                prompt: prompt.clone(),
+                image_urls: Vec::new(),
+                local_image_paths: Vec::new(),
+                cost_hint: Some("未产生有效图片；以 MiniMax 官方账单为准。".to_string()),
+                duration_ms: Some(started.elapsed().as_millis()),
+                error: Some(format!("MiniMax 响应不是有效 JSON：{parse_error}")),
+                raw: serde_json::json!({
+                    "http_status": status.as_u16(),
+                    "parse_error": parse_error.to_string(),
+                    "body_preview": preview,
+                    "visionhub_minimax_request": {
+                        "endpoint": endpoint,
+                        "model": model_id,
+                        "aspect_ratio": minimax_aspect_ratio(&api_size),
+                        "size": api_size,
+                        "prompt_optimizer": false
+                    }
+                }),
+                created_at: chrono_like_timestamp(),
+                generation_mode: Some(generation_mode),
+                reference_images: Some(reference_images),
+            });
+        }
+    };
+    let image_urls = extract_image_urls(&raw, request.output_format.as_deref());
+    let request_succeeded = status.is_success() && !image_urls.is_empty() && !minimax_raw_has_error(&raw);
+    let local_image_paths = if request_succeeded {
+        save_images_to_library(&app, &image_urls, &request)
+            .await
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let display_image_urls = display_library_image_urls_for_paths(&app, &local_image_paths, &image_urls);
+    let error = if request_succeeded {
+        None
+    } else {
+        Some(format_minimax_error(status.as_u16(), &raw))
+    };
+
+    Ok(ImageGenerationResult {
+        id: format!("minimax-{}", chrono_like_timestamp_millis()),
+        provider_id: provider_id.clone(),
+        model_id: model_id.clone(),
+        status: if error.is_some() { "failed" } else { "succeeded" }.to_string(),
+        prompt: prompt.clone(),
+        image_urls: display_image_urls,
+        local_image_paths,
+        cost_hint: Some("以 MiniMax 官方账单为准。".to_string()),
+        duration_ms: Some(started.elapsed().as_millis()),
+        error,
+        raw: serde_json::json!({
+            "provider": "minimax",
+            "http_status": status.as_u16(),
+            "response": raw,
+            "visionhub_minimax_request": {
+                "endpoint": endpoint,
+                "model": model_id,
+                "aspect_ratio": minimax_aspect_ratio(&api_size),
+                "size": api_size,
+                "count": request.count.max(1).min(9),
+                "prompt_optimizer": false
+            }
+        }),
         created_at: chrono_like_timestamp(),
         generation_mode: Some(generation_mode),
         reference_images: Some(reference_images),
@@ -4295,6 +4456,72 @@ fn extract_image_urls(raw: &Value, output_format: Option<&str>) -> Vec<String> {
     urls
 }
 
+fn normalize_minimax_image_size(requested_size: &str) -> String {
+    let parts: Vec<&str> = requested_size.split('x').collect();
+    if parts.len() != 2 {
+        return "1024x1024".to_string();
+    }
+    let width = parts[0].trim().parse::<u32>().unwrap_or(1024).max(1);
+    let height = parts[1].trim().parse::<u32>().unwrap_or(1024).max(1);
+    format!("{width}x{height}")
+}
+
+fn minimax_aspect_ratio(size: &str) -> &'static str {
+    let parts: Vec<&str> = size.split('x').collect();
+    if parts.len() != 2 {
+        return "1:1";
+    }
+    let width = parts[0].trim().parse::<f64>().unwrap_or(1.0).max(1.0);
+    let height = parts[1].trim().parse::<f64>().unwrap_or(1.0).max(1.0);
+    let ratio = width / height;
+    let candidates = [
+        ("1:1", 1.0),
+        ("16:9", 16.0 / 9.0),
+        ("9:16", 9.0 / 16.0),
+        ("4:3", 4.0 / 3.0),
+        ("3:4", 3.0 / 4.0),
+        ("3:2", 3.0 / 2.0),
+        ("2:3", 2.0 / 3.0),
+        ("21:9", 21.0 / 9.0),
+    ];
+    candidates
+        .iter()
+        .min_by(|left, right| {
+            let left_delta = (ratio - left.1).abs();
+            let right_delta = (ratio - right.1).abs();
+            left_delta
+                .partial_cmp(&right_delta)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|item| item.0)
+        .unwrap_or("1:1")
+}
+
+fn minimax_raw_has_error(raw: &Value) -> bool {
+    raw.pointer("/base_resp/status_code")
+        .and_then(|value| value.as_i64())
+        .map(|status_code| status_code != 0)
+        .unwrap_or(false)
+}
+
+fn format_minimax_error(status_code: u16, raw: &Value) -> String {
+    let api_code = raw
+        .pointer("/base_resp/status_code")
+        .and_then(|value| value.as_i64());
+    let api_message = raw
+        .pointer("/base_resp/status_msg")
+        .or_else(|| raw.pointer("/base_resp/message"))
+        .or_else(|| raw.get("message"))
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty());
+    match (api_code, api_message) {
+        (Some(code), Some(message)) => format!("MiniMax 返回错误 {code}：{message}"),
+        (Some(code), None) => format!("MiniMax 返回错误 {code}。"),
+        (None, Some(message)) => format!("MiniMax 请求失败：HTTP {status_code}，{message}"),
+        (None, None) => format!("MiniMax 请求失败：HTTP {status_code}，没有返回有效图片。"),
+    }
+}
+
 fn collect_images_recursive(value: &Value, urls: &mut Vec<String>, default_base64_mime: &str) {
     match value {
         Value::Object(map) => {
@@ -4322,7 +4549,7 @@ fn collect_images_recursive(value: &Value, urls: &mut Vec<String>, default_base6
             }
         }
         Value::String(text) => {
-            if text.starts_with("data:image/") {
+            if text.starts_with("http://") || text.starts_with("https://") || text.starts_with("data:image/") {
                 urls.push(text.to_string());
             }
         }

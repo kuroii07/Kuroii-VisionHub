@@ -499,14 +499,16 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-minimax',
     platformType: 'official',
     label: 'MiniMax 官方',
-    description: '国内官方 API V4 第一批候选；后续按官方图片接口接入真实文生图。',
-    status: 'planned',
+    description: '国内官方 API V4 第一批；支持按官方图片接口接入文生图。',
+    status: 'configurable',
     region: 'domestic',
     sortRank: 20,
+    providerId: 'minimax-image',
+    defaultDisplayName: 'MiniMax 官方',
     apiDocUrl: 'https://platform.minimaxi.com/',
     supportsTextToImage: true,
     supportsImageToImage: false,
-    notes: ['先核验 image-01 / image-01-live 等官方接口、鉴权和图片返回格式。', '未实接前不开放保存启用或真实试生图。']
+    notes: ['使用 MiniMax 官方 Bearer API Key，独立于中转站 Key。', '当前先接入 image-01 / image-01-live 文生图，图生图后续补。']
   },
   {
     id: 'official-mimo',
@@ -2061,10 +2063,11 @@ export function App() {
     ? profileToProviderConfig(activeGenerationProfile)
     : loadProviderConfig(selectedProviderId);
   const desktopRuntime = isTauriRuntime();
-  const supportsOpenAICompatible =
-    selectedProvider.id === 'openai-gpt-image' || selectedProvider.id === 'custom-http-provider';
-  const generationSupportsOpenAICompatible =
-    selectedProviderId === 'openai-gpt-image' || selectedProviderId === 'custom-http-provider';
+  const selectedProviderUsesConfig = providerUsesConfig(selectedProvider.id);
+  const generationProviderUsesConfig = providerUsesConfig(selectedProviderId);
+  const selectedProviderSupportsModelList = providerSupportsOpenAICompatibleModelList(selectedProvider.id);
+  const supportsOpenAICompatible = selectedProviderUsesConfig;
+  const generationSupportsOpenAICompatible = generationProviderUsesConfig;
   const activeComfyUIWorkflowPreset =
     localComfyUIWorkflowStore.presets.find((item) => item.id === localComfyUIWorkflowStore.activeId) ??
     localComfyUIWorkflowStore.presets[0] ??
@@ -2074,7 +2077,7 @@ export function App() {
     selectedProviderId === 'comfyui-local' &&
     Boolean(activeComfyUIWorkflowPreset?.rawWorkflow);
   const isRealProviderReady = desktopRuntime && (
-    (generationSupportsOpenAICompatible && generationSecretAvailable) ||
+    (generationProviderUsesConfig && generationSecretAvailable) ||
     isComfyUIGenerationReady
   );
   const homeProviderNameMap = useMemo(
@@ -2262,10 +2265,7 @@ export function App() {
       null;
     const config = nextProfile
       ? profileToProviderConfig(nextProfile)
-      : {
-          ...loadProviderConfig(selectedProvider.id),
-          displayName: selectedProvider.name
-        };
+      : createEmptyProviderDraftConfig(selectedProvider, selectedServiceTemplate);
     setSelectedProfileId(nextProfile?.id ?? null);
     setProviderConfig(config);
     if (supportsOpenAICompatible) setSelectedModel(config.modelId);
@@ -3528,6 +3528,10 @@ export function App() {
       setConfigMessage('当前服务模板尚未接入，暂不能刷新模型。');
       return;
     }
+    if (!providerSupportsOpenAICompatibleModelList(selectedProvider.id)) {
+      setConfigMessage('当前官方 API 暂不提供 OpenAI 兼容模型列表，已保留模板内置模型和手动模型 ID。');
+      return;
+    }
     if (!desktopRuntime) {
       setConfigMessage('请在 Tauri 桌面端刷新模型列表。');
       return;
@@ -3756,8 +3760,8 @@ export function App() {
     const targetProvider = providers.find((provider) => provider.id === targetProviderId) ?? selectedProvider;
     const targetConfig = targetProfile ? profileToProviderConfig(targetProfile) : providerConfig;
     const targetSecretId = targetProfile ? providerProfileSecretId(targetProfile.id) : activeSecretId();
-    const targetSupportsOpenAICompatible =
-      targetProviderId === 'openai-gpt-image' || targetProviderId === 'custom-http-provider';
+    const targetSupportsOpenAICompatible = providerUsesConfig(targetProviderId);
+    const targetSupportsModelList = providerSupportsOpenAICompatibleModelList(targetProviderId);
     const startedAt = performance.now();
     let profileStatus: ProviderConnectionProfile['lastTestStatus'] = 'warning';
     let profileMessage = '诊断未完成。';
@@ -3780,7 +3784,7 @@ export function App() {
         id: 'adapter',
         label: '平台接入状态',
         level: targetSupportsOpenAICompatible ? 'pass' : 'info',
-        detail: targetSupportsOpenAICompatible ? '当前平台支持 OpenAI-compatible 官方或聚合站配置。' : '当前平台仍是路线图占位，暂不支持真实连通性诊断。'
+        detail: targetSupportsOpenAICompatible ? '当前平台已接入可配置的真实请求链路。' : '当前平台仍是路线图占位，暂不支持真实连通性诊断。'
       });
 
       if (!targetSupportsOpenAICompatible) {
@@ -3963,6 +3967,32 @@ export function App() {
           level: 'info',
           detail: '生成请求会优先尝试 background/store 并轮询 response id；若中转不支持 background 会回退同步请求，长任务仍可能受 524 影响。'
         });
+      }
+
+      if (!targetSupportsModelList) {
+        const nextConfig = ensureManualModelOption(targetConfig);
+        if (!targetProfile || targetProfile.id === selectedProfileId) {
+          setProviderConfig(nextConfig);
+          saveProviderConfig(targetProviderId, nextConfig);
+          setSelectedModel(nextConfig.modelId);
+        }
+        profileStatus = 'warning';
+        profileMessage = '当前官方 API 暂不提供 OpenAI 兼容模型列表；已保留模板内置模型和手动模型 ID，可继续用真实试生图验证。';
+        profilePatch = {
+          lastModelProbe: {
+            modelId: nextConfig.modelId.trim(),
+            available: false,
+            checkedAt: new Date().toISOString(),
+            message: profileMessage
+          }
+        };
+        push({
+          id: 'models',
+          label: '模型列表连通性',
+          level: 'info',
+          detail: profileMessage
+        });
+        return;
       }
 
       if (!desktopRuntime || !currentSecretAvailable) {
@@ -4397,6 +4427,7 @@ export function App() {
             isRefreshingModels={isRefreshingModels}
             isProbingModel={isProbingModel}
             supportsOpenAICompatible={supportsOpenAICompatible}
+            supportsModelList={selectedProviderSupportsModelList}
             onPlatformTypeChange={selectPlatformType}
             onServiceTemplateChange={selectServiceTemplate}
             onSecretDraftChange={setSecretDraft}
@@ -5447,6 +5478,7 @@ function ProviderSettingsPage(props: {
   isRefreshingModels: boolean;
   isProbingModel: boolean;
   supportsOpenAICompatible: boolean;
+  supportsModelList: boolean;
   onPlatformTypeChange: (platformType: ProviderPlatformType) => void;
   onServiceTemplateChange: (templateId: string) => void;
   onSecretDraftChange: (secret: string) => void;
@@ -5897,7 +5929,7 @@ function ProviderSettingsPage(props: {
                 <input
                   value={props.providerConfig.baseUrl}
                   onChange={(event) => props.onConfigChange('baseUrl', event.target.value)}
-                  placeholder={props.selectedProviderId === 'openai-gpt-image' ? OFFICIAL_OPENAI_BASE_URL : 'https://你的聚合站或中转站'}
+                  placeholder={defaultBaseUrlPlaceholder(props.selectedProviderId)}
                 />
               </label>
               <label>
@@ -5937,7 +5969,13 @@ function ProviderSettingsPage(props: {
                       <option value={modelId} key={modelId} />
                     ))}
                   </datalist>
-                  <button className="iconButton" onClick={props.onRefreshModels} disabled={props.isRefreshingModels}>
+                  <button
+                    className="iconButton"
+                    onClick={props.onRefreshModels}
+                    disabled={props.isRefreshingModels || !props.supportsModelList}
+                    title={props.supportsModelList ? '刷新模型列表' : '当前官方 API 暂不提供 OpenAI 兼容模型列表'}
+                    aria-label={props.supportsModelList ? '刷新模型列表' : '当前官方 API 暂不提供 OpenAI 兼容模型列表'}
+                  >
                     {props.isRefreshingModels ? '…' : '刷新'}
                   </button>
                   <button className="iconButton" onClick={props.onProbeModel} disabled={props.isProbingModel || props.isRefreshingModels}>
@@ -5973,10 +6011,10 @@ function ProviderSettingsPage(props: {
                 <input
                   value={props.providerConfig.endpointPath}
                   onChange={(event) => props.onConfigChange('endpointPath', event.target.value)}
-                  placeholder="/v1/images/generations"
+                  placeholder={defaultEndpointPlaceholder(props.selectedProviderId)}
                 />
                 <small className="providerFieldHint">
-                  可按中转站文档自主修改，例如 /images/generations、/v1/images/generations 或 /v1/responses；保存后真实请求会使用这里的路径。
+                  {providerEndpointHint(props.selectedProviderId)}
                 </small>
               </label>
               <label>
@@ -10503,14 +10541,15 @@ function createEmptyProviderDraftConfig(
   serviceTemplate?: ProviderServiceTemplate
 ): OpenAICompatibleConfig {
   const isOfficialOpenAI = provider.id === 'openai-gpt-image';
+  const isMiniMax = provider.id === 'minimax-image';
   const firstModel = provider.models[0]?.id ?? '';
   return {
     ...defaultOpenAICompatibleConfig,
     displayName: serviceTemplate?.defaultDisplayName ?? '',
-    baseUrl: isOfficialOpenAI ? OFFICIAL_OPENAI_BASE_URL : '',
+    baseUrl: isOfficialOpenAI ? OFFICIAL_OPENAI_BASE_URL : isMiniMax ? 'https://api.minimaxi.com' : '',
     modelId: firstModel,
-    protocol: 'images',
-    endpointPath: defaultEndpointForProtocol('images'),
+    protocol: isMiniMax ? 'custom-images' : 'images',
+    endpointPath: isMiniMax ? '/v1/image_generation' : defaultEndpointForProtocol('images'),
     extraHeadersJson: '{}',
     modelOptions: provider.models.map((model) => model.id)
   };
@@ -10534,9 +10573,36 @@ function isProviderServiceTemplateConfigurable(template: ProviderServiceTemplate
   return Boolean(template.providerId) && (template.status === 'connected' || template.status === 'configurable');
 }
 
+function providerUsesConfig(providerId: string) {
+  return providerId === 'openai-gpt-image' || providerId === 'custom-http-provider' || providerId === 'minimax-image';
+}
+
+function providerSupportsOpenAICompatibleModelList(providerId: string) {
+  return providerId === 'openai-gpt-image' || providerId === 'custom-http-provider';
+}
+
+function defaultBaseUrlPlaceholder(providerId: string) {
+  if (providerId === 'openai-gpt-image') return OFFICIAL_OPENAI_BASE_URL;
+  if (providerId === 'minimax-image') return 'https://api.minimaxi.com';
+  return 'https://你的聚合站或中转站';
+}
+
+function defaultEndpointPlaceholder(providerId: string) {
+  if (providerId === 'minimax-image') return '/v1/image_generation';
+  return '/v1/images/generations';
+}
+
+function providerEndpointHint(providerId: string) {
+  if (providerId === 'minimax-image') {
+    return 'MiniMax 官方文生图接口默认使用 /v1/image_generation；保存后真实请求会使用这里的路径。';
+  }
+  return '可按中转站文档自主修改，例如 /images/generations、/v1/images/generations 或 /v1/responses；保存后真实请求会使用这里的路径。';
+}
+
 function getDefaultProviderServiceTemplateForProvider(providerId: string) {
   if (providerId === 'custom-http-provider') return getProviderServiceTemplate('aggregator-openai-compatible');
   if (providerId === 'openai-gpt-image') return getProviderServiceTemplate('official-openai');
+  if (providerId === 'minimax-image') return getProviderServiceTemplate('official-minimax');
   return providerServiceTemplates.find((template) => template.providerId === providerId);
 }
 
@@ -10546,7 +10612,7 @@ function providerProfileBelongsToTemplate(
 ) {
   if (!template.providerId || profile.providerId !== template.providerId) return false;
   if (profile.serviceTemplateId) return profile.serviceTemplateId === template.id;
-  return template.id === 'aggregator-openai-compatible' || template.id === 'official-openai';
+  return template.id === 'aggregator-openai-compatible' || template.id === 'official-openai' || template.id === 'official-minimax';
 }
 
 function providerGenerationLabel(provider: ReturnType<typeof listProviders>[number]) {

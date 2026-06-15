@@ -224,6 +224,7 @@ function canvasPreviewSortIndex(record: GenerationRecord, fallbackIndex: number)
 function providerAccessLabel(provider: ReturnType<typeof listProviders>[number]) {
   if (provider.id === 'custom-http-provider') return '中转站 / 聚合 API · OpenAI 兼容中转';
   if (provider.id === 'openai-gpt-image') return '官方 API · OpenAI 官方';
+  if (provider.id === 'minimax-image') return '官方 API · MiniMax 官方';
   if (provider.phase === 'local-lab') return `本地模型 · ${provider.name}`;
   return provider.name;
 }
@@ -231,6 +232,7 @@ function providerAccessLabel(provider: ReturnType<typeof listProviders>[number])
 function providerAccessDescription(provider: ReturnType<typeof listProviders>[number]) {
   if (provider.id === 'custom-http-provider') return '默认主入口，使用平台接入页保存的中转站 / 聚合 API 配置。';
   if (provider.id === 'openai-gpt-image') return '官方 OpenAI API，使用 https://api.openai.com。';
+  if (provider.id === 'minimax-image') return 'MiniMax 官方文生图 API，使用平台接入页保存的 MiniMax API Key 和配置实例。';
   if (provider.id === 'comfyui-local') return '本地 ComfyUI：使用平台接入页导入的 API workflow 提交本地生成。';
   if (provider.phase === 'local-lab') return '本地模型路线暂为规划入口，不作为当前生图主通道。';
   return provider.notes[0] ?? '平台能力以当前模板和服务商文档为准。';

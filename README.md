@@ -706,7 +706,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - 目标：把官方 API 从“规划模板”推进到多平台真实接入，同时保持中转站 / 聚合 API 仍是默认主入口。
   - 第一阶段先改平台模板结构：增加国内 / 国外标识、接入状态、排序权重、官方文档入口和能力字段；已接入 / 可配置模板靠上，待接入模板自动靠下。
   - 默认服务模板主流优先，不堆用户没听过、短期不用、也没有真实接入计划的小众平台。
-  - 官方 API 多平台真实接入：MiniMax、小米 MiMo 候选核验、Gemini / Nano Banana、xAI、火山方舟 / Seedream、阿里百炼 / 通义万相、可灵企业 API、即梦企业 API。
+  - 官方 API 多平台真实接入：MiniMax 作为第一条新增官方 API 已进入实接链路，后续继续推进小米 MiMo 候选核验、Gemini / Nano Banana、xAI、火山方舟 / Seedream、阿里百炼 / 通义万相、可灵企业 API、即梦企业 API。
   - 小米 MiMo 先作为国内主流候选核验：确认是否有公开文生图 / 图生图 API endpoint；确认前只展示候选说明，不开放真实生图。
   - 每个官方平台单独 adapter，不把官方 API 强塞进 OpenAI-compatible；共用任务轮询、图片下载、错误归一化和作品画廊保存链路。
   - 官方 API 第一批稳定后，再推进聚合网站 API、硅基流动等聚合站真实能力，以及 Stable Diffusion WebUI / Forge 本地模型路线。
