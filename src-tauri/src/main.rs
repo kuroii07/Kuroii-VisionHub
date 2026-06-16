@@ -1906,6 +1906,7 @@ fn load_generation_history(app: tauri::AppHandle) -> Result<Vec<GenerationRecord
     let mut records = read_generation_history_records(&app)?;
     let mut changed = false;
     for record in &mut records {
+        changed |= sanitize_generation_record_raw(record);
         changed |= hydrate_record_image_urls(&app, record);
     }
     if changed {
@@ -2024,6 +2025,7 @@ fn save_generation_record(
     if !record.local_image_paths.is_empty() {
         record.image_urls.retain(|url| !url.starts_with("data:image/"));
     }
+    sanitize_generation_record_raw(&mut record);
     records.retain(|item| item.id != record.id);
     records.insert(0, record.clone());
     records.truncate(500);
@@ -4993,6 +4995,78 @@ fn collect_images_recursive(value: &Value, urls: &mut Vec<String>, default_base6
         }
         _ => {}
     }
+}
+
+fn sanitize_generation_record_raw(record: &mut GenerationRecord) -> bool {
+    redact_large_inline_images(&mut record.raw)
+}
+
+fn redact_large_inline_images(value: &mut Value) -> bool {
+    match value {
+        Value::Object(map) => {
+            let mut changed = false;
+            let inline_key = if map.contains_key("inlineData") {
+                Some("inlineData")
+            } else if map.contains_key("inline_data") {
+                Some("inline_data")
+            } else {
+                None
+            };
+            if let Some(inline_data) = inline_key
+                .and_then(|key| map.get_mut(key))
+                .and_then(|value| value.as_object_mut()) {
+                let mime_type = inline_data
+                    .get("mimeType")
+                    .or_else(|| inline_data.get("mime_type"))
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("image/*")
+                    .to_string();
+                if let Some(data) = inline_data.get_mut("data") {
+                    changed |= redact_image_string_value(data, Some(&mime_type));
+                }
+            }
+            for child in map.values_mut() {
+                changed |= redact_large_inline_images(child);
+            }
+            changed
+        }
+        Value::Array(items) => {
+            let mut changed = false;
+            for child in items {
+                changed |= redact_large_inline_images(child);
+            }
+            changed
+        }
+        Value::String(_) => redact_image_string_value(value, None),
+        _ => false,
+    }
+}
+
+fn redact_image_string_value(value: &mut Value, mime_hint: Option<&str>) -> bool {
+    let Some(text) = value.as_str() else {
+        return false;
+    };
+    let trimmed = text.trim();
+    if trimmed.starts_with("data:image/") || is_probable_base64_image(trimmed) {
+        let mime_type = if trimmed.starts_with("data:image/") {
+            trimmed
+                .split_once(';')
+                .map(|item| item.0.trim_start_matches("data:"))
+                .filter(|item| item.starts_with("image/"))
+                .unwrap_or_else(|| mime_hint.unwrap_or("image/*"))
+                .to_string()
+        } else {
+            mime_hint.unwrap_or("image/*").to_string()
+        };
+        *value = serde_json::json!({
+            "visionhub_redacted_image_payload": true,
+            "mime_type": mime_type,
+            "chars": text.len(),
+            "reason": "图片二进制已落盘，raw 中只保留摘要以避免历史记录过大导致软件卡顿。"
+        });
+        return true;
+    }
+    false
 }
 
 fn is_probable_base64_image(value: &str) -> bool {

@@ -301,7 +301,7 @@ function resolveInitialProviderId(providerId: string) {
 }
 
 function providerUsesConfig(providerId: string) {
-  return providerId === 'openai-gpt-image' || providerId === 'custom-http-provider' || providerId === 'minimax-image';
+  return providerId === 'openai-gpt-image' || providerId === 'custom-http-provider' || providerId === 'minimax-image' || providerId === 'gemini-image';
 }
 
 function readSearchParam(name: string) {
