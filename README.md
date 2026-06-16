@@ -164,6 +164,16 @@ visionhub-studio/
 
 ## 近期更新记录
 
+### 2026-06-16 平台接入 V4 当日优化收口
+
+- MiniMax 官方 API 已完成真实文生图和单张人物主体参考图生图测试，配置实例、独立密钥、固定模型 ID 诊断、错误分类和结果落盘已接入。
+- 小米 MiMo 完成公开文档核验：当前未发现公开文生图 / 图生图 endpoint，继续作为官方候选说明，不开放保存启用或真实生图。
+- Google Gemini / Nano Banana 官方 API 已加入 `gemini-image` Provider，走 `generateContent`、`inlineData` 参考图和 inline image/base64 结果解析；代码链路、构建和 `cargo check` 已通过，待真实 Gemini API Key 联调。
+- AI 创作台已支持中转站 / 聚合 API 多配置实例直接切换；多个实例可同时保持启用，生成时由创作台“配置实例”下拉决定当前使用的 Base URL、模型、协议和密钥通道。
+- 为避免生成历史和诊断面板卡顿，保存 / 读取生成历史时会把 raw 里的大体积图片二进制、base64 和 `data:image/...` 替换为轻量摘要，图片本体仍按本地图库路径保存。
+- 聚合站兼容性补充：新增 `Images API 精简兼容` 协议，只向 `/v1/images/generations` 提交 `model + prompt`；`Chat Completions 图片包装` 改为更保守的聊天包装，并增强 Markdown / 文本响应中的图片 URL 提取。
+- 已确认 `woyao.pro / api.iiiitoken.com` 的 `gemini-3.1-flash-image`、`gpt-image-2` 在当前配置尝试下仍未稳定生图；暂不继续硬猜专用协议，后续如需接入应以该站 raw 错误或官方 API 文档为准。
+
 ### v0.3.7 偏好设置 V2
 
 - 偏好设置升级为工作流配置中心，保留创作默认值、语言、首页模块和数据安全等核心配置入口，顶部不再展示纯概览卡片。
@@ -713,6 +723,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - 默认服务模板主流优先，不堆用户没听过、短期不用、也没有真实接入计划的小众平台。
   - 官方 API 多平台真实接入：MiniMax 作为第一条新增官方 API 已进入实接链路，`image-01` 文生图和单张人物主体参考图生图已实测通过，并已补齐固定模型 ID 诊断、非 OpenAI-compatible 模型列表提示和 MiniMax 专用错误分类；Google Gemini / Nano Banana 官方已完成 `generateContent` / `inlineData` 代码链路和本地构建验证，待真实 Gemini API Key 联调；后续继续推进 xAI、火山方舟 / Seedream、阿里百炼 / 通义万相、可灵企业 API、即梦企业 API。
   - 小米 MiMo 已完成第一轮公开文档核验：当前官方 API 主要覆盖文本、图像理解和全模态推理，未发现公开文生图 / 图生图 endpoint；软件中继续作为官方候选说明，不开放保存启用或真实生图。
+  - 聚合站 / 中转站多实例切换、生成历史 raw 轻量化、Chat 包装兼容和 Images 精简兼容协议已完成；`woyao.pro` 的 Gemini / GPT Image 生图专用规则仍待站点文档或 raw 错误进一步确认。
   - 每个官方平台单独 adapter，不把官方 API 强塞进 OpenAI-compatible；共用任务轮询、图片下载、错误归一化和作品画廊保存链路。
   - 官方 API 第一批稳定后，再推进聚合网站 API、硅基流动等聚合站真实能力，以及 Stable Diffusion WebUI / Forge 本地模型路线。
   - 未确认真实 API、账号权限或企业文档的平台，不显示“保存并启用 / 真实试生图”等会误导用户的操作。
