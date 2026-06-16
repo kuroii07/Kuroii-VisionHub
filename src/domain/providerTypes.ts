@@ -106,7 +106,7 @@ export interface ImageGenerationRequest {
   references?: ReferenceImage[];
   seed?: number;
   baseUrl?: string;
-  protocol?: 'images' | 'responses' | 'chat-completions' | 'custom-images';
+  protocol?: 'images' | 'images-minimal' | 'responses' | 'chat-completions' | 'custom-images';
   imageToImageAdapter?: ImageToImageAdapter;
   endpointPath?: string;
   extraHeaders?: Record<string, string>;

@@ -5685,6 +5685,11 @@ function ProviderSettingsPage(props: {
       description: '适合 OpenAI 官方图片生成和多数图片中转，默认路径 /v1/images/generations。'
     },
     {
+      value: 'images-minimal',
+      label: 'Images API 精简兼容',
+      description: '只提交 model + prompt，适合会拒绝尺寸、质量、数量等扩展字段的图片中转。'
+    },
+    {
       value: 'responses',
       label: 'OpenAI Responses API',
       description: '适合支持 Responses 协议的上游，可用文本 + 图片工具方式生成图片。'
@@ -10849,6 +10854,7 @@ function profileLabel(status: ProviderConnectionProfile['lastTestStatus']) {
 function protocolLabel(protocol: OpenAICompatibleConfig['protocol']) {
   const labels: Record<OpenAICompatibleConfig['protocol'], string> = {
     images: 'Images',
+    'images-minimal': 'Images 精简',
     responses: 'Responses',
     'chat-completions': 'Chat',
     'custom-images': 'Custom'

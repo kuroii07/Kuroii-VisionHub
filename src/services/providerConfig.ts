@@ -3,6 +3,7 @@ import { readStorageValue, writeStorageValue } from './safeStorage';
 
 export type OpenAICompatibleProtocol =
   | 'images'
+  | 'images-minimal'
   | 'responses'
   | 'chat-completions'
   | 'custom-images';
@@ -115,6 +116,7 @@ export function defaultEndpointForProtocol(protocol: OpenAICompatibleProtocol) {
       return '/v1/responses';
     case 'chat-completions':
       return '/v1/chat/completions';
+    case 'images-minimal':
     case 'custom-images':
     case 'images':
     default:

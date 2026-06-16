@@ -4407,6 +4407,7 @@ fn percent_decode(input: &str) -> Vec<u8> {
 fn normalize_endpoint_path(custom_path: Option<&str>, protocol: &str) -> Result<String, String> {
     let default_path = match protocol {
         "images" => "/v1/images/generations",
+        "images-minimal" => "/v1/images/generations",
         "responses" => "/v1/responses",
         "chat-completions" => "/v1/chat/completions",
         "custom-images" => "/v1/images/generations",
@@ -4602,6 +4603,12 @@ fn build_openai_compatible_payload(
     }
 
     apply_advanced_request_options(match protocol {
+        "images-minimal" => {
+            serde_json::json!({
+                "model": request.model_id,
+                "prompt": request.prompt
+            })
+        }
         "responses" => {
             serde_json::json!({
                 "model": request.model_id,
