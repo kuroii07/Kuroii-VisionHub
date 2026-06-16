@@ -507,8 +507,8 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     defaultDisplayName: 'MiniMax 官方',
     apiDocUrl: 'https://platform.minimaxi.com/',
     supportsTextToImage: true,
-    supportsImageToImage: false,
-    notes: ['使用 MiniMax 官方 Bearer API Key，独立于中转站 Key。', '当前先接入 image-01 / image-01-live 文生图，图生图后续补。']
+    supportsImageToImage: true,
+    notes: ['使用 MiniMax 官方 Bearer API Key，独立于中转站 Key。', '当前接入 image-01 / image-01-live 文生图和单张人物主体参考图；多参考图后续补。']
   },
   {
     id: 'official-mimo',
@@ -3529,7 +3529,7 @@ export function App() {
       return;
     }
     if (!providerSupportsOpenAICompatibleModelList(selectedProvider.id)) {
-      setConfigMessage('当前官方 API 暂不提供 OpenAI 兼容模型列表，已保留模板内置模型和手动模型 ID。');
+      setConfigMessage(modelListUnsupportedMessage(selectedProvider.id, providerConfig.modelId));
       return;
     }
     if (!desktopRuntime) {
@@ -3629,6 +3629,38 @@ export function App() {
   async function probeCurrentModel() {
     if (!isSelectedServiceConfigurable) {
       setConfigMessage('当前服务模板尚未接入，暂不能探测模型。');
+      return;
+    }
+    if (!providerSupportsOpenAICompatibleModelList(selectedProvider.id)) {
+      const nextConfig = ensureManualModelOption({
+        ...providerConfig,
+        modelOptions: Array.from(new Set([...providerConfig.modelOptions, ...minimaxModelOptions(), providerConfig.modelId.trim()].filter(Boolean)))
+      });
+      const probe = isMiniMaxProvider(selectedProvider.id)
+        ? buildMiniMaxManualModelProbe(nextConfig.modelId, '未提交网络请求；请用“真实试生图”做最终联调。')
+        : buildModelProbe(nextConfig.modelId, nextConfig.modelOptions, '当前 API 不提供 OpenAI-compatible 模型列表。');
+      setProviderConfig(nextConfig);
+      saveProviderConfig(selectedProvider.id, nextConfig);
+      if (selectedProfile) {
+        persistProfile({
+          ...selectedProfile,
+          ...nextConfig,
+          lastTestStatus: 'warning',
+          lastMessage: probe.message,
+          lastTestedAt: new Date().toISOString(),
+          lastModelProbe: probe
+        });
+      }
+      setProviderDiagnostics((current) => [
+        ...current.filter((item) => item.id !== 'model-probe'),
+        {
+          id: 'model-probe',
+          label: '当前模型探测',
+          level: probe.available ? 'info' : 'warn',
+          detail: probe.message
+        }
+      ]);
+      setConfigMessage(probe.message);
       return;
     }
     if (!desktopRuntime) {
@@ -3970,25 +4002,31 @@ export function App() {
       }
 
       if (!targetSupportsModelList) {
-        const nextConfig = ensureManualModelOption(targetConfig);
+        const nextConfig = isMiniMaxProvider(targetProviderId)
+          ? ensureManualModelOption({
+              ...targetConfig,
+              modelOptions: Array.from(new Set([...targetConfig.modelOptions, ...minimaxModelOptions(), targetConfig.modelId.trim()].filter(Boolean)))
+            })
+          : ensureManualModelOption(targetConfig);
+        const modelProbe = isMiniMaxProvider(targetProviderId)
+          ? buildMiniMaxManualModelProbe(nextConfig.modelId, '非消耗诊断不会调用 MiniMax；请用真实试生图做最终联调。')
+          : {
+              modelId: nextConfig.modelId.trim(),
+              available: false,
+              checkedAt: new Date().toISOString(),
+              message: modelListUnsupportedMessage(targetProviderId, nextConfig.modelId)
+            };
         if (!targetProfile || targetProfile.id === selectedProfileId) {
           setProviderConfig(nextConfig);
           saveProviderConfig(targetProviderId, nextConfig);
           setSelectedModel(nextConfig.modelId);
         }
         profileStatus = 'warning';
-        profileMessage = '当前官方 API 暂不提供 OpenAI 兼容模型列表；已保留模板内置模型和手动模型 ID，可继续用真实试生图验证。';
-        profilePatch = {
-          lastModelProbe: {
-            modelId: nextConfig.modelId.trim(),
-            available: false,
-            checkedAt: new Date().toISOString(),
-            message: profileMessage
-          }
-        };
+        profileMessage = modelProbe.message;
+        profilePatch = { lastModelProbe: modelProbe };
         push({
           id: 'models',
-          label: '模型列表连通性',
+          label: isMiniMaxProvider(targetProviderId) ? 'MiniMax 模型确认' : '模型列表连通性',
           level: 'info',
           detail: profileMessage
         });
@@ -5978,7 +6016,13 @@ function ProviderSettingsPage(props: {
                   >
                     {props.isRefreshingModels ? '…' : '刷新'}
                   </button>
-                  <button className="iconButton" onClick={props.onProbeModel} disabled={props.isProbingModel || props.isRefreshingModels}>
+                  <button
+                    className="iconButton"
+                    onClick={props.onProbeModel}
+                    disabled={props.isProbingModel || props.isRefreshingModels || !props.supportsModelList}
+                    title={props.supportsModelList ? '探测当前模型是否出现在模型列表' : '当前官方 API 暂不提供 OpenAI 兼容模型探测'}
+                    aria-label={props.supportsModelList ? '探测当前模型' : '当前官方 API 暂不提供 OpenAI 兼容模型探测'}
+                  >
                     {props.isProbingModel ? '…' : '探测'}
                   </button>
                   <button className="iconButton" onClick={props.onPinModel}>
@@ -10581,6 +10625,36 @@ function providerSupportsOpenAICompatibleModelList(providerId: string) {
   return providerId === 'openai-gpt-image' || providerId === 'custom-http-provider';
 }
 
+function isMiniMaxProvider(providerId: string) {
+  return providerId === 'minimax-image';
+}
+
+function minimaxModelOptions() {
+  return ['image-01', 'image-01-live'];
+}
+
+function buildMiniMaxManualModelProbe(modelId: string, source: string) {
+  const normalizedModelId = modelId.trim();
+  const options = minimaxModelOptions();
+  const available = Boolean(normalizedModelId) && options.includes(normalizedModelId);
+  return {
+    modelId: normalizedModelId,
+    available,
+    checkedAt: new Date().toISOString(),
+    message: available
+      ? `MiniMax 官方模板内置模型「${normalizedModelId}」。${source}`
+      : `MiniMax 当前建议使用 ${options.join(' / ')}；「${normalizedModelId || '未填写'}」未在内置模型里。${source}`
+  };
+}
+
+function modelListUnsupportedMessage(providerId: string, modelId: string) {
+  if (isMiniMaxProvider(providerId)) {
+    const modelProbe = buildMiniMaxManualModelProbe(modelId, 'MiniMax 官方图片接口当前按固定模型 ID 配置，不读取 OpenAI-compatible /v1/models。');
+    return modelProbe.message;
+  }
+  return '当前官方 API 暂不提供 OpenAI 兼容模型列表；已保留模板内置模型和手动模型 ID，可继续用真实试生图验证。';
+}
+
 function defaultBaseUrlPlaceholder(providerId: string) {
   if (providerId === 'openai-gpt-image') return OFFICIAL_OPENAI_BASE_URL;
   if (providerId === 'minimax-image') return 'https://api.minimaxi.com';
@@ -10594,7 +10668,7 @@ function defaultEndpointPlaceholder(providerId: string) {
 
 function providerEndpointHint(providerId: string) {
   if (providerId === 'minimax-image') {
-    return 'MiniMax 官方文生图接口默认使用 /v1/image_generation；保存后真实请求会使用这里的路径。';
+    return 'MiniMax 官方文生图接口默认使用 /v1/image_generation；这是官方图片 API 路径，不是 OpenAI-compatible /v1/images/generations。';
   }
   return '可按中转站文档自主修改，例如 /images/generations、/v1/images/generations 或 /v1/responses；保存后真实请求会使用这里的路径。';
 }
@@ -10789,6 +10863,64 @@ function buildProviderReadinessItems(input: {
   const generationVerified = Boolean(input.profile?.lastMessage?.includes('测试生成成功'));
   const resolvedAdapter = resolveImageToImageAdapterForDisplay(input.config, input.providerId);
   const protocolLabelText = protocolLabel(input.config.protocol);
+  const isMiniMax = isMiniMaxProvider(input.providerId);
+
+  if (isMiniMax) {
+    const miniMaxProbe = buildMiniMaxManualModelProbe(
+      modelId,
+      'MiniMax 官方图片接口当前使用固定模型 ID，不读取 /v1/models。'
+    );
+    return [
+      {
+        id: 'config-profile',
+        label: '配置实例',
+        level: input.profile ? 'pass' : 'info',
+        detail: input.profile
+          ? '已保存为 MiniMax 官方配置实例，并使用当前配置实例的独立密钥。'
+          : '当前仍是 MiniMax 编辑草稿；保存后才会绑定独立密钥。'
+      },
+      {
+        id: 'model-list',
+        label: '模型列表',
+        level: 'info',
+        detail: 'MiniMax 官方图片接口不按 OpenAI-compatible /v1/models 刷新；请在内置 image-01 / image-01-live 或官方确认的新模型之间手动选择。'
+      },
+      {
+        id: 'model-probe',
+        label: '当前模型',
+        level: miniMaxProbe.available ? 'pass' : 'warn',
+        detail: miniMaxProbe.message
+      },
+      {
+        id: 'text-to-image',
+        label: '文生图',
+        level: generationVerified
+          ? 'pass'
+          : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
+            ? 'info'
+            : 'warn',
+        detail: generationVerified
+          ? '最近一次 MiniMax 真实试生图成功，说明当前配置至少通过了官方文生图链路。'
+          : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
+            ? '基础配置已具备；需要手动点击“真实试生图”才会消耗额度并验证 MiniMax 官方文生图。'
+            : '需要补齐桌面端、MiniMax API Key、Base URL、模型 ID 和 /v1/image_generation 路径后，才能真实试生图。'
+      },
+      {
+        id: 'image-to-image',
+        label: '图生图',
+        level: hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime ? 'info' : 'warn',
+        detail: hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
+          ? 'MiniMax 图生图会把第一张参考图作为 subject_reference.character 提交；多参考图暂不提交。'
+          : '需要补齐桌面端、MiniMax API Key、Base URL、模型 ID 和接口路径后，才能带参考图真实试生图。'
+      },
+      {
+        id: 'multi-reference',
+        label: '多参考图',
+        level: 'info',
+        detail: '当前只提交第一张参考图作为人物主体参考；多张参考图会保留在记录里，但本轮不发送给 MiniMax。'
+      }
+    ];
+  }
 
   return [
     {

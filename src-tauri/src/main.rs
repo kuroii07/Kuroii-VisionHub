@@ -666,7 +666,8 @@ async fn generate_minimax_image(
         .clone()
         .unwrap_or_else(|| "text-to-image".to_string());
     let reference_images = request.reference_images.clone().unwrap_or_default();
-    if generation_mode == "image-to-image" || !reference_images.is_empty() {
+    let is_image_to_image = generation_mode == "image-to-image" || !reference_images.is_empty();
+    if is_image_to_image && reference_images.is_empty() {
         return Ok(ImageGenerationResult {
             id: format!("minimax-{}", chrono_like_timestamp_millis()),
             provider_id: provider_id.clone(),
@@ -677,10 +678,10 @@ async fn generate_minimax_image(
             local_image_paths: Vec::new(),
             cost_hint: Some("未提交 MiniMax 请求。".to_string()),
             duration_ms: Some(started.elapsed().as_millis()),
-            error: Some("MiniMax 官方图生图 / 参考图能力尚未接入，当前仅支持文生图。".to_string()),
+            error: Some("MiniMax 官方图生图需要先添加一张人物主体参考图。".to_string()),
             raw: serde_json::json!({
                 "provider": "minimax",
-                "blocked_reason": "image_to_image_not_supported_yet"
+                "blocked_reason": "missing_subject_reference"
             }),
             created_at: chrono_like_timestamp(),
             generation_mode: Some(generation_mode),
@@ -701,7 +702,12 @@ async fn generate_minimax_image(
     let endpoint = format!("{base_url}{endpoint_path}");
     let client = reqwest::Client::new();
     let api_size = normalize_minimax_image_size(&request.size);
-    let payload = serde_json::json!({
+    let subject_reference = if is_image_to_image {
+        Some(build_minimax_subject_reference(&client, &reference_images).await?)
+    } else {
+        None
+    };
+    let mut payload = serde_json::json!({
         "model": model_id,
         "prompt": prompt,
         "aspect_ratio": minimax_aspect_ratio(&api_size),
@@ -709,6 +715,9 @@ async fn generate_minimax_image(
         "prompt_optimizer": false,
         "response_format": "url"
     });
+    if let Some(subject_reference) = subject_reference.as_ref() {
+        payload["subject_reference"] = serde_json::json!(subject_reference);
+    }
 
     let mut builder = client.post(&endpoint).bearer_auth(&api_key).json(&payload);
     if let Some(headers) = request.extra_headers.clone() {
@@ -753,7 +762,14 @@ async fn generate_minimax_image(
                         "model": model_id,
                         "aspect_ratio": minimax_aspect_ratio(&api_size),
                         "size": api_size,
-                        "prompt_optimizer": false
+                        "prompt_optimizer": false,
+                        "response_format": "url",
+                        "subject_reference_count": if is_image_to_image { 1 } else { 0 },
+                        "omitted_reference_count": if is_image_to_image { reference_images.len().saturating_sub(1) } else { 0 }
+                    },
+                    "visionhub_minimax_diagnostic": {
+                        "category": "response_parse",
+                        "suggestion": "MiniMax 返回内容不是 JSON。请检查 Base URL、接口路径和账号网关返回内容。"
                     }
                 }),
                 created_at: chrono_like_timestamp(),
@@ -764,6 +780,7 @@ async fn generate_minimax_image(
     };
     let image_urls = extract_image_urls(&raw, request.output_format.as_deref());
     let request_succeeded = status.is_success() && !image_urls.is_empty() && !minimax_raw_has_error(&raw);
+    let minimax_diagnostic_category = minimax_error_category(status.as_u16(), &raw);
     let local_image_paths = if request_succeeded {
         save_images_to_library(&app, &image_urls, &request)
             .await
@@ -799,7 +816,14 @@ async fn generate_minimax_image(
                 "aspect_ratio": minimax_aspect_ratio(&api_size),
                 "size": api_size,
                 "count": request.count.max(1).min(9),
-                "prompt_optimizer": false
+                "prompt_optimizer": false,
+                "response_format": "url",
+                "subject_reference_count": if is_image_to_image { 1 } else { 0 },
+                "omitted_reference_count": if is_image_to_image { reference_images.len().saturating_sub(1) } else { 0 }
+            },
+            "visionhub_minimax_diagnostic": {
+                "category": minimax_diagnostic_category,
+                "suggestion": minimax_error_suggestion(minimax_diagnostic_category)
             }
         }),
         created_at: chrono_like_timestamp(),
@@ -4497,11 +4521,120 @@ fn minimax_aspect_ratio(size: &str) -> &'static str {
         .unwrap_or("1:1")
 }
 
+async fn build_minimax_subject_reference(
+    client: &reqwest::Client,
+    references: &[ReferenceImage],
+) -> Result<Vec<Value>, String> {
+    let reference = references
+        .first()
+        .ok_or_else(|| "MiniMax 图生图需要至少一张参考图。".to_string())?;
+    let image_file = minimax_reference_image_file(client, reference).await?;
+    Ok(vec![serde_json::json!({
+        "type": "character",
+        "image_file": image_file
+    })])
+}
+
+async fn minimax_reference_image_file(
+    client: &reqwest::Client,
+    reference: &ReferenceImage,
+) -> Result<String, String> {
+    if let Some(url) = reference
+        .data_url
+        .as_deref()
+        .or(reference.preview_url.as_deref())
+        .filter(|url| url.starts_with("data:image/") || url.starts_with("http://") || url.starts_with("https://"))
+    {
+        if url.starts_with("http://") || url.starts_with("https://") {
+            return Ok(url.to_string());
+        }
+        let (bytes, extension) = decode_data_url_image(url)?;
+        return Ok(format!(
+            "data:{};base64,{}",
+            mime_from_extension(&extension),
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        ));
+    }
+
+    if let Some(local_path) = reference.local_path.as_deref().filter(|value| !value.trim().is_empty()) {
+        let path = PathBuf::from(local_path);
+        if path.is_file() && is_supported_reference_image_path(&path) {
+            return image_path_to_data_url(&path, "MiniMax subject reference");
+        }
+    }
+
+    if let Some(remote) = reference
+        .preview_url
+        .as_deref()
+        .filter(|url| url.starts_with("http://") || url.starts_with("https://"))
+    {
+        let (bytes, extension) = download_remote_image(client, remote).await?;
+        return Ok(format!(
+            "data:{};base64,{}",
+            mime_from_extension(&extension),
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        ));
+    }
+
+    Err("MiniMax 图生图参考图缺少可提交的 data URL、本地路径或远程 URL。".to_string())
+}
+
 fn minimax_raw_has_error(raw: &Value) -> bool {
     raw.pointer("/base_resp/status_code")
         .and_then(|value| value.as_i64())
         .map(|status_code| status_code != 0)
         .unwrap_or(false)
+}
+
+fn minimax_error_category(status_code: u16, raw: &Value) -> &'static str {
+    let api_code = raw
+        .pointer("/base_resp/status_code")
+        .and_then(|value| value.as_i64())
+        .unwrap_or_default();
+    let message = raw
+        .pointer("/base_resp/status_msg")
+        .or_else(|| raw.pointer("/base_resp/message"))
+        .or_else(|| raw.get("message"))
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    if status_code == 401 || message.contains("unauthorized") || message.contains("api key") {
+        return "auth";
+    }
+    if status_code == 403 || message.contains("forbidden") || message.contains("permission") {
+        return "permission";
+    }
+    if status_code == 404 || message.contains("not found") || message.contains("model") {
+        return "model_or_endpoint";
+    }
+    if status_code == 429 || message.contains("rate") || message.contains("quota") || message.contains("limit") {
+        return "quota_or_rate_limit";
+    }
+    if status_code == 400 || status_code == 422 || message.contains("invalid") || message.contains("param") {
+        return "parameter";
+    }
+    if status_code >= 500 {
+        return "provider_server";
+    }
+    if api_code != 0 {
+        return "provider_error";
+    }
+    "no_image"
+}
+
+fn minimax_error_suggestion(category: &str) -> &'static str {
+    match category {
+        "auth" => "检查 MiniMax API Key 是否保存到当前配置实例，且没有误填中转站 Key。",
+        "permission" => "检查 MiniMax 账号是否开通图片生成模型权限，或当前 Key 是否允许调用该 endpoint。",
+        "model_or_endpoint" => "检查模型 ID 是否为 image-01 / image-01-live，Base URL 和 /v1/image_generation 路径是否匹配。",
+        "quota_or_rate_limit" => "检查账号额度、频率限制或稍后重试；避免连续真实试生图消耗额度。",
+        "parameter" => "回到默认 1:1、数量 1、image-01 后再试，逐项恢复尺寸、数量和高级参数。",
+        "provider_server" => "MiniMax 服务端或网关异常；保留 raw 和请求摘要，稍后重试或到平台后台对照。",
+        "provider_error" => "MiniMax 返回业务错误；复制诊断报告和 raw 与平台后台对照。",
+        "response_parse" => "接口返回不是 JSON；检查 Base URL、接口路径或网关是否返回了网页/错误页。",
+        _ => "没有提取到有效图片 URL；检查 response_format、模型权限和 raw 响应里的图片字段。",
+    }
 }
 
 fn format_minimax_error(status_code: u16, raw: &Value) -> String {

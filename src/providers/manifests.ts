@@ -62,7 +62,7 @@ export const providerManifests: ProviderManifest[] = [
     auth: { type: 'bearer-token', label: 'MiniMax API Key', secretStorageKey: 'provider.minimax.apiKey' },
     capabilities: {
       textToImage: 'supported',
-      imageToImage: 'planned',
+      imageToImage: 'partial',
       editImage: 'planned',
       multiReferenceImage: 'unsupported',
       generateSeries: 'partial',
@@ -91,7 +91,7 @@ export const providerManifests: ProviderManifest[] = [
     ],
     notes: [
       'MiniMax 官方 API 使用独立凭据通道，不复用中转站 Key。',
-      '当前先接入文生图；图生图和多参考图待官方能力确认后再补。'
+      '当前接入文生图和单张人物主体参考图；多参考图和局部编辑后续补。'
     ]
   },
   {
