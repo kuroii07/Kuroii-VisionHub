@@ -244,6 +244,7 @@ for term in [
     "minimax-image",
     "/v1/image_generation",
     "小米 MiMo 官方",
+    "图像理解",
     "providerServiceRegionLabel",
     "sortRank",
     "serviceTemplateMeta",

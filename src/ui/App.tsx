@@ -514,14 +514,14 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-mimo',
     platformType: 'official',
     label: '小米 MiMo 官方',
-    description: '国内主流候选；先核验是否开放文生图 / 图生图 API endpoint。',
+    description: '国内主流候选；官方 API 当前面向文本、图像理解和全模态推理，暂未开放生图 endpoint。',
     status: 'planned',
     region: 'domestic',
     sortRank: 30,
-    apiDocUrl: 'https://mimo.xiaomi.com/',
+    apiDocUrl: 'https://mimo.mi.com/docs/zh-CN/quick-start/usage-guide/multimodal-understanding/image-understanding',
     supportsTextToImage: false,
     supportsImageToImage: false,
-    notes: ['MiMo 官网有 API Access 入口，但需确认图片生成 API 是否公开。', '确认前只展示候选说明，不开放真实生图。']
+    notes: ['官方文档显示图片能力是图像理解：支持 URL / Base64 图片输入，用于描述、分类和视觉问答。', '未发现公开文生图 / 图生图 endpoint；继续只展示候选说明，不开放真实生图。']
   },
   {
     id: 'official-gemini',
