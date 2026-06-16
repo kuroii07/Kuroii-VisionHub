@@ -4585,7 +4585,8 @@ fn build_openai_compatible_payload(
                 }
                 serde_json::json!({
                     "model": request.model_id,
-                    "messages": [{ "role": "user", "content": content }]
+                    "messages": [{ "role": "user", "content": content }],
+                    "modalities": ["image", "text"]
                 })
             }
             _ => serde_json::json!({
@@ -4621,7 +4622,8 @@ fn build_openai_compatible_payload(
                         "role": "user",
                         "content": request.prompt
                     }
-                ]
+                ],
+                "modalities": ["image", "text"]
             })
         }
         _ => {
@@ -4996,6 +4998,11 @@ fn collect_images_recursive(value: &Value, urls: &mut Vec<String>, default_base6
 }
 
 fn collect_embedded_image_urls(text: &str, urls: &mut Vec<String>) {
+    if let Ok(parsed) = serde_json::from_str::<Value>(text.trim()) {
+        collect_images_recursive(&parsed, urls, mime_from_output_format(None));
+    }
+    let normalized_text = text.replace("\\/", "/");
+    let text = normalized_text.as_str();
     for marker in ["data:image/", "https://", "http://"] {
         let mut offset = 0usize;
         while let Some(relative_index) = text[offset..].find(marker) {
