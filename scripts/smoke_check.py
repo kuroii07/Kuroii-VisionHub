@@ -236,6 +236,7 @@ for term in [
     "selectGenerationProfile",
     "changeGenerationModel",
     "onProfileChange",
+    "配置实例”下拉中选择当前使用哪一个",
     "测试生成",
     "provider-hub-test-generation",
     "diagnostics",

@@ -2315,7 +2315,12 @@ export function App() {
   function selectGenerationProfile(profileId: string) {
     const profile = providerProfiles.find((item) => item.id === profileId);
     if (!profile) return;
-    const nextProfiles = setProviderProfileEnabled(providerProfiles, profileId, true);
+    const enabledProfiles = setProviderProfileEnabled(providerProfiles, profileId, true);
+    const nextProfiles = [
+      ...enabledProfiles.filter((item) => item.id === profileId),
+      ...enabledProfiles.filter((item) => item.id !== profileId)
+    ];
+    saveProviderProfiles(nextProfiles);
     setProviderProfiles(nextProfiles);
     setIsCreatingProviderProfile(false);
     setSelectedProfileId(profile.id);
@@ -3427,7 +3432,7 @@ export function App() {
       setProviderConfig(profileToProviderConfig(profile));
       setSelectedModel(profile.modelId);
       if (enabled) setSelectedProvider(profile.providerId);
-      setConfigMessage(`${enabled ? '已启用' : '已停用'}：${profile.displayName}`);
+      setConfigMessage(`${enabled ? '已启用' : '已停用'}：${profile.displayName}。可在 AI 创作台的“配置实例”下拉中选择当前使用哪一个。`);
     }
   }
 
