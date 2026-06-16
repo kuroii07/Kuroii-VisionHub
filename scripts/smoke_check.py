@@ -332,7 +332,7 @@ for term in ["minimax-image", "MiniMax API Key", "image-01-live", "gemini-image"
     assert term in manifests_src, f"Provider manifest missing: {term}"
 
 tauri_src = (ROOT / "src-tauri/src/main.rs").read_text(encoding="utf-8")
-for term in ["get_app_paths", "reveal_app_data_dir", "reveal_library_dir", "export_settings_backup", "open_external_url", "polish_prompt_with_provider", "PromptPolishRequest", "extract_text_response", "prompt_polish_mode_rules", "ensure_prompt_polish_changed", "generate_minimax_image", "visionhub_minimax_request", "visionhub_minimax_diagnostic", "subject_reference", "build_minimax_subject_reference", "generate_gemini_image", "visionhub_gemini_request", "visionhub_gemini_diagnostic", "gemini_reference_part", "inlineData", "sanitize_generation_record_raw", "visionhub_redacted_image_payload"]:
+for term in ["get_app_paths", "reveal_app_data_dir", "reveal_library_dir", "export_settings_backup", "open_external_url", "polish_prompt_with_provider", "PromptPolishRequest", "extract_text_response", "prompt_polish_mode_rules", "ensure_prompt_polish_changed", "generate_minimax_image", "visionhub_minimax_request", "visionhub_minimax_diagnostic", "subject_reference", "build_minimax_subject_reference", "generate_gemini_image", "visionhub_gemini_request", "visionhub_gemini_diagnostic", "gemini_reference_part", "inlineData", "sanitize_generation_record_raw", "visionhub_redacted_image_payload", "collect_embedded_image_urls"]:
     assert term in tauri_src, f"Tauri settings command missing: {term}"
 
 styles_src = (ROOT / "src/ui/styles.css").read_text(encoding="utf-8")

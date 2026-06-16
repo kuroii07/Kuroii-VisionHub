@@ -4585,10 +4585,7 @@ fn build_openai_compatible_payload(
                 }
                 serde_json::json!({
                     "model": request.model_id,
-                    "messages": [{ "role": "user", "content": content }],
-                    "modalities": ["text", "image"],
-                    "size": api_size,
-                    "n": request.count.max(1).min(4)
+                    "messages": [{ "role": "user", "content": content }]
                 })
             }
             _ => serde_json::json!({
@@ -4624,10 +4621,7 @@ fn build_openai_compatible_payload(
                         "role": "user",
                         "content": request.prompt
                     }
-                ],
-                "modalities": ["text", "image"],
-                "size": api_size,
-                "n": request.count.max(1).min(4)
+                ]
             })
         }
         _ => {
@@ -4646,6 +4640,8 @@ fn extract_image_urls(raw: &Value, output_format: Option<&str>) -> Vec<String> {
     let mut urls = Vec::new();
     let default_mime = mime_from_output_format(output_format);
     collect_images_recursive(raw, &mut urls, default_mime);
+    let mut seen = std::collections::HashSet::new();
+    urls.retain(|url| seen.insert(url.clone()));
     urls
 }
 
@@ -4991,9 +4987,44 @@ fn collect_images_recursive(value: &Value, urls: &mut Vec<String>, default_base6
         Value::String(text) => {
             if text.starts_with("http://") || text.starts_with("https://") || text.starts_with("data:image/") {
                 urls.push(text.to_string());
+            } else {
+                collect_embedded_image_urls(text, urls);
             }
         }
         _ => {}
+    }
+}
+
+fn collect_embedded_image_urls(text: &str, urls: &mut Vec<String>) {
+    for marker in ["data:image/", "https://", "http://"] {
+        let mut offset = 0usize;
+        while let Some(relative_index) = text[offset..].find(marker) {
+            let start = offset + relative_index;
+            let rest = &text[start..];
+            let end = rest
+                .char_indices()
+                .find_map(|(index, ch)| {
+                    if ch.is_whitespace() || matches!(ch, '"' | '\'' | ')' | ']' | '}' | '<' | '>') {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(rest.len());
+            let candidate = rest[..end]
+                .trim_end_matches([',', '.', ';', ':', '!', '?'])
+                .to_string();
+            if candidate.starts_with("data:image/")
+                || candidate.starts_with("http://")
+                || candidate.starts_with("https://")
+            {
+                urls.push(candidate);
+            }
+            offset = start.saturating_add(end.max(marker.len()));
+            if offset >= text.len() {
+                break;
+            }
+        }
     }
 }
 
