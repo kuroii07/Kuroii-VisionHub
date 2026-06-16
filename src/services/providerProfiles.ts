@@ -173,8 +173,13 @@ export function setProviderProfileEnabled(
   enabled: boolean
 ) {
   const now = new Date().toISOString();
+  const targetProviderId = profiles.find((profile) => profile.id === profileId)?.providerId;
   const nextProfiles = profiles.map((profile) =>
-    profile.id === profileId ? { ...profile, enabled, updatedAt: now } : profile
+    profile.id === profileId
+      ? { ...profile, enabled, updatedAt: now }
+      : enabled && targetProviderId && profile.providerId === targetProviderId
+        ? { ...profile, enabled: false, updatedAt: now }
+        : profile
   );
   saveProviderProfiles(nextProfiles);
   return nextProfiles;

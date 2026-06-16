@@ -240,6 +240,13 @@ function providerAccessDescription(provider: ReturnType<typeof listProviders>[nu
   return provider.notes[0] ?? '平台能力以当前模板和服务商文档为准。';
 }
 
+function profileStatusLabel(status: ProviderConnectionProfile['lastTestStatus']) {
+  if (status === 'passed') return '已验证';
+  if (status === 'warning') return '注意';
+  if (status === 'failed') return '失败';
+  return '未测试';
+}
+
 function compactModelLabel(modelId: string) {
   const cleaned = modelId.trim();
   return cleaned
@@ -389,6 +396,7 @@ export function ModernGeneratePage(props: {
   isRealProviderReady: boolean;
   providerConfig: OpenAICompatibleConfig;
   activeProfile: Pick<ProviderConnectionProfile, 'id' | 'displayName' | 'enabled' | 'lastTestStatus' | 'lastModelProbe'> | null;
+  providerProfiles: Pick<ProviderConnectionProfile, 'id' | 'displayName' | 'modelId' | 'baseUrl' | 'enabled' | 'lastTestStatus'>[];
   activeProfileSecretAvailable: boolean;
   selectedModelId: string;
   prompt: string;
@@ -405,6 +413,7 @@ export function ModernGeneratePage(props: {
   promptPolishSettings: PromptPolishSettings;
   sessionStartedAtMs: number;
   onProviderChange: (providerId: string) => void;
+  onProfileChange: (profileId: string) => void;
   onModelChange: (modelId: string) => void;
   onPromptChange: (prompt: string) => void;
   onCountChange: (count: number) => void;
@@ -480,6 +489,11 @@ export function ModernGeneratePage(props: {
       ? '__local__'
       : resolveActivePromptPolishConfigId(props.promptPolishSettings);
   const selectedQuickPolishConfig = promptPolishConfigOptions.find((config) => config.id === selectedQuickPolishValue);
+  const providerProfileOptions = props.providerProfiles.map((profile) => ({
+    value: profile.id,
+    label: profile.displayName || profile.modelId || '未命名配置',
+    description: `${profile.modelId || '未设置模型'} · ${profile.enabled ? '当前启用' : profileStatusLabel(profile.lastTestStatus)}`
+  }));
   const effectivePromptPolishSettings: PromptPolishSettings =
     selectedQuickPolishValue === '__local__'
       ? { ...props.promptPolishSettings, engine: 'local' }
@@ -1500,6 +1514,16 @@ export function ModernGeneratePage(props: {
               }))}
             />
           </label>
+          {props.supportsOpenAICompatible && providerProfileOptions.length > 0 ? (
+            <label>
+              配置实例
+              <StudioSelect
+                value={props.activeProfile?.id ?? providerProfileOptions[0]?.value ?? ''}
+                onChange={props.onProfileChange}
+                options={providerProfileOptions}
+              />
+            </label>
+          ) : null}
           <label>
             模型
             <StudioSelect

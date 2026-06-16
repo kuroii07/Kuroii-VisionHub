@@ -2312,6 +2312,56 @@ export function App() {
     }
   }
 
+  function selectGenerationProfile(profileId: string) {
+    const profile = providerProfiles.find((item) => item.id === profileId);
+    if (!profile) return;
+    const nextProfiles = setProviderProfileEnabled(providerProfiles, profileId, true);
+    setProviderProfiles(nextProfiles);
+    setIsCreatingProviderProfile(false);
+    setSelectedProfileId(profile.id);
+    setProviderConfig(profileToProviderConfig(profile));
+    setSelectedProvider(profile.providerId);
+    setSelectedModel(profile.modelId);
+    const template = getDefaultProviderServiceTemplateForProvider(profile.providerId);
+    if (template) {
+      setSelectedPlatformType(template.platformType);
+      setSelectedServiceTemplateId(template.id);
+    }
+    setConfigMessage(`AI 创作已切换到配置实例：${profile.displayName}`);
+  }
+
+  function changeGenerationModel(modelId: string) {
+    if (generationSupportsOpenAICompatible && activeGenerationProfile) {
+      const now = new Date().toISOString();
+      const nextProfiles = providerProfiles.map((profile) =>
+        profile.id === activeGenerationProfile.id
+          ? {
+              ...profile,
+              modelId,
+              modelOptions: Array.from(new Set([...profile.modelOptions, modelId].filter(Boolean))),
+              updatedAt: now
+            }
+          : profile
+      );
+      setProviderProfiles(nextProfiles);
+      saveProviderProfiles(nextProfiles);
+      if (selectedProfileId === activeGenerationProfile.id) {
+        setProviderConfig((current) => ({
+          ...current,
+          modelId,
+          modelOptions: Array.from(new Set([...current.modelOptions, modelId].filter(Boolean)))
+        }));
+      }
+      setSelectedModel(modelId);
+      return;
+    }
+    if (generationSupportsOpenAICompatible) {
+      handleConfigChange('modelId', modelId);
+      return;
+    }
+    setSelectedModel(modelId);
+  }
+
   function selectPlatformType(platformType: ProviderPlatformType) {
     const firstTemplate = getProviderServiceTemplatesForPlatform(platformType)[0] ?? providerServiceTemplates[0];
     setSelectedPlatformType(platformType);
@@ -4406,6 +4456,14 @@ export function App() {
                 lastTestStatus: activeGenerationProfile.lastTestStatus,
                 lastModelProbe: activeGenerationProfile.lastModelProbe
               } : null}
+              providerProfiles={getProfilesForProvider(providerProfiles, selectedProviderId).map((profile) => ({
+                id: profile.id,
+                displayName: profile.displayName,
+                modelId: profile.modelId,
+                baseUrl: profile.baseUrl,
+                enabled: profile.enabled,
+                lastTestStatus: profile.lastTestStatus
+              }))}
               activeProfileSecretAvailable={generationSecretAvailable}
               selectedModelId={selectedModelId}
               prompt={prompt}
@@ -4422,10 +4480,8 @@ export function App() {
               promptPolishSettings={appSettings.promptPolish}
               sessionStartedAtMs={generateSessionStartedAt}
               onProviderChange={selectProvider}
-              onModelChange={(modelId) => {
-                if (generationSupportsOpenAICompatible) handleConfigChange('modelId', modelId);
-                else setSelectedModel(modelId);
-              }}
+              onProfileChange={selectGenerationProfile}
+              onModelChange={changeGenerationModel}
               onPromptChange={setPrompt}
               onCountChange={setCount}
               onSizeChange={setSize}
