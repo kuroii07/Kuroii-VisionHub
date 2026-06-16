@@ -527,14 +527,16 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'official-gemini',
     platformType: 'official',
     label: 'Google Gemini / Nano Banana 官方',
-    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
-    status: 'planned',
+    description: '海外官方 API V4 第一批；支持 Gemini 图片生成 / 编辑，返回 inline image 后落盘。',
+    status: 'configurable',
     region: 'overseas',
     sortRank: 40,
+    providerId: 'gemini-image',
+    defaultDisplayName: 'Google Gemini 官方',
     apiDocUrl: 'https://ai.google.dev/gemini-api/docs/image-generation',
     supportsTextToImage: true,
     supportsImageToImage: true,
-    notes: ['后续需要单独实现官方 API adapter、鉴权和图片返回解析。']
+    notes: ['使用 Google Gemini API Key，独立于中转站 Key。', '当前接入 gemini-2.5-flash-image，支持文生图和参考图编辑；多图数量后续补。']
   },
   {
     id: 'official-xai',
@@ -3632,13 +3634,16 @@ export function App() {
       return;
     }
     if (!providerSupportsOpenAICompatibleModelList(selectedProvider.id)) {
+      const fixedModelOptions = officialFixedModelOptions(selectedProvider.id);
       const nextConfig = ensureManualModelOption({
         ...providerConfig,
-        modelOptions: Array.from(new Set([...providerConfig.modelOptions, ...minimaxModelOptions(), providerConfig.modelId.trim()].filter(Boolean)))
+        modelOptions: Array.from(new Set([...providerConfig.modelOptions, ...fixedModelOptions, providerConfig.modelId.trim()].filter(Boolean)))
       });
       const probe = isMiniMaxProvider(selectedProvider.id)
         ? buildMiniMaxManualModelProbe(nextConfig.modelId, '未提交网络请求；请用“真实试生图”做最终联调。')
-        : buildModelProbe(nextConfig.modelId, nextConfig.modelOptions, '当前 API 不提供 OpenAI-compatible 模型列表。');
+        : isGeminiProvider(selectedProvider.id)
+          ? buildGeminiManualModelProbe(nextConfig.modelId, '未提交网络请求；请用“真实试生图”做最终联调。')
+          : buildModelProbe(nextConfig.modelId, nextConfig.modelOptions, '当前 API 不提供 OpenAI-compatible 模型列表。');
       setProviderConfig(nextConfig);
       saveProviderConfig(selectedProvider.id, nextConfig);
       if (selectedProfile) {
@@ -4002,20 +4007,23 @@ export function App() {
       }
 
       if (!targetSupportsModelList) {
-        const nextConfig = isMiniMaxProvider(targetProviderId)
+        const fixedModelOptions = officialFixedModelOptions(targetProviderId);
+        const nextConfig = fixedModelOptions.length
           ? ensureManualModelOption({
               ...targetConfig,
-              modelOptions: Array.from(new Set([...targetConfig.modelOptions, ...minimaxModelOptions(), targetConfig.modelId.trim()].filter(Boolean)))
+              modelOptions: Array.from(new Set([...targetConfig.modelOptions, ...fixedModelOptions, targetConfig.modelId.trim()].filter(Boolean)))
             })
           : ensureManualModelOption(targetConfig);
         const modelProbe = isMiniMaxProvider(targetProviderId)
           ? buildMiniMaxManualModelProbe(nextConfig.modelId, '非消耗诊断不会调用 MiniMax；请用真实试生图做最终联调。')
-          : {
-              modelId: nextConfig.modelId.trim(),
-              available: false,
-              checkedAt: new Date().toISOString(),
-              message: modelListUnsupportedMessage(targetProviderId, nextConfig.modelId)
-            };
+          : isGeminiProvider(targetProviderId)
+            ? buildGeminiManualModelProbe(nextConfig.modelId, '非消耗诊断不会调用 Gemini；请用真实试生图做最终联调。')
+            : {
+                modelId: nextConfig.modelId.trim(),
+                available: false,
+                checkedAt: new Date().toISOString(),
+                message: modelListUnsupportedMessage(targetProviderId, nextConfig.modelId)
+              };
         if (!targetProfile || targetProfile.id === selectedProfileId) {
           setProviderConfig(nextConfig);
           saveProviderConfig(targetProviderId, nextConfig);
@@ -4026,7 +4034,7 @@ export function App() {
         profilePatch = { lastModelProbe: modelProbe };
         push({
           id: 'models',
-          label: isMiniMaxProvider(targetProviderId) ? 'MiniMax 模型确认' : '模型列表连通性',
+          label: isMiniMaxProvider(targetProviderId) ? 'MiniMax 模型确认' : isGeminiProvider(targetProviderId) ? 'Gemini 模型确认' : '模型列表连通性',
           level: 'info',
           detail: profileMessage
         });
@@ -10586,14 +10594,15 @@ function createEmptyProviderDraftConfig(
 ): OpenAICompatibleConfig {
   const isOfficialOpenAI = provider.id === 'openai-gpt-image';
   const isMiniMax = provider.id === 'minimax-image';
+  const isGemini = provider.id === 'gemini-image';
   const firstModel = provider.models[0]?.id ?? '';
   return {
     ...defaultOpenAICompatibleConfig,
     displayName: serviceTemplate?.defaultDisplayName ?? '',
-    baseUrl: isOfficialOpenAI ? OFFICIAL_OPENAI_BASE_URL : isMiniMax ? 'https://api.minimaxi.com' : '',
+    baseUrl: isOfficialOpenAI ? OFFICIAL_OPENAI_BASE_URL : isMiniMax ? 'https://api.minimaxi.com' : isGemini ? 'https://generativelanguage.googleapis.com' : '',
     modelId: firstModel,
     protocol: isMiniMax ? 'custom-images' : 'images',
-    endpointPath: isMiniMax ? '/v1/image_generation' : defaultEndpointForProtocol('images'),
+    endpointPath: isMiniMax ? '/v1/image_generation' : isGemini ? '/v1beta/models/{model}:generateContent' : defaultEndpointForProtocol('images'),
     extraHeadersJson: '{}',
     modelOptions: provider.models.map((model) => model.id)
   };
@@ -10618,7 +10627,7 @@ function isProviderServiceTemplateConfigurable(template: ProviderServiceTemplate
 }
 
 function providerUsesConfig(providerId: string) {
-  return providerId === 'openai-gpt-image' || providerId === 'custom-http-provider' || providerId === 'minimax-image';
+  return providerId === 'openai-gpt-image' || providerId === 'custom-http-provider' || providerId === 'minimax-image' || providerId === 'gemini-image';
 }
 
 function providerSupportsOpenAICompatibleModelList(providerId: string) {
@@ -10629,8 +10638,22 @@ function isMiniMaxProvider(providerId: string) {
   return providerId === 'minimax-image';
 }
 
+function isGeminiProvider(providerId: string) {
+  return providerId === 'gemini-image';
+}
+
 function minimaxModelOptions() {
   return ['image-01', 'image-01-live'];
+}
+
+function geminiModelOptions() {
+  return ['gemini-2.5-flash-image'];
+}
+
+function officialFixedModelOptions(providerId: string) {
+  if (isMiniMaxProvider(providerId)) return minimaxModelOptions();
+  if (isGeminiProvider(providerId)) return geminiModelOptions();
+  return [];
 }
 
 function buildMiniMaxManualModelProbe(modelId: string, source: string) {
@@ -10647,10 +10670,27 @@ function buildMiniMaxManualModelProbe(modelId: string, source: string) {
   };
 }
 
+function buildGeminiManualModelProbe(modelId: string, source: string) {
+  const normalizedModelId = modelId.trim();
+  const options = geminiModelOptions();
+  const available = Boolean(normalizedModelId) && options.includes(normalizedModelId);
+  return {
+    modelId: normalizedModelId,
+    available,
+    checkedAt: new Date().toISOString(),
+    message: available
+      ? `Gemini 官方模板内置模型「${normalizedModelId}」。${source}`
+      : `Gemini 当前建议使用 ${options.join(' / ')}；「${normalizedModelId || '未填写'}」未在内置模型里。${source}`
+  };
+}
+
 function modelListUnsupportedMessage(providerId: string, modelId: string) {
   if (isMiniMaxProvider(providerId)) {
     const modelProbe = buildMiniMaxManualModelProbe(modelId, 'MiniMax 官方图片接口当前按固定模型 ID 配置，不读取 OpenAI-compatible /v1/models。');
     return modelProbe.message;
+  }
+  if (isGeminiProvider(providerId)) {
+    return buildGeminiManualModelProbe(modelId, 'Gemini 官方图片接口当前按固定模型 ID 配置，不读取 OpenAI-compatible /v1/models。').message;
   }
   return '当前官方 API 暂不提供 OpenAI 兼容模型列表；已保留模板内置模型和手动模型 ID，可继续用真实试生图验证。';
 }
@@ -10658,17 +10698,22 @@ function modelListUnsupportedMessage(providerId: string, modelId: string) {
 function defaultBaseUrlPlaceholder(providerId: string) {
   if (providerId === 'openai-gpt-image') return OFFICIAL_OPENAI_BASE_URL;
   if (providerId === 'minimax-image') return 'https://api.minimaxi.com';
+  if (providerId === 'gemini-image') return 'https://generativelanguage.googleapis.com';
   return 'https://你的聚合站或中转站';
 }
 
 function defaultEndpointPlaceholder(providerId: string) {
   if (providerId === 'minimax-image') return '/v1/image_generation';
+  if (providerId === 'gemini-image') return '/v1beta/models/{model}:generateContent';
   return '/v1/images/generations';
 }
 
 function providerEndpointHint(providerId: string) {
   if (providerId === 'minimax-image') {
     return 'MiniMax 官方文生图接口默认使用 /v1/image_generation；这是官方图片 API 路径，不是 OpenAI-compatible /v1/images/generations。';
+  }
+  if (providerId === 'gemini-image') {
+    return 'Gemini 官方图片接口默认使用 /v1beta/models/{model}:generateContent；保存后后端会把 {model} 替换为当前模型 ID。';
   }
   return '可按中转站文档自主修改，例如 /images/generations、/v1/images/generations 或 /v1/responses；保存后真实请求会使用这里的路径。';
 }
@@ -10677,6 +10722,7 @@ function getDefaultProviderServiceTemplateForProvider(providerId: string) {
   if (providerId === 'custom-http-provider') return getProviderServiceTemplate('aggregator-openai-compatible');
   if (providerId === 'openai-gpt-image') return getProviderServiceTemplate('official-openai');
   if (providerId === 'minimax-image') return getProviderServiceTemplate('official-minimax');
+  if (providerId === 'gemini-image') return getProviderServiceTemplate('official-gemini');
   return providerServiceTemplates.find((template) => template.providerId === providerId);
 }
 
@@ -10686,7 +10732,7 @@ function providerProfileBelongsToTemplate(
 ) {
   if (!template.providerId || profile.providerId !== template.providerId) return false;
   if (profile.serviceTemplateId) return profile.serviceTemplateId === template.id;
-  return template.id === 'aggregator-openai-compatible' || template.id === 'official-openai' || template.id === 'official-minimax';
+  return template.id === 'aggregator-openai-compatible' || template.id === 'official-openai' || template.id === 'official-minimax' || template.id === 'official-gemini';
 }
 
 function providerGenerationLabel(provider: ReturnType<typeof listProviders>[number]) {
@@ -10864,6 +10910,7 @@ function buildProviderReadinessItems(input: {
   const resolvedAdapter = resolveImageToImageAdapterForDisplay(input.config, input.providerId);
   const protocolLabelText = protocolLabel(input.config.protocol);
   const isMiniMax = isMiniMaxProvider(input.providerId);
+  const isGemini = isGeminiProvider(input.providerId);
 
   if (isMiniMax) {
     const miniMaxProbe = buildMiniMaxManualModelProbe(
@@ -10918,6 +10965,63 @@ function buildProviderReadinessItems(input: {
         label: '多参考图',
         level: 'info',
         detail: '当前只提交第一张参考图作为人物主体参考；多张参考图会保留在记录里，但本轮不发送给 MiniMax。'
+      }
+    ];
+  }
+
+  if (isGemini) {
+    const geminiProbe = buildGeminiManualModelProbe(
+      modelId,
+      'Gemini 官方图片接口当前使用固定模型 ID，不读取 /v1/models。'
+    );
+    return [
+      {
+        id: 'config-profile',
+        label: '配置实例',
+        level: input.profile ? 'pass' : 'info',
+        detail: input.profile
+          ? '已保存为 Gemini 官方配置实例，并使用当前配置实例的独立密钥。'
+          : '当前仍是 Gemini 编辑草稿；保存后才会绑定独立密钥。'
+      },
+      {
+        id: 'model-list',
+        label: '模型列表',
+        level: 'info',
+        detail: 'Gemini 官方图片接口按模型 ID 直接调用 generateContent；当前不读取 OpenAI-compatible /v1/models。'
+      },
+      {
+        id: 'model-probe',
+        label: '当前模型',
+        level: geminiProbe.available ? 'pass' : 'warn',
+        detail: geminiProbe.message
+      },
+      {
+        id: 'text-to-image',
+        label: '文生图',
+        level: generationVerified
+          ? 'pass'
+          : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
+            ? 'info'
+            : 'warn',
+        detail: generationVerified
+          ? '最近一次 Gemini 真实试生图成功，说明当前配置至少通过了官方文生图链路。'
+          : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
+            ? '基础配置已具备；需要手动点击“真实试生图”才会消耗额度并验证 Gemini 官方文生图。'
+            : '需要补齐桌面端、Gemini API Key、Base URL、模型 ID 和 generateContent 路径后，才能真实试生图。'
+      },
+      {
+        id: 'image-to-image',
+        label: '图生图 / 编辑',
+        level: hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime ? 'info' : 'warn',
+        detail: hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
+          ? 'Gemini 图生图会把参考图作为 inlineData parts 与文本提示一起提交；真实效果需要带参考图试生图验证。'
+          : '需要补齐桌面端、Gemini API Key、Base URL、模型 ID 和接口路径后，才能带参考图真实试生图。'
+      },
+      {
+        id: 'multi-reference',
+        label: '多参考图',
+        level: 'info',
+        detail: '当前会把已添加参考图作为多个 inlineData parts 提交；多参考效果以后续真实测试为准。'
       }
     ];
   }

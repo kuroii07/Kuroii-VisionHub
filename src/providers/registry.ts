@@ -24,7 +24,8 @@ export function createProviderAdapter(providerId: string): ProviderAdapter {
   if (
     (providerId === 'openai-gpt-image' ||
       providerId === 'custom-http-provider' ||
-      providerId === 'minimax-image') &&
+      providerId === 'minimax-image' ||
+      providerId === 'gemini-image') &&
     isTauriRuntime()
   ) {
     return new TauriOpenAIAdapter(getProviderManifest(providerId));

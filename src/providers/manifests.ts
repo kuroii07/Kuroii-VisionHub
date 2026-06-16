@@ -95,6 +95,42 @@ export const providerManifests: ProviderManifest[] = [
     ]
   },
   {
+    id: 'gemini-image',
+    name: 'Google Gemini / Nano Banana 官方',
+    vendor: 'Google',
+    region: 'global',
+    phase: 'official-api',
+    executionModes: ['sync', 'custom-http'],
+    homepage: 'https://ai.google.dev/',
+    docs: 'https://ai.google.dev/gemini-api/docs/image-generation',
+    auth: { type: 'api-key', label: 'Gemini API Key', secretStorageKey: 'provider.gemini.apiKey' },
+    capabilities: {
+      textToImage: 'supported',
+      imageToImage: 'partial',
+      editImage: 'partial',
+      multiReferenceImage: 'partial',
+      generateSeries: 'unsupported',
+      imageToVideo: 'unsupported',
+      promptPolish: 'unsupported',
+      chineseTextRendering: 'unknown',
+      localWorkflow: 'unsupported'
+    },
+    models: [
+      {
+        id: 'gemini-2.5-flash-image',
+        label: 'gemini-2.5-flash-image',
+        description: 'Gemini 官方图片生成与编辑模型，Nano Banana 生产模型。',
+        defaultSize: '1024x1024',
+        defaultQuality: 'auto',
+        tags: ['official', 'overseas', 'nano-banana', 'text-to-image', 'image-to-image']
+      }
+    ],
+    notes: [
+      '使用 Google Gemini API Key，独立于中转站 Key。',
+      '当前接入 generateContent 图片生成，支持文本生成图片和参考图编辑；返回 inline image/base64 后落盘。'
+    ]
+  },
+  {
     id: 'custom-http-provider',
     name: '聚合站 / OpenAI 兼容',
     vendor: 'Relay / Aggregator',

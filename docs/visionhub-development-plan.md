@@ -545,7 +545,7 @@
   - OpenAI 官方（国外）：保持现有真实接入能力，并作为官方 Adapter 基准。
   - MiniMax 官方（国内）：第一条新增官方 API 已进入实接代码链路，`image-01` 文生图和单张人物主体参考图生图已用真实账号 Key 测试成功；已补齐固定模型 ID 非消耗诊断、非 OpenAI-compatible 模型列表提示、MiniMax 专用错误分类和 URL 结果落盘；多参考图 / 局部编辑后续补。
   - 小米 MiMo 官方（国内）：已完成第一轮公开文档核验；当前官方 API 主要面向文本、图像理解和全模态推理，未发现公开文生图 / 图生图 endpoint，继续保留为候选说明，不开放真实生图。
-  - Google Gemini / Nano Banana 官方（国外）：接入 Gemini 图片生成 / 编辑，处理 inline image/base64 返回。
+  - Google Gemini / Nano Banana 官方（国外）：代码链路已接入 Gemini `generateContent`，使用 `gemini-2.5-flash-image`、`inlineData` 参考图提交和 inline image/base64 返回解析；待真实 Gemini API Key 做文生图 / 图生图联调。
   - xAI 官方（国外）：接入 Grok Imagine 图片生成，处理数量、比例、分辨率和结果 URL。
   - 火山方舟 / Seedream 官方（国内）：接入图片生成 API，重点处理火山鉴权、模型名、轮询和结果落盘。
   - 阿里百炼 / 通义万相官方（国内）：接入 DashScope 异步任务创建、任务查询、结果下载和错误码解析。
@@ -571,7 +571,7 @@
 1. 先做服务模板数据结构和排序 UI，保证“已接入在上、待接入在下、国内 / 国外标识”先落地。
 2. MiniMax 官方作为 V4 第一条新增官方图片 API：配置实例、独立密钥、文生图 / 单张人物主体参考图请求、结果落盘和错误归一化已完成，文生图与图生图均已真实测试成功；后续只补多参考图 / 局部编辑等增强项。
 3. 小米 MiMo 官方 API 已完成公开文档核验：当前未发现公开生图 endpoint，只保留候选模板和图像理解说明，不开放真实生图。
-4. 接 Gemini / Nano Banana 和 xAI 官方，覆盖海外官方同步 / 近同步图片返回。
+4. Gemini / Nano Banana 官方已完成代码链路和本地验证，待真实 Gemini API Key 联调；下一步接 xAI 官方，覆盖海外官方同步 / 近同步图片返回。
 5. 接阿里百炼 / 通义万相和火山方舟 / Seedream，覆盖国内官方异步任务轮询。
 6. 可灵企业 API、即梦企业 API 等需要企业文档或账号权限的平台，先保留模板和 adapter 插槽，等凭据 / 文档确认后再打开真实操作。
 7. 官方 API 第一批稳定后，再进入聚合站真实能力和 Stable Diffusion WebUI / Forge；同时清理旧服务模板，把非主流项从默认列表移除。

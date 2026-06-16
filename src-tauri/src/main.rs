@@ -439,6 +439,9 @@ async fn generate_openai_image(
     if request.provider_id == "minimax-image" {
         return generate_minimax_image(app, request).await;
     }
+    if request.provider_id == "gemini-image" {
+        return generate_gemini_image(app, request).await;
+    }
 
     let started = std::time::Instant::now();
     let api_key = read_provider_secret(request.secret_id.as_deref(), &request.provider_id)
@@ -824,6 +827,170 @@ async fn generate_minimax_image(
             "visionhub_minimax_diagnostic": {
                 "category": minimax_diagnostic_category,
                 "suggestion": minimax_error_suggestion(minimax_diagnostic_category)
+            }
+        }),
+        created_at: chrono_like_timestamp(),
+        generation_mode: Some(generation_mode),
+        reference_images: Some(reference_images),
+    })
+}
+
+async fn generate_gemini_image(
+    app: tauri::AppHandle,
+    request: OpenAIImageRequest,
+) -> Result<ImageGenerationResult, String> {
+    let started = std::time::Instant::now();
+    let provider_id = request.provider_id.clone();
+    let model_id = request.model_id.clone();
+    let prompt = request.prompt.clone();
+    let api_key = read_provider_secret(request.secret_id.as_deref(), &request.provider_id)
+        .map_err(|_| "Gemini API Key is not configured. Save it in Provider settings first.".to_string())?;
+    let generation_mode = request
+        .generation_mode
+        .clone()
+        .unwrap_or_else(|| "text-to-image".to_string());
+    let reference_images = request.reference_images.clone().unwrap_or_default();
+    let base_url = normalize_base_url(
+        request
+            .base_url
+            .as_deref()
+            .unwrap_or("https://generativelanguage.googleapis.com"),
+    )?;
+    let endpoint_path = normalize_endpoint_path(
+        request
+            .endpoint_path
+            .as_deref()
+            .or(Some("/v1beta/models/{model}:generateContent")),
+        "custom-images",
+    )?;
+    let endpoint = format!(
+        "{base_url}{}",
+        endpoint_path.replace("{model}", &model_id)
+    );
+    let client = reqwest::Client::new();
+    let api_size = normalize_minimax_image_size(&request.size);
+    let mut parts = Vec::new();
+    if generation_mode == "image-to-image" || !reference_images.is_empty() {
+        for reference in &reference_images {
+            parts.push(gemini_reference_part(&client, reference).await?);
+        }
+    }
+    parts.push(serde_json::json!({ "text": prompt }));
+    let payload = serde_json::json!({
+        "contents": [{ "role": "user", "parts": parts }],
+        "generationConfig": {
+            "responseModalities": ["TEXT", "IMAGE"],
+            "imageConfig": {
+                "aspectRatio": minimax_aspect_ratio(&api_size)
+            }
+        }
+    });
+
+    let mut builder = client
+        .post(&endpoint)
+        .header("x-goog-api-key", &api_key)
+        .json(&payload);
+    if let Some(headers) = request.extra_headers.clone() {
+        for (name, value) in headers {
+            if name.eq_ignore_ascii_case("authorization")
+                || name.eq_ignore_ascii_case("content-type")
+                || name.eq_ignore_ascii_case("x-goog-api-key")
+            {
+                continue;
+            }
+            builder = builder.header(name, value);
+        }
+    }
+
+    let response = builder
+        .send()
+        .await
+        .map_err(|error| format!("Gemini request failed: {error}"))?;
+    let status = response.status();
+    let body_text = response
+        .text()
+        .await
+        .map_err(|error| format!("Cannot read Gemini response body: {error}"))?;
+    let raw: serde_json::Value = match serde_json::from_str(&body_text) {
+        Ok(raw) => raw,
+        Err(parse_error) => {
+            let preview: String = body_text.chars().take(600).collect();
+            return Ok(ImageGenerationResult {
+                id: format!("gemini-{}", chrono_like_timestamp_millis()),
+                provider_id: provider_id.clone(),
+                model_id: model_id.clone(),
+                status: "failed".to_string(),
+                prompt: prompt.clone(),
+                image_urls: Vec::new(),
+                local_image_paths: Vec::new(),
+                cost_hint: Some("未产生有效图片；以 Google Gemini 官方账单为准。".to_string()),
+                duration_ms: Some(started.elapsed().as_millis()),
+                error: Some(format!("Gemini 响应不是有效 JSON：{parse_error}")),
+                raw: serde_json::json!({
+                    "http_status": status.as_u16(),
+                    "parse_error": parse_error.to_string(),
+                    "body_preview": preview,
+                    "visionhub_gemini_request": {
+                        "endpoint": endpoint,
+                        "model": model_id,
+                        "aspect_ratio": minimax_aspect_ratio(&api_size),
+                        "size": api_size,
+                        "reference_count": reference_images.len()
+                    },
+                    "visionhub_gemini_diagnostic": {
+                        "category": "response_parse",
+                        "suggestion": "Gemini 返回内容不是 JSON。请检查 Base URL、接口路径和账号网关返回内容。"
+                    }
+                }),
+                created_at: chrono_like_timestamp(),
+                generation_mode: Some(generation_mode),
+                reference_images: Some(reference_images),
+            });
+        }
+    };
+    let image_urls = extract_image_urls(&raw, request.output_format.as_deref());
+    let request_succeeded = status.is_success() && !image_urls.is_empty() && !gemini_raw_has_error(&raw);
+    let gemini_diagnostic_category = gemini_error_category(status.as_u16(), &raw);
+    let local_image_paths = if request_succeeded {
+        save_images_to_library(&app, &image_urls, &request)
+            .await
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let display_image_urls = display_library_image_urls_for_paths(&app, &local_image_paths, &image_urls);
+    let error = if request_succeeded {
+        None
+    } else {
+        Some(format_gemini_error(status.as_u16(), &raw))
+    };
+
+    Ok(ImageGenerationResult {
+        id: format!("gemini-{}", chrono_like_timestamp_millis()),
+        provider_id: provider_id.clone(),
+        model_id: model_id.clone(),
+        status: if error.is_some() { "failed" } else { "succeeded" }.to_string(),
+        prompt: prompt.clone(),
+        image_urls: display_image_urls,
+        local_image_paths,
+        cost_hint: Some("以 Google Gemini 官方账单为准。".to_string()),
+        duration_ms: Some(started.elapsed().as_millis()),
+        error,
+        raw: serde_json::json!({
+            "provider": "gemini",
+            "http_status": status.as_u16(),
+            "response": raw,
+            "visionhub_gemini_request": {
+                "endpoint": endpoint,
+                "model": model_id,
+                "aspect_ratio": minimax_aspect_ratio(&api_size),
+                "size": api_size,
+                "reference_count": reference_images.len(),
+                "response_modalities": ["TEXT", "IMAGE"]
+            },
+            "visionhub_gemini_diagnostic": {
+                "category": gemini_diagnostic_category,
+                "suggestion": gemini_error_suggestion(gemini_diagnostic_category)
             }
         }),
         created_at: chrono_like_timestamp(),
@@ -4579,11 +4746,132 @@ async fn minimax_reference_image_file(
     Err("MiniMax 图生图参考图缺少可提交的 data URL、本地路径或远程 URL。".to_string())
 }
 
+async fn gemini_reference_part(
+    client: &reqwest::Client,
+    reference: &ReferenceImage,
+) -> Result<Value, String> {
+    let (mime_type, data) = reference_image_to_base64(client, reference, "Gemini reference image").await?;
+    Ok(serde_json::json!({
+        "inlineData": {
+            "mimeType": mime_type,
+            "data": data
+        }
+    }))
+}
+
+async fn reference_image_to_base64(
+    client: &reqwest::Client,
+    reference: &ReferenceImage,
+    context: &str,
+) -> Result<(String, String), String> {
+    if let Some(url) = reference
+        .data_url
+        .as_deref()
+        .or(reference.preview_url.as_deref())
+        .filter(|url| url.starts_with("data:image/") || url.starts_with("http://") || url.starts_with("https://"))
+    {
+        if url.starts_with("data:image/") {
+            let (bytes, extension) = decode_data_url_image(url)?;
+            return Ok((
+                mime_from_extension(&extension).to_string(),
+                base64::engine::general_purpose::STANDARD.encode(bytes),
+            ));
+        }
+        let (bytes, extension) = download_remote_image(client, url).await?;
+        return Ok((
+            mime_from_extension(&extension).to_string(),
+            base64::engine::general_purpose::STANDARD.encode(bytes),
+        ));
+    }
+
+    if let Some(local_path) = reference.local_path.as_deref().filter(|value| !value.trim().is_empty()) {
+        let path = PathBuf::from(local_path);
+        if path.is_file() && is_supported_reference_image_path(&path) {
+            let data_url = image_path_to_data_url(&path, context)?;
+            let (bytes, extension) = decode_data_url_image(&data_url)?;
+            return Ok((
+                mime_from_extension(&extension).to_string(),
+                base64::engine::general_purpose::STANDARD.encode(bytes),
+            ));
+        }
+    }
+
+    Err("Gemini 参考图缺少可提交的 data URL、本地路径或远程 URL。".to_string())
+}
+
 fn minimax_raw_has_error(raw: &Value) -> bool {
     raw.pointer("/base_resp/status_code")
         .and_then(|value| value.as_i64())
         .map(|status_code| status_code != 0)
         .unwrap_or(false)
+}
+
+fn gemini_raw_has_error(raw: &Value) -> bool {
+    raw.get("error").is_some()
+}
+
+fn gemini_error_category(status_code: u16, raw: &Value) -> &'static str {
+    let message = raw
+        .pointer("/error/message")
+        .or_else(|| raw.get("message"))
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let status = raw
+        .pointer("/error/status")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    if status_code == 401 || status_code == 403 || status.contains("permission") || message.contains("api key") {
+        return "auth_or_permission";
+    }
+    if status_code == 404 || message.contains("model") || message.contains("not found") {
+        return "model_or_endpoint";
+    }
+    if status_code == 429 || status.contains("quota") || message.contains("quota") || message.contains("rate") {
+        return "quota_or_rate_limit";
+    }
+    if status_code == 400 || status_code == 422 || message.contains("invalid") || message.contains("argument") {
+        return "parameter";
+    }
+    if status_code >= 500 {
+        return "provider_server";
+    }
+    if raw.get("error").is_some() {
+        return "provider_error";
+    }
+    "no_image"
+}
+
+fn gemini_error_suggestion(category: &str) -> &'static str {
+    match category {
+        "auth_or_permission" => "检查 Gemini API Key 是否保存到当前配置实例，以及 Google AI Studio 项目是否允许调用该模型。",
+        "model_or_endpoint" => "检查模型 ID 是否为 gemini-2.5-flash-image，Base URL 和 /v1beta/models/{model}:generateContent 路径是否匹配。",
+        "quota_or_rate_limit" => "检查 Google Gemini API 配额、频率限制或稍后重试。",
+        "parameter" => "回到默认比例、数量 1、gemini-2.5-flash-image 后再试，逐项恢复参考图和高级参数。",
+        "provider_server" => "Gemini 服务端或网关异常；保留 raw 和请求摘要，稍后重试或到 Google 控制台对照。",
+        "provider_error" => "Gemini 返回业务错误；复制诊断报告和 raw 与 Google 控制台对照。",
+        "response_parse" => "接口返回不是 JSON；检查 Base URL、接口路径或网关是否返回了网页/错误页。",
+        _ => "没有提取到 inline image；检查 responseModalities、模型权限和 raw 响应里的 inlineData。",
+    }
+}
+
+fn format_gemini_error(status_code: u16, raw: &Value) -> String {
+    let api_status = raw
+        .pointer("/error/status")
+        .and_then(|value| value.as_str());
+    let api_message = raw
+        .pointer("/error/message")
+        .or_else(|| raw.get("message"))
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty());
+    match (api_status, api_message) {
+        (Some(status), Some(message)) => format!("Gemini 返回错误 {status}：{message}"),
+        (Some(status), None) => format!("Gemini 返回错误 {status}。"),
+        (None, Some(message)) => format!("Gemini 请求失败：HTTP {status_code}，{message}"),
+        (None, None) => format!("Gemini 请求失败：HTTP {status_code}，没有返回有效图片。"),
+    }
 }
 
 fn minimax_error_category(status_code: u16, raw: &Value) -> &'static str {
@@ -4658,6 +4946,23 @@ fn format_minimax_error(status_code: u16, raw: &Value) -> String {
 fn collect_images_recursive(value: &Value, urls: &mut Vec<String>, default_base64_mime: &str) {
     match value {
         Value::Object(map) => {
+            if let Some(inline_data) = map
+                .get("inlineData")
+                .or_else(|| map.get("inline_data"))
+                .and_then(|value| value.as_object())
+            {
+                let inline_mime = inline_data
+                    .get("mimeType")
+                    .or_else(|| inline_data.get("mime_type"))
+                    .and_then(|value| value.as_str())
+                    .filter(|value| value.starts_with("image/"))
+                    .unwrap_or(default_base64_mime);
+                if let Some(b64) = inline_data.get("data").and_then(|value| value.as_str()) {
+                    if is_probable_base64_image(b64) {
+                        urls.push(format!("data:{inline_mime};base64,{b64}"));
+                    }
+                }
+            }
             for key in ["url", "image_url"] {
                 if let Some(url) = map.get(key).and_then(|value| value.as_str()) {
                     if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("data:image/") {

@@ -154,6 +154,7 @@ visionhub-studio/
 - 图片收藏目录已从作品画廊目录中独立出来，可在偏好设置里单独选择和打开；免费平台导入成品后会刷新灵感中心图片收藏。
 - 提示词润色已拆成本地规则和模型润色两条路径，模型润色使用独立凭据 `prompt-polish:default`。
 - MiniMax 官方已作为 0.3.8 第一条新增官方图片 API 进入实接链路：`image-01` 文生图和单张人物主体参考图生图已用真实 MiniMax API Key 测试成功，走独立凭据、`/v1/image_generation`、固定模型 ID 选择和专用错误诊断；模型列表不再误导为 OpenAI-compatible `/v1/models`。
+- Google Gemini / Nano Banana 官方已进入 0.3.8 实接代码链路：使用独立 Gemini API Key、`/v1beta/models/{model}:generateContent`、`gemini-2.5-flash-image` 固定模型和 `inlineData` 参考图 / 返回图解析；当前已完成代码与本地构建验证，仍需用户提供真实 Gemini API Key 后做文生图和图生图额度联调。
 - `/v1/responses` 图片结果解析已兼容常见 `result` / `image` 字段。
 - Responses 长任务已加入 background + store 尝试和轮询查询；中转站不支持时会回退同步请求。
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
@@ -707,7 +708,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - 目标：把官方 API 从“规划模板”推进到多平台真实接入，同时保持中转站 / 聚合 API 仍是默认主入口。
   - 第一阶段先改平台模板结构：增加国内 / 国外标识、接入状态、排序权重、官方文档入口和能力字段；已接入 / 可配置模板靠上，待接入模板自动靠下。
   - 默认服务模板主流优先，不堆用户没听过、短期不用、也没有真实接入计划的小众平台。
-  - 官方 API 多平台真实接入：MiniMax 作为第一条新增官方 API 已进入实接链路，`image-01` 文生图和单张人物主体参考图生图已实测通过，并已补齐固定模型 ID 诊断、非 OpenAI-compatible 模型列表提示和 MiniMax 专用错误分类；后续继续推进小米 MiMo 候选核验、Gemini / Nano Banana、xAI、火山方舟 / Seedream、阿里百炼 / 通义万相、可灵企业 API、即梦企业 API。
+  - 官方 API 多平台真实接入：MiniMax 作为第一条新增官方 API 已进入实接链路，`image-01` 文生图和单张人物主体参考图生图已实测通过，并已补齐固定模型 ID 诊断、非 OpenAI-compatible 模型列表提示和 MiniMax 专用错误分类；Google Gemini / Nano Banana 官方已完成 `generateContent` / `inlineData` 代码链路和本地构建验证，待真实 Gemini API Key 联调；后续继续推进 xAI、火山方舟 / Seedream、阿里百炼 / 通义万相、可灵企业 API、即梦企业 API。
   - 小米 MiMo 已完成第一轮公开文档核验：当前官方 API 主要覆盖文本、图像理解和全模态推理，未发现公开文生图 / 图生图 endpoint；软件中继续作为官方候选说明，不开放保存启用或真实生图。
   - 每个官方平台单独 adapter，不把官方 API 强塞进 OpenAI-compatible；共用任务轮询、图片下载、错误归一化和作品画廊保存链路。
   - 官方 API 第一批稳定后，再推进聚合网站 API、硅基流动等聚合站真实能力，以及 Stable Diffusion WebUI / Forge 本地模型路线。

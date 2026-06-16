@@ -43,6 +43,7 @@ for provider_id in [
     "openai-gpt-image",
     "custom-http-provider",
     "comfyui-local",
+    "gemini-image",
 ]:
     assert provider_id in manifest_src, f"Provider missing: {provider_id}"
 for term in ["promptPolish", "textModels", "gpt-4o-mini", "中转站文本模型"]:
@@ -243,6 +244,9 @@ for term in [
     "MiniMax 官方",
     "minimax-image",
     "/v1/image_generation",
+    "Google Gemini / Nano Banana 官方",
+    "gemini-image",
+    "/v1beta/models/{model}:generateContent",
     "小米 MiMo 官方",
     "图像理解",
     "providerServiceRegionLabel",
@@ -320,11 +324,11 @@ for term in ["validateGenerationRequest", "请先在平台接入设置 Base URL"
     assert term in store_src, f"Generation preflight missing: {term}"
 
 manifests_src = (ROOT / "src/providers/manifests.ts").read_text(encoding="utf-8")
-for term in ["minimax-image", "MiniMax API Key", "image-01-live", "imageToImage: 'partial'"]:
+for term in ["minimax-image", "MiniMax API Key", "image-01-live", "gemini-image", "Gemini API Key", "gemini-2.5-flash-image", "imageToImage: 'partial'"]:
     assert term in manifests_src, f"Provider manifest missing: {term}"
 
 tauri_src = (ROOT / "src-tauri/src/main.rs").read_text(encoding="utf-8")
-for term in ["get_app_paths", "reveal_app_data_dir", "reveal_library_dir", "export_settings_backup", "open_external_url", "polish_prompt_with_provider", "PromptPolishRequest", "extract_text_response", "prompt_polish_mode_rules", "ensure_prompt_polish_changed", "generate_minimax_image", "visionhub_minimax_request", "visionhub_minimax_diagnostic", "subject_reference", "build_minimax_subject_reference"]:
+for term in ["get_app_paths", "reveal_app_data_dir", "reveal_library_dir", "export_settings_backup", "open_external_url", "polish_prompt_with_provider", "PromptPolishRequest", "extract_text_response", "prompt_polish_mode_rules", "ensure_prompt_polish_changed", "generate_minimax_image", "visionhub_minimax_request", "visionhub_minimax_diagnostic", "subject_reference", "build_minimax_subject_reference", "generate_gemini_image", "visionhub_gemini_request", "visionhub_gemini_diagnostic", "gemini_reference_part", "inlineData"]:
     assert term in tauri_src, f"Tauri settings command missing: {term}"
 
 styles_src = (ROOT / "src/ui/styles.css").read_text(encoding="utf-8")
