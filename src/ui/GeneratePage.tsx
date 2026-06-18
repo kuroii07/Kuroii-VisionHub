@@ -432,6 +432,7 @@ export function ModernGeneratePage(props: {
   onQualityChange: (quality: string) => void;
   onGenerate: (options?: GenerateSubmitOptions) => void;
   onAddToBatchQueue?: (options?: GenerateSubmitOptions) => void;
+  onAddCompareGroupToBatchQueue?: (profileIds: string[], options?: GenerateSubmitOptions) => void;
   batchQueueTaskCount?: number;
   onPreview: (imageUrl: string) => void;
   onReloadHistory: () => void | Promise<void>;
@@ -468,6 +469,7 @@ export function ModernGeneratePage(props: {
   const [canvasPreviewIndex, setCanvasPreviewIndex] = useState(0);
   const [activeGeneratingMode, setActiveGeneratingMode] = useState<GenerationMode | null>(null);
   const [canvasClearedAfterByMode, setCanvasClearedAfterByMode] = useState<Partial<Record<CanvasGenerationMode, number>>>(() => loadCanvasClearedAfter());
+  const [compareProfileIds, setCompareProfileIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
   const referenceNoticeTimerRef = useRef<number | null>(null);
@@ -507,6 +509,24 @@ export function ModernGeneratePage(props: {
     label: profile.displayName || profile.modelId || '未命名配置',
     description: `${profile.modelId || '未设置模型'} · ${profile.enabled ? '当前启用' : profileStatusLabel(profile.lastTestStatus)}`
   }));
+  const compareProfileCandidates = useMemo(
+    () => props.supportsOpenAICompatible
+      ? props.providerProfiles.filter((profile) => profile.modelId.trim())
+      : [],
+    [props.providerProfiles, props.supportsOpenAICompatible]
+  );
+  const compareCandidateIdSet = useMemo(
+    () => new Set(compareProfileCandidates.map((profile) => profile.id)),
+    [compareProfileCandidates]
+  );
+  const selectedCompareProfileIds = compareProfileIds.filter((profileId) => compareCandidateIdSet.has(profileId));
+  const selectedCompareProfileCount = selectedCompareProfileIds.length;
+  const canCreateCompareGroup = Boolean(
+    props.onAddCompareGroupToBatchQueue &&
+    props.supportsOpenAICompatible &&
+    selectedCompareProfileCount >= 2 &&
+    !props.isGenerating
+  );
   const effectivePromptPolishSettings: PromptPolishSettings =
     selectedQuickPolishValue === '__local__'
       ? { ...props.promptPolishSettings, engine: 'local' }
@@ -646,6 +666,19 @@ export function ModernGeneratePage(props: {
   useEffect(() => {
     setOutputFormat(props.defaultOutputFormat);
   }, [props.defaultOutputFormat]);
+
+  useEffect(() => {
+    setCompareProfileIds((current) => {
+      const validCurrent = current.filter((profileId) => compareCandidateIdSet.has(profileId));
+      if (validCurrent.length > 0) return validCurrent;
+      const activeProfileId = props.activeProfile?.id && compareCandidateIdSet.has(props.activeProfile.id)
+        ? props.activeProfile.id
+        : compareProfileCandidates[0]?.id;
+      if (!activeProfileId) return [];
+      const secondProfileId = compareProfileCandidates.find((profile) => profile.id !== activeProfileId)?.id;
+      return secondProfileId ? [activeProfileId, secondProfileId] : [activeProfileId];
+    });
+  }, [compareCandidateIdSet, compareProfileCandidates, props.activeProfile?.id]);
 
   useEffect(() => {
     if (props.referenceImages.length > 0) {
@@ -1173,6 +1206,25 @@ export function ModernGeneratePage(props: {
     updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入批量队列')));
   }
 
+  function toggleCompareProfile(profileId: string, checked: boolean) {
+    setCompareProfileIds((current) => {
+      const next = new Set(current.filter((item) => compareCandidateIdSet.has(item)));
+      if (checked) next.add(profileId);
+      else next.delete(profileId);
+      return Array.from(next);
+    });
+  }
+
+  function addCompareGroupToBatchQueue() {
+    if (!props.onAddCompareGroupToBatchQueue || !isCurrentSizeSupportedByModel()) return;
+    if (selectedCompareProfileIds.length < 2) {
+      showDraftNotice('至少选择 2 个配置实例，才能创建多模型对比队列。');
+      return;
+    }
+    props.onAddCompareGroupToBatchQueue(selectedCompareProfileIds, buildCurrentGenerationOptions());
+    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入多模型对比队列')));
+  }
+
   return (
     <div
       className={`generatorStudio ${referenceDragState ? `isReferenceDragActive ${referenceDragState}` : ''}`}
@@ -1594,6 +1646,69 @@ export function ModernGeneratePage(props: {
               <span>{activeProfileSecretText}</span>
             </div>
           </div>
+          {props.supportsOpenAICompatible && compareProfileCandidates.length > 1 ? (
+            <div className="compareProfileBox" aria-label="多模型对比配置实例选择器">
+              <div className="compareProfileHeader">
+                <div>
+                  <strong>多模型对比</strong>
+                  <small>可同时选择多个配置实例；无需把它们都设为启用。</small>
+                </div>
+                <span>{selectedCompareProfileCount}/{compareProfileCandidates.length}</span>
+              </div>
+              <div className="compareProfileList">
+                {compareProfileCandidates.map((profile) => {
+                  const checked = selectedCompareProfileIds.includes(profile.id);
+                  return (
+                    <label className={`compareProfileOption ${checked ? 'active' : ''}`} key={profile.id}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={props.isGenerating}
+                        onChange={(event) => toggleCompareProfile(profile.id, event.target.checked)}
+                      />
+                      <span>
+                        <strong>{profile.displayName || profile.modelId}</strong>
+                        <small>{profile.modelId} · {profile.baseUrl || '未配置 Base URL'}</small>
+                      </span>
+                      <em>{profile.enabled ? '当前' : profileStatusLabel(profile.lastTestStatus)}</em>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="compareProfileActions">
+                <button
+                  type="button"
+                  className="miniButton"
+                  onClick={() => setCompareProfileIds(compareProfileCandidates.map((profile) => profile.id))}
+                  disabled={props.isGenerating}
+                  title="选择当前平台下所有可用配置实例"
+                  aria-label="全选多模型对比配置实例"
+                >
+                  全选
+                </button>
+                <button
+                  type="button"
+                  className="miniButton"
+                  onClick={() => setCompareProfileIds([])}
+                  disabled={props.isGenerating}
+                  title="清空多模型对比配置实例选择"
+                  aria-label="清空多模型对比配置实例选择"
+                >
+                  清空
+                </button>
+                <button
+                  type="button"
+                  className="miniButton primary"
+                  onClick={addCompareGroupToBatchQueue}
+                  disabled={!canCreateCompareGroup}
+                  title="把同一 Prompt 和当前参数分别按所选配置实例创建任务快照；不会立即消耗额度"
+                  aria-label="加入多模型对比队列"
+                >
+                  加入对比队列
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <section className="railCard">

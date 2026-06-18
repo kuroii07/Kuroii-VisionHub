@@ -148,7 +148,9 @@ import { FREE_PLATFORMS, buildFreePlatformPrompt, type FreePlatform } from '../s
 import { readStorageValue, writeStorageValue } from '../services/safeStorage';
 import {
   appendBatchQueueTasks,
+  appendBatchQueueTasksAndCompareGroups,
   createBatchQueue,
+  createBatchQueueCompareGroup,
   createBatchQueueTask,
   createQueuedGenerationSnapshot,
   loadBatchQueueStore,
@@ -165,7 +167,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
-const APP_VERSION = '0.3.8';
+const APP_VERSION = '0.3.9';
 
 type Page = AppPage;
 type ProviderDiagnosticLevel = 'pass' | 'warn' | 'fail' | 'info';
@@ -2732,6 +2734,128 @@ export function App() {
     navigateTo('batch');
   }
 
+  function handleAddCompareGroupToBatchQueue(profileIds: string[], options: GenerateSubmissionOptions = {}) {
+    const trimmedPrompt = prompt.trim();
+    const generationMode = options.mode ?? 'text-to-image';
+    const references = options.references ?? [];
+    if (!trimmedPrompt) {
+      setConfigMessage('请先输入 Prompt，再创建多模型对比队列。');
+      return;
+    }
+    if (!generationSupportsOpenAICompatible) {
+      setConfigMessage('多模型对比 V1 当前先支持中转站 / 聚合 API 和官方 OpenAI-compatible 配置实例。');
+      return;
+    }
+    if (generationMode === 'image-to-image' && references.length === 0) {
+      setConfigMessage('图生图对比任务需要先添加至少一张参考图。');
+      return;
+    }
+
+    const uniqueProfileIds = Array.from(new Set(profileIds)).filter(Boolean);
+    const selectedProfiles = uniqueProfileIds
+      .map((profileId) => providerProfiles.find((item) => item.id === profileId))
+      .filter((profile): profile is ProviderConnectionProfile => Boolean(profile))
+      .filter((profile) => profile.providerId === selectedProviderId);
+    if (selectedProfiles.length < 2) {
+      setConfigMessage('请至少选择 2 个当前平台下的配置实例，再加入多模型对比队列。');
+      return;
+    }
+
+    const missingModelProfile = selectedProfiles.find((profile) => !profile.modelId.trim());
+    if (missingModelProfile) {
+      setConfigMessage(`配置实例 ${missingModelProfile.displayName} 的模型 ID 为空，请先补全模型后再对比。`);
+      return;
+    }
+
+    const existingQueue = batchQueueStore.queues[0] ?? null;
+    const queue = existingQueue ?? createBatchQueue({
+      name: '默认批量队列',
+      description: '从 AI 创作台加入的生成任务会先进入这里，执行前仍需二次确认。',
+      status: 'ready'
+    });
+    const requestedCount = Math.max(1, Math.min(4, Math.round(count)));
+    const compareGroupDraft = createBatchQueueCompareGroup({
+      queueId: queue.id,
+      prompt: trimmedPrompt,
+      profileIds: selectedProfiles.map((profile) => profile.id)
+    });
+    const addedAt = new Date().toISOString();
+    const tasks: BatchGenerationQueue['tasks'] = [];
+
+    for (const profile of selectedProfiles) {
+      const profileConfig = profileToProviderConfig(profile);
+      let extraHeaders: Record<string, string> | undefined;
+      try {
+        extraHeaders = parseExtraHeaders(profileConfig.extraHeadersJson);
+      } catch (error) {
+        setConfigMessage(`配置实例 ${profile.displayName} 的额外 Headers JSON 无法解析，未加入对比队列：${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
+
+      const snapshot = createQueuedGenerationSnapshot({
+        providerId: profile.providerId,
+        providerName: generationSelectedProvider.name,
+        profileId: profile.id,
+        profileName: profile.displayName,
+        modelId: profileConfig.modelId.trim(),
+        prompt: trimmedPrompt,
+        negativePrompt: options.negativePrompt,
+        size,
+        quality,
+        outputFormat: options.outputFormat ?? appSettings.generationDefaults.outputFormat,
+        outputCompression: options.outputCompression,
+        count: requestedCount,
+        generationMode,
+        references,
+        seed: options.seed,
+        baseUrl: profileConfig.baseUrl,
+        protocol: profileConfig.protocol,
+        imageToImageAdapter: profileConfig.imageToImageAdapter,
+        endpointPath: profileConfig.endpointPath,
+        extraHeaders,
+        secretId: providerProfileSecretId(profile.id),
+        metadata: {
+          ...(options.metadata ?? {}),
+          visionhub_model_compare: {
+            compareGroupId: compareGroupDraft.id,
+            origin: 'generate-page',
+            addedAt,
+            realExecutionRequiresConfirmation: true,
+            profileId: profile.id,
+            profileName: profile.displayName
+          }
+        },
+        source: 'model-compare'
+      });
+      tasks.push(createBatchQueueTask({
+        queueId: queue.id,
+        snapshot,
+        kind: 'model-compare',
+        compareGroupId: compareGroupDraft.id,
+        title: `对比 · ${profile.displayName || profileConfig.modelId} · ${profileConfig.modelId}`
+      }));
+    }
+
+    const compareGroup = {
+      ...compareGroupDraft,
+      taskIds: tasks.map((task) => task.id),
+      updatedAt: addedAt
+    };
+    const nextStore = existingQueue
+      ? appendBatchQueueTasksAndCompareGroups(queue.id, tasks, [compareGroup], batchQueueStore)
+      : upsertBatchQueue({ ...queue, tasks, compareGroups: [compareGroup], status: 'ready' }, batchQueueStore);
+    setBatchQueueStore(nextStore);
+    const omittedReferenceCount = tasks.reduce(
+      (sum, task) => sum + (task.snapshot.referencePolicy?.omittedReferenceIds.length ?? 0),
+      0
+    );
+    setConfigMessage([
+      `已创建多模型对比组：${selectedProfiles.length} 个配置实例，${tasks.length} 个任务，单任务 ${requestedCount} 张。`,
+      omittedReferenceCount > 0 ? `有 ${omittedReferenceCount} 个任务的参考图未持久化大体积数据，执行前需要重新确认参考图。` : ''
+    ].filter(Boolean).join(' '));
+    navigateTo('batch');
+  }
+
   function setBatchTaskState(queueId: string, taskId: string, patch: Parameters<typeof updateBatchQueueTask>[2]) {
     const nextStore = updateBatchQueueTask(queueId, taskId, patch, loadBatchQueueStore());
     setBatchQueueStore(nextStore);
@@ -4942,6 +5066,7 @@ export function App() {
               onQualityChange={setQuality}
               onGenerate={runCreativeDeskGenerate}
               onAddToBatchQueue={handleAddCurrentGenerationToBatchQueue}
+              onAddCompareGroupToBatchQueue={handleAddCompareGroupToBatchQueue}
               batchQueueTaskCount={batchQueueAggregate.total}
               onPreview={setGeneratePreviewUrl}
               onReloadHistory={loadHistory}
@@ -5163,9 +5288,11 @@ function BatchQueuePage(props: {
     acc.succeeded += summary.succeeded;
     acc.failed += summary.failed;
     acc.requestedImages += summary.requestedImages;
+    acc.compareGroups += queue.compareGroups?.length ?? 0;
     return acc;
-  }, { total: 0, pending: 0, running: 0, succeeded: 0, failed: 0, requestedImages: 0 });
+  }, { total: 0, pending: 0, running: 0, succeeded: 0, failed: 0, requestedImages: 0, compareGroups: 0 });
   const visibleTasks = activeQueue ? [...activeQueue.tasks].reverse().slice(0, 80) : [];
+  const compareGroupMap = new Map((activeQueue?.compareGroups ?? []).map((group) => [group.id, group]));
   const omittedReferenceCount = visibleTasks.reduce(
     (sum, task) => sum + (task.snapshot.referencePolicy?.omittedReferenceIds.length ?? 0),
     0
@@ -5217,6 +5344,7 @@ function BatchQueuePage(props: {
         <BatchQueueStat label="队列数" value={props.queues.length} hint={activeQueue?.name ?? '暂无队列'} />
         <BatchQueueStat label="任务数" value={aggregate.total} hint={`${aggregate.pending} 个待执行`} />
         <BatchQueueStat label="预计图片" value={aggregate.requestedImages} hint="按任务 count 汇总" />
+        <BatchQueueStat label="对比组" value={aggregate.compareGroups} hint={`${activeQueue?.compareGroups?.length ?? 0} 个在当前队列`} />
         <BatchQueueStat label="失败 / 成功" value={`${aggregate.failed} / ${aggregate.succeeded}`} hint="执行后回写" />
       </div>
 
@@ -5231,7 +5359,7 @@ function BatchQueuePage(props: {
             </div>
             <div className="batchQueueCard active">
               <strong>{activeQueue.name}</strong>
-              <span>{activeSummary.total} 个任务 · {activeSummary.requestedImages} 张预计输出</span>
+              <span>{activeSummary.total} 个任务 · {activeSummary.requestedImages} 张预计输出 · {activeQueue.compareGroups?.length ?? 0} 个对比组</span>
               <small>{batchQueueStatusLabel(activeQueue.status)} · {formatWorkspaceHomeTime(activeQueue.updatedAt)}</small>
             </div>
             {props.queues.slice(1).map((queue) => {
@@ -5266,11 +5394,18 @@ function BatchQueuePage(props: {
                   const canRequeue = task.status === 'failed' && !props.executingTaskId;
                   const canCancel = task.status === 'pending' && !props.executingTaskId && !props.runningQueueId;
                   const canDelete = (task.status === 'failed' || task.status === 'cancelled') && !props.executingTaskId && !props.runningQueueId;
+                  const compareGroup = task.compareGroupId ? compareGroupMap.get(task.compareGroupId) : undefined;
+                  const compareTaskIndex = compareGroup ? compareGroup.taskIds.indexOf(task.id) + 1 : 0;
                   return (
                   <article className={`batchTaskItem ${isExecuting ? 'running' : ''}`} key={task.id}>
                     <div className="batchTaskMain">
                       <div className="batchTaskTitleRow">
                         <strong>{task.title}</strong>
+                        {compareGroup ? (
+                          <span className="batchCompareBadge" title={`对比组 ${compareGroup.id}`}>
+                            对比组 {compareTaskIndex > 0 ? `${compareTaskIndex}/${compareGroup.taskIds.length}` : compareGroup.taskIds.length}
+                          </span>
+                        ) : null}
                         <span className={`batchTaskStatus ${task.status}`}>{batchQueueTaskStatusLabel(task.status)}</span>
                       </div>
                       <p>{task.snapshot.prompt}</p>

@@ -121,6 +121,11 @@ for term in [
     "requestStartBatchQueue",
     "requestStopBatchQueue",
     "requestDeleteBatchQueueTask",
+    "handleAddCompareGroupToBatchQueue",
+    "createBatchQueueCompareGroup",
+    "appendBatchQueueTasksAndCompareGroups",
+    "compareGroupId",
+    "visionhub_model_compare",
     "visionhub_queue_retry",
     "执行此任务",
     "确认执行",
@@ -169,6 +174,10 @@ for term in [
     "onAddToBatchQueue",
     "batchQueueTaskCount",
     "加入队列",
+    "onAddCompareGroupToBatchQueue",
+    "多模型对比",
+    "加入对比队列",
+    "compareProfileBox",
     "secondaryQueueButton",
 ]:
     assert term in generate_src, f"Generate page prompt assist missing: {term}"
@@ -464,12 +473,16 @@ for selector in [
     ".batchTaskItem",
     ".batchTaskActions",
     ".batchTaskError",
+    ".batchCompareBadge",
+    ".compareProfileBox",
+    ".compareProfileOption",
+    ".compareProfileActions",
     ".workspaceCommandButton.dangerAction",
     ".secondaryQueueButton",
 ]:
     assert selector in styles_src, f"Remote UI hardening selector missing: {selector}"
 
-for term in ["removeBatchQueueTask", "批量队列不存在，无法删除任务。"]:
+for term in ["removeBatchQueueTask", "批量队列不存在，无法删除任务。", "BatchQueueCompareGroup", "createBatchQueueCompareGroup"]:
     assert term in batch_queue_src, f"Batch queue delete helper missing: {term}"
 
 svg = (ROOT / "planning/product-overview.svg").read_text(encoding="utf-8")

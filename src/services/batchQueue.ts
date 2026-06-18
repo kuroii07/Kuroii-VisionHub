@@ -45,6 +45,13 @@ export interface CreateBatchQueueTaskInput {
   status?: BatchQueueTaskStatus;
 }
 
+export interface CreateBatchQueueCompareGroupInput {
+  queueId: string;
+  prompt: string;
+  taskIds?: string[];
+  profileIds?: string[];
+}
+
 export function createEmptyBatchQueueStore(): BatchQueueStore {
   return {
     version: CURRENT_STORE_VERSION,
@@ -122,6 +129,42 @@ export function appendBatchQueueTasks(queueId: string, tasks: BatchQueueTask[], 
       ...queue.tasks,
       ...tasks.map((task) => normalizeBatchQueueTask({ ...task, queueId }))
     ].slice(0, MAX_TASKS_PER_QUEUE),
+    updatedAt: now
+  };
+  return upsertBatchQueue(nextQueue, store);
+}
+
+export function appendBatchQueueTasksAndCompareGroups(
+  queueId: string,
+  tasks: BatchQueueTask[],
+  compareGroups: BatchQueueCompareGroup[] = [],
+  store = loadBatchQueueStore()
+) {
+  const queue = store.queues.find((item) => item.id === queueId);
+  if (!queue) throw new Error('批量队列不存在，无法追加对比任务。');
+
+  const now = nowIso();
+  const shouldReactivateQueue =
+    tasks.length > 0 &&
+    (queue.status === 'draft' ||
+      queue.status === 'paused' ||
+      queue.status === 'completed' ||
+      queue.status === 'completed-with-errors' ||
+      queue.status === 'cancelled');
+  const existingGroupIds = new Set((queue.compareGroups ?? []).map((group) => group.id));
+  const nextQueue: BatchGenerationQueue = {
+    ...queue,
+    status: shouldReactivateQueue ? 'ready' : queue.status,
+    tasks: [
+      ...queue.tasks,
+      ...tasks.map((task) => normalizeBatchQueueTask({ ...task, queueId }))
+    ].slice(0, MAX_TASKS_PER_QUEUE),
+    compareGroups: [
+      ...(queue.compareGroups ?? []),
+      ...compareGroups
+        .filter((group) => !existingGroupIds.has(group.id))
+        .map((group) => normalizeCompareGroup({ ...group, queueId }))
+    ],
     updatedAt: now
   };
   return upsertBatchQueue(nextQueue, store);
@@ -242,6 +285,19 @@ export function createBatchQueueTask(input: CreateBatchQueueTaskInput): BatchQue
     status: input.status ?? 'pending',
     attempt: 0,
     resultRecordIds: [],
+    createdAt,
+    updatedAt: createdAt
+  });
+}
+
+export function createBatchQueueCompareGroup(input: CreateBatchQueueCompareGroupInput): BatchQueueCompareGroup {
+  const createdAt = nowIso();
+  return normalizeCompareGroup({
+    id: createBatchQueueId('compare'),
+    queueId: input.queueId,
+    prompt: input.prompt,
+    taskIds: input.taskIds ?? [],
+    profileIds: input.profileIds ?? [],
     createdAt,
     updatedAt: createdAt
   });
