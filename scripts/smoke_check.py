@@ -189,7 +189,8 @@ for term in [
     "多模型对比",
     "加入对比队列",
     "compareProfileBox",
-    "secondaryQueueButton",
+    "quickQueueActions",
+    "quickQueueButton",
 ]:
     assert term in generate_src, f"Generate page prompt assist missing: {term}"
 
@@ -494,8 +495,9 @@ for selector in [
     ".compareProfileBox",
     ".compareProfileOption",
     ".compareProfileActions",
+    ".quickQueueActions",
+    ".quickQueueButton",
     ".workspaceCommandButton.dangerAction",
-    ".secondaryQueueButton",
 ]:
     assert selector in styles_src, f"Remote UI hardening selector missing: {selector}"
 

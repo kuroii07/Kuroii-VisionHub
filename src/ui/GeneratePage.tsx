@@ -592,9 +592,6 @@ export function ModernGeneratePage(props: {
     : props.activeProfile?.lastModelProbe
     ? props.activeProfile.lastModelProbe.available ? '当前模型已命中' : '当前模型未命中'
     : '模型未探测';
-  const topbarProviderSummary = props.supportsOpenAICompatible
-    ? `${providerAccessLabel(props.selectedProvider)} · ${activeProfileName} · ${modelValue}`
-    : `${providerAccessLabel(props.selectedProvider)} · ${modelValue}`;
   const selectedRatio = ratioFromSize(props.size);
   const selectedSize = SIZE_OPTIONS.find((item) => item.value === props.size);
   const currentRatioSizes = useMemo(() => SIZE_OPTIONS.filter((item) => item.ratio === selectedRatio), [selectedRatio]);
@@ -1329,7 +1326,6 @@ export function ModernGeneratePage(props: {
             <span className="tealLabel">AI 创作工作台</span>
             <div className="workspaceTitleLine">
               <strong>{isCurrentModeGenerating ? '当前模式渲染中' : activeCanvasPreviewItem ? '当前模式最近画面' : '准备生成'}</strong>
-              <small>{topbarProviderSummary}</small>
             </div>
           </div>
           <div className="quickToolbar">
@@ -1345,6 +1341,30 @@ export function ModernGeneratePage(props: {
             <span className="sessionCount">
               <Clock3 size={13} /> {currentModeSessionResults.length}
             </span>
+            <div className="quickQueueActions" aria-label="队列与批量操作">
+              <button
+                className="quickQueueButton"
+                type="button"
+                onClick={addToBatchQueue}
+                disabled={props.isGenerating || !props.onAddToBatchQueue}
+                title="把当前 Prompt、模型、尺寸和参考图快照加入批量队列；不会立即消耗额度"
+                aria-label="加入批量队列"
+              >
+                <ListChecks size={14} />
+                <span>{props.batchQueueTaskCount ? `队列 · ${props.batchQueueTaskCount}` : '加入队列'}</span>
+              </button>
+              <button
+                className="quickQueueButton"
+                type="button"
+                onClick={() => setIsBatchToolsOpen(true)}
+                disabled={props.isGenerating || (!props.onAddBatchVariantsToBatchQueue && !props.onAddCompareGroupToBatchQueue)}
+                title="打开批量变体和多模型对比创建器；不会立即消耗额度"
+                aria-label="打开批量与多模型对比"
+              >
+                <GalleryHorizontal size={14} />
+                <span>批量 / 对比</span>
+              </button>
+            </div>
           </div>
         </header>
 
@@ -1670,28 +1690,6 @@ export function ModernGeneratePage(props: {
                 aria-label={generateButtonLabel}
               >
                 <Sparkles size={17} /> {generateButtonLabel}
-              </button>
-              <button
-                className="secondaryQueueButton"
-                type="button"
-                onClick={addToBatchQueue}
-                disabled={props.isGenerating || !props.onAddToBatchQueue}
-                title="把当前 Prompt、模型、尺寸和参考图快照加入批量队列；不会立即消耗额度"
-                aria-label="加入批量队列"
-              >
-                <ListChecks size={15} />
-                <span>{props.batchQueueTaskCount ? `加入队列 · ${props.batchQueueTaskCount}` : '加入队列'}</span>
-              </button>
-              <button
-                className="secondaryQueueButton"
-                type="button"
-                onClick={() => setIsBatchToolsOpen(true)}
-                disabled={props.isGenerating || (!props.onAddBatchVariantsToBatchQueue && !props.onAddCompareGroupToBatchQueue)}
-                title="打开批量变体和多模型对比创建器；不会立即消耗额度"
-                aria-label="打开批量与多模型对比"
-              >
-                <GalleryHorizontal size={15} />
-                <span>批量 / 对比</span>
               </button>
             </div>
           </div>

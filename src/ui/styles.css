@@ -8180,6 +8180,7 @@ body {
 .workspaceGenerate .quickToolbar {
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 7px;
@@ -8208,6 +8209,48 @@ body {
   align-items: center;
   gap: 6px;
   max-width: none;
+}
+
+.workspaceGenerate .quickQueueActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 2px;
+  padding-left: 8px;
+  border-left: 1px solid var(--app-line);
+}
+
+.workspaceGenerate .quickQueueButton {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-line));
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-text));
+  background-color: color-mix(in srgb, var(--app-accent-strong) 9%, var(--app-surface));
+  background-image: none;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease;
+}
+
+.workspaceGenerate .quickQueueButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 48%, var(--app-line));
+  background-color: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
+}
+
+.workspaceGenerate .quickQueueButton:disabled {
+  color: var(--app-muted);
+  border-color: var(--app-line);
+  background-color: color-mix(in srgb, var(--app-surface-2) 72%, var(--app-surface));
+  cursor: not-allowed;
+  opacity: 0.68;
 }
 
 .workspaceGenerate .modeToggle {
@@ -20452,7 +20495,7 @@ body {
 
 /* Batch Queue V1 — visible entry and non-consuming task snapshots. */
 .workspaceGenerate .promptControlRow .generateStack {
-  width: min(184px, 100%);
+  width: min(158px, 100%);
   display: grid;
   gap: 6px;
 }
