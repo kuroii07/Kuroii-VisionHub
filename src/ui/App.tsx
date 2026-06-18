@@ -2762,7 +2762,7 @@ export function App() {
 
     const estimatedTasks = normalizedPrompts.length * normalizedSizes.length;
     if (estimatedTasks > 40) {
-      setConfigMessage(`本次批量变体会创建 ${estimatedTasks} 个任务，超过单次上限 40 个；请减少 Prompt 或尺寸数量。`);
+      setConfigMessage(`本次批量变体会创建 ${estimatedTasks} 个任务，超过单次上限 40 个；请减少 Prompt 或画面比例数量。`);
       return;
     }
 
@@ -5517,7 +5517,7 @@ function BatchQueuePage(props: {
                       <div className="batchTaskTitleRow">
                         <strong>{task.title}</strong>
                         {isBatchVariantTask ? (
-                          <span className="batchVariantBadge" title="多 Prompt / 多尺寸批量变体任务">
+                          <span className="batchVariantBadge" title="多 Prompt / 多画面比例批量变体任务">
                             批量变体
                           </span>
                         ) : null}

@@ -3800,6 +3800,92 @@ kbd {
   white-space: nowrap;
 }
 
+.workspaceGenerate .batchToolsBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3600;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(10, 15, 24, 0.46);
+  backdrop-filter: blur(12px) saturate(1.05);
+}
+
+.workspaceGenerate .batchToolsDialog {
+  width: min(760px, calc(100vw - 48px));
+  max-height: min(760px, calc(100vh - 48px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--app-surface) 94%, var(--app-bg));
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.26);
+}
+
+.workspaceGenerate .batchToolsHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.workspaceGenerate .batchToolsHeader div {
+  display: grid;
+  gap: 4px;
+}
+
+.workspaceGenerate .batchToolsHeader span {
+  color: color-mix(in srgb, var(--app-accent-strong) 42%, var(--app-muted));
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.workspaceGenerate .batchToolsHeader strong {
+  color: var(--app-text);
+  font-size: 18px;
+}
+
+.workspaceGenerate .batchToolsHeader small {
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.workspaceGenerate .batchToolsTabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.workspaceGenerate .batchToolsTabs button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface-2) 72%, transparent);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.workspaceGenerate .batchToolsTabs button.active {
+  color: #042f2e;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 46%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 78%, #ffffff);
+}
+
+.workspaceGenerate .batchToolsBody {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px 18px;
+}
+
 .workspaceGenerate .batchVariantBox {
   display: grid;
   gap: 8px;
@@ -3807,6 +3893,12 @@ kbd {
   border: 1px solid color-mix(in srgb, var(--app-line) 88%, transparent);
   border-radius: 14px;
   background: color-mix(in srgb, var(--app-surface-2) 64%, transparent);
+}
+
+.workspaceGenerate .batchVariantBox.inDialog,
+.workspaceGenerate .compareProfileBox.inDialog {
+  padding: 14px;
+  border-radius: 18px;
 }
 
 .workspaceGenerate .batchVariantHeader {
@@ -3851,15 +3943,16 @@ kbd {
   line-height: 1.45;
 }
 
-.workspaceGenerate .batchVariantSizeList {
+.workspaceGenerate .batchVariantRatioList {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
-.workspaceGenerate .batchVariantSizeOption {
+.workspaceGenerate .batchVariantRatioOption {
   min-width: 0;
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 6px;
   padding: 6px 7px;
@@ -3870,25 +3963,41 @@ kbd {
   cursor: pointer;
 }
 
-.workspaceGenerate .batchVariantSizeOption.active {
+.workspaceGenerate .batchVariantRatioOption.active {
   border-color: color-mix(in srgb, var(--app-accent-strong) 38%, var(--app-line));
   color: var(--app-text);
   background: color-mix(in srgb, var(--app-accent-strong) 9%, var(--app-surface));
 }
 
-.workspaceGenerate .batchVariantSizeOption input {
+.workspaceGenerate .batchVariantRatioOption input {
   width: 13px;
   height: 13px;
   accent-color: var(--app-accent-strong);
 }
 
-.workspaceGenerate .batchVariantSizeOption span {
+.workspaceGenerate .batchVariantRatioOption span {
   min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.workspaceGenerate .batchVariantRatioOption strong,
+.workspaceGenerate .batchVariantRatioOption small {
   overflow: hidden;
-  font-size: 11px;
-  font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.workspaceGenerate .batchVariantRatioOption strong {
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.workspaceGenerate .batchVariantRatioOption small {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 760;
 }
 
 .workspaceGenerate .batchVariantActions {
@@ -3913,6 +4022,45 @@ kbd {
 .workspaceGenerate .batchVariantActions .miniButton:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.workspaceGenerate .batchToolsSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border: 1px dashed var(--app-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--app-surface) 70%, transparent);
+}
+
+.workspaceGenerate .batchToolsSummary span {
+  padding: 3px 7px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.workspaceGenerate .batchToolsEmpty {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px dashed var(--app-line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--app-surface-2) 56%, transparent);
+}
+
+.workspaceGenerate .batchToolsEmpty strong {
+  color: var(--app-text);
+  font-size: 13px;
+}
+
+.workspaceGenerate .batchToolsEmpty small {
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .workspaceGenerate .compareProfileBox {

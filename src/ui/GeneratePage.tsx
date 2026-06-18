@@ -53,6 +53,8 @@ type GenerateSubmitOptions = {
   metadata?: Record<string, unknown>;
 };
 
+type BatchToolTab = 'variants' | 'compare';
+
 type SizeOption = {
   value: string;
   ratio: string;
@@ -113,6 +115,18 @@ const SIZE_OPTIONS: SizeOption[] = [
   { value: '1280x1600', ratio: '4:5', desc: '小红书 / 电商竖图', badge: '2K' },
   { value: '2048x2560', ratio: '4:5', desc: '高清竖版商业海报', badge: '2K' },
   { value: '2560x3200', ratio: '4:5', desc: '4K 竖版精细输出', badge: '4K', experimental: true }
+];
+
+const BATCH_VARIANT_RATIO_OPTIONS = [
+  { ratio: '1:1', label: '1:1 方图', size: '1024x1024', hint: '头像 / 商品主图' },
+  { ratio: '16:9', label: '16:9 横屏', size: '1536x864', hint: '封面 / 大屏配图' },
+  { ratio: '9:16', label: '9:16 竖屏', size: '864x1536', hint: '手机封面 / 壁纸' },
+  { ratio: '4:3', label: '4:3 横图', size: '1280x960', hint: '演示 / 经典画幅' },
+  { ratio: '3:4', label: '3:4 竖图', size: '960x1280', hint: '电商 / 详情首图' },
+  { ratio: '3:2', label: '3:2 摄影横图', size: '1536x1024', hint: '横版摄影 / 场景' },
+  { ratio: '2:3', label: '2:3 海报竖图', size: '1024x1536', hint: '角色 / 海报' },
+  { ratio: '21:9', label: '21:9 电影宽幅', size: '1792x768', hint: '宽景 / Banner' },
+  { ratio: '4:5', label: '4:5 社媒竖图', size: '1280x1600', hint: '社媒 / 商业海报' }
 ];
 
 const REFERENCE_ROLE_OPTIONS = [
@@ -476,12 +490,14 @@ export function ModernGeneratePage(props: {
   const [promptDrafts, setPromptDrafts] = useState<PromptDraft[]>(() => loadPromptDrafts());
   const [draftNotice, setDraftNotice] = useState('');
   const [isDraftLibraryOpen, setIsDraftLibraryOpen] = useState(false);
+  const [isBatchToolsOpen, setIsBatchToolsOpen] = useState(false);
+  const [batchToolTab, setBatchToolTab] = useState<BatchToolTab>('variants');
   const [canvasPreviewIndex, setCanvasPreviewIndex] = useState(0);
   const [activeGeneratingMode, setActiveGeneratingMode] = useState<GenerationMode | null>(null);
   const [canvasClearedAfterByMode, setCanvasClearedAfterByMode] = useState<Partial<Record<CanvasGenerationMode, number>>>(() => loadCanvasClearedAfter());
   const [compareProfileIds, setCompareProfileIds] = useState<string[]>([]);
   const [batchPromptText, setBatchPromptText] = useState('');
-  const [batchSizeValues, setBatchSizeValues] = useState<string[]>(() => [props.size]);
+  const [batchRatioValues, setBatchRatioValues] = useState<string[]>(() => [ratioFromSize(props.size)]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
   const referenceNoticeTimerRef = useRef<number | null>(null);
@@ -582,20 +598,30 @@ export function ModernGeneratePage(props: {
   const selectedRatio = ratioFromSize(props.size);
   const selectedSize = SIZE_OPTIONS.find((item) => item.value === props.size);
   const currentRatioSizes = useMemo(() => SIZE_OPTIONS.filter((item) => item.ratio === selectedRatio), [selectedRatio]);
-  const batchSizeCandidates = useMemo(() => {
-    const candidates = currentRatioSizes.map((item) => item.value);
-    if (!candidates.includes(props.size)) candidates.unshift(props.size);
-    return candidates.slice(0, 8);
-  }, [currentRatioSizes, props.size]);
-  const batchSizeCandidateSet = useMemo(() => new Set(batchSizeCandidates), [batchSizeCandidates]);
-  const selectedBatchSizeValues = batchSizeValues.filter((item) => batchSizeCandidateSet.has(item));
+  const batchRatioOptions = useMemo(() => {
+    const options = [...BATCH_VARIANT_RATIO_OPTIONS];
+    if (!options.some((option) => option.ratio === selectedRatio)) {
+      options.unshift({
+        ratio: selectedRatio,
+        label: `${selectedRatio} 当前比例`,
+        size: props.size,
+        hint: '当前自定义画幅'
+      });
+    }
+    return options;
+  }, [props.size, selectedRatio]);
+  const batchRatioCandidateSet = useMemo(() => new Set(batchRatioOptions.map((option) => option.ratio)), [batchRatioOptions]);
+  const selectedBatchRatioValues = batchRatioValues.filter((item) => batchRatioCandidateSet.has(item));
+  const selectedBatchVariantSizes = selectedBatchRatioValues
+    .map((ratio) => batchRatioOptions.find((option) => option.ratio === ratio)?.size)
+    .filter((item): item is string => Boolean(item));
   const batchPromptLines = parseBatchPromptLines(batchPromptText, props.prompt);
-  const estimatedBatchVariantTasks = batchPromptLines.length * Math.max(selectedBatchSizeValues.length, 0);
+  const estimatedBatchVariantTasks = batchPromptLines.length * Math.max(selectedBatchVariantSizes.length, 0);
   const canCreateBatchVariants = Boolean(
     props.onAddBatchVariantsToBatchQueue &&
     !props.isGenerating &&
     batchPromptLines.length > 0 &&
-    selectedBatchSizeValues.length > 0 &&
+    selectedBatchVariantSizes.length > 0 &&
     estimatedBatchVariantTasks <= 40
   );
   const sessionResults = useMemo(
@@ -696,12 +722,12 @@ export function ModernGeneratePage(props: {
   }, [props.defaultOutputFormat]);
 
   useEffect(() => {
-    setBatchSizeValues((current) => {
-      const validCurrent = current.filter((item) => batchSizeCandidateSet.has(item));
+    setBatchRatioValues((current) => {
+      const validCurrent = current.filter((item) => batchRatioCandidateSet.has(item));
       if (validCurrent.length > 0) return validCurrent;
-      return batchSizeCandidateSet.has(props.size) ? [props.size] : batchSizeCandidates.slice(0, 1);
+      return batchRatioCandidateSet.has(selectedRatio) ? [selectedRatio] : batchRatioOptions.slice(0, 1).map((option) => option.ratio);
     });
-  }, [batchSizeCandidateSet, batchSizeCandidates, props.size]);
+  }, [batchRatioCandidateSet, batchRatioOptions, selectedRatio]);
 
   useEffect(() => {
     setCompareProfileIds((current) => {
@@ -1242,11 +1268,11 @@ export function ModernGeneratePage(props: {
     updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入批量队列')));
   }
 
-  function toggleBatchSize(sizeValue: string, checked: boolean) {
-    setBatchSizeValues((current) => {
-      const next = new Set(current.filter((item) => batchSizeCandidateSet.has(item)));
-      if (checked) next.add(sizeValue);
-      else next.delete(sizeValue);
+  function toggleBatchRatio(ratioValue: string, checked: boolean) {
+    setBatchRatioValues((current) => {
+      const next = new Set(current.filter((item) => batchRatioCandidateSet.has(item)));
+      if (checked) next.add(ratioValue);
+      else next.delete(ratioValue);
       return Array.from(next);
     });
   }
@@ -1257,15 +1283,15 @@ export function ModernGeneratePage(props: {
       showDraftNotice('先输入当前 Prompt，或在批量变体里逐行填写 Prompt。');
       return;
     }
-    if (selectedBatchSizeValues.length === 0) {
-      showDraftNotice('至少选择 1 个尺寸，才能创建批量变体。');
+    if (selectedBatchVariantSizes.length === 0) {
+      showDraftNotice('至少选择 1 个画面比例，才能创建批量变体。');
       return;
     }
     if (estimatedBatchVariantTasks > 40) {
       showDraftNotice('单次最多创建 40 个批量变体任务，请减少 Prompt 或尺寸。');
       return;
     }
-    props.onAddBatchVariantsToBatchQueue(batchPromptLines, selectedBatchSizeValues, buildCurrentGenerationOptions());
+    props.onAddBatchVariantsToBatchQueue(batchPromptLines, selectedBatchVariantSizes, buildCurrentGenerationOptions());
     updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入批量变体队列')));
   }
 
@@ -1656,6 +1682,17 @@ export function ModernGeneratePage(props: {
                 <ListChecks size={15} />
                 <span>{props.batchQueueTaskCount ? `加入队列 · ${props.batchQueueTaskCount}` : '加入队列'}</span>
               </button>
+              <button
+                className="secondaryQueueButton"
+                type="button"
+                onClick={() => setIsBatchToolsOpen(true)}
+                disabled={props.isGenerating || (!props.onAddBatchVariantsToBatchQueue && !props.onAddCompareGroupToBatchQueue)}
+                title="打开批量变体和多模型对比创建器；不会立即消耗额度"
+                aria-label="打开批量与多模型对比"
+              >
+                <GalleryHorizontal size={15} />
+                <span>批量 / 对比</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1709,133 +1746,6 @@ export function ModernGeneratePage(props: {
               <span>{activeProfileSecretText}</span>
             </div>
           </div>
-          <div className="batchVariantBox" aria-label="多 Prompt 多尺寸批量变体">
-            <div className="batchVariantHeader">
-              <div>
-                <strong>批量变体</strong>
-                <small>逐行 Prompt × 多尺寸入队；不会立即消耗额度。</small>
-              </div>
-              <span>{estimatedBatchVariantTasks || 0} 任务</span>
-            </div>
-            <textarea
-              value={batchPromptText}
-              rows={4}
-              placeholder="可选：一行一个 Prompt。留空则使用左侧当前 Prompt。"
-              disabled={props.isGenerating}
-              onChange={(event) => setBatchPromptText(event.target.value)}
-            />
-            <div className="batchVariantSizeList" aria-label="批量变体尺寸选择">
-              {batchSizeCandidates.map((sizeValue) => {
-                const checked = selectedBatchSizeValues.includes(sizeValue);
-                return (
-                  <label className={`batchVariantSizeOption ${checked ? 'active' : ''}`} key={sizeValue}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={props.isGenerating}
-                      onChange={(event) => toggleBatchSize(sizeValue, event.target.checked)}
-                    />
-                    <span>{sizeValue}</span>
-                  </label>
-                );
-              })}
-            </div>
-            <div className="batchVariantActions">
-              <button
-                type="button"
-                className="miniButton"
-                onClick={() => setBatchSizeValues(batchSizeCandidates)}
-                disabled={props.isGenerating}
-                title="选择当前比例下所有候选尺寸"
-                aria-label="全选批量变体尺寸"
-              >
-                尺寸全选
-              </button>
-              <button
-                type="button"
-                className="miniButton"
-                onClick={() => setBatchSizeValues([props.size])}
-                disabled={props.isGenerating}
-                title="仅保留当前尺寸"
-                aria-label="只保留当前尺寸"
-              >
-                当前尺寸
-              </button>
-              <button
-                type="button"
-                className="miniButton primary"
-                onClick={addBatchVariantsToBatchQueue}
-                disabled={!canCreateBatchVariants}
-                title="按 Prompt 和尺寸组合创建批量队列任务；执行前仍需确认"
-                aria-label="加入批量变体队列"
-              >
-                加入变体队列
-              </button>
-            </div>
-          </div>
-          {props.supportsOpenAICompatible && compareProfileCandidates.length > 1 ? (
-            <div className="compareProfileBox" aria-label="多模型对比配置实例选择器">
-              <div className="compareProfileHeader">
-                <div>
-                  <strong>多模型对比</strong>
-                  <small>可同时选择多个配置实例；无需把它们都设为启用。</small>
-                </div>
-                <span>{selectedCompareProfileCount}/{compareProfileCandidates.length}</span>
-              </div>
-              <div className="compareProfileList">
-                {compareProfileCandidates.map((profile) => {
-                  const checked = selectedCompareProfileIds.includes(profile.id);
-                  return (
-                    <label className={`compareProfileOption ${checked ? 'active' : ''}`} key={profile.id}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={props.isGenerating}
-                        onChange={(event) => toggleCompareProfile(profile.id, event.target.checked)}
-                      />
-                      <span>
-                        <strong>{profile.displayName || profile.modelId}</strong>
-                        <small>{profile.modelId} · {profile.baseUrl || '未配置 Base URL'}</small>
-                      </span>
-                      <em>{profile.enabled ? '当前' : profileStatusLabel(profile.lastTestStatus)}</em>
-                    </label>
-                  );
-                })}
-              </div>
-              <div className="compareProfileActions">
-                <button
-                  type="button"
-                  className="miniButton"
-                  onClick={() => setCompareProfileIds(compareProfileCandidates.map((profile) => profile.id))}
-                  disabled={props.isGenerating}
-                  title="选择当前平台下所有可用配置实例"
-                  aria-label="全选多模型对比配置实例"
-                >
-                  全选
-                </button>
-                <button
-                  type="button"
-                  className="miniButton"
-                  onClick={() => setCompareProfileIds([])}
-                  disabled={props.isGenerating}
-                  title="清空多模型对比配置实例选择"
-                  aria-label="清空多模型对比配置实例选择"
-                >
-                  清空
-                </button>
-                <button
-                  type="button"
-                  className="miniButton primary"
-                  onClick={addCompareGroupToBatchQueue}
-                  disabled={!canCreateCompareGroup}
-                  title="把同一 Prompt 和当前参数分别按所选配置实例创建任务快照；不会立即消耗额度"
-                  aria-label="加入多模型对比队列"
-                >
-                  加入对比队列
-                </button>
-              </div>
-            </div>
-          ) : null}
         </section>
 
         <section className="railCard">
@@ -1962,6 +1872,189 @@ export function ModernGeneratePage(props: {
           <small>填写后会随请求记录，并传给支持 Seed / 负面提示词字段的兼容接口。</small>
         </section>
       </aside>
+      {isBatchToolsOpen ? (
+        <div className="batchToolsBackdrop" onClick={() => setIsBatchToolsOpen(false)}>
+          <section className="batchToolsDialog" role="dialog" aria-modal="true" aria-label="批量与多模型对比" onClick={(event) => event.stopPropagation()}>
+            <header className="batchToolsHeader">
+              <div>
+                <span>Batch Tools</span>
+                <strong>批量 / 对比创建器</strong>
+                <small>只创建本地队列快照，进入批量队列确认后才会真实消耗额度。</small>
+              </div>
+              <button type="button" className="promptAssistClose" aria-label="关闭批量与对比创建器" onClick={() => setIsBatchToolsOpen(false)}>
+                <XCircle size={18} />
+              </button>
+            </header>
+            <div className="batchToolsTabs" role="tablist" aria-label="批量工具类型">
+              <button
+                type="button"
+                role="tab"
+                className={batchToolTab === 'variants' ? 'active' : ''}
+                aria-selected={batchToolTab === 'variants'}
+                onClick={() => setBatchToolTab('variants')}
+              >
+                批量变体
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={batchToolTab === 'compare' ? 'active' : ''}
+                aria-selected={batchToolTab === 'compare'}
+                onClick={() => setBatchToolTab('compare')}
+              >
+                多模型对比
+              </button>
+            </div>
+            <div className="batchToolsBody">
+              {batchToolTab === 'variants' ? (
+                <div className="batchVariantBox inDialog" aria-label="多 Prompt 多画面比例批量变体">
+                  <div className="batchVariantHeader">
+                    <div>
+                      <strong>批量变体</strong>
+                      <small>逐行 Prompt × 多画面比例；每个比例使用一个代表尺寸，便于比较构图适配性。</small>
+                    </div>
+                    <span>{estimatedBatchVariantTasks || 0} 任务</span>
+                  </div>
+                  <textarea
+                    value={batchPromptText}
+                    rows={6}
+                    placeholder="可选：一行一个 Prompt。留空则使用左侧当前 Prompt。"
+                    disabled={props.isGenerating}
+                    onChange={(event) => setBatchPromptText(event.target.value)}
+                  />
+                  <div className="batchVariantRatioList" aria-label="批量变体画面比例选择">
+                    {batchRatioOptions.map((option) => {
+                      const checked = selectedBatchRatioValues.includes(option.ratio);
+                      return (
+                        <label className={`batchVariantRatioOption ${checked ? 'active' : ''}`} key={option.ratio}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={props.isGenerating}
+                            onChange={(event) => toggleBatchRatio(option.ratio, event.target.checked)}
+                          />
+                          <span>
+                            <strong>{option.label}</strong>
+                            <small>{option.size} · {option.hint}</small>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="batchVariantActions">
+                    <button
+                      type="button"
+                      className="miniButton"
+                      onClick={() => setBatchRatioValues(batchRatioOptions.map((option) => option.ratio))}
+                      disabled={props.isGenerating}
+                      title="选择所有候选画面比例"
+                      aria-label="全选批量变体画面比例"
+                    >
+                      比例全选
+                    </button>
+                    <button
+                      type="button"
+                      className="miniButton"
+                      onClick={() => setBatchRatioValues([selectedRatio])}
+                      disabled={props.isGenerating}
+                      title="仅保留当前画面比例"
+                      aria-label="只保留当前画面比例"
+                    >
+                      当前比例
+                    </button>
+                    <button
+                      type="button"
+                      className="miniButton primary"
+                      onClick={addBatchVariantsToBatchQueue}
+                      disabled={!canCreateBatchVariants}
+                      title="按 Prompt 和画面比例组合创建批量队列任务；执行前仍需确认"
+                      aria-label="加入批量变体队列"
+                    >
+                      加入变体队列
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="compareProfileBox inDialog" aria-label="多模型对比配置实例选择器">
+                  <div className="compareProfileHeader">
+                    <div>
+                      <strong>多模型对比</strong>
+                      <small>同一 Prompt 和当前基础参数，分别按多个配置实例创建任务快照。</small>
+                    </div>
+                    <span>{selectedCompareProfileCount}/{compareProfileCandidates.length}</span>
+                  </div>
+                  {props.supportsOpenAICompatible && compareProfileCandidates.length > 1 ? (
+                    <>
+                      <div className="compareProfileList">
+                        {compareProfileCandidates.map((profile) => {
+                          const checked = selectedCompareProfileIds.includes(profile.id);
+                          return (
+                            <label className={`compareProfileOption ${checked ? 'active' : ''}`} key={profile.id}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={props.isGenerating}
+                                onChange={(event) => toggleCompareProfile(profile.id, event.target.checked)}
+                              />
+                              <span>
+                                <strong>{profile.displayName || profile.modelId}</strong>
+                                <small>{profile.modelId} · {profile.baseUrl || '未配置 Base URL'}</small>
+                              </span>
+                              <em>{profile.enabled ? '当前' : profileStatusLabel(profile.lastTestStatus)}</em>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <div className="batchToolsSummary">
+                        <span>当前尺寸：{props.size}</span>
+                        <span>数量：{props.count} 张 / 任务</span>
+                        <span>质量：{props.quality}</span>
+                      </div>
+                      <div className="compareProfileActions">
+                        <button
+                          type="button"
+                          className="miniButton"
+                          onClick={() => setCompareProfileIds(compareProfileCandidates.map((profile) => profile.id))}
+                          disabled={props.isGenerating}
+                          title="选择当前平台下所有可用配置实例"
+                          aria-label="全选多模型对比配置实例"
+                        >
+                          全选
+                        </button>
+                        <button
+                          type="button"
+                          className="miniButton"
+                          onClick={() => setCompareProfileIds([])}
+                          disabled={props.isGenerating}
+                          title="清空多模型对比配置实例选择"
+                          aria-label="清空多模型对比配置实例选择"
+                        >
+                          清空
+                        </button>
+                        <button
+                          type="button"
+                          className="miniButton primary"
+                          onClick={addCompareGroupToBatchQueue}
+                          disabled={!canCreateCompareGroup}
+                          title="把同一 Prompt 和当前参数分别按所选配置实例创建任务快照；不会立即消耗额度"
+                          aria-label="加入多模型对比队列"
+                        >
+                          加入对比队列
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="batchToolsEmpty">
+                      <strong>当前平台不足 2 个可对比配置实例</strong>
+                      <small>多模型对比 V1 先支持中转站 / 聚合 API 与 OpenAI-compatible 配置实例；请先到平台接入里增加至少两个配置实例。</small>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : null}
       {assistMode ? (
         <PromptAssistModal
           mode={assistMode}
