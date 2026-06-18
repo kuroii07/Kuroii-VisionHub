@@ -399,6 +399,15 @@ function referenceSourceLabel(source: ReferenceImage['source']) {
   return labels[source] ?? source;
 }
 
+function parseBatchPromptLines(batchPromptText: string, fallbackPrompt: string) {
+  const lines = batchPromptText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const sourceLines = lines.length > 0 ? lines : [fallbackPrompt.trim()].filter(Boolean);
+  return Array.from(new Set(sourceLines)).slice(0, 20);
+}
+
 export function ModernGeneratePage(props: {
   providers: ReturnType<typeof listProviders>;
   selectedProvider: ReturnType<typeof listProviders>[number];
@@ -432,6 +441,7 @@ export function ModernGeneratePage(props: {
   onQualityChange: (quality: string) => void;
   onGenerate: (options?: GenerateSubmitOptions) => void;
   onAddToBatchQueue?: (options?: GenerateSubmitOptions) => void;
+  onAddBatchVariantsToBatchQueue?: (prompts: string[], sizes: string[], options?: GenerateSubmitOptions) => void;
   onAddCompareGroupToBatchQueue?: (profileIds: string[], options?: GenerateSubmitOptions) => void;
   batchQueueTaskCount?: number;
   onPreview: (imageUrl: string) => void;
@@ -470,6 +480,8 @@ export function ModernGeneratePage(props: {
   const [activeGeneratingMode, setActiveGeneratingMode] = useState<GenerationMode | null>(null);
   const [canvasClearedAfterByMode, setCanvasClearedAfterByMode] = useState<Partial<Record<CanvasGenerationMode, number>>>(() => loadCanvasClearedAfter());
   const [compareProfileIds, setCompareProfileIds] = useState<string[]>([]);
+  const [batchPromptText, setBatchPromptText] = useState('');
+  const [batchSizeValues, setBatchSizeValues] = useState<string[]>(() => [props.size]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
   const referenceNoticeTimerRef = useRef<number | null>(null);
@@ -570,6 +582,22 @@ export function ModernGeneratePage(props: {
   const selectedRatio = ratioFromSize(props.size);
   const selectedSize = SIZE_OPTIONS.find((item) => item.value === props.size);
   const currentRatioSizes = useMemo(() => SIZE_OPTIONS.filter((item) => item.ratio === selectedRatio), [selectedRatio]);
+  const batchSizeCandidates = useMemo(() => {
+    const candidates = currentRatioSizes.map((item) => item.value);
+    if (!candidates.includes(props.size)) candidates.unshift(props.size);
+    return candidates.slice(0, 8);
+  }, [currentRatioSizes, props.size]);
+  const batchSizeCandidateSet = useMemo(() => new Set(batchSizeCandidates), [batchSizeCandidates]);
+  const selectedBatchSizeValues = batchSizeValues.filter((item) => batchSizeCandidateSet.has(item));
+  const batchPromptLines = parseBatchPromptLines(batchPromptText, props.prompt);
+  const estimatedBatchVariantTasks = batchPromptLines.length * Math.max(selectedBatchSizeValues.length, 0);
+  const canCreateBatchVariants = Boolean(
+    props.onAddBatchVariantsToBatchQueue &&
+    !props.isGenerating &&
+    batchPromptLines.length > 0 &&
+    selectedBatchSizeValues.length > 0 &&
+    estimatedBatchVariantTasks <= 40
+  );
   const sessionResults = useMemo(
     () => props.results.filter((result) => generationTimeMs(result.createdAt) >= props.sessionStartedAtMs),
     [props.results, props.sessionStartedAtMs]
@@ -666,6 +694,14 @@ export function ModernGeneratePage(props: {
   useEffect(() => {
     setOutputFormat(props.defaultOutputFormat);
   }, [props.defaultOutputFormat]);
+
+  useEffect(() => {
+    setBatchSizeValues((current) => {
+      const validCurrent = current.filter((item) => batchSizeCandidateSet.has(item));
+      if (validCurrent.length > 0) return validCurrent;
+      return batchSizeCandidateSet.has(props.size) ? [props.size] : batchSizeCandidates.slice(0, 1);
+    });
+  }, [batchSizeCandidateSet, batchSizeCandidates, props.size]);
 
   useEffect(() => {
     setCompareProfileIds((current) => {
@@ -1206,6 +1242,33 @@ export function ModernGeneratePage(props: {
     updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入批量队列')));
   }
 
+  function toggleBatchSize(sizeValue: string, checked: boolean) {
+    setBatchSizeValues((current) => {
+      const next = new Set(current.filter((item) => batchSizeCandidateSet.has(item)));
+      if (checked) next.add(sizeValue);
+      else next.delete(sizeValue);
+      return Array.from(next);
+    });
+  }
+
+  function addBatchVariantsToBatchQueue() {
+    if (!props.onAddBatchVariantsToBatchQueue || !isCurrentSizeSupportedByModel()) return;
+    if (batchPromptLines.length === 0) {
+      showDraftNotice('先输入当前 Prompt，或在批量变体里逐行填写 Prompt。');
+      return;
+    }
+    if (selectedBatchSizeValues.length === 0) {
+      showDraftNotice('至少选择 1 个尺寸，才能创建批量变体。');
+      return;
+    }
+    if (estimatedBatchVariantTasks > 40) {
+      showDraftNotice('单次最多创建 40 个批量变体任务，请减少 Prompt 或尺寸。');
+      return;
+    }
+    props.onAddBatchVariantsToBatchQueue(batchPromptLines, selectedBatchSizeValues, buildCurrentGenerationOptions());
+    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入批量变体队列')));
+  }
+
   function toggleCompareProfile(profileId: string, checked: boolean) {
     setCompareProfileIds((current) => {
       const next = new Set(current.filter((item) => compareCandidateIdSet.has(item)));
@@ -1644,6 +1707,70 @@ export function ModernGeneratePage(props: {
               <span>{activeProfileStatus}</span>
               <span>{activeProfileModelProbeText}</span>
               <span>{activeProfileSecretText}</span>
+            </div>
+          </div>
+          <div className="batchVariantBox" aria-label="多 Prompt 多尺寸批量变体">
+            <div className="batchVariantHeader">
+              <div>
+                <strong>批量变体</strong>
+                <small>逐行 Prompt × 多尺寸入队；不会立即消耗额度。</small>
+              </div>
+              <span>{estimatedBatchVariantTasks || 0} 任务</span>
+            </div>
+            <textarea
+              value={batchPromptText}
+              rows={4}
+              placeholder="可选：一行一个 Prompt。留空则使用左侧当前 Prompt。"
+              disabled={props.isGenerating}
+              onChange={(event) => setBatchPromptText(event.target.value)}
+            />
+            <div className="batchVariantSizeList" aria-label="批量变体尺寸选择">
+              {batchSizeCandidates.map((sizeValue) => {
+                const checked = selectedBatchSizeValues.includes(sizeValue);
+                return (
+                  <label className={`batchVariantSizeOption ${checked ? 'active' : ''}`} key={sizeValue}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={props.isGenerating}
+                      onChange={(event) => toggleBatchSize(sizeValue, event.target.checked)}
+                    />
+                    <span>{sizeValue}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="batchVariantActions">
+              <button
+                type="button"
+                className="miniButton"
+                onClick={() => setBatchSizeValues(batchSizeCandidates)}
+                disabled={props.isGenerating}
+                title="选择当前比例下所有候选尺寸"
+                aria-label="全选批量变体尺寸"
+              >
+                尺寸全选
+              </button>
+              <button
+                type="button"
+                className="miniButton"
+                onClick={() => setBatchSizeValues([props.size])}
+                disabled={props.isGenerating}
+                title="仅保留当前尺寸"
+                aria-label="只保留当前尺寸"
+              >
+                当前尺寸
+              </button>
+              <button
+                type="button"
+                className="miniButton primary"
+                onClick={addBatchVariantsToBatchQueue}
+                disabled={!canCreateBatchVariants}
+                title="按 Prompt 和尺寸组合创建批量队列任务；执行前仍需确认"
+                aria-label="加入批量变体队列"
+              >
+                加入变体队列
+              </button>
             </div>
           </div>
           {props.supportsOpenAICompatible && compareProfileCandidates.length > 1 ? (

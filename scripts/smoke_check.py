@@ -121,10 +121,13 @@ for term in [
     "requestStartBatchQueue",
     "requestStopBatchQueue",
     "requestDeleteBatchQueueTask",
+    "handleAddBatchVariantsToBatchQueue",
     "handleAddCompareGroupToBatchQueue",
     "createBatchQueueCompareGroup",
     "appendBatchQueueTasksAndCompareGroups",
     "compareGroupId",
+    "visionhub_batch_variants",
+    "batch-variants",
     "visionhub_model_compare",
     "visionhub_queue_retry",
     "执行此任务",
@@ -174,6 +177,10 @@ for term in [
     "onAddToBatchQueue",
     "batchQueueTaskCount",
     "加入队列",
+    "onAddBatchVariantsToBatchQueue",
+    "批量变体",
+    "加入变体队列",
+    "batchVariantBox",
     "onAddCompareGroupToBatchQueue",
     "多模型对比",
     "加入对比队列",
@@ -473,7 +480,11 @@ for selector in [
     ".batchTaskItem",
     ".batchTaskActions",
     ".batchTaskError",
+    ".batchVariantBadge",
     ".batchCompareBadge",
+    ".batchVariantBox",
+    ".batchVariantSizeOption",
+    ".batchVariantActions",
     ".compareProfileBox",
     ".compareProfileOption",
     ".compareProfileActions",
@@ -482,7 +493,7 @@ for selector in [
 ]:
     assert selector in styles_src, f"Remote UI hardening selector missing: {selector}"
 
-for term in ["removeBatchQueueTask", "批量队列不存在，无法删除任务。", "BatchQueueCompareGroup", "createBatchQueueCompareGroup"]:
+for term in ["removeBatchQueueTask", "批量队列不存在，无法删除任务。", "BatchQueueCompareGroup", "createBatchQueueCompareGroup", "prompt-size-sweep"]:
     assert term in batch_queue_src, f"Batch queue delete helper missing: {term}"
 
 svg = (ROOT / "planning/product-overview.svg").read_text(encoding="utf-8")

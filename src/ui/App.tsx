@@ -2734,6 +2734,119 @@ export function App() {
     navigateTo('batch');
   }
 
+  function handleAddBatchVariantsToBatchQueue(prompts: string[], sizes: string[], options: GenerateSubmissionOptions = {}) {
+    const normalizedPrompts = Array.from(new Set(prompts.map((item) => item.trim()).filter(Boolean))).slice(0, 20);
+    const normalizedSizes = Array.from(new Set(sizes.map((item) => item.trim()).filter(Boolean))).slice(0, 8);
+    const generationMode = options.mode ?? 'text-to-image';
+    const references = options.references ?? [];
+    if (normalizedPrompts.length === 0) {
+      setConfigMessage('请至少输入 1 条 Prompt，再创建批量变体队列。');
+      return;
+    }
+    if (normalizedSizes.length === 0) {
+      setConfigMessage('请至少选择 1 个尺寸，再创建批量变体队列。');
+      return;
+    }
+    if (generationMode === 'image-to-image' && references.length === 0) {
+      setConfigMessage('图生图批量变体需要先添加至少一张参考图。');
+      return;
+    }
+
+    const providerModelId = generationSupportsOpenAICompatible
+      ? activeGenerationConfig.modelId.trim()
+      : selectedModelId.trim();
+    if (!providerModelId) {
+      setConfigMessage('当前模型 ID 为空，请先在平台接入或创作台选择模型。');
+      return;
+    }
+
+    const estimatedTasks = normalizedPrompts.length * normalizedSizes.length;
+    if (estimatedTasks > 40) {
+      setConfigMessage(`本次批量变体会创建 ${estimatedTasks} 个任务，超过单次上限 40 个；请减少 Prompt 或尺寸数量。`);
+      return;
+    }
+
+    let extraHeaders: Record<string, string> | undefined;
+    if (generationSupportsOpenAICompatible) {
+      try {
+        extraHeaders = parseExtraHeaders(activeGenerationConfig.extraHeadersJson);
+      } catch (error) {
+        setConfigMessage(`额外 Headers JSON 无法解析，未加入批量变体：${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
+    }
+
+    const existingQueue = batchQueueStore.queues[0] ?? null;
+    const queue = existingQueue ?? createBatchQueue({
+      name: '默认批量队列',
+      description: '从 AI 创作台加入的生成任务会先进入这里，执行前仍需二次确认。',
+      status: 'ready'
+    });
+    const requestedCount = Math.max(1, Math.min(4, Math.round(count)));
+    const addedAt = new Date().toISOString();
+    const tasks: BatchGenerationQueue['tasks'] = [];
+
+    for (const variantPrompt of normalizedPrompts) {
+      for (const variantSize of normalizedSizes) {
+        const snapshot = createQueuedGenerationSnapshot({
+          providerId: selectedProviderId,
+          providerName: generationSelectedProvider.name,
+          profileId: activeGenerationProfile?.id,
+          profileName: activeGenerationProfile?.displayName,
+          modelId: providerModelId,
+          prompt: variantPrompt,
+          negativePrompt: options.negativePrompt,
+          size: variantSize,
+          quality,
+          outputFormat: options.outputFormat ?? appSettings.generationDefaults.outputFormat,
+          outputCompression: options.outputCompression,
+          count: requestedCount,
+          generationMode,
+          references,
+          seed: options.seed,
+          baseUrl: generationSupportsOpenAICompatible ? activeGenerationConfig.baseUrl : undefined,
+          protocol: generationSupportsOpenAICompatible ? activeGenerationConfig.protocol : undefined,
+          imageToImageAdapter: generationSupportsOpenAICompatible ? activeGenerationConfig.imageToImageAdapter : undefined,
+          endpointPath: generationSupportsOpenAICompatible ? activeGenerationConfig.endpointPath : undefined,
+          extraHeaders,
+          secretId: activeGenerationProfile ? providerProfileSecretId(activeGenerationProfile.id) : undefined,
+          metadata: {
+            ...(options.metadata ?? {}),
+            visionhub_batch_variants: {
+              origin: 'generate-page',
+              addedAt,
+              promptCount: normalizedPrompts.length,
+              sizeCount: normalizedSizes.length,
+              variantSize,
+              realExecutionRequiresConfirmation: true
+            }
+          },
+          source: 'batch-variants'
+        });
+        tasks.push(createBatchQueueTask({
+          queueId: queue.id,
+          snapshot,
+          kind: 'prompt-size-sweep',
+          title: `批量变体 · ${variantSize} · ${providerModelId}`
+        }));
+      }
+    }
+
+    const nextStore = existingQueue
+      ? appendBatchQueueTasks(queue.id, tasks, batchQueueStore)
+      : upsertBatchQueue({ ...queue, tasks, status: 'ready' }, batchQueueStore);
+    setBatchQueueStore(nextStore);
+    const omittedReferenceCount = tasks.reduce(
+      (sum, task) => sum + (task.snapshot.referencePolicy?.omittedReferenceIds.length ?? 0),
+      0
+    );
+    setConfigMessage([
+      `已创建批量变体：${normalizedPrompts.length} 条 Prompt × ${normalizedSizes.length} 个尺寸 = ${tasks.length} 个任务，单任务 ${requestedCount} 张。`,
+      omittedReferenceCount > 0 ? `有 ${omittedReferenceCount} 个任务的参考图未持久化大体积数据，执行前需要重新确认参考图。` : ''
+    ].filter(Boolean).join(' '));
+    navigateTo('batch');
+  }
+
   function handleAddCompareGroupToBatchQueue(profileIds: string[], options: GenerateSubmissionOptions = {}) {
     const trimmedPrompt = prompt.trim();
     const generationMode = options.mode ?? 'text-to-image';
@@ -5066,6 +5179,7 @@ export function App() {
               onQualityChange={setQuality}
               onGenerate={runCreativeDeskGenerate}
               onAddToBatchQueue={handleAddCurrentGenerationToBatchQueue}
+              onAddBatchVariantsToBatchQueue={handleAddBatchVariantsToBatchQueue}
               onAddCompareGroupToBatchQueue={handleAddCompareGroupToBatchQueue}
               batchQueueTaskCount={batchQueueAggregate.total}
               onPreview={setGeneratePreviewUrl}
@@ -5307,7 +5421,7 @@ function BatchQueuePage(props: {
           <span>Batch Queue</span>
           <h1>批量队列</h1>
         </div>
-        <p>0.3.9 当前支持从 AI 创作台创建任务快照、逐个确认执行，并可连续执行待处理任务；停止执行会在当前任务完成后生效。</p>
+        <p>0.3.9 当前支持单任务、批量变体和多模型对比组入队；执行前仍需确认，可连续执行待处理任务，停止执行会在当前任务完成后生效。</p>
         <div className="batchQueueActions">
           <button
             type="button"
@@ -5396,11 +5510,17 @@ function BatchQueuePage(props: {
                   const canDelete = (task.status === 'failed' || task.status === 'cancelled') && !props.executingTaskId && !props.runningQueueId;
                   const compareGroup = task.compareGroupId ? compareGroupMap.get(task.compareGroupId) : undefined;
                   const compareTaskIndex = compareGroup ? compareGroup.taskIds.indexOf(task.id) + 1 : 0;
+                  const isBatchVariantTask = task.kind === 'prompt-size-sweep';
                   return (
                   <article className={`batchTaskItem ${isExecuting ? 'running' : ''}`} key={task.id}>
                     <div className="batchTaskMain">
                       <div className="batchTaskTitleRow">
                         <strong>{task.title}</strong>
+                        {isBatchVariantTask ? (
+                          <span className="batchVariantBadge" title="多 Prompt / 多尺寸批量变体任务">
+                            批量变体
+                          </span>
+                        ) : null}
                         {compareGroup ? (
                           <span className="batchCompareBadge" title={`对比组 ${compareGroup.id}`}>
                             对比组 {compareTaskIndex > 0 ? `${compareTaskIndex}/${compareGroup.taskIds.length}` : compareGroup.taskIds.length}

@@ -3800,6 +3800,121 @@ kbd {
   white-space: nowrap;
 }
 
+.workspaceGenerate .batchVariantBox {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--app-line) 88%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--app-surface-2) 64%, transparent);
+}
+
+.workspaceGenerate .batchVariantHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workspaceGenerate .batchVariantHeader div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.workspaceGenerate .batchVariantHeader strong {
+  color: var(--app-text);
+  font-size: 13px;
+}
+
+.workspaceGenerate .batchVariantHeader small {
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.workspaceGenerate .batchVariantHeader > span {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 24%, var(--app-line));
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-text));
+  background: color-mix(in srgb, var(--app-accent-strong) 8%, var(--app-surface));
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.workspaceGenerate .batchVariantBox textarea {
+  min-height: 86px;
+  resize: vertical;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.workspaceGenerate .batchVariantSizeList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.workspaceGenerate .batchVariantSizeOption {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 7px;
+  border: 1px solid var(--app-line);
+  border-radius: 11px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-surface) 70%, transparent);
+  cursor: pointer;
+}
+
+.workspaceGenerate .batchVariantSizeOption.active {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 38%, var(--app-line));
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-accent-strong) 9%, var(--app-surface));
+}
+
+.workspaceGenerate .batchVariantSizeOption input {
+  width: 13px;
+  height: 13px;
+  accent-color: var(--app-accent-strong);
+}
+
+.workspaceGenerate .batchVariantSizeOption span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspaceGenerate .batchVariantActions {
+  display: grid;
+  grid-template-columns: 0.9fr 0.9fr 1.3fr;
+  gap: 6px;
+}
+
+.workspaceGenerate .batchVariantActions .miniButton {
+  min-height: 30px;
+  color: var(--app-text-2);
+  border-color: var(--app-line);
+  background: color-mix(in srgb, var(--app-surface-2) 76%, transparent);
+}
+
+.workspaceGenerate .batchVariantActions .miniButton.primary {
+  color: #042f2e;
+  border-color: color-mix(in srgb, var(--app-accent-strong) 46%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 76%, #ffffff);
+}
+
+.workspaceGenerate .batchVariantActions .miniButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .workspaceGenerate .compareProfileBox {
   display: grid;
   gap: 8px;
@@ -20297,19 +20412,19 @@ body {
 
 .batchQueueStats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  padding: 12px;
-  border-radius: 22px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border-radius: 20px;
 }
 
 .batchQueueStat {
   min-width: 0;
   display: grid;
-  gap: 4px;
-  padding: 12px;
+  gap: 3px;
+  padding: 10px 12px;
   border: 1px solid var(--app-line);
-  border-radius: 18px;
+  border-radius: 16px;
   background: color-mix(in srgb, var(--app-surface-2) 60%, transparent);
 }
 
@@ -20324,7 +20439,7 @@ body {
 
 .batchQueueStat strong {
   color: var(--app-text);
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.05;
 }
 
@@ -20423,7 +20538,8 @@ body {
   font-weight: 900;
 }
 
-.batchCompareBadge {
+.batchCompareBadge,
+.batchVariantBadge {
   flex: 0 0 auto;
   max-width: 104px;
   overflow: hidden;
@@ -20436,6 +20552,12 @@ body {
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.batchVariantBadge {
+  border-color: color-mix(in srgb, #f59e0b 38%, var(--app-line));
+  color: color-mix(in srgb, #f59e0b 36%, var(--app-text));
+  background: color-mix(in srgb, #f59e0b 9%, var(--app-surface));
 }
 
 .batchTaskStatus.pending {

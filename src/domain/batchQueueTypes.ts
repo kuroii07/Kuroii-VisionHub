@@ -16,12 +16,13 @@ export type BatchQueueTaskStatus =
   | 'failed'
   | 'cancelled';
 
-export type BatchQueueTaskKind = 'single' | 'model-compare';
+export type BatchQueueTaskKind = 'single' | 'model-compare' | 'prompt-size-sweep';
 
 export type QueuedGenerationSource =
   | 'generate-page'
   | 'library-retry'
   | 'model-compare'
+  | 'batch-variants'
   | 'manual';
 
 export interface QueuedReferenceImage extends ReferenceImage {

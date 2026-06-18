@@ -402,7 +402,11 @@ function normalizeBatchQueueTask(task: Partial<BatchQueueTask>): BatchQueueTask 
   return {
     id: task.id || createBatchQueueId('task'),
     queueId: task.queueId || '',
-    kind: task.kind === 'model-compare' ? 'model-compare' : 'single',
+    kind: task.kind === 'model-compare'
+      ? 'model-compare'
+      : task.kind === 'prompt-size-sweep'
+        ? 'prompt-size-sweep'
+        : 'single',
     compareGroupId: task.compareGroupId,
     title: task.title?.trim() || summarizePrompt(task.snapshot?.prompt ?? ''),
     snapshot: normalizeQueuedGenerationSnapshot(task.snapshot ?? {}),
