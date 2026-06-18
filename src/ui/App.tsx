@@ -2822,6 +2822,58 @@ export function App() {
     });
   }
 
+  function requestRequeueBatchQueueTask(queueId: string, taskId: string) {
+    const store = loadBatchQueueStore();
+    const queue = store.queues.find((item) => item.id === queueId);
+    const task = queue?.tasks.find((item) => item.id === taskId);
+    if (!queue || !task) {
+      setConfigMessage('队列任务不存在，请刷新批量队列后重试。');
+      setBatchQueueStore(store);
+      return;
+    }
+    if (task.status !== 'failed') {
+      setConfigMessage('只有失败任务可以重新入队；待执行任务请直接执行。');
+      return;
+    }
+    requestConfirm({
+      title: '重新入队这个失败任务？',
+      message: [
+        '将复制原任务的 Prompt、模型、配置实例、尺寸和参考图快照，创建一个新的待执行任务。',
+        '原失败任务和作品画廊里的失败记录都会保留，不会被覆盖。',
+        task.error ? `上次错误：${task.error}` : ''
+      ].filter(Boolean).join('\n'),
+      confirmLabel: '重新入队',
+      cancelLabel: '先不重试',
+      onConfirm: () => {
+        const retrySnapshot = createQueuedGenerationSnapshot({
+          ...task.snapshot,
+          references: task.snapshot.references ?? [],
+          metadata: {
+            ...(task.snapshot.metadata ?? {}),
+            visionhub_queue_retry: {
+              fromQueueId: queue.id,
+              fromTaskId: task.id,
+              previousAttempt: task.attempt,
+              previousError: task.error ?? null,
+              requeuedAt: new Date().toISOString()
+            }
+          },
+          source: 'library-retry',
+          preserveEmbeddedReferenceImages: true
+        });
+        const retryTask = createBatchQueueTask({
+          queueId: queue.id,
+          snapshot: retrySnapshot,
+          title: `重试 · ${task.title}`,
+          status: 'pending'
+        });
+        const nextStore = appendBatchQueueTasks(queue.id, [retryTask], loadBatchQueueStore());
+        setBatchQueueStore(nextStore);
+        setConfigMessage('已创建新的重试任务，原失败任务已保留。');
+      }
+    });
+  }
+
   function dispatchGenerateShortcut(shortcut: GenerateShortcutName) {
     const eventName = generateShortcutEventName[shortcut];
     if (page !== 'generate') {
@@ -4749,6 +4801,7 @@ export function App() {
             onRefresh={refreshBatchQueueStore}
             onExecuteTask={requestExecuteBatchQueueTask}
             onCancelTask={requestCancelBatchQueueTask}
+            onRequeueTask={requestRequeueBatchQueueTask}
           />
         ) : page === 'free' ? (
           <FreeGenerationPage
@@ -4920,6 +4973,7 @@ function BatchQueuePage(props: {
   onRefresh: () => void;
   onExecuteTask: (queueId: string, taskId: string) => void;
   onCancelTask: (queueId: string, taskId: string) => void;
+  onRequeueTask: (queueId: string, taskId: string) => void;
 }) {
   const activeQueue = props.queues[0] ?? null;
   const activeSummary = activeQueue ? summarizeBatchQueue(activeQueue) : {
@@ -5035,8 +5089,9 @@ function BatchQueuePage(props: {
               <div className="batchTaskList">
                 {visibleTasks.map((task) => {
                   const isExecuting = props.executingTaskId === task.id;
-                  const canExecute = (task.status === 'pending' || task.status === 'failed') && !props.executingTaskId;
-                  const canCancel = (task.status === 'pending' || task.status === 'failed') && !props.executingTaskId;
+                  const canExecute = task.status === 'pending' && !props.executingTaskId;
+                  const canRequeue = task.status === 'failed' && !props.executingTaskId;
+                  const canCancel = task.status === 'pending' && !props.executingTaskId;
                   return (
                   <article className={`batchTaskItem ${isExecuting ? 'running' : ''}`} key={task.id}>
                     <div className="batchTaskMain">
@@ -5057,18 +5112,34 @@ function BatchQueuePage(props: {
                     </div>
                     <div className="batchTaskSide">
                       <span>{formatWorkspaceHomeTime(task.createdAt)}</span>
-                      <small>{task.snapshot.referencePolicy?.omittedReferenceIds.length ? '参考图需确认' : `${task.snapshot.references?.length ?? 0} 张参考图`}</small>
+                      <small>
+                        {task.attempt > 0 ? `已尝试 ${task.attempt} 次 · ` : ''}
+                        {task.snapshot.referencePolicy?.omittedReferenceIds.length ? '参考图需确认' : `${task.snapshot.references?.length ?? 0} 张参考图`}
+                      </small>
                       <div className="batchTaskActions">
-                        <button
-                          type="button"
-                          className="workspaceCommandButton primary"
-                          onClick={() => props.onExecuteTask(task.queueId, task.id)}
-                          disabled={!canExecute}
-                          title="执行这个任务；会弹出确认并真实调用接口"
-                          aria-label="执行此队列任务"
-                        >
-                          {isExecuting ? '执行中…' : task.status === 'failed' ? '重试任务' : '执行此任务'}
-                        </button>
+                        {task.status === 'failed' ? (
+                          <button
+                            type="button"
+                            className="workspaceCommandButton primary"
+                            onClick={() => props.onRequeueTask(task.queueId, task.id)}
+                            disabled={!canRequeue}
+                            title="复制原失败任务并创建一个新的待执行重试任务，不覆盖原失败记录"
+                            aria-label="重新入队此失败任务"
+                          >
+                            重新入队
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="workspaceCommandButton primary"
+                            onClick={() => props.onExecuteTask(task.queueId, task.id)}
+                            disabled={!canExecute}
+                            title="执行这个任务；会弹出确认并真实调用接口"
+                            aria-label="执行此队列任务"
+                          >
+                            {isExecuting ? '执行中…' : '执行此任务'}
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="workspaceCommandButton"

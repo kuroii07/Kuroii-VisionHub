@@ -117,8 +117,11 @@ for term in [
     "executeQueuedGenerationTask",
     "requestExecuteBatchQueueTask",
     "executeBatchQueueTaskNow",
+    "requestRequeueBatchQueueTask",
+    "visionhub_queue_retry",
     "执行此任务",
     "确认执行",
+    "重新入队",
 ]:
     assert term in app_src, f"Settings interaction missing: {term}"
 
