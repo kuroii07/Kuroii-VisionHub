@@ -108,9 +108,16 @@ export function appendBatchQueueTasks(queueId: string, tasks: BatchQueueTask[], 
   if (!queue) throw new Error('批量队列不存在，无法追加任务。');
 
   const now = nowIso();
+  const shouldReactivateQueue =
+    tasks.length > 0 &&
+    (queue.status === 'draft' ||
+      queue.status === 'paused' ||
+      queue.status === 'completed' ||
+      queue.status === 'completed-with-errors' ||
+      queue.status === 'cancelled');
   const nextQueue: BatchGenerationQueue = {
     ...queue,
-    status: queue.status === 'draft' ? 'ready' : queue.status,
+    status: shouldReactivateQueue ? 'ready' : queue.status,
     tasks: [
       ...queue.tasks,
       ...tasks.map((task) => normalizeBatchQueueTask({ ...task, queueId }))
@@ -140,6 +147,40 @@ export function updateBatchQueueTask(
     updatedAt: now
   };
   return upsertBatchQueue(nextQueue, store);
+}
+
+export function removeBatchQueueTask(
+  queueId: string,
+  taskId: string,
+  store = loadBatchQueueStore()
+) {
+  const queue = store.queues.find((item) => item.id === queueId);
+  if (!queue) throw new Error('批量队列不存在，无法删除任务。');
+
+  const now = nowIso();
+  const nextTasks = queue.tasks.filter((task) => task.id !== taskId);
+  const summary = summarizeBatchQueue({ ...queue, tasks: nextTasks });
+  const nextStatus: BatchQueueStatus =
+    nextTasks.length === 0
+      ? 'ready'
+      : summary.running > 0
+        ? 'running'
+        : summary.pending > 0
+          ? 'ready'
+          : summary.failed > 0
+            ? 'completed-with-errors'
+            : summary.cancelled === nextTasks.length
+              ? 'cancelled'
+              : 'completed';
+  return upsertBatchQueue({
+    ...queue,
+    status: nextStatus,
+    tasks: nextTasks,
+    updatedAt: now,
+    finishedAt: nextStatus === 'completed' || nextStatus === 'completed-with-errors'
+      ? now
+      : queue.finishedAt
+  }, store);
 }
 
 export function createQueuedGenerationSnapshot(

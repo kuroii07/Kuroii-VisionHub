@@ -118,10 +118,15 @@ for term in [
     "requestExecuteBatchQueueTask",
     "executeBatchQueueTaskNow",
     "requestRequeueBatchQueueTask",
+    "requestStartBatchQueue",
+    "requestStopBatchQueue",
+    "requestDeleteBatchQueueTask",
     "visionhub_queue_retry",
     "执行此任务",
     "确认执行",
     "重新入队",
+    "删除这个队列任务",
+    "停止连续执行",
 ]:
     assert term in app_src, f"Settings interaction missing: {term}"
 
@@ -459,9 +464,13 @@ for selector in [
     ".batchTaskItem",
     ".batchTaskActions",
     ".batchTaskError",
+    ".workspaceCommandButton.dangerAction",
     ".secondaryQueueButton",
 ]:
     assert selector in styles_src, f"Remote UI hardening selector missing: {selector}"
+
+for term in ["removeBatchQueueTask", "批量队列不存在，无法删除任务。"]:
+    assert term in batch_queue_src, f"Batch queue delete helper missing: {term}"
 
 svg = (ROOT / "planning/product-overview.svg").read_text(encoding="utf-8")
 assert re.search(r"VisionHub Studio", svg)

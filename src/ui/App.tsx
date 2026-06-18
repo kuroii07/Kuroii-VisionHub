@@ -152,6 +152,7 @@ import {
   createBatchQueueTask,
   createQueuedGenerationSnapshot,
   loadBatchQueueStore,
+  removeBatchQueueTask,
   summarizeBatchQueue,
   updateBatchQueueTask,
   upsertBatchQueue
@@ -2001,12 +2002,14 @@ export function App() {
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [batchQueueStore, setBatchQueueStore] = useState(() => loadBatchQueueStore());
   const [executingBatchTaskId, setExecutingBatchTaskId] = useState<string | null>(null);
+  const [runningBatchQueueId, setRunningBatchQueueId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [generateSessionStartedAt] = useState(() => Date.now());
   const autoRecheckedRecordIdsRef = useRef<Set<string>>(new Set());
   const localComfyUIDiagnosticRequestRef = useRef(0);
   const localComfyUIAutoCheckRunningRef = useRef(false);
+  const batchQueueStopRequestedRef = useRef(false);
   const themeSwitchTimerRef = useRef<number | null>(null);
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() =>
     typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
@@ -2735,22 +2738,38 @@ export function App() {
     return nextStore;
   }
 
-  async function executeBatchQueueTaskNow(queueId: string, taskId: string) {
+  function setBatchQueueRunState(queueId: string, patch: Partial<BatchGenerationQueue>) {
+    const store = loadBatchQueueStore();
+    const queue = store.queues.find((item) => item.id === queueId);
+    if (!queue) {
+      setBatchQueueStore(store);
+      return store;
+    }
+    const nextStore = upsertBatchQueue({ ...queue, ...patch, id: queue.id }, store);
+    setBatchQueueStore(nextStore);
+    return nextStore;
+  }
+
+  async function executeBatchQueueTaskNow(
+    queueId: string,
+    taskId: string,
+    options: { suppressMessage?: boolean } = {}
+  ): Promise<'succeeded' | 'failed' | 'skipped'> {
     const store = loadBatchQueueStore();
     const queue = store.queues.find((item) => item.id === queueId);
     const task = queue?.tasks.find((item) => item.id === taskId);
     if (!queue || !task) {
-      setConfigMessage('队列任务不存在，请刷新批量队列后重试。');
+      if (!options.suppressMessage) setConfigMessage('队列任务不存在，请刷新批量队列后重试。');
       setBatchQueueStore(store);
-      return;
+      return 'skipped';
     }
     if (task.status === 'running') {
-      setConfigMessage('这个任务正在执行中，请等待完成。');
-      return;
+      if (!options.suppressMessage) setConfigMessage('这个任务正在执行中，请等待完成。');
+      return 'skipped';
     }
     if (task.status === 'cancelled') {
-      setConfigMessage('这个任务已取消，如需执行请后续使用重新入队功能。');
-      return;
+      if (!options.suppressMessage) setConfigMessage('这个任务已取消，如需执行请后续使用重新入队功能。');
+      return 'skipped';
     }
     setExecutingBatchTaskId(task.id);
     try {
@@ -2765,16 +2784,159 @@ export function App() {
       }
       const nextStore = updateBatchQueueTask(queueId, taskId, execution.task, loadBatchQueueStore());
       setBatchQueueStore(nextStore);
-      setConfigMessage(execution.task.status === 'succeeded'
-        ? `队列任务执行成功：已保存 ${execution.records.length} 条作品记录。`
-        : `队列任务执行失败：${execution.task.error ?? '没有返回有效图片'}，失败记录已写入作品画廊。`);
+      if (!options.suppressMessage) {
+        setConfigMessage(execution.task.status === 'succeeded'
+          ? `队列任务执行成功：已保存 ${execution.records.length} 条作品记录。`
+          : `队列任务执行失败：${execution.task.error ?? '没有返回有效图片'}，失败记录已写入作品画廊。`);
+      }
+      return execution.task.status === 'succeeded' ? 'succeeded' : 'failed';
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setBatchTaskState(queueId, taskId, { status: 'failed', error: message });
-      setConfigMessage(`队列任务执行失败：${message}`);
+      if (!options.suppressMessage) setConfigMessage(`队列任务执行失败：${message}`);
+      return 'failed';
     } finally {
       setExecutingBatchTaskId(null);
     }
+  }
+
+  async function executeBatchQueueSequentially(queueId: string) {
+    if (runningBatchQueueId || executingBatchTaskId) {
+      setConfigMessage('已有队列任务正在执行，请等待当前任务完成。');
+      return;
+    }
+    const store = loadBatchQueueStore();
+    const queue = store.queues.find((item) => item.id === queueId);
+    if (!queue) {
+      setBatchQueueStore(store);
+      setConfigMessage('队列不存在，请刷新后重试。');
+      return;
+    }
+    const initialPendingCount = queue.tasks.filter((task) => task.status === 'pending').length;
+    if (initialPendingCount === 0) {
+      setConfigMessage('当前队列没有待执行任务。');
+      return;
+    }
+
+    batchQueueStopRequestedRef.current = false;
+    setRunningBatchQueueId(queueId);
+    setBatchQueueRunState(queueId, {
+      status: 'running',
+      startedAt: queue.startedAt ?? new Date().toISOString(),
+      finishedAt: undefined
+    });
+    setConfigMessage(`已开始连续执行队列：共 ${initialPendingCount} 个待执行任务。`);
+
+    let completedThisRun = 0;
+    let failedThisRun = 0;
+    try {
+      while (!batchQueueStopRequestedRef.current) {
+        const latestStore = loadBatchQueueStore();
+        const latestQueue = latestStore.queues.find((item) => item.id === queueId);
+        const nextTask = latestQueue?.tasks.find((task) => task.status === 'pending');
+        if (!latestQueue || !nextTask) break;
+        const result = await executeBatchQueueTaskNow(queueId, nextTask.id, { suppressMessage: true });
+        if (result === 'succeeded') completedThisRun += 1;
+        if (result === 'failed') failedThisRun += 1;
+      }
+    } finally {
+      const finalStore = loadBatchQueueStore();
+      const finalQueue = finalStore.queues.find((item) => item.id === queueId);
+      if (finalQueue) {
+        const summary = summarizeBatchQueue(finalQueue);
+        const wasStopped = batchQueueStopRequestedRef.current && summary.pending > 0;
+        const finalStatus: BatchGenerationQueue['status'] = wasStopped
+          ? 'paused'
+          : summary.pending > 0
+            ? 'ready'
+            : summary.failed > 0
+              ? 'completed-with-errors'
+              : 'completed';
+        const nextStore = upsertBatchQueue({
+          ...finalQueue,
+          status: finalStatus,
+          finishedAt: finalStatus === 'completed' || finalStatus === 'completed-with-errors'
+            ? new Date().toISOString()
+            : finalQueue.finishedAt
+        }, finalStore);
+        setBatchQueueStore(nextStore);
+        setConfigMessage(wasStopped
+          ? `已停止连续执行：本轮成功 ${completedThisRun} 个，失败 ${failedThisRun} 个，剩余 ${summary.pending} 个待执行。`
+          : `连续执行完成：本轮成功 ${completedThisRun} 个，失败 ${failedThisRun} 个。`);
+      }
+      batchQueueStopRequestedRef.current = false;
+      setRunningBatchQueueId(null);
+      setExecutingBatchTaskId(null);
+    }
+  }
+
+  function requestStartBatchQueue(queueId: string) {
+    const store = loadBatchQueueStore();
+    const queue = store.queues.find((item) => item.id === queueId);
+    if (!queue) {
+      setBatchQueueStore(store);
+      setConfigMessage('队列不存在，请刷新后重试。');
+      return;
+    }
+    const pendingTasks = queue.tasks.filter((task) => task.status === 'pending');
+    const pendingImages = pendingTasks.reduce((sum, task) => sum + Math.max(1, Math.min(4, Math.round(task.snapshot.count))), 0);
+    if (pendingTasks.length === 0) {
+      setConfigMessage('当前队列没有待执行任务。');
+      return;
+    }
+    requestConfirm({
+      title: '开始连续执行队列？',
+      message: [
+        `将按顺序执行 ${pendingTasks.length} 个待执行任务，预计请求 ${pendingImages} 张图片。`,
+        '执行过程中会真实调用接口，可能消耗中转站或官方 API 额度。',
+        '点击“停止执行”只会在当前任务完成后停止，不会强行中断已发出的请求。'
+      ].join('\n'),
+      confirmLabel: '开始执行',
+      cancelLabel: '先不执行',
+      onConfirm: () => {
+        setConfigMessage('已开始连续执行队列，可继续操作其他页面；当前任务完成后会自动执行下一个待执行任务。');
+        void executeBatchQueueSequentially(queueId);
+      }
+    });
+  }
+
+  function requestStopBatchQueue(queueId: string) {
+    if (runningBatchQueueId !== queueId) {
+      setConfigMessage('当前没有正在连续执行的这个队列。');
+      return;
+    }
+    batchQueueStopRequestedRef.current = true;
+    setConfigMessage('已请求停止连续执行：当前任务完成后会暂停，不会再开始下一个任务。');
+  }
+
+  function requestDeleteBatchQueueTask(queueId: string, taskId: string) {
+    const store = loadBatchQueueStore();
+    const queue = store.queues.find((item) => item.id === queueId);
+    const task = queue?.tasks.find((item) => item.id === taskId);
+    if (!queue || !task) {
+      setBatchQueueStore(store);
+      setConfigMessage('队列任务不存在，请刷新后重试。');
+      return;
+    }
+    if (task.status !== 'failed' && task.status !== 'cancelled') {
+      setConfigMessage('只有失败或已取消的队列任务可以删除。');
+      return;
+    }
+    requestConfirm({
+      title: '删除这个队列任务？',
+      message: [
+        `将从本地批量队列中删除“${task.title}”。`,
+        '这只删除队列任务快照，不会删除作品画廊记录，也不会删除磁盘图片文件。'
+      ].join('\n'),
+      confirmLabel: '删除任务',
+      cancelLabel: '保留任务',
+      tone: 'danger',
+      onConfirm: () => {
+        const nextStore = removeBatchQueueTask(queueId, taskId, loadBatchQueueStore());
+        setBatchQueueStore(nextStore);
+        setConfigMessage('已删除队列任务；作品画廊记录和磁盘图片未受影响。');
+      }
+    });
   }
 
   function requestExecuteBatchQueueTask(queueId: string, taskId: string) {
@@ -4797,11 +4959,15 @@ export function App() {
           <BatchQueuePage
             queues={batchQueueStore.queues}
             executingTaskId={executingBatchTaskId}
+            runningQueueId={runningBatchQueueId}
             onNavigate={navigateTo}
             onRefresh={refreshBatchQueueStore}
+            onStartQueue={requestStartBatchQueue}
+            onStopQueue={requestStopBatchQueue}
             onExecuteTask={requestExecuteBatchQueueTask}
             onCancelTask={requestCancelBatchQueueTask}
             onRequeueTask={requestRequeueBatchQueueTask}
+            onDeleteTask={requestDeleteBatchQueueTask}
           />
         ) : page === 'free' ? (
           <FreeGenerationPage
@@ -4969,11 +5135,15 @@ export function App() {
 function BatchQueuePage(props: {
   queues: BatchGenerationQueue[];
   executingTaskId: string | null;
+  runningQueueId: string | null;
   onNavigate: (page: Page) => void;
   onRefresh: () => void;
+  onStartQueue: (queueId: string) => void;
+  onStopQueue: (queueId: string) => void;
   onExecuteTask: (queueId: string, taskId: string) => void;
   onCancelTask: (queueId: string, taskId: string) => void;
   onRequeueTask: (queueId: string, taskId: string) => void;
+  onDeleteTask: (queueId: string, taskId: string) => void;
 }) {
   const activeQueue = props.queues[0] ?? null;
   const activeSummary = activeQueue ? summarizeBatchQueue(activeQueue) : {
@@ -5000,6 +5170,8 @@ function BatchQueuePage(props: {
     (sum, task) => sum + (task.snapshot.referencePolicy?.omittedReferenceIds.length ?? 0),
     0
   );
+  const isActiveQueueRunning = Boolean(activeQueue && props.runningQueueId === activeQueue.id);
+  const canStartActiveQueue = Boolean(activeQueue && activeSummary.pending > 0 && !props.runningQueueId && !props.executingTaskId);
 
   return (
     <section className="batchQueuePage" aria-label="批量队列">
@@ -5008,7 +5180,7 @@ function BatchQueuePage(props: {
           <span>Batch Queue</span>
           <h1>批量队列</h1>
         </div>
-        <p>0.3.9 当前支持从 AI 创作台创建任务快照，并可逐个确认执行；完整连续队列执行会在失败重试和暂停机制补齐后开放。</p>
+        <p>0.3.9 当前支持从 AI 创作台创建任务快照、逐个确认执行，并可连续执行待处理任务；停止执行会在当前任务完成后生效。</p>
         <div className="batchQueueActions">
           <button
             type="button"
@@ -5030,12 +5202,13 @@ function BatchQueuePage(props: {
           </button>
           <button
             type="button"
-            className="workspaceCommandButton disabled"
-            disabled
-            title="连续执行会批量消耗接口额度，待暂停、失败重试和进度控制完成后开放；当前请先逐个执行任务"
-            aria-label="开始执行队列暂未开放"
+            className={`workspaceCommandButton ${isActiveQueueRunning ? 'dangerAction' : 'primary'}`}
+            disabled={!activeQueue || (!isActiveQueueRunning && !canStartActiveQueue)}
+            onClick={() => activeQueue ? (isActiveQueueRunning ? props.onStopQueue(activeQueue.id) : props.onStartQueue(activeQueue.id)) : undefined}
+            title={isActiveQueueRunning ? '当前任务完成后停止，不会继续执行下一个任务' : '连续执行当前队列里的待执行任务'}
+            aria-label={isActiveQueueRunning ? '停止连续执行队列' : '开始连续执行队列'}
           >
-            <ListChecks size={15} /> 开始执行
+            <ListChecks size={15} /> {isActiveQueueRunning ? '停止执行' : '开始执行'}
           </button>
         </div>
       </header>
@@ -5089,9 +5262,10 @@ function BatchQueuePage(props: {
               <div className="batchTaskList">
                 {visibleTasks.map((task) => {
                   const isExecuting = props.executingTaskId === task.id;
-                  const canExecute = task.status === 'pending' && !props.executingTaskId;
+                  const canExecute = task.status === 'pending' && !props.executingTaskId && !props.runningQueueId;
                   const canRequeue = task.status === 'failed' && !props.executingTaskId;
-                  const canCancel = task.status === 'pending' && !props.executingTaskId;
+                  const canCancel = task.status === 'pending' && !props.executingTaskId && !props.runningQueueId;
+                  const canDelete = (task.status === 'failed' || task.status === 'cancelled') && !props.executingTaskId && !props.runningQueueId;
                   return (
                   <article className={`batchTaskItem ${isExecuting ? 'running' : ''}`} key={task.id}>
                     <div className="batchTaskMain">
@@ -5150,6 +5324,18 @@ function BatchQueuePage(props: {
                         >
                           取消
                         </button>
+                        {(task.status === 'failed' || task.status === 'cancelled') ? (
+                          <button
+                            type="button"
+                            className="workspaceCommandButton dangerAction"
+                            onClick={() => props.onDeleteTask(task.queueId, task.id)}
+                            disabled={!canDelete}
+                            title="只删除本地队列任务，不删除作品画廊记录和磁盘图片"
+                            aria-label="删除此队列任务"
+                          >
+                            删除
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </article>

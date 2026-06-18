@@ -20153,6 +20153,17 @@ body {
   opacity: 0.72;
 }
 
+.workspaceCommandButton.dangerAction {
+  color: #b91c1c;
+  border-color: color-mix(in srgb, #ef4444 40%, var(--app-line));
+  background: color-mix(in srgb, #ef4444 9%, var(--app-surface));
+}
+
+.workspaceCommandButton.dangerAction:hover:not(:disabled) {
+  border-color: color-mix(in srgb, #ef4444 56%, var(--app-line));
+  background: color-mix(in srgb, #ef4444 14%, var(--app-surface));
+}
+
 .batchQueueStats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
