@@ -22,6 +22,7 @@
 } from 'lucide-react';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { ClipboardEvent, DragEvent } from 'react';
 import { listProviders } from '../providers/registry';
 import type {
@@ -458,6 +459,10 @@ export function ModernGeneratePage(props: {
   onAddBatchVariantsToBatchQueue?: (prompts: string[], sizes: string[], options?: GenerateSubmitOptions) => void;
   onAddCompareGroupToBatchQueue?: (profileIds: string[], options?: GenerateSubmitOptions) => void;
   batchQueueTaskCount?: number;
+  batchQueueCurrentName?: string;
+  batchQueueCurrentTaskCount?: number;
+  batchQueueCurrentPendingCount?: number;
+  onOpenBatchQueue?: () => void;
   onPreview: (imageUrl: string) => void;
   onReloadHistory: () => void | Promise<void>;
   onOpenLibrary: () => void;
@@ -491,6 +496,8 @@ export function ModernGeneratePage(props: {
   const [draftNotice, setDraftNotice] = useState('');
   const [isDraftLibraryOpen, setIsDraftLibraryOpen] = useState(false);
   const [isBatchToolsOpen, setIsBatchToolsOpen] = useState(false);
+  const [isQueueMenuOpen, setIsQueueMenuOpen] = useState(false);
+  const [queueMenuPosition, setQueueMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [batchToolTab, setBatchToolTab] = useState<BatchToolTab>('variants');
   const [canvasPreviewIndex, setCanvasPreviewIndex] = useState(0);
   const [activeGeneratingMode, setActiveGeneratingMode] = useState<GenerationMode | null>(null);
@@ -500,6 +507,9 @@ export function ModernGeneratePage(props: {
   const [batchRatioValues, setBatchRatioValues] = useState<string[]>(() => [ratioFromSize(props.size)]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const queueMenuRef = useRef<HTMLDivElement | null>(null);
+  const queueMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const queueMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const referenceNoticeTimerRef = useRef<number | null>(null);
   const draftNoticeTimerRef = useRef<number | null>(null);
   const modelOptions = props.supportsOpenAICompatible
@@ -738,6 +748,44 @@ export function ModernGeneratePage(props: {
       return secondProfileId ? [activeProfileId, secondProfileId] : [activeProfileId];
     });
   }, [compareCandidateIdSet, compareProfileCandidates, props.activeProfile?.id]);
+
+  function updateQueueMenuPosition() {
+    const rect = queueMenuButtonRef.current?.getBoundingClientRect();
+    if (!rect) {
+      setQueueMenuPosition(null);
+      return;
+    }
+    setQueueMenuPosition({
+      top: Math.round(rect.bottom + 8),
+      right: Math.max(12, Math.round(window.innerWidth - rect.right))
+    });
+  }
+
+  useEffect(() => {
+    if (!isQueueMenuOpen) return undefined;
+    updateQueueMenuPosition();
+
+    function closeQueueMenuOnOutsideClick(event: MouseEvent) {
+      if (queueMenuRef.current?.contains(event.target as Node)) return;
+      if (queueMenuPanelRef.current?.contains(event.target as Node)) return;
+      setIsQueueMenuOpen(false);
+    }
+
+    function closeQueueMenuOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setIsQueueMenuOpen(false);
+    }
+
+    document.addEventListener('mousedown', closeQueueMenuOnOutsideClick);
+    document.addEventListener('keydown', closeQueueMenuOnEscape);
+    window.addEventListener('resize', updateQueueMenuPosition);
+    window.addEventListener('scroll', updateQueueMenuPosition, true);
+    return () => {
+      document.removeEventListener('mousedown', closeQueueMenuOnOutsideClick);
+      document.removeEventListener('keydown', closeQueueMenuOnEscape);
+      window.removeEventListener('resize', updateQueueMenuPosition);
+      window.removeEventListener('scroll', updateQueueMenuPosition, true);
+    };
+  }, [isQueueMenuOpen]);
 
   useEffect(() => {
     if (props.referenceImages.length > 0) {
@@ -1261,6 +1309,7 @@ export function ModernGeneratePage(props: {
 
   function addToBatchQueue() {
     if (!props.onAddToBatchQueue || !isCurrentSizeSupportedByModel()) return;
+    setIsQueueMenuOpen(false);
     props.onAddToBatchQueue(buildCurrentGenerationOptions());
     updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入批量队列')));
   }
@@ -1289,6 +1338,7 @@ export function ModernGeneratePage(props: {
       return;
     }
     props.onAddBatchVariantsToBatchQueue(batchPromptLines, selectedBatchVariantSizes, buildCurrentGenerationOptions());
+    setIsQueueMenuOpen(false);
     updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入批量变体队列')));
   }
 
@@ -1308,8 +1358,13 @@ export function ModernGeneratePage(props: {
       return;
     }
     props.onAddCompareGroupToBatchQueue(selectedCompareProfileIds, buildCurrentGenerationOptions());
+    setIsQueueMenuOpen(false);
     updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入多模型对比队列')));
   }
+
+  const queueMenuPortalHost = typeof document === 'undefined'
+    ? null
+    : document.querySelector('.appShell') ?? document.body;
 
   return (
     <div
@@ -1341,29 +1396,81 @@ export function ModernGeneratePage(props: {
             <span className="sessionCount">
               <Clock3 size={13} /> {currentModeSessionResults.length}
             </span>
-            <div className="quickQueueActions" aria-label="队列与批量操作">
+            <div className="quickQueueActions" ref={queueMenuRef} aria-label="队列与批量操作">
               <button
-                className="quickQueueButton"
+                className="quickQueueButton quickQueueMenuTrigger"
+                ref={queueMenuButtonRef}
                 type="button"
-                onClick={addToBatchQueue}
-                disabled={props.isGenerating || !props.onAddToBatchQueue}
-                title="把当前 Prompt、模型、尺寸和参考图快照加入批量队列；不会立即消耗额度"
-                aria-label="加入批量队列"
+                onClick={() => {
+                  updateQueueMenuPosition();
+                  setIsQueueMenuOpen((open) => !open);
+                }}
+                disabled={props.isGenerating || (!props.onAddToBatchQueue && !props.onAddBatchVariantsToBatchQueue && !props.onAddCompareGroupToBatchQueue && !props.onOpenBatchQueue)}
+                title={props.batchQueueCurrentName ? `打开队列相关操作；当前队列：${props.batchQueueCurrentName}` : '打开队列相关操作'}
+                aria-label="打开队列操作菜单"
+                aria-expanded={isQueueMenuOpen}
+                aria-haspopup="menu"
               >
                 <ListChecks size={14} />
-                <span>{props.batchQueueTaskCount ? `队列 · ${props.batchQueueTaskCount}` : '加入队列'}</span>
+                <span>{props.batchQueueTaskCount ? `队列 · ${props.batchQueueTaskCount}` : '队列操作'}</span>
+                <ChevronDown size={13} />
               </button>
-              <button
-                className="quickQueueButton"
-                type="button"
-                onClick={() => setIsBatchToolsOpen(true)}
-                disabled={props.isGenerating || (!props.onAddBatchVariantsToBatchQueue && !props.onAddCompareGroupToBatchQueue)}
-                title="打开批量变体和多模型对比创建器；不会立即消耗额度"
-                aria-label="打开批量与多模型对比"
-              >
-                <GalleryHorizontal size={14} />
-                <span>批量 / 对比</span>
-              </button>
+              {isQueueMenuOpen && queueMenuPosition && queueMenuPortalHost ? createPortal((
+                <div
+                  className="quickQueueMenu"
+                  ref={queueMenuPanelRef}
+                  role="menu"
+                  aria-label="队列操作菜单"
+                  style={{ top: queueMenuPosition.top, right: queueMenuPosition.right }}
+                >
+                  <div className="quickQueueMenuInfo" role="presentation">
+                    <span>当前队列</span>
+                    <strong>{props.batchQueueCurrentName ?? '默认批量队列'}</strong>
+                    <small>
+                      {props.batchQueueCurrentName
+                        ? `${props.batchQueueCurrentTaskCount ?? 0} 个任务 · ${props.batchQueueCurrentPendingCount ?? 0} 个待执行`
+                        : '加入任务时会自动创建'}
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={addToBatchQueue}
+                    disabled={props.isGenerating || !props.onAddToBatchQueue}
+                  >
+                    <ListChecks size={14} />
+                    <span>加入队列</span>
+                    <small>当前参数快照，不立即消耗额度</small>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setIsQueueMenuOpen(false);
+                      setIsBatchToolsOpen(true);
+                    }}
+                    disabled={props.isGenerating || (!props.onAddBatchVariantsToBatchQueue && !props.onAddCompareGroupToBatchQueue)}
+                  >
+                    <GalleryHorizontal size={14} />
+                    <span>批量 / 对比…</span>
+                    <small>多比例或多模型入队</small>
+                  </button>
+                  {props.onOpenBatchQueue ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setIsQueueMenuOpen(false);
+                        props.onOpenBatchQueue?.();
+                      }}
+                    >
+                      <PanelRight size={14} />
+                      <span>查看批量队列</span>
+                      <small>{props.batchQueueTaskCount ? `${props.batchQueueTaskCount} 个任务` : '打开队列页'}</small>
+                    </button>
+                  ) : null}
+                </div>
+              ), queueMenuPortalHost) : null}
             </div>
           </div>
         </header>
