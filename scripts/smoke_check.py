@@ -13,7 +13,10 @@ required = [
     "src/services/promptAssist.ts",
     "src/services/promptTemplates.ts",
     "src/services/freePlatforms.ts",
+    "src/domain/batchQueueTypes.ts",
     "src/domain/providerTypes.ts",
+    "src/services/batchQueue.ts",
+    "src/services/batchQueueExecutor.ts",
     "src/providers/manifests.ts",
     "src/providers/registry.ts",
     "src/providers/mockAdapter.ts",
@@ -104,6 +107,18 @@ for term in [
     "onOpenAppDataDirectory",
     "onExportSettingsBackup",
     "settingsMessage",
+    "BatchQueuePage",
+    "批量队列",
+    "handleAddCurrentGenerationToBatchQueue",
+    "createQueuedGenerationSnapshot",
+    "loadBatchQueueStore",
+    "summarizeBatchQueue",
+    "onRefresh={refreshBatchQueueStore}",
+    "executeQueuedGenerationTask",
+    "requestExecuteBatchQueueTask",
+    "executeBatchQueueTaskNow",
+    "执行此任务",
+    "确认执行",
 ]:
     assert term in app_src, f"Settings interaction missing: {term}"
 
@@ -143,6 +158,10 @@ for term in [
     "effectivePromptPolishSettings",
     "promptPolishQuickGroup",
     "quickPolishOptions",
+    "onAddToBatchQueue",
+    "batchQueueTaskCount",
+    "加入队列",
+    "secondaryQueueButton",
 ]:
     assert term in generate_src, f"Generate page prompt assist missing: {term}"
 
@@ -328,6 +347,42 @@ store_src = (ROOT / "src/store/useStudioStore.ts").read_text(encoding="utf-8")
 for term in ["validateGenerationRequest", "请先在平台接入设置 Base URL", "not-configured"]:
     assert term in store_src, f"Generation preflight missing: {term}"
 
+batch_queue_types_src = (ROOT / "src/domain/batchQueueTypes.ts").read_text(encoding="utf-8")
+for term in [
+    "BatchGenerationQueue",
+    "BatchQueueTask",
+    "QueuedGenerationRequestSnapshot",
+    "profileId",
+    "secretId",
+    "referencePolicy",
+]:
+    assert term in batch_queue_types_src, f"Batch queue type missing: {term}"
+
+batch_queue_src = (ROOT / "src/services/batchQueue.ts").read_text(encoding="utf-8")
+for term in [
+    "visionhub.batch.queues.v1",
+    "createQueuedGenerationSnapshot",
+    "createBatchQueueTask",
+    "appendBatchQueueTasks",
+    "compactReferenceImageForQueue",
+    "embeddedImageData",
+    "dataUrlOmitted",
+]:
+    assert term in batch_queue_src, f"Batch queue snapshot service missing: {term}"
+
+batch_queue_executor_src = (ROOT / "src/services/batchQueueExecutor.ts").read_text(encoding="utf-8")
+for term in [
+    "executeQueuedGenerationTask",
+    "executeNextBatchQueueTask",
+    "snapshotToImageGenerationRequest",
+    "generateOpenAIImage",
+    "saveGenerationRecord",
+    "visionhub_queue_task",
+    "profileId",
+    "secretId",
+]:
+    assert term in batch_queue_executor_src, f"Batch queue executor missing: {term}"
+
 manifests_src = (ROOT / "src/providers/manifests.ts").read_text(encoding="utf-8")
 for term in ["minimax-image", "MiniMax API Key", "image-01-live", "gemini-image", "Gemini API Key", "gemini-2.5-flash-image", "imageToImage: 'partial'"]:
     assert term in manifests_src, f"Provider manifest missing: {term}"
@@ -394,6 +449,14 @@ for selector in [
     ".reuseRecordCard",
     ".reuseNoImage",
     ".assistEmpty",
+    ".workspaceBatchShell",
+    ".batchQueuePage",
+    ".batchQueueHero",
+    ".batchQueueStats",
+    ".batchTaskItem",
+    ".batchTaskActions",
+    ".batchTaskError",
+    ".secondaryQueueButton",
 ]:
     assert selector in styles_src, f"Remote UI hardening selector missing: {selector}"
 

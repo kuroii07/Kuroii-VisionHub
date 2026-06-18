@@ -7,6 +7,7 @@
   History,
   Library,
   ImagePlus,
+  ListChecks,
   Maximize2,
   PanelRight,
   RotateCcw,
@@ -41,6 +42,16 @@ import { useStudioStore } from '../store/useStudioStore';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { PromptAssistModal } from './PromptAssistModal';
 import { StudioSelect } from './StudioSelect';
+
+type GenerateSubmitOptions = {
+  mode?: GenerationMode;
+  references?: ReferenceImage[];
+  outputFormat?: OutputFormat;
+  outputCompression?: number;
+  negativePrompt?: string;
+  seed?: number;
+  metadata?: Record<string, unknown>;
+};
 
 type SizeOption = {
   value: string;
@@ -419,7 +430,9 @@ export function ModernGeneratePage(props: {
   onCountChange: (count: number) => void;
   onSizeChange: (size: string) => void;
   onQualityChange: (quality: string) => void;
-  onGenerate: (options?: { mode?: GenerationMode; references?: ReferenceImage[]; outputFormat?: OutputFormat; outputCompression?: number; negativePrompt?: string; seed?: number; metadata?: Record<string, unknown> }) => void;
+  onGenerate: (options?: GenerateSubmitOptions) => void;
+  onAddToBatchQueue?: (options?: GenerateSubmitOptions) => void;
+  batchQueueTaskCount?: number;
   onPreview: (imageUrl: string) => void;
   onReloadHistory: () => void | Promise<void>;
   onOpenLibrary: () => void;
@@ -1091,12 +1104,7 @@ export function ModernGeneratePage(props: {
     };
   }, [props.isGenerating, props.referenceImages]);
 
-  function runGenerate() {
-    const selectedModelForGeneration = props.supportsOpenAICompatible ? props.providerConfig.modelId : props.selectedModelId;
-    if (selectedSize?.badge === '4K' && isKnown4KUnsupportedModel(props.selectedProvider.id, selectedModelForGeneration)) {
-      window.alert(`当前模型 ${selectedModelForGeneration || '未配置模型'} 不支持 4K 图片。请换成 1K/2K 输出尺寸，或切换到支持 4K 的模型后再生成。`);
-      return;
-    }
+  function buildCurrentGenerationOptions(): GenerateSubmitOptions {
     const trimmedCompression = compression.trim();
     const parsedCompression = trimmedCompression ? Number(trimmedCompression) : Number.NaN;
     const outputCompression = trimmedCompression && Number.isFinite(parsedCompression)
@@ -1111,12 +1119,11 @@ export function ModernGeneratePage(props: {
       seed
     };
     if (mode === 'image') {
-      setActiveGeneratingMode('image-to-image');
       const referenceRoleMap = Object.fromEntries(props.referenceImages.map((reference) => [
         reference.id,
         referenceRoles[reference.id] ?? reference.role ?? props.defaultReferenceRole
       ]));
-      props.onGenerate({
+      return {
         mode: 'image-to-image',
         references: props.referenceImages,
         outputFormat,
@@ -1132,13 +1139,38 @@ export function ModernGeneratePage(props: {
             referenceRoles: referenceRoleMap
           }
         }
-      });
+      };
+    }
+    return { mode: 'text-to-image', references: [], outputFormat, outputCompression, ...advancedGenerationOptions };
+  }
+
+  function isCurrentSizeSupportedByModel() {
+    const selectedModelForGeneration = props.supportsOpenAICompatible ? props.providerConfig.modelId : props.selectedModelId;
+    if (selectedSize?.badge === '4K' && isKnown4KUnsupportedModel(props.selectedProvider.id, selectedModelForGeneration)) {
+      window.alert(`当前模型 ${selectedModelForGeneration || '未配置模型'} 不支持 4K 图片。请换成 1K/2K 输出尺寸，或切换到支持 4K 的模型后再生成。`);
+      return false;
+    }
+    return true;
+  }
+
+  function runGenerate() {
+    if (!isCurrentSizeSupportedByModel()) return;
+    const generationOptions = buildCurrentGenerationOptions();
+    if (mode === 'image') {
+      setActiveGeneratingMode('image-to-image');
+      props.onGenerate(generationOptions);
       updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', '已提交图生图')));
       return;
     }
     setActiveGeneratingMode('text-to-image');
-    props.onGenerate({ mode: 'text-to-image', references: [], outputFormat, outputCompression, ...advancedGenerationOptions });
+    props.onGenerate(generationOptions);
     updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', '已提交文生图')));
+  }
+
+  function addToBatchQueue() {
+    if (!props.onAddToBatchQueue || !isCurrentSizeSupportedByModel()) return;
+    props.onAddToBatchQueue(buildCurrentGenerationOptions());
+    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入批量队列')));
   }
 
   return (
@@ -1490,10 +1522,24 @@ export function ModernGeneratePage(props: {
             <div className="generateStack">
               <button
                 className="primaryGenerate"
+                type="button"
                 onClick={runGenerate}
                 disabled={props.isGenerating}
+                title={generateButtonLabel}
+                aria-label={generateButtonLabel}
               >
                 <Sparkles size={17} /> {generateButtonLabel}
+              </button>
+              <button
+                className="secondaryQueueButton"
+                type="button"
+                onClick={addToBatchQueue}
+                disabled={props.isGenerating || !props.onAddToBatchQueue}
+                title="把当前 Prompt、模型、尺寸和参考图快照加入批量队列；不会立即消耗额度"
+                aria-label="加入批量队列"
+              >
+                <ListChecks size={15} />
+                <span>{props.batchQueueTaskCount ? `加入队列 · ${props.batchQueueTaskCount}` : '加入队列'}</span>
               </button>
             </div>
           </div>

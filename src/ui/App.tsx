@@ -18,6 +18,7 @@ import {
   Info,
   Keyboard,
   Layers,
+  ListChecks,
   Maximize2,
   Monitor,
   MoreHorizontal,
@@ -42,8 +43,9 @@ import {
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 import { createPortal } from 'react-dom';
+import type { BatchGenerationQueue } from '../domain/batchQueueTypes';
 import type { InspirationAsset } from '../domain/inspirationTypes';
-import type { GenerationRecord, ImageGenerationResult, ImageToImageAdapter, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
+import type { GenerationMode, GenerationRecord, ImageGenerationRequest, ImageGenerationResult, ImageToImageAdapter, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
 import { listProviders } from '../providers/registry';
 import {
   chooseInspirationDir,
@@ -144,6 +146,17 @@ import {
 import { importInspirationAsset } from '../services/inspirationApi';
 import { FREE_PLATFORMS, buildFreePlatformPrompt, type FreePlatform } from '../services/freePlatforms';
 import { readStorageValue, writeStorageValue } from '../services/safeStorage';
+import {
+  appendBatchQueueTasks,
+  createBatchQueue,
+  createBatchQueueTask,
+  createQueuedGenerationSnapshot,
+  loadBatchQueueStore,
+  summarizeBatchQueue,
+  updateBatchQueueTask,
+  upsertBatchQueue
+} from '../services/batchQueue';
+import { executeQueuedGenerationTask } from '../services/batchQueueExecutor';
 import { useStudioStore } from '../store/useStudioStore';
 import { ModernGeneratePage } from './GeneratePage';
 import { InspirationPage } from './InspirationPage';
@@ -1824,6 +1837,15 @@ const GITHUB_RELEASES_URL = `${GITHUB_REPOSITORY_URL}/releases`;
 type UtilityModal = 'system-info' | 'shortcuts' | null;
 type GenerateShortcutName = 'submit' | 'focus-prompt' | 'add-reference' | 'clear-references' | 'mode-image' | 'mode-text';
 type ConfirmDialogState = ConfirmDialogRequest & { error?: string };
+type GenerateSubmissionOptions = {
+  mode?: GenerationMode;
+  references?: ReferenceImage[];
+  outputFormat?: ImageGenerationRequest['outputFormat'];
+  outputCompression?: ImageGenerationRequest['outputCompression'];
+  negativePrompt?: ImageGenerationRequest['negativePrompt'];
+  seed?: ImageGenerationRequest['seed'];
+  metadata?: ImageGenerationRequest['metadata'];
+};
 
 const generateShortcutEventName: Record<GenerateShortcutName, string> = {
   submit: 'visionhub:generate-submit',
@@ -1851,6 +1873,7 @@ const shortcutGroups: Array<{ title: string; items: Array<{ keys: string[]; acti
       { keys: ['Ctrl', '5'], action: '打开提示词库' },
       { keys: ['Ctrl', '6'], action: '打开平台接入' },
       { keys: ['Ctrl', '7'], action: '打开偏好设置' },
+      { keys: ['Ctrl', '8'], action: '打开批量队列' },
       { keys: ['Esc'], action: '关闭浮窗 / 关闭图片预览' }
     ]
   },
@@ -1976,6 +1999,8 @@ export function App() {
   const [isThemeSwitching, setIsThemeSwitching] = useState(false);
   const [storageSettings, setStorageSettings] = useState<StorageSettings | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
+  const [batchQueueStore, setBatchQueueStore] = useState(() => loadBatchQueueStore());
+  const [executingBatchTaskId, setExecutingBatchTaskId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [generateSessionStartedAt] = useState(() => Date.now());
@@ -2125,6 +2150,27 @@ export function App() {
     failed: results.filter((record) => record.status === 'failed').length,
     pending: results.filter(isPotentialBackgroundCompletion).length
   }), [results]);
+  const batchQueueAggregate = useMemo(() => batchQueueStore.queues.reduce((acc, queue) => {
+    const summary = summarizeBatchQueue(queue);
+    acc.queueCount += 1;
+    acc.total += summary.total;
+    acc.pending += summary.pending;
+    acc.running += summary.running;
+    acc.succeeded += summary.succeeded;
+    acc.failed += summary.failed;
+    acc.cancelled += summary.cancelled;
+    acc.requestedImages += summary.requestedImages;
+    return acc;
+  }, {
+    queueCount: 0,
+    total: 0,
+    pending: 0,
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    cancelled: 0,
+    requestedImages: 0
+  }), [batchQueueStore]);
   const openLibraryPreview = useCallback((imageUrl: string, navigation?: ImagePreviewNavigation) => {
     setLibraryPreview({ imageUrl, navigation });
   }, []);
@@ -2591,6 +2637,191 @@ export function App() {
     setPage(nextPage);
   }, []);
 
+  function refreshBatchQueueStore() {
+    setBatchQueueStore(loadBatchQueueStore());
+    setConfigMessage('已刷新批量队列本地状态。');
+  }
+
+  function handleAddCurrentGenerationToBatchQueue(options: GenerateSubmissionOptions = {}) {
+    const trimmedPrompt = prompt.trim();
+    const generationMode = options.mode ?? 'text-to-image';
+    const references = options.references ?? [];
+    if (!trimmedPrompt) {
+      setConfigMessage('请先输入 Prompt，再加入批量队列。');
+      return;
+    }
+    if (generationMode === 'image-to-image' && references.length === 0) {
+      setConfigMessage('图生图任务需要先添加至少一张参考图，再加入批量队列。');
+      return;
+    }
+
+    const providerModelId = generationSupportsOpenAICompatible
+      ? activeGenerationConfig.modelId.trim()
+      : selectedModelId.trim();
+    if (!providerModelId) {
+      setConfigMessage('当前模型 ID 为空，请先在平台接入或创作台选择模型。');
+      return;
+    }
+
+    let extraHeaders: Record<string, string> | undefined;
+    if (generationSupportsOpenAICompatible) {
+      try {
+        extraHeaders = parseExtraHeaders(activeGenerationConfig.extraHeadersJson);
+      } catch (error) {
+        setConfigMessage(`额外 Headers JSON 无法解析，未加入队列：${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
+    }
+
+    const existingQueue = batchQueueStore.queues[0] ?? null;
+    const queue = existingQueue ?? createBatchQueue({
+      name: '默认批量队列',
+      description: '从 AI 创作台加入的生成任务会先进入这里，执行前仍需二次确认。',
+      status: 'ready'
+    });
+    const requestedCount = Math.max(1, Math.min(4, Math.round(count)));
+    const snapshot = createQueuedGenerationSnapshot({
+      providerId: selectedProviderId,
+      providerName: generationSelectedProvider.name,
+      profileId: activeGenerationProfile?.id,
+      profileName: activeGenerationProfile?.displayName,
+      modelId: providerModelId,
+      prompt: trimmedPrompt,
+      negativePrompt: options.negativePrompt,
+      size,
+      quality,
+      outputFormat: options.outputFormat ?? appSettings.generationDefaults.outputFormat,
+      outputCompression: options.outputCompression,
+      count: requestedCount,
+      generationMode,
+      references,
+      seed: options.seed,
+      baseUrl: generationSupportsOpenAICompatible ? activeGenerationConfig.baseUrl : undefined,
+      protocol: generationSupportsOpenAICompatible ? activeGenerationConfig.protocol : undefined,
+      imageToImageAdapter: generationSupportsOpenAICompatible ? activeGenerationConfig.imageToImageAdapter : undefined,
+      endpointPath: generationSupportsOpenAICompatible ? activeGenerationConfig.endpointPath : undefined,
+      extraHeaders,
+      secretId: activeGenerationProfile ? providerProfileSecretId(activeGenerationProfile.id) : undefined,
+      metadata: {
+        ...(options.metadata ?? {}),
+        visionhub_batch_queue: {
+          origin: 'generate-page',
+          addedAt: new Date().toISOString(),
+          realExecutionRequiresConfirmation: true
+        }
+      },
+      source: 'generate-page'
+    });
+    const task = createBatchQueueTask({
+      queueId: queue.id,
+      snapshot,
+      title: `${generationMode === 'image-to-image' ? '图生图' : '文生图'} · ${providerModelId}`
+    });
+    const nextStore = existingQueue
+      ? appendBatchQueueTasks(queue.id, [task], batchQueueStore)
+      : upsertBatchQueue({ ...queue, tasks: [task], status: 'ready' }, batchQueueStore);
+    setBatchQueueStore(nextStore);
+    const omittedReferenceCount = snapshot.referencePolicy?.omittedReferenceIds.length ?? 0;
+    setConfigMessage([
+      `已加入批量队列：${generationSelectedProvider.name} / ${providerModelId}，${requestedCount} 张。`,
+      omittedReferenceCount > 0 ? `有 ${omittedReferenceCount} 张参考图未持久化大体积数据，执行前需要重新确认参考图。` : ''
+    ].filter(Boolean).join(' '));
+    navigateTo('batch');
+  }
+
+  function setBatchTaskState(queueId: string, taskId: string, patch: Parameters<typeof updateBatchQueueTask>[2]) {
+    const nextStore = updateBatchQueueTask(queueId, taskId, patch, loadBatchQueueStore());
+    setBatchQueueStore(nextStore);
+    return nextStore;
+  }
+
+  async function executeBatchQueueTaskNow(queueId: string, taskId: string) {
+    const store = loadBatchQueueStore();
+    const queue = store.queues.find((item) => item.id === queueId);
+    const task = queue?.tasks.find((item) => item.id === taskId);
+    if (!queue || !task) {
+      setConfigMessage('队列任务不存在，请刷新批量队列后重试。');
+      setBatchQueueStore(store);
+      return;
+    }
+    if (task.status === 'running') {
+      setConfigMessage('这个任务正在执行中，请等待完成。');
+      return;
+    }
+    if (task.status === 'cancelled') {
+      setConfigMessage('这个任务已取消，如需执行请后续使用重新入队功能。');
+      return;
+    }
+    setExecutingBatchTaskId(task.id);
+    try {
+      const execution = await executeQueuedGenerationTask(task, {
+        providerName: task.snapshot.providerName,
+        onTaskUpdate: (updatedTask) => {
+          setBatchTaskState(queueId, taskId, updatedTask);
+        }
+      });
+      for (const record of [...execution.records].reverse()) {
+        addResult(record);
+      }
+      const nextStore = updateBatchQueueTask(queueId, taskId, execution.task, loadBatchQueueStore());
+      setBatchQueueStore(nextStore);
+      setConfigMessage(execution.task.status === 'succeeded'
+        ? `队列任务执行成功：已保存 ${execution.records.length} 条作品记录。`
+        : `队列任务执行失败：${execution.task.error ?? '没有返回有效图片'}，失败记录已写入作品画廊。`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setBatchTaskState(queueId, taskId, { status: 'failed', error: message });
+      setConfigMessage(`队列任务执行失败：${message}`);
+    } finally {
+      setExecutingBatchTaskId(null);
+    }
+  }
+
+  function requestExecuteBatchQueueTask(queueId: string, taskId: string) {
+    const queue = batchQueueStore.queues.find((item) => item.id === queueId);
+    const task = queue?.tasks.find((item) => item.id === taskId);
+    if (!queue || !task) {
+      setConfigMessage('队列任务不存在，请刷新批量队列后重试。');
+      return;
+    }
+    const omittedReferenceCount = task.snapshot.referencePolicy?.omittedReferenceIds.length ?? 0;
+    requestConfirm({
+      title: '执行这个队列任务？',
+      message: [
+        `将使用 ${task.snapshot.providerName ?? task.snapshot.providerId} / ${task.snapshot.profileName ?? '当前快照配置'} / ${task.snapshot.modelId} 生成 ${task.snapshot.count} 张图片。`,
+        `模式：${task.snapshot.generationMode === 'image-to-image' ? '图生图' : '文生图'}，尺寸：${task.snapshot.size}。`,
+        omittedReferenceCount > 0 ? `注意：有 ${omittedReferenceCount} 张参考图未完整持久化，可能会执行失败；建议重新加入带参考图的任务。` : '确认后会真实调用接口，可能消耗中转站或官方 API 额度。'
+      ].join('\n'),
+      confirmLabel: '确认执行',
+      cancelLabel: '先不执行',
+      onConfirm: () => {
+        setConfigMessage('已开始执行队列任务，可继续操作其他页面；任务状态会在批量队列中更新。');
+        void executeBatchQueueTaskNow(queueId, taskId);
+      }
+    });
+  }
+
+  function requestCancelBatchQueueTask(queueId: string, taskId: string) {
+    const queue = batchQueueStore.queues.find((item) => item.id === queueId);
+    const task = queue?.tasks.find((item) => item.id === taskId);
+    if (!queue || !task) return;
+    requestConfirm({
+      title: '取消这个队列任务？',
+      message: '取消只会把这个本地队列任务标记为已取消，不会删除作品画廊记录，也不会删除任何磁盘图片。',
+      confirmLabel: '标记取消',
+      cancelLabel: '保留任务',
+      tone: 'danger',
+      onConfirm: () => {
+        setBatchTaskState(queueId, taskId, {
+          status: 'cancelled',
+          error: task.error,
+          finishedAt: new Date().toISOString()
+        });
+        setConfigMessage('已将队列任务标记为取消。');
+      }
+    });
+  }
+
   function dispatchGenerateShortcut(shortcut: GenerateShortcutName) {
     const eventName = generateShortcutEventName[shortcut];
     if (page !== 'generate') {
@@ -2712,7 +2943,8 @@ export function App() {
       '4': 'inspiration',
       '5': 'templates',
       '6': 'providers',
-      '7': 'settings'
+      '7': 'settings',
+      '8': 'batch'
     };
     const shortcutPage = pageShortcuts[key];
     if (shortcutPage) {
@@ -4286,6 +4518,7 @@ export function App() {
     ? {
         home: 'Workspace',
         generate: 'AI Create',
+        batch: 'Batch Queue',
         free: 'Free Tools',
         library: 'Gallery',
         inspiration: 'Inspiration',
@@ -4296,6 +4529,7 @@ export function App() {
     : {
         home: '工作台',
         generate: 'AI 创作',
+        batch: '批量队列',
         free: '免费平台',
         library: '作品画廊',
         inspiration: '灵感中心',
@@ -4306,6 +4540,7 @@ export function App() {
   const navItems: Array<{ page: Page; label: string; icon: ReactNode }> = [
     { page: 'home', label: navLabels.home, icon: <Grid2X2 size={18} /> },
     { page: 'generate', label: navLabels.generate, icon: <Wand2 size={18} /> },
+    { page: 'batch', label: navLabels.batch, icon: <ListChecks size={18} /> },
     { page: 'free', label: navLabels.free, icon: <Gift size={18} /> },
     { page: 'library', label: navLabels.library, icon: <Image size={18} /> },
     { page: 'inspiration', label: navLabels.inspiration, icon: <Bookmark size={18} /> },
@@ -4361,8 +4596,8 @@ export function App() {
             <span>{homeResultSummary.total} 条记录，{homeResultSummary.failed} 条失败，{homeResultSummary.pending} 条待核查。</span>
           </div>
           <div className="dockCard subtle">
-            <strong>首页 V2</strong>
-            <span>项目资产库、批量队列、多模型对比已整理为首页入口。</span>
+            <strong>批量队列</strong>
+            <span>{batchQueueAggregate.total} 个任务，{batchQueueAggregate.pending} 个待执行。</span>
           </div>
         </div>
         <div className="sidebarFooter">
@@ -4389,7 +4624,7 @@ export function App() {
         </div>
       </aside>
 
-      <main className={`workspace ${page === 'generate' ? 'workspaceGenerate' : page === 'home' ? 'workspaceHomeShell' : ''}`}>
+      <main className={`workspace ${page === 'generate' ? 'workspaceGenerate' : page === 'home' ? 'workspaceHomeShell' : page === 'batch' ? 'workspaceBatchShell' : ''}`}>
         {isLibraryPageMounted ? (
           <CachedLibraryPage
             providers={providers}
@@ -4492,6 +4727,8 @@ export function App() {
               onSizeChange={setSize}
               onQualityChange={setQuality}
               onGenerate={runCreativeDeskGenerate}
+              onAddToBatchQueue={handleAddCurrentGenerationToBatchQueue}
+              batchQueueTaskCount={batchQueueAggregate.total}
               onPreview={setGeneratePreviewUrl}
               onReloadHistory={loadHistory}
               onOpenLibrary={() => navigateTo('library')}
@@ -4504,6 +4741,15 @@ export function App() {
               <ImagePreviewModal imageUrl={generatePreviewUrl} onClose={() => setGeneratePreviewUrl(null)} />
             ) : null}
           </>
+        ) : page === 'batch' ? (
+          <BatchQueuePage
+            queues={batchQueueStore.queues}
+            executingTaskId={executingBatchTaskId}
+            onNavigate={navigateTo}
+            onRefresh={refreshBatchQueueStore}
+            onExecuteTask={requestExecuteBatchQueueTask}
+            onCancelTask={requestCancelBatchQueueTask}
+          />
         ) : page === 'free' ? (
           <FreeGenerationPage
             prompt={prompt}
@@ -4667,6 +4913,237 @@ export function App() {
   );
 }
 
+function BatchQueuePage(props: {
+  queues: BatchGenerationQueue[];
+  executingTaskId: string | null;
+  onNavigate: (page: Page) => void;
+  onRefresh: () => void;
+  onExecuteTask: (queueId: string, taskId: string) => void;
+  onCancelTask: (queueId: string, taskId: string) => void;
+}) {
+  const activeQueue = props.queues[0] ?? null;
+  const activeSummary = activeQueue ? summarizeBatchQueue(activeQueue) : {
+    total: 0,
+    pending: 0,
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    cancelled: 0,
+    requestedImages: 0
+  };
+  const aggregate = props.queues.reduce((acc, queue) => {
+    const summary = summarizeBatchQueue(queue);
+    acc.total += summary.total;
+    acc.pending += summary.pending;
+    acc.running += summary.running;
+    acc.succeeded += summary.succeeded;
+    acc.failed += summary.failed;
+    acc.requestedImages += summary.requestedImages;
+    return acc;
+  }, { total: 0, pending: 0, running: 0, succeeded: 0, failed: 0, requestedImages: 0 });
+  const visibleTasks = activeQueue ? [...activeQueue.tasks].reverse().slice(0, 80) : [];
+  const omittedReferenceCount = visibleTasks.reduce(
+    (sum, task) => sum + (task.snapshot.referencePolicy?.omittedReferenceIds.length ?? 0),
+    0
+  );
+
+  return (
+    <section className="batchQueuePage" aria-label="批量队列">
+      <header className="batchQueueHero">
+        <div className="workspaceCommandTitle">
+          <span>Batch Queue</span>
+          <h1>批量队列</h1>
+        </div>
+        <p>0.3.9 当前支持从 AI 创作台创建任务快照，并可逐个确认执行；完整连续队列执行会在失败重试和暂停机制补齐后开放。</p>
+        <div className="batchQueueActions">
+          <button
+            type="button"
+            className="workspaceCommandButton primary"
+            onClick={() => props.onNavigate('generate')}
+            title="回到 AI 创作台添加新的批量任务"
+            aria-label="回到 AI 创作台添加新的批量任务"
+          >
+            <Wand2 size={15} /> 去 AI 创作台
+          </button>
+          <button
+            type="button"
+            className="workspaceCommandButton"
+            onClick={props.onRefresh}
+            title="从本地存储重新读取批量队列"
+            aria-label="刷新批量队列"
+          >
+            <RefreshCcw size={15} /> 刷新队列
+          </button>
+          <button
+            type="button"
+            className="workspaceCommandButton disabled"
+            disabled
+            title="连续执行会批量消耗接口额度，待暂停、失败重试和进度控制完成后开放；当前请先逐个执行任务"
+            aria-label="开始执行队列暂未开放"
+          >
+            <ListChecks size={15} /> 开始执行
+          </button>
+        </div>
+      </header>
+
+      <div className="batchQueueStats" aria-label="队列统计">
+        <BatchQueueStat label="队列数" value={props.queues.length} hint={activeQueue?.name ?? '暂无队列'} />
+        <BatchQueueStat label="任务数" value={aggregate.total} hint={`${aggregate.pending} 个待执行`} />
+        <BatchQueueStat label="预计图片" value={aggregate.requestedImages} hint="按任务 count 汇总" />
+        <BatchQueueStat label="失败 / 成功" value={`${aggregate.failed} / ${aggregate.succeeded}`} hint="执行后回写" />
+      </div>
+
+      {activeQueue ? (
+        <div className="batchQueueLayout">
+          <aside className="batchQueueListPanel" aria-label="队列列表">
+            <div className="workspaceSectionHeading compact">
+              <div>
+                <p className="eyebrow">Queues</p>
+                <h2>当前队列</h2>
+              </div>
+            </div>
+            <div className="batchQueueCard active">
+              <strong>{activeQueue.name}</strong>
+              <span>{activeSummary.total} 个任务 · {activeSummary.requestedImages} 张预计输出</span>
+              <small>{batchQueueStatusLabel(activeQueue.status)} · {formatWorkspaceHomeTime(activeQueue.updatedAt)}</small>
+            </div>
+            {props.queues.slice(1).map((queue) => {
+              const summary = summarizeBatchQueue(queue);
+              return (
+                <div className="batchQueueCard" key={queue.id}>
+                  <strong>{queue.name}</strong>
+                  <span>{summary.total} 个任务 · {summary.pending} 个待执行</span>
+                  <small>{batchQueueStatusLabel(queue.status)} · {formatWorkspaceHomeTime(queue.updatedAt)}</small>
+                </div>
+              );
+            })}
+          </aside>
+
+          <section className="batchTaskPanel" aria-label="任务列表">
+            <div className="workspaceSectionHeading compact">
+              <div>
+                <p className="eyebrow">Tasks</p>
+                <h2>任务快照</h2>
+              </div>
+              {omittedReferenceCount > 0 ? (
+                <span className="workspaceSoftCounter warning">{omittedReferenceCount} 张参考图需执行前确认</span>
+              ) : (
+                <span className="workspaceSoftCounter">{activeSummary.pending} 个待执行</span>
+              )}
+            </div>
+            {visibleTasks.length ? (
+              <div className="batchTaskList">
+                {visibleTasks.map((task) => {
+                  const isExecuting = props.executingTaskId === task.id;
+                  const canExecute = (task.status === 'pending' || task.status === 'failed') && !props.executingTaskId;
+                  const canCancel = (task.status === 'pending' || task.status === 'failed') && !props.executingTaskId;
+                  return (
+                  <article className={`batchTaskItem ${isExecuting ? 'running' : ''}`} key={task.id}>
+                    <div className="batchTaskMain">
+                      <div className="batchTaskTitleRow">
+                        <strong>{task.title}</strong>
+                        <span className={`batchTaskStatus ${task.status}`}>{batchQueueTaskStatusLabel(task.status)}</span>
+                      </div>
+                      <p>{task.snapshot.prompt}</p>
+                      <div className="batchTaskMeta">
+                        <span>{task.snapshot.generationMode === 'image-to-image' ? '图生图' : '文生图'}</span>
+                        <span>{task.snapshot.providerName ?? task.snapshot.providerId}</span>
+                        <span>{task.snapshot.profileName ?? '未绑定配置实例'}</span>
+                        <span>{task.snapshot.modelId}</span>
+                        <span>{task.snapshot.size}</span>
+                        <span>{task.snapshot.count} 张</span>
+                      </div>
+                      {task.error ? <small className="batchTaskError">{task.error}</small> : null}
+                    </div>
+                    <div className="batchTaskSide">
+                      <span>{formatWorkspaceHomeTime(task.createdAt)}</span>
+                      <small>{task.snapshot.referencePolicy?.omittedReferenceIds.length ? '参考图需确认' : `${task.snapshot.references?.length ?? 0} 张参考图`}</small>
+                      <div className="batchTaskActions">
+                        <button
+                          type="button"
+                          className="workspaceCommandButton primary"
+                          onClick={() => props.onExecuteTask(task.queueId, task.id)}
+                          disabled={!canExecute}
+                          title="执行这个任务；会弹出确认并真实调用接口"
+                          aria-label="执行此队列任务"
+                        >
+                          {isExecuting ? '执行中…' : task.status === 'failed' ? '重试任务' : '执行此任务'}
+                        </button>
+                        <button
+                          type="button"
+                          className="workspaceCommandButton"
+                          onClick={() => props.onCancelTask(task.queueId, task.id)}
+                          disabled={!canCancel}
+                          title="只把本地队列任务标记为已取消，不删除作品记录"
+                          aria-label="取消此队列任务"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="workspaceHomeEmpty">
+                <strong>这个队列还没有任务</strong>
+                <small>回到 AI 创作台，填写 Prompt 后点击“加入队列”。</small>
+                <button type="button" className="workspaceCommandButton primary" onClick={() => props.onNavigate('generate')}>
+                  <Wand2 size={15} /> 添加任务
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+      ) : (
+        <div className="workspaceHomeEmpty batchQueueEmpty">
+          <ListChecks size={28} />
+          <strong>还没有批量任务</strong>
+          <small>先在 AI 创作台准备一次文生图或图生图参数，再加入批量队列。</small>
+          <button type="button" className="workspaceCommandButton primary" onClick={() => props.onNavigate('generate')}>
+            <Wand2 size={15} /> 去 AI 创作台
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function BatchQueueStat(props: { label: string; value: number | string; hint: string }) {
+  return (
+    <div className="batchQueueStat">
+      <span>{props.label}</span>
+      <strong>{props.value}</strong>
+      <small>{props.hint}</small>
+    </div>
+  );
+}
+
+function batchQueueStatusLabel(status: BatchGenerationQueue['status']) {
+  const labels: Record<BatchGenerationQueue['status'], string> = {
+    draft: '草稿',
+    ready: '就绪',
+    running: '运行中',
+    paused: '已暂停',
+    completed: '已完成',
+    'completed-with-errors': '完成但有失败',
+    cancelled: '已取消'
+  };
+  return labels[status] ?? status;
+}
+
+function batchQueueTaskStatusLabel(status: BatchGenerationQueue['tasks'][number]['status']) {
+  const labels: Record<BatchGenerationQueue['tasks'][number]['status'], string> = {
+    pending: '待执行',
+    running: '运行中',
+    succeeded: '成功',
+    failed: '失败',
+    cancelled: '已取消'
+  };
+  return labels[status] ?? status;
+}
+
 function WorkspaceHomePage(props: {
   providerName: string;
   providerProfileName: string;
@@ -4730,7 +5207,7 @@ function WorkspaceHomePage(props: {
   ];
   const roadmapItems = [
     { title: '项目资产库', state: '入口 MVP', page: 'library' as Page },
-    { title: '批量队列', state: '规划中', page: 'generate' as Page },
+    { title: '批量队列', state: '可创建任务', page: 'batch' as Page },
     { title: '多模型对比', state: '规划中', page: 'providers' as Page }
   ];
 

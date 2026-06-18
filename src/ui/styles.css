@@ -20055,3 +20055,362 @@ body {
 .appShell .libraryDetailActions .miniButton svg {
   flex: 0 0 auto;
 }
+
+/* Batch Queue V1 — visible entry and non-consuming task snapshots. */
+.workspaceGenerate .promptControlRow .generateStack {
+  width: min(184px, 100%);
+  display: grid;
+  gap: 6px;
+}
+
+.workspaceGenerate .promptControlRow .secondaryQueueButton {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-line));
+  border-radius: 13px;
+  color: color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-text));
+  background-color: color-mix(in srgb, var(--app-accent-strong) 9%, var(--app-surface));
+  background-image: none;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background-color 0.16s ease, opacity 0.16s ease;
+}
+
+.workspaceGenerate .promptControlRow .secondaryQueueButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 48%, var(--app-line));
+  background-color: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
+}
+
+.workspaceGenerate .promptControlRow .secondaryQueueButton:disabled {
+  color: var(--app-muted);
+  border-color: var(--app-line);
+  background-color: color-mix(in srgb, var(--app-surface-2) 72%, var(--app-surface));
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.workspaceBatchShell {
+  overflow: auto;
+  background: var(--app-bg);
+}
+
+.batchQueuePage {
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+  padding-bottom: 30px;
+}
+
+.batchQueueHero,
+.batchQueueStats,
+.batchQueueListPanel,
+.batchTaskPanel,
+.batchQueueEmpty {
+  min-width: 0;
+  border: 1px solid var(--app-line);
+  background: color-mix(in srgb, var(--app-surface) 78%, var(--app-bg));
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.07);
+}
+
+.batchQueueHero {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.5fr) minmax(260px, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
+  border-radius: 24px;
+}
+
+.batchQueueHero p {
+  margin: 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.batchQueueActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workspaceCommandButton.disabled,
+.workspaceCommandButton:disabled {
+  color: var(--app-muted);
+  background: color-mix(in srgb, var(--app-surface-2) 70%, var(--app-surface));
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.batchQueueStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border-radius: 22px;
+}
+
+.batchQueueStat {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--app-surface-2) 60%, transparent);
+}
+
+.batchQueueStat span,
+.batchQueueStat small,
+.batchTaskSide,
+.batchTaskMeta span {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.batchQueueStat strong {
+  color: var(--app-text);
+  font-size: 22px;
+  line-height: 1.05;
+}
+
+.batchQueueLayout {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.batchQueueListPanel,
+.batchTaskPanel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 24px;
+}
+
+.batchQueueCard,
+.batchTaskItem {
+  min-width: 0;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--app-surface-2) 58%, transparent);
+}
+
+.batchQueueCard {
+  display: grid;
+  gap: 5px;
+  padding: 11px;
+}
+
+.batchQueueCard.active {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 40%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface));
+}
+
+.batchQueueCard strong,
+.batchTaskTitleRow strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--app-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batchQueueCard span,
+.batchQueueCard small {
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batchTaskList {
+  display: grid;
+  gap: 9px;
+}
+
+.batchTaskItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(104px, auto);
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+}
+
+.batchTaskItem.running {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 48%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 12%, var(--app-surface));
+}
+
+.batchTaskMain {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.batchTaskTitleRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.batchTaskStatus {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  color: var(--app-muted);
+  background: color-mix(in srgb, var(--app-surface-2) 70%, transparent);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.batchTaskStatus.pending {
+  color: #b45309;
+  border-color: color-mix(in srgb, #f59e0b 40%, var(--app-line));
+  background: color-mix(in srgb, #f59e0b 11%, var(--app-surface));
+}
+
+.batchTaskStatus.succeeded {
+  color: #047857;
+  border-color: color-mix(in srgb, #10b981 40%, var(--app-line));
+  background: color-mix(in srgb, #10b981 11%, var(--app-surface));
+}
+
+.batchTaskStatus.failed {
+  color: #b91c1c;
+  border-color: color-mix(in srgb, #ef4444 40%, var(--app-line));
+  background: color-mix(in srgb, #ef4444 10%, var(--app-surface));
+}
+
+.batchTaskStatus.running {
+  color: #0369a1;
+  border-color: color-mix(in srgb, #0ea5e9 42%, var(--app-line));
+  background: color-mix(in srgb, #0ea5e9 12%, var(--app-surface));
+}
+
+.batchTaskItem p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.batchTaskMeta {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.batchTaskMeta span {
+  max-width: 180px;
+  overflow: hidden;
+  padding: 4px 7px;
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-surface) 72%, transparent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batchTaskError {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #b91c1c;
+  font-size: 11px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.batchTaskSide {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.batchTaskSide small {
+  color: color-mix(in srgb, var(--app-accent-strong) 38%, var(--app-muted));
+}
+
+.batchTaskActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.batchTaskActions .workspaceCommandButton {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.batchQueueEmpty {
+  min-height: 320px;
+}
+
+.appShell.theme-dark .batchQueueHero,
+.appShell.theme-dark .batchQueueStats,
+.appShell.theme-dark .batchQueueListPanel,
+.appShell.theme-dark .batchTaskPanel,
+.appShell.theme-dark .batchQueueEmpty {
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.18);
+}
+
+@media (max-width: 1380px) {
+  .workspaceGenerate .promptControlRow .generateStack {
+    width: min(168px, 100%);
+  }
+
+  .workspaceGenerate .promptControlRow .secondaryQueueButton {
+    min-height: 30px;
+    font-size: 11px;
+  }
+
+  .batchQueueHero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .batchQueueActions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 980px) {
+  .batchQueueStats,
+  .batchQueueLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .batchTaskItem {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .batchTaskSide {
+    justify-items: start;
+    text-align: left;
+  }
+}

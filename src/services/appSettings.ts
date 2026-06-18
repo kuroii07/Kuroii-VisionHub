@@ -1,6 +1,6 @@
 import { readStorageValue, writeStorageValue } from './safeStorage';
 
-export type AppPage = 'home' | 'generate' | 'free' | 'library' | 'inspiration' | 'templates' | 'providers' | 'settings';
+export type AppPage = 'home' | 'generate' | 'batch' | 'free' | 'library' | 'inspiration' | 'templates' | 'providers' | 'settings';
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type AppLanguage = 'zh-CN' | 'en-US';
 export type DefaultGenerationMode = 'text' | 'image';
@@ -147,6 +147,7 @@ export const LANGUAGE_OPTIONS: Array<{ value: AppLanguage; label: string; shortL
 export const STARTUP_PAGE_OPTIONS: Array<{ value: AppPage; label: string }> = [
   { value: 'home', label: '工作台首页' },
   { value: 'generate', label: 'AI 创作' },
+  { value: 'batch', label: '批量队列' },
   { value: 'free', label: '免费平台' },
   { value: 'library', label: '作品画廊' },
   { value: 'inspiration', label: '灵感中心' },
