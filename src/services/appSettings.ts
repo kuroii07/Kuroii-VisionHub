@@ -6,7 +6,7 @@ export type AppLanguage = 'zh-CN' | 'en-US';
 export type DefaultGenerationMode = 'text' | 'image';
 export type OutputFormat = 'PNG' | 'JPEG' | 'WebP';
 export type PromptPolishEngine = 'local' | 'provider';
-export type PromptPolishLanguage = 'zh' | 'en' | 'bilingual';
+export type PromptPolishLanguage = 'source' | 'zh' | 'en' | 'bilingual';
 export type PromptPolishProtocol = 'chat-completions' | 'responses';
 export type PromptPolishStrength = 'concise' | 'detailed' | 'professional' | 'cinematic' | 'commercial';
 export type DefaultReferenceRole = 'auto' | 'composition' | 'style' | 'character' | 'color';
@@ -49,6 +49,7 @@ export interface PromptPolishSettings {
   savedConfigs: PromptPolishConfig[];
   extraHeadersJson: string;
   language: PromptPolishLanguage;
+  languageRuleVersion: 2;
   strength: PromptPolishStrength;
   protocol: PromptPolishProtocol;
   fallbackToLocal: boolean;
@@ -211,7 +212,8 @@ export const PROMPT_POLISH_ENGINE_OPTIONS: Array<{ value: PromptPolishEngine; la
 ];
 
 export const PROMPT_POLISH_LANGUAGE_OPTIONS: Array<{ value: PromptPolishLanguage; label: string }> = [
-  { value: 'zh', label: '保持中文' },
+  { value: 'source', label: '跟随原文' },
+  { value: 'zh', label: '输出中文' },
   { value: 'en', label: '输出英文' },
   { value: 'bilingual', label: '中英双语' }
 ];
@@ -267,7 +269,8 @@ export const defaultAppSettings: AppSettings = {
     modelOptions: [],
     savedConfigs: [],
     extraHeadersJson: '{}',
-    language: 'zh',
+    language: 'source',
+    languageRuleVersion: 2,
     strength: 'professional',
     protocol: 'chat-completions',
     fallbackToLocal: true
@@ -370,6 +373,8 @@ function normalizePromptPolish(value: Partial<PromptPolishSettings> | null | und
     ? value.extraHeadersJson
     : fallback.extraHeadersJson;
   const protocol = pickStringOption(value?.protocol, PROMPT_POLISH_PROTOCOL_OPTIONS, fallback.protocol);
+  const languageRuleVersion = value?.languageRuleVersion === 2 ? 2 : 1;
+  const pickedLanguage = pickStringOption(value?.language, PROMPT_POLISH_LANGUAGE_OPTIONS, fallback.language);
   const savedConfigs = normalizePromptPolishConfigs(value?.savedConfigs, {
     id: promptPolishConfigId(displayName, baseUrl),
     displayName,
@@ -387,7 +392,8 @@ function normalizePromptPolish(value: Partial<PromptPolishSettings> | null | und
     modelOptions,
     savedConfigs,
     extraHeadersJson,
-    language: pickStringOption(value?.language, PROMPT_POLISH_LANGUAGE_OPTIONS, fallback.language),
+    language: languageRuleVersion < 2 && pickedLanguage === 'zh' ? 'source' : pickedLanguage,
+    languageRuleVersion: 2,
     strength: pickStringOption(value?.strength, PROMPT_POLISH_STRENGTH_OPTIONS, fallback.strength),
     protocol,
     fallbackToLocal: typeof value?.fallbackToLocal === 'boolean' ? value.fallbackToLocal : fallback.fallbackToLocal

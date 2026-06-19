@@ -22,7 +22,9 @@ import {
   Maximize2,
   Monitor,
   MoreHorizontal,
+  Pause,
   Pencil,
+  Play,
   Plus,
   RefreshCcw,
   Settings,
@@ -1838,6 +1840,8 @@ function getProviderCapabilityMatrixCell(
 
 const GITHUB_REPOSITORY_URL = 'https://github.com/BlueSummer2333/VisionHub-Studio';
 const GITHUB_RELEASES_URL = `${GITHUB_REPOSITORY_URL}/releases`;
+const BATCH_QUEUE_TEMPLATE_STORAGE_KEY = 'visionhub.batch.queueTemplates.v1';
+const MAX_BATCH_QUEUE_TEMPLATES = 40;
 
 type UtilityModal = 'system-info' | 'shortcuts' | null;
 type GenerateShortcutName = 'submit' | 'focus-prompt' | 'add-reference' | 'clear-references' | 'mode-image' | 'mode-text';
@@ -1846,6 +1850,39 @@ type BatchQueueNameDialogState = {
   mode: 'create' | 'rename';
   defaultName: string;
   targetId?: string;
+};
+type BatchQueueRunProgress = {
+  queueId: string;
+  initialPendingCount: number;
+  completedThisRun: number;
+  failedThisRun: number;
+  currentTaskId?: string;
+  currentTaskTitle?: string;
+  startedAt: string;
+  pauseRequested?: boolean;
+};
+type BatchQueueTaskTemplate = {
+  kind: BatchGenerationQueue['tasks'][number]['kind'];
+  compareGroupId?: string;
+  title: string;
+  snapshot: BatchGenerationQueue['tasks'][number]['snapshot'];
+};
+type BatchQueueCompareGroupTemplate = {
+  id: string;
+  prompt: string;
+  profileIds: string[];
+  taskIndexes: number[];
+};
+type BatchQueueTemplate = {
+  id: string;
+  name: string;
+  description?: string;
+  taskTemplates: BatchQueueTaskTemplate[];
+  compareGroups: BatchQueueCompareGroupTemplate[];
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt?: string;
+  usedCount?: number;
 };
 type GenerateSubmissionOptions = {
   mode?: GenerationMode;
@@ -1867,6 +1904,101 @@ const generateShortcutEventName: Record<GenerateShortcutName, string> = {
 };
 
 const libraryFocusSearchEvent = 'visionhub:library-focus-search';
+
+function loadBatchQueueTemplates(): BatchQueueTemplate[] {
+  const raw = readStorageValue(BATCH_QUEUE_TEMPLATE_STORAGE_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map(normalizeBatchQueueTemplate)
+      .filter((template) => template.taskTemplates.length > 0)
+      .slice(0, MAX_BATCH_QUEUE_TEMPLATES);
+  } catch (error) {
+    console.warn('[VisionHub] batch queue templates parse failed; using empty list', error);
+    return [];
+  }
+}
+
+function saveBatchQueueTemplates(templates: BatchQueueTemplate[]) {
+  writeStorageValue(
+    BATCH_QUEUE_TEMPLATE_STORAGE_KEY,
+    JSON.stringify(templates.map(normalizeBatchQueueTemplate).slice(0, MAX_BATCH_QUEUE_TEMPLATES))
+  );
+}
+
+function createBatchQueueTemplateFromQueue(queue: BatchGenerationQueue, name?: string): BatchQueueTemplate {
+  const now = new Date().toISOString();
+  const taskTemplates = queue.tasks.map((task): BatchQueueTaskTemplate => ({
+    kind: task.kind,
+    compareGroupId: task.compareGroupId,
+    title: task.title,
+    snapshot: task.snapshot
+  }));
+  const compareGroups = (queue.compareGroups ?? [])
+    .map((group): BatchQueueCompareGroupTemplate => ({
+      id: group.id,
+      prompt: group.prompt,
+      profileIds: group.profileIds,
+      taskIndexes: group.taskIds
+        .map((taskId) => queue.tasks.findIndex((task) => task.id === taskId))
+        .filter((index) => index >= 0)
+    }))
+    .filter((group) => group.taskIndexes.length > 0);
+
+  return normalizeBatchQueueTemplate({
+    id: createLocalId('batch-template'),
+    name: name?.trim() || `${queue.name} 模板`,
+    description: `${taskTemplates.length} 个任务 · ${compareGroups.length} 个对比组`,
+    taskTemplates,
+    compareGroups,
+    createdAt: now,
+    updatedAt: now,
+    usedCount: 0
+  });
+}
+
+function normalizeBatchQueueTemplate(value: Partial<BatchQueueTemplate>): BatchQueueTemplate {
+  const createdAt = value.createdAt || new Date().toISOString();
+  const taskTemplates = Array.isArray(value.taskTemplates)
+    ? value.taskTemplates
+      .map((task): BatchQueueTaskTemplate | null => {
+        if (!task?.snapshot?.prompt?.trim()) return null;
+        return {
+          kind: task.kind === 'model-compare' ? 'model-compare' : task.kind === 'prompt-size-sweep' ? 'prompt-size-sweep' : 'single',
+          compareGroupId: task.compareGroupId,
+          title: task.title?.trim() || task.snapshot.prompt.slice(0, 40) || '未命名任务',
+          snapshot: task.snapshot
+        };
+      })
+      .filter((task): task is BatchQueueTaskTemplate => Boolean(task))
+    : [];
+  return {
+    id: value.id || createLocalId('batch-template'),
+    name: value.name?.trim() || '未命名批量模板',
+    description: value.description?.trim() || undefined,
+    taskTemplates,
+    compareGroups: Array.isArray(value.compareGroups)
+      ? value.compareGroups.map((group) => ({
+        id: group.id || createLocalId('compare-template'),
+        prompt: String(group.prompt || ''),
+        profileIds: Array.isArray(group.profileIds) ? group.profileIds.map(String) : [],
+        taskIndexes: Array.isArray(group.taskIndexes) ? group.taskIndexes.map((index) => Math.max(0, Math.round(Number(index)))) : []
+      })).filter((group) => group.taskIndexes.length > 0)
+      : [],
+    createdAt,
+    updatedAt: value.updatedAt || createdAt,
+    lastUsedAt: value.lastUsedAt,
+    usedCount: Math.max(0, Math.round(Number(value.usedCount ?? 0)))
+  };
+}
+
+function createLocalId(prefix: string) {
+  const cryptoApi = typeof crypto !== 'undefined' ? crypto : undefined;
+  if (cryptoApi?.randomUUID) return `${prefix}-${cryptoApi.randomUUID()}`;
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 const shortcutGroups: Array<{ title: string; items: Array<{ keys: string[]; action: string }> }> = [
   {
@@ -2013,6 +2145,8 @@ export function App() {
   const [activeBatchQueueId, setActiveBatchQueueId] = useState(() => readStorageValue(ACTIVE_BATCH_QUEUE_STORAGE_KEY) || '');
   const [executingBatchTaskId, setExecutingBatchTaskId] = useState<string | null>(null);
   const [runningBatchQueueId, setRunningBatchQueueId] = useState<string | null>(null);
+  const [batchQueueRunProgress, setBatchQueueRunProgress] = useState<BatchQueueRunProgress | null>(null);
+  const [batchQueueTemplates, setBatchQueueTemplates] = useState<BatchQueueTemplate[]>(() => loadBatchQueueTemplates());
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [batchQueueNameDialog, setBatchQueueNameDialog] = useState<BatchQueueNameDialogState | null>(null);
@@ -2802,6 +2936,139 @@ export function App() {
     });
   }
 
+  function createTasksFromBatchQueueTemplate(template: BatchQueueTemplate, queueId: string) {
+    const appliedAt = new Date().toISOString();
+    const compareGroupDrafts = new Map<string, ReturnType<typeof createBatchQueueCompareGroup>>();
+    for (const group of template.compareGroups) {
+      compareGroupDrafts.set(group.id, createBatchQueueCompareGroup({
+        queueId,
+        prompt: group.prompt,
+        profileIds: group.profileIds
+      }));
+    }
+
+    const tasks = template.taskTemplates.map((taskTemplate) => {
+      const compareGroup = taskTemplate.compareGroupId ? compareGroupDrafts.get(taskTemplate.compareGroupId) : undefined;
+      const snapshot = createQueuedGenerationSnapshot({
+        ...taskTemplate.snapshot,
+        references: taskTemplate.snapshot.references ?? [],
+        metadata: {
+          ...(taskTemplate.snapshot.metadata ?? {}),
+          visionhub_queue_template: {
+            templateId: template.id,
+            templateName: template.name,
+            appliedAt
+          }
+        },
+        source: taskTemplate.snapshot.source,
+        preserveEmbeddedReferenceImages: true
+      });
+      return createBatchQueueTask({
+        queueId,
+        snapshot,
+        kind: taskTemplate.kind,
+        compareGroupId: compareGroup?.id,
+        title: taskTemplate.title,
+        status: 'pending'
+      });
+    });
+
+    const compareGroups = template.compareGroups
+      .map((group) => {
+        const compareGroup = compareGroupDrafts.get(group.id);
+        if (!compareGroup) return null;
+        return {
+          ...compareGroup,
+          taskIds: group.taskIndexes
+            .map((index) => tasks[index]?.id)
+            .filter((taskId): taskId is string => Boolean(taskId)),
+          updatedAt: appliedAt
+        };
+      })
+      .filter((group): group is ReturnType<typeof createBatchQueueCompareGroup> => Boolean(group?.taskIds.length));
+
+    return { tasks, compareGroups };
+  }
+
+  function requestSaveActiveBatchQueueTemplate(queueId: string) {
+    const store = loadBatchQueueStore();
+    const queue = store.queues.find((item) => item.id === queueId);
+    if (!queue) {
+      setBatchQueueStore(store);
+      setConfigMessage('队列不存在，请刷新后重试。');
+      return;
+    }
+    const summary = summarizeBatchQueue(queue);
+    if (runningBatchQueueId === queue.id || summary.running > 0) {
+      setConfigMessage('这个队列正在执行，暂时不能保存为模板。');
+      return;
+    }
+    if (summary.total === 0) {
+      setConfigMessage('空队列不能保存为模板。');
+      return;
+    }
+    const template = createBatchQueueTemplateFromQueue(queue);
+    const nextTemplates = [
+      template,
+      ...batchQueueTemplates.filter((item) => item.id !== template.id)
+    ].slice(0, MAX_BATCH_QUEUE_TEMPLATES);
+    saveBatchQueueTemplates(nextTemplates);
+    setBatchQueueTemplates(nextTemplates);
+    setConfigMessage(`已保存批量模板：${template.name}，包含 ${template.taskTemplates.length} 个任务。`);
+  }
+
+  function requestApplyBatchQueueTemplate(templateId: string) {
+    const template = batchQueueTemplates.find((item) => item.id === templateId);
+    if (!template) {
+      setConfigMessage('批量模板不存在，请刷新后重试。');
+      return;
+    }
+    const { queue, exists } = resolveTargetBatchQueue(loadBatchQueueStore());
+    const { tasks, compareGroups } = createTasksFromBatchQueueTemplate(template, queue.id);
+    if (!tasks.length) {
+      setConfigMessage('这个批量模板没有可追加的任务。');
+      return;
+    }
+    const nextStore = exists
+      ? appendBatchQueueTasksAndCompareGroups(queue.id, tasks, compareGroups, loadBatchQueueStore())
+      : upsertBatchQueue({ ...queue, tasks, compareGroups, status: 'ready' }, loadBatchQueueStore());
+    const now = new Date().toISOString();
+    const nextTemplates = [
+      { ...template, usedCount: (template.usedCount ?? 0) + 1, lastUsedAt: now, updatedAt: now },
+      ...batchQueueTemplates.filter((item) => item.id !== template.id)
+    ].slice(0, MAX_BATCH_QUEUE_TEMPLATES);
+    saveBatchQueueTemplates(nextTemplates);
+    setBatchQueueTemplates(nextTemplates);
+    setBatchQueueStore(nextStore);
+    selectActiveBatchQueue(queue.id);
+    setConfigMessage(`已套用批量模板「${template.name}」：追加 ${tasks.length} 个待执行任务。`);
+    navigateTo('batch');
+  }
+
+  function requestDeleteBatchQueueTemplate(templateId: string) {
+    const template = batchQueueTemplates.find((item) => item.id === templateId);
+    if (!template) {
+      setConfigMessage('批量模板不存在，请刷新后重试。');
+      return;
+    }
+    requestConfirm({
+      title: '删除这个批量模板？',
+      message: [
+        `将删除模板“${template.name}”。`,
+        '这只删除模板，不会删除队列任务、作品画廊记录或磁盘图片。'
+      ].join('\n'),
+      confirmLabel: '删除模板',
+      cancelLabel: '保留模板',
+      tone: 'danger',
+      onConfirm: () => {
+        const nextTemplates = batchQueueTemplates.filter((item) => item.id !== template.id);
+        saveBatchQueueTemplates(nextTemplates);
+        setBatchQueueTemplates(nextTemplates);
+        setConfigMessage(`已删除批量模板：${template.name}`);
+      }
+    });
+  }
+
   function handleAddCurrentGenerationToBatchQueue(options: GenerateSubmissionOptions = {}) {
     const trimmedPrompt = prompt.trim();
     const generationMode = options.mode ?? 'text-to-image';
@@ -3130,6 +3397,12 @@ export function App() {
     return nextStore;
   }
 
+  function updateBatchQueueRunProgress(queueId: string, patch: Partial<BatchQueueRunProgress>) {
+    setBatchQueueRunProgress((current) => (
+      current?.queueId === queueId ? { ...current, ...patch } : current
+    ));
+  }
+
   async function executeBatchQueueTaskNow(
     queueId: string,
     taskId: string,
@@ -3200,6 +3473,13 @@ export function App() {
 
     batchQueueStopRequestedRef.current = false;
     setRunningBatchQueueId(queueId);
+    setBatchQueueRunProgress({
+      queueId,
+      initialPendingCount,
+      completedThisRun: 0,
+      failedThisRun: 0,
+      startedAt: new Date().toISOString()
+    });
     setBatchQueueRunState(queueId, {
       status: 'running',
       startedAt: queue.startedAt ?? new Date().toISOString(),
@@ -3215,9 +3495,21 @@ export function App() {
         const latestQueue = latestStore.queues.find((item) => item.id === queueId);
         const nextTask = latestQueue?.tasks.find((task) => task.status === 'pending');
         if (!latestQueue || !nextTask) break;
+        updateBatchQueueRunProgress(queueId, {
+          currentTaskId: nextTask.id,
+          currentTaskTitle: nextTask.title,
+          completedThisRun,
+          failedThisRun
+        });
         const result = await executeBatchQueueTaskNow(queueId, nextTask.id, { suppressMessage: true });
         if (result === 'succeeded') completedThisRun += 1;
         if (result === 'failed') failedThisRun += 1;
+        updateBatchQueueRunProgress(queueId, {
+          completedThisRun,
+          failedThisRun,
+          currentTaskId: undefined,
+          currentTaskTitle: undefined
+        });
       }
     } finally {
       const finalStore = loadBatchQueueStore();
@@ -3247,6 +3539,7 @@ export function App() {
       batchQueueStopRequestedRef.current = false;
       setRunningBatchQueueId(null);
       setExecutingBatchTaskId(null);
+      setBatchQueueRunProgress(null);
     }
   }
 
@@ -3286,7 +3579,8 @@ export function App() {
       return;
     }
     batchQueueStopRequestedRef.current = true;
-    setConfigMessage('已请求停止连续执行：当前任务完成后会暂停，不会再开始下一个任务。');
+    updateBatchQueueRunProgress(queueId, { pauseRequested: true });
+    setConfigMessage('已请求暂停连续执行：当前任务完成后会暂停，不会再开始下一个任务。');
   }
 
   function requestDeleteBatchQueueTask(queueId: string, taskId: string) {
@@ -5399,9 +5693,13 @@ export function App() {
         ) : page === 'batch' ? (
           <BatchQueuePage
             queues={batchQueueStore.queues}
+            results={results}
+            templates={batchQueueTemplates}
             activeQueueId={activeBatchQueueId}
             executingTaskId={executingBatchTaskId}
             runningQueueId={runningBatchQueueId}
+            runProgress={batchQueueRunProgress}
+            onPreview={openLibraryPreview}
             onNavigate={navigateTo}
             onSelectQueue={selectActiveBatchQueue}
             onCreateQueue={requestCreateBatchQueue}
@@ -5415,6 +5713,9 @@ export function App() {
             onRequeueTask={requestRequeueBatchQueueTask}
             onRequeueFailedTasks={requestRequeueFailedBatchQueueTasks}
             onDeleteTask={requestDeleteBatchQueueTask}
+            onSaveTemplate={requestSaveActiveBatchQueueTemplate}
+            onApplyTemplate={requestApplyBatchQueueTemplate}
+            onDeleteTemplate={requestDeleteBatchQueueTemplate}
           />
         ) : page === 'free' ? (
           <FreeGenerationPage
@@ -5589,9 +5890,13 @@ export function App() {
 
 function BatchQueuePage(props: {
   queues: BatchGenerationQueue[];
+  results: GenerationRecord[];
+  templates: BatchQueueTemplate[];
   activeQueueId: string;
   executingTaskId: string | null;
   runningQueueId: string | null;
+  runProgress: BatchQueueRunProgress | null;
+  onPreview: (imageUrl: string, navigation?: ImagePreviewNavigation) => void;
   onNavigate: (page: Page) => void;
   onSelectQueue: (queueId: string) => void;
   onCreateQueue: () => void;
@@ -5605,6 +5910,9 @@ function BatchQueuePage(props: {
   onRequeueTask: (queueId: string, taskId: string) => void;
   onRequeueFailedTasks: (queueId: string) => void;
   onDeleteTask: (queueId: string, taskId: string) => void;
+  onSaveTemplate: (queueId: string) => void;
+  onApplyTemplate: (templateId: string) => void;
+  onDeleteTemplate: (templateId: string) => void;
 }) {
   const activeQueue = (props.activeQueueId ? props.queues.find((queue) => queue.id === props.activeQueueId) : null)
     ?? props.queues[0]
@@ -5631,27 +5939,60 @@ function BatchQueuePage(props: {
   }, { total: 0, pending: 0, running: 0, succeeded: 0, failed: 0, requestedImages: 0, compareGroups: 0 });
   const visibleTasks = activeQueue ? [...activeQueue.tasks].reverse().slice(0, 80) : [];
   const compareGroupMap = new Map((activeQueue?.compareGroups ?? []).map((group) => [group.id, group]));
+  const resultRecordMap = new Map(props.results.map((record) => [record.id, record]));
+  const compareResultGroups = activeQueue ? (activeQueue.compareGroups ?? [])
+    .map((group) => {
+      const groupTasks = group.taskIds
+        .map((taskId) => activeQueue.tasks.find((task) => task.id === taskId))
+        .filter((task): task is BatchGenerationQueue['tasks'][number] => Boolean(task));
+      const completedCount = groupTasks.filter((task) => task.status === 'succeeded' || task.status === 'failed' || task.status === 'cancelled').length;
+      return {
+        group,
+        tasks: groupTasks,
+        completedCount,
+        resultCount: groupTasks.reduce((sum, task) => sum + task.resultRecordIds.filter((recordId) => resultRecordMap.has(recordId)).length, 0)
+      };
+    })
+    .sort((a, b) => b.group.createdAt.localeCompare(a.group.createdAt))
+    .slice(0, 4) : [];
   const batchVariantGroups = activeQueue ? summarizeBatchVariantGroups(activeQueue) : [];
   const omittedReferenceCount = visibleTasks.reduce(
     (sum, task) => sum + (task.snapshot.referencePolicy?.omittedReferenceIds.length ?? 0),
     0
   );
   const isActiveQueueRunning = Boolean(activeQueue && props.runningQueueId === activeQueue.id);
+  const activeRunProgress = activeQueue && props.runProgress?.queueId === activeQueue.id ? props.runProgress : null;
   const canStartActiveQueue = Boolean(activeQueue && activeSummary.pending > 0 && !props.runningQueueId && !props.executingTaskId);
-  const activeExecutingTask = activeQueue && props.executingTaskId
-    ? activeQueue.tasks.find((task) => task.id === props.executingTaskId)
+  const activeTaskId = props.executingTaskId ?? activeRunProgress?.currentTaskId ?? null;
+  const activeExecutingTask = activeQueue && activeTaskId
+    ? activeQueue.tasks.find((task) => task.id === activeTaskId)
     : null;
   const activeQueueFinishedCount = activeSummary.succeeded + activeSummary.failed + activeSummary.cancelled;
-  const activeQueueCurrentIndex = activeSummary.total > 0
-    ? Math.min(activeSummary.total, activeQueueFinishedCount + (isActiveQueueRunning ? 1 : 0))
+  const activeRunCompletedCount = activeRunProgress
+    ? activeRunProgress.completedThisRun + activeRunProgress.failedThisRun
+    : 0;
+  const activeRunTotalCount = activeRunProgress?.initialPendingCount ?? activeSummary.total;
+  const activeRunPercent = activeRunTotalCount > 0
+    ? Math.min(100, Math.round((activeRunCompletedCount / activeRunTotalCount) * 100))
     : 0;
   const activeQueueProgressText = activeQueue
     ? isActiveQueueRunning
-      ? `正在执行 ${activeQueueCurrentIndex} / ${activeSummary.total}，剩余 ${activeSummary.pending} 个`
+      ? activeRunProgress?.pauseRequested
+        ? `暂停请求中，本轮已结束 ${activeRunCompletedCount} / ${activeRunTotalCount}，当前任务完成后暂停`
+        : `本轮 ${activeRunCompletedCount} / ${activeRunTotalCount} 已结束，剩余 ${activeSummary.pending} 个待执行`
       : activeSummary.pending > 0
-        ? `${activeSummary.pending} 个待执行，一次确认后会自动依次执行`
+        ? activeQueue.status === 'paused'
+          ? `${activeSummary.pending} 个待执行，继续后会从下一个待执行任务恢复`
+          : `${activeSummary.pending} 个待执行，一次确认后会自动依次执行`
         : `${activeQueueFinishedCount} / ${activeSummary.total} 已完成或结束`
     : '暂无队列';
+  const activeQueuePrimaryActionLabel = isActiveQueueRunning
+    ? activeRunProgress?.pauseRequested ? '暂停中…' : '暂停队列'
+    : activeQueue?.status === 'paused'
+      ? '继续执行'
+      : '执行全部待处理';
+  const visibleTemplates = props.templates.slice(0, 4);
+  const canSaveActiveQueueTemplate = Boolean(activeQueue && activeSummary.total > 0 && !isActiveQueueRunning && activeSummary.running === 0);
 
   return (
     <section className="batchQueuePage" aria-label="批量队列">
@@ -5691,13 +6032,23 @@ function BatchQueuePage(props: {
           </button>
           <button
             type="button"
+            className="workspaceCommandButton"
+            disabled={!activeQueue || !canSaveActiveQueueTemplate}
+            onClick={() => activeQueue ? props.onSaveTemplate(activeQueue.id) : undefined}
+            title="把当前队列的任务快照保存为可复用模板；不会保存执行结果"
+            aria-label="保存当前队列为批量模板"
+          >
+            <Bookmark size={15} /> 保存模板
+          </button>
+          <button
+            type="button"
             className={`workspaceCommandButton ${isActiveQueueRunning ? 'dangerAction' : 'primary'}`}
             disabled={!activeQueue || (!isActiveQueueRunning && !canStartActiveQueue)}
             onClick={() => activeQueue ? (isActiveQueueRunning ? props.onStopQueue(activeQueue.id) : props.onStartQueue(activeQueue.id)) : undefined}
-            title={isActiveQueueRunning ? '当前任务完成后停止，不会继续执行下一个任务' : '一次确认后按顺序执行当前队列里的所有待处理任务'}
-            aria-label={isActiveQueueRunning ? '停止连续执行队列' : '执行全部待处理队列任务'}
+            title={isActiveQueueRunning ? '当前任务完成后暂停，不会继续执行下一个任务' : '一次确认后按顺序执行当前队列里的所有待处理任务'}
+            aria-label={isActiveQueueRunning ? '暂停连续执行队列' : '执行全部待处理队列任务'}
           >
-            <ListChecks size={15} /> {isActiveQueueRunning ? '停止执行' : '执行全部待处理'}
+            {isActiveQueueRunning ? <Pause size={15} /> : <Play size={15} />} {activeQueuePrimaryActionLabel}
           </button>
           <button
             type="button"
@@ -5713,12 +6064,18 @@ function BatchQueuePage(props: {
       </header>
 
       {activeQueue ? (
-        <div className={`batchQueueRunBanner ${isActiveQueueRunning ? 'running' : ''}`} aria-live="polite">
+        <div className={`batchQueueRunBanner ${isActiveQueueRunning ? 'running' : ''} ${activeQueue.status === 'paused' ? 'paused' : ''}`} aria-live="polite">
           <div>
-            <strong>{isActiveQueueRunning ? '队列正在自动执行' : '队列执行方式'}</strong>
+            <strong>{isActiveQueueRunning ? activeRunProgress?.pauseRequested ? '队列暂停请求中' : '队列正在自动执行' : activeQueue.status === 'paused' ? '队列已暂停' : '队列执行方式'}</strong>
             <span>{activeQueueProgressText}</span>
             {activeExecutingTask ? <em>当前：{activeExecutingTask.title}</em> : null}
+            {activeRunProgress?.currentTaskTitle && !activeExecutingTask ? <em>当前：{activeRunProgress.currentTaskTitle}</em> : null}
           </div>
+          {isActiveQueueRunning ? (
+            <div className="batchQueueProgressTrack" aria-label={`本轮执行进度 ${activeRunPercent}%`}>
+              <span style={{ width: `${activeRunPercent}%` }} />
+            </div>
+          ) : null}
           <small>默认并发数 1，避免中转站 / 聚合 API 被限流；后续可扩展为可控并发。</small>
         </div>
       ) : null}
@@ -5822,6 +6179,97 @@ function BatchQueuePage(props: {
                 <span className="workspaceSoftCounter">{activeSummary.pending} 个待执行</span>
               )}
             </div>
+            {visibleTemplates.length ? (
+              <div className="batchTemplateList" aria-label="批量任务模板">
+                {visibleTemplates.map((template) => (
+                  <article className="batchTemplateCard" key={template.id}>
+                    <div>
+                      <strong>{template.name}</strong>
+                      <span>{template.taskTemplates.length} 个任务 · {template.compareGroups.length} 个对比组</span>
+                      <small>
+                        {template.usedCount ? `使用 ${template.usedCount} 次` : '尚未使用'}
+                        {template.lastUsedAt ? ` · ${formatWorkspaceHomeTime(template.lastUsedAt)}` : ` · ${formatWorkspaceHomeTime(template.updatedAt)}`}
+                      </small>
+                    </div>
+                    <div className="batchTemplateActions">
+                      <button
+                        type="button"
+                        className="workspaceCommandButton primary"
+                        onClick={() => props.onApplyTemplate(template.id)}
+                        disabled={Boolean(props.runningQueueId) || Boolean(props.executingTaskId)}
+                        title="把这个模板的任务追加到当前队列末尾"
+                        aria-label={`套用批量模板 ${template.name}`}
+                      >
+                        套用
+                      </button>
+                      <button
+                        type="button"
+                        className="workspaceCommandButton dangerAction"
+                        onClick={() => props.onDeleteTemplate(template.id)}
+                        disabled={Boolean(props.runningQueueId) || Boolean(props.executingTaskId)}
+                        title="删除这个批量模板，不影响队列和作品记录"
+                        aria-label={`删除批量模板 ${template.name}`}
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+            {compareResultGroups.length ? (
+              <div className="batchCompareResultList" aria-label="多模型对比结果">
+                {compareResultGroups.map(({ group, tasks, completedCount, resultCount }) => (
+                  <article className="batchCompareResultGroup" key={group.id}>
+                    <div className="batchCompareResultHeader">
+                      <div>
+                        <strong>多模型对比结果</strong>
+                        <span>{completedCount} / {tasks.length} 个任务已结束 · {resultCount > 0 ? `${resultCount} 条结果记录` : '展示任务状态'}</span>
+                      </div>
+                      <small>{formatWorkspaceHomeTime(group.createdAt)}</small>
+                    </div>
+                    <p>{group.prompt}</p>
+                    <div className="batchCompareResultGrid">
+                      {tasks.map((task) => {
+                        const taskRecords = task.resultRecordIds
+                          .map((recordId) => resultRecordMap.get(recordId))
+                          .filter((record): record is GenerationRecord => Boolean(record));
+                        const successRecord = taskRecords.find((record) => record.status === 'succeeded' && record.imageUrls[0]);
+                        const firstRecord = taskRecords[0];
+                        const previewUrl = successRecord?.imageUrls[0];
+                        const status = firstRecord?.status ?? task.status;
+                        return (
+                          <article className={`batchCompareResultCard ${status}`} key={task.id}>
+                            {previewUrl ? (
+                              <button
+                                type="button"
+                                className="batchCompareThumb"
+                                onClick={() => props.onPreview(previewUrl)}
+                                title="预览这条对比结果"
+                                aria-label={`预览对比结果 ${task.snapshot.profileName ?? task.snapshot.modelId}`}
+                              >
+                                <img src={previewUrl} alt={task.title} loading="lazy" decoding="async" />
+                              </button>
+                            ) : (
+                              <div className="batchCompareThumb empty">
+                                <Image size={18} />
+                                <span>{batchQueueTaskStatusLabel(task.status)}</span>
+                              </div>
+                            )}
+                            <div className="batchCompareResultMeta">
+                              <strong>{task.snapshot.profileName ?? task.snapshot.providerName ?? task.snapshot.providerId}</strong>
+                              <span>{task.snapshot.modelId}</span>
+                              <small>{task.snapshot.size} · {task.snapshot.count} 张 · {task.durationMs ? `${Math.round(task.durationMs / 1000)}s` : '待回写耗时'}</small>
+                              {task.error || firstRecord?.error ? <em>{task.error ?? firstRecord?.error}</em> : null}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
             {batchVariantGroups.length ? (
               <div className="batchVariantGroupList" aria-label="批量变体批次">
                 {batchVariantGroups.slice(0, 4).map((group) => (

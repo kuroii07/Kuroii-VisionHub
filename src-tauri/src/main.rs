@@ -3047,6 +3047,7 @@ fn format_openai_compatible_error(
 
 fn build_prompt_polish_instruction(request: &PromptPolishRequest) -> String {
     let language = match request.language.as_str() {
+        "source" => "自动识别原始提示词的主要语言，并使用同一种语言输出润色结果；日语输入输出日语，英语输入输出英语，中文输入输出中文。若原文中有少量外文关键词、模型名、风格名或专有名词，应原样保留；不要因为系统说明是中文就把外语提示词翻译成中文。",
         "en" => "输出英文提示词。",
         "bilingual" => "输出中英双语提示词，先中文后英文。",
         _ => "保持中文输出。",
@@ -3075,12 +3076,14 @@ fn build_prompt_polish_payload(request: &PromptPolishRequest, protocol: &str, in
     let mode_rules = prompt_polish_mode_rules(&request.mode_id);
     let strength_rules = prompt_polish_strength_rules(&request.strength);
     let style_rules = prompt_style_rules(request.style_id.as_deref().unwrap_or("auto"));
+    let language_rules = prompt_polish_language_rules(&request.language);
     let user_content = format!(
-        "请按以下规则重写原始提示词。\n\n当前润色模式：{}\n模式规则：{}\n强度规则：{}\n风格规则：{}\n输出要求：只输出一段完整的最终生图提示词；不要把原文原样放在开头再追加一句；必须把原文拆解并重组为主体、场景、构图/镜头、光线、材质、色彩、画质、约束明确的画面方案；如果原文少于 20 个字，要扩写到可直接用于生成的丰富画面描述；不要输出说明文字。\n\n原始提示词：\n{}",
+        "请按以下规则重写原始提示词。\n\n当前润色模式：{}\n模式规则：{}\n强度规则：{}\n风格规则：{}\n语言规则：{}\n输出要求：只输出一段完整的最终生图提示词；不要把原文原样放在开头再追加一句；必须把原文拆解并重组为主体、场景、构图/镜头、光线、材质、色彩、画质、约束明确的画面方案；如果原文少于 20 个字，要扩写到可直接用于生成的丰富画面描述；不要输出说明文字。\n\n原始提示词：\n{}",
         prompt_polish_mode_label(&request.mode_id),
         mode_rules,
         strength_rules,
         if style_rules.is_empty() { "不额外限定画风，按原始需求自然处理。" } else { style_rules },
+        language_rules,
         request.prompt.trim()
     );
     match protocol {
@@ -3100,6 +3103,15 @@ fn build_prompt_polish_payload(request: &PromptPolishRequest, protocol: &str, in
             ],
             "temperature": 0.7
         }),
+    }
+}
+
+fn prompt_polish_language_rules(language: &str) -> &'static str {
+    match language {
+        "source" => "跟随原文主语言输出，不翻译成中文；英语输入保持英文，日语输入保持日语，中文输入保持中文，混合语言输入保留原有语言结构和专有名词。",
+        "en" => "输出英文提示词。",
+        "bilingual" => "输出中英双语提示词，先中文后英文。",
+        _ => "输出中文提示词。",
     }
 }
 
