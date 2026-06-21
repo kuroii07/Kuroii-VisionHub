@@ -1,4 +1,6 @@
-﻿use base64::Engine;
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use base64::Engine;
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::PngEncoder;
 use image::codecs::webp::WebPEncoder;

@@ -16601,7 +16601,7 @@ body {
 
 .workspaceContinueBody {
   display: grid;
-  grid-template-columns: minmax(220px, 330px) minmax(0, 1fr);
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
   gap: 18px;
   align-items: center;
 }
@@ -16617,14 +16617,16 @@ body {
 }
 
 .workspaceContinuePreview {
-  height: 248px;
+  width: 100%;
+  height: auto;
   min-height: 0;
-  max-height: 248px;
+  max-height: 360px;
   align-self: center;
   border: 0;
   border-radius: 18px;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: color-mix(in srgb, var(--app-surface-2) 42%, transparent);
   transition:
     background 0.18s ease,
@@ -16662,12 +16664,18 @@ body {
 }
 
 .workspaceContinuePreview img {
-  object-fit: contain;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 360px;
+  object-fit: contain !important;
 }
 
 .workspaceContinueInfo {
+  display: grid;
   align-content: center;
   gap: 12px;
+  padding: 4px 0;
 }
 
 .workspaceContinueInfo > strong {
@@ -16710,6 +16718,10 @@ body {
   font-weight: 850;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.workspaceContinueActions {
+  margin-top: 2px;
 }
 
 .workspaceCommandButton,

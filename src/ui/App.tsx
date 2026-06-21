@@ -170,7 +170,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
-const APP_VERSION = '0.3.9';
+const APP_VERSION = '0.3.10';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -6001,7 +6001,7 @@ function BatchQueuePage(props: {
           <span>Batch Queue</span>
           <h1>批量队列</h1>
         </div>
-        <p>0.3.9 当前支持单任务、批量变体和多模型对比组入队；点击“执行全部待处理”只确认一次，随后按稳妥串行自动跑完整个队列。</p>
+        <p>0.3.10 当前支持单任务、批量变体和多模型对比组入队；点击“执行全部待处理”只确认一次，随后按稳妥串行自动跑完整个队列。</p>
         <div className="batchQueueActions">
           <button
             type="button"

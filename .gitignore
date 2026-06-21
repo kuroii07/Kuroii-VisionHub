@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules/
 .npm-cache/
 
@@ -6,6 +6,7 @@ node_modules/
 dist/
 .vite-cache/
 output/
+outputs/
 .codex-browser-profile/
 
 # Tauri / Rust generated output
