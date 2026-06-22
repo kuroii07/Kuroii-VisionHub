@@ -222,7 +222,7 @@ function splitImageResultIntoSingleImageRecords(result: ImageGenerationResult): 
 
 type LibraryTimeFilter = 'all' | 'today' | '7d' | '30d';
 type LibraryViewMode = 'masonry' | 'adaptive' | 'square' | 'contain' | 'list';
-type LibrarySortMode = 'newest' | 'oldest' | 'favorites' | 'provider' | 'model' | 'duration' | 'size' | 'filename';
+type LibrarySortMode = 'newest' | 'oldest' | 'favorites' | 'provider' | 'model' | 'duration' | 'size' | 'filename' | 'recent-viewed' | 'recent-reference';
 type LibraryQuickFilter = 'favorites' | 'recent7d' | 'references' | 'failed' | 'local';
 type LibraryShapeFilter = 'all' | 'landscape' | 'portrait' | 'square' | 'wide' | 'tall' | 'four-three' | 'three-four' | 'sixteen-nine' | 'nine-sixteen' | 'custom';
 type LibraryFormatFilter = 'all' | 'png' | 'jpg' | 'gif' | 'webp' | 'svg' | 'unknown';
@@ -290,7 +290,6 @@ type LibraryDisplaySettings = {
   showPrompt: boolean;
   showProvider: boolean;
   showModel: boolean;
-  showFailed: boolean;
   showReferenceBadge: boolean;
   compact: boolean;
 };
@@ -332,6 +331,7 @@ type LibraryScope =
   | { type: 'all' }
   | { type: 'favorites' }
   | { type: 'recent7d' }
+  | { type: 'recent-viewed' }
   | { type: 'local' }
   | { type: 'folder'; id: string }
   | { type: 'collection'; id: string };
@@ -698,7 +698,6 @@ const defaultLibraryDisplaySettings: LibraryDisplaySettings = {
   showPrompt: true,
   showProvider: true,
   showModel: true,
-  showFailed: false,
   showReferenceBadge: true,
   compact: false
 };
@@ -953,13 +952,16 @@ const librarySortOptions: Array<{ value: LibrarySortMode; label: string }> = [
   { value: 'model', label: '模型分组' },
   { value: 'duration', label: '生成耗时' },
   { value: 'size', label: '图片尺寸' },
-  { value: 'filename', label: '文件名' }
+  { value: 'filename', label: '文件名' },
+  { value: 'recent-viewed', label: '最近查看' },
+  { value: 'recent-reference', label: '最近设为参考' }
 ];
 
 const libraryQuickFilters: Array<{ value: LibraryQuickFilter; label: string }> = [
   { value: 'favorites', label: '收藏' },
   { value: 'recent7d', label: '最近 7 天' },
   { value: 'references', label: '有参考图' },
+  { value: 'failed', label: '失败记录' },
   { value: 'local', label: '本地已落盘' }
 ];
 
@@ -1324,7 +1326,6 @@ function normalizeLibraryDisplaySettings(value: Partial<LibraryDisplaySettings> 
     showPrompt: typeof value?.showPrompt === 'boolean' ? value.showPrompt : defaultLibraryDisplaySettings.showPrompt,
     showProvider: typeof value?.showProvider === 'boolean' ? value.showProvider : defaultLibraryDisplaySettings.showProvider,
     showModel: typeof value?.showModel === 'boolean' ? value.showModel : defaultLibraryDisplaySettings.showModel,
-    showFailed: typeof value?.showFailed === 'boolean' ? value.showFailed : defaultLibraryDisplaySettings.showFailed,
     showReferenceBadge: typeof value?.showReferenceBadge === 'boolean' ? value.showReferenceBadge : defaultLibraryDisplaySettings.showReferenceBadge,
     compact: typeof value?.compact === 'boolean' ? value.compact : defaultLibraryDisplaySettings.compact
   };
@@ -1754,6 +1755,12 @@ function sortLibraryRecords(records: GenerationRecord[], sortMode: LibrarySortMo
     }
     if (sortMode === 'filename') {
       return getRecordFileName(a).localeCompare(getRecordFileName(b), 'zh-Hans-CN') || getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt);
+    }
+    if (sortMode === 'recent-viewed') {
+      return getRecordTimeMs(meta[b.id]?.lastViewedAt ?? '') - getRecordTimeMs(meta[a.id]?.lastViewedAt ?? '') || getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt);
+    }
+    if (sortMode === 'recent-reference') {
+      return getRecordTimeMs(meta[b.id]?.lastUsedAsReferenceAt ?? '') - getRecordTimeMs(meta[a.id]?.lastUsedAsReferenceAt ?? '') || getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt);
     }
     return getRecordTimeMs(b.createdAt) - getRecordTimeMs(a.createdAt);
   });
@@ -6588,7 +6595,7 @@ function WorkspaceHomePage(props: {
     { page: 'providers', label: '平台接入', detail: '检查配置', icon: <Database size={16} /> }
   ];
   const roadmapItems = [
-    { title: '项目资产库', state: '入口 MVP', page: 'library' as Page },
+    { title: '画廊整理', state: '下一步', page: 'library' as Page },
     { title: '批量队列', state: '可创建任务', page: 'batch' as Page },
     { title: '多模型对比', state: '规划中', page: 'providers' as Page }
   ];
@@ -8935,7 +8942,7 @@ function SettingsPage(props: {
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
             <strong>分组策略</strong>
-            <small>用于后续导出、项目资产库和批量整理；不会移动现有图库文件。</small>
+            <small>用于后续导出和批量整理；不会移动现有图库文件。</small>
           </div>
           <div className="settingsBooleanGrid compactTwo">
             <button className={savePreferences.groupByDate ? 'active' : ''} onClick={() => updateSavePreferences({ groupByDate: !savePreferences.groupByDate })}>按日期分组</button>
@@ -9387,7 +9394,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   const [providerFilter, setProviderFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'succeeded' | 'failed'>(() => {
     const status = readUrlSearchParam('status');
-    return status === 'all' || status === 'succeeded' || status === 'failed' ? status : 'all';
+    return status === 'all' || status === 'succeeded' || status === 'failed' ? status : 'succeeded';
   });
   const [modeFilter, setModeFilter] = useState<LibraryModeFilter>('all');
   const [timeFilter, setTimeFilter] = useState<LibraryTimeFilter>('all');
@@ -9627,9 +9634,9 @@ const LibraryPage = memo(function LibraryPage(props: {
     }).join('|');
   }, [activeCustomFilters, colorFilter, libraryItems, libraryMeta, libraryScope, normalizedQuery, quickFilters, ratingFilter, shapeFilter, sortMode]);
   const statusOptions = [
-    { value: 'all', label: '默认状态' },
-    { value: 'succeeded', label: '\u6210\u529f' },
-    { value: 'failed', label: '\u5931\u8d25' }
+    { value: 'succeeded', label: '成功记录' },
+    { value: 'failed', label: '失败记录' },
+    { value: 'all', label: '全部记录' }
   ];
   const modeOptions = [
     { value: 'all', label: '\u5168\u90e8\u7c7b\u578b' },
@@ -9648,7 +9655,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     const generationMode = result.generationMode ?? 'text-to-image';
     const recordTime = getRecordTimeMs(result.createdAt);
     const matchesProvider = providerFilter === 'all' || result.providerId === providerFilter;
-    const matchesStatus = statusFilter === 'all' ? result.status !== 'failed' : result.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || result.status === statusFilter;
     const matchesMode =
       modeFilter === 'all' ||
       generationMode === modeFilter ||
@@ -9682,6 +9689,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       libraryScope.type === 'all' ||
       (libraryScope.type === 'favorites' && Boolean(meta?.favorite)) ||
       (libraryScope.type === 'recent7d' && recordTime >= nowMs - 7 * 24 * 60 * 60 * 1000) ||
+      (libraryScope.type === 'recent-viewed' && Boolean(meta?.lastViewedAt)) ||
       (libraryScope.type === 'local' && Boolean(result.localImagePaths?.[0])) ||
       (libraryScope.type === 'folder' && meta?.folderId === libraryScope.id) ||
       (libraryScope.type === 'collection' && Boolean(meta?.collectionIds?.includes(libraryScope.id)));
@@ -9707,7 +9715,6 @@ const LibraryPage = memo(function LibraryPage(props: {
       }
       if (criteria.providerFilter && criteria.providerFilter !== 'all' && result.providerId !== criteria.providerFilter) return false;
       if (criteria.statusFilter && criteria.statusFilter !== 'all' && result.status !== criteria.statusFilter) return false;
-      if (criteria.statusFilter === 'all' && result.status === 'failed') return false;
       if (criteria.modeFilter && criteria.modeFilter !== 'all' && generationMode !== criteria.modeFilter && !(criteria.modeFilter === 'with-references' && Boolean(result.referenceImages?.length))) return false;
       if (criteria.timeFilter === 'today' && recordTime < todayStartMs) return false;
       if (criteria.timeFilter === '7d' && recordTime < nowMs - 7 * 24 * 60 * 60 * 1000) return false;
@@ -9816,11 +9823,12 @@ const LibraryPage = memo(function LibraryPage(props: {
   const selectedRecordCollections = selectedRecordMeta?.collectionIds?.length
     ? libraryOrganization.collections.filter((collection) => selectedRecordMeta.collectionIds?.includes(collection.id))
     : [];
-  const { folderCounts, collectionCounts, favoriteScopeCount, recentScopeCount, localScopeCount } = useMemo(() => {
+  const { folderCounts, collectionCounts, favoriteScopeCount, recentScopeCount, recentViewedScopeCount, localScopeCount } = useMemo(() => {
     const nextFolderCounts = new Map<string, number>();
     const nextCollectionCounts = new Map<string, number>();
     let favorite = 0;
     let recent = 0;
+    let recentViewed = 0;
     let local = 0;
     libraryItems.forEach((record) => {
       const meta = libraryMeta[record.id];
@@ -9830,6 +9838,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       });
       if (meta?.favorite) favorite += 1;
       if (getRecordTimeMs(record.createdAt) >= nowMs - 7 * 24 * 60 * 60 * 1000) recent += 1;
+      if (meta?.lastViewedAt) recentViewed += 1;
       if (record.localImagePaths?.[0]) local += 1;
     });
     return {
@@ -9837,6 +9846,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       collectionCounts: nextCollectionCounts,
       favoriteScopeCount: favorite,
       recentScopeCount: recent,
+      recentViewedScopeCount: recentViewed,
       localScopeCount: local
     };
   }, [libraryItems, libraryMeta, nowMs]);
@@ -9844,6 +9854,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     libraryScope.type === 'all' ? '全部作品'
       : libraryScope.type === 'favorites' ? '收藏'
       : libraryScope.type === 'recent7d' ? '最近 7 天'
+      : libraryScope.type === 'recent-viewed' ? '最近查看'
       : libraryScope.type === 'local' ? '本地已落盘'
       : libraryScope.type === 'folder' ? libraryOrganization.folders.find((folder) => folder.id === libraryScope.id)?.name ?? '文件夹'
       : libraryOrganization.collections.find((collection) => collection.id === libraryScope.id)?.name ?? '收藏集';
@@ -10102,6 +10113,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   }
 
   function openRecordDetails(record: GenerationRecord) {
+    updateLibraryMeta(record.id, { lastViewedAt: new Date().toISOString() });
     setSelectedRecordId(record.id);
     setDiagnosticRecordId(null);
   }
@@ -10124,6 +10136,7 @@ const LibraryPage = memo(function LibraryPage(props: {
 
   function previewRecord(record: GenerationRecord, imageUrl?: string) {
     if (!imageUrl) return;
+    updateLibraryMeta(record.id, { lastViewedAt: new Date().toISOString() });
     props.onPreview(imageUrl, createLibraryPreviewNavigation(record));
   }
 
@@ -10624,7 +10637,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   function clearLibraryFilters() {
     setQuery('');
     setProviderFilter('all');
-    setStatusFilter('all');
+    setStatusFilter('succeeded');
     setModeFilter('all');
     setTimeFilter('all');
     setColorFilter('all');
@@ -10636,6 +10649,10 @@ const LibraryPage = memo(function LibraryPage(props: {
   }
 
   function toggleQuickFilter(filter: LibraryQuickFilter) {
+    if (filter === 'failed') {
+      setStatusFilter((current) => (current === 'failed' ? 'succeeded' : 'failed'));
+      return;
+    }
     setQuickFilters((current) => (
       current.includes(filter)
         ? current.filter((item) => item !== filter)
@@ -10661,7 +10678,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     return Boolean(
       criteria.query ||
       criteria.providerFilter !== 'all' ||
-      criteria.statusFilter !== 'all' ||
+      criteria.statusFilter !== 'succeeded' ||
       criteria.modeFilter !== 'all' ||
       criteria.timeFilter !== 'all' ||
       criteria.colorFilter !== 'all' ||
@@ -10712,7 +10729,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   const gridStyle = { '--library-thumb-scale': thumbnailScale } as CSSProperties;
   const activeFilterCount = [
     providerFilter !== 'all',
-    statusFilter !== 'all',
+    statusFilter !== 'succeeded',
     modeFilter !== 'all',
     timeFilter !== 'all',
     colorFilter !== 'all',
@@ -10786,16 +10803,19 @@ const LibraryPage = memo(function LibraryPage(props: {
             </button>
           </div>
           <div className="libraryQuickFilters" aria-label="快捷筛选">
-            {libraryQuickFilters.map((filter) => (
-              <button
-                className={`libraryQuickFilterChip ${quickFilters.includes(filter.value) ? 'active' : ''}`}
-                key={filter.value}
-                type="button"
-                onClick={() => toggleQuickFilter(filter.value)}
-              >
-                {filter.label}
-              </button>
-            ))}
+            {libraryQuickFilters.map((filter) => {
+              const isActive = filter.value === 'failed' ? statusFilter === 'failed' : quickFilters.includes(filter.value);
+              return (
+                <button
+                  className={`libraryQuickFilterChip ${isActive ? 'active' : ''}`}
+                  key={filter.value}
+                  type="button"
+                  onClick={() => toggleQuickFilter(filter.value)}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
             {customQuickFilters.map((filter) => {
               const isActive = activeCustomQuickFilterIds.includes(filter.id);
               return (
@@ -10919,6 +10939,9 @@ const LibraryPage = memo(function LibraryPage(props: {
             <button className={libraryScope.type === 'recent7d' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'recent7d' })}>
               <Clock3 size={14} /><span>最近 7 天</span><em>{recentScopeCount}</em>
             </button>
+            <button className={libraryScope.type === 'recent-viewed' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'recent-viewed' })}>
+              <Clock3 size={14} /><span>最近查看</span><em>{recentViewedScopeCount}</em>
+            </button>
             <button className={libraryScope.type === 'local' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'local' })}>
               <HardDrive size={14} /><span>本地已落盘</span><em>{localScopeCount}</em>
             </button>
@@ -10986,6 +11009,7 @@ const LibraryPage = memo(function LibraryPage(props: {
             <strong>
               {libraryScope.type === 'favorites' ? <Star size={15} /> :
                 libraryScope.type === 'recent7d' ? <Clock3 size={15} /> :
+                libraryScope.type === 'recent-viewed' ? <Clock3 size={15} /> :
                 libraryScope.type === 'local' ? <HardDrive size={15} /> :
                 libraryScope.type === 'folder' ? <FolderOpen size={15} /> :
                 libraryScope.type === 'collection' ? <Bookmark size={15} /> :
