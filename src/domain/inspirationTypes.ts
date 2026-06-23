@@ -10,6 +10,9 @@ export type InspirationRegion = 'china' | 'global' | 'mixed';
 export type InspirationCommercialReference = 'unknown' | 'reference-only' | 'user-confirmed';
 export type InspirationLicenseStatus = 'unknown' | 'reference-only' | 'commercial-confirmed';
 export type InspirationSourceKind = 'preset' | 'custom';
+export type ImagePromptReverseLanguage = 'zh' | 'en' | 'source';
+export type ImagePromptReverseDetail = 'concise' | 'detailed' | 'professional';
+export type ImagePromptReverseProtocol = 'responses' | 'chat-completions' | 'gemini-generate-content';
 
 export interface InspirationSource {
   id: string;
@@ -44,6 +47,18 @@ export interface InspirationAsset {
   author?: string;
   originalPrompt?: string;
   inferredPrompt?: string;
+  reversePrompt?: {
+    prompt: string;
+    language?: ImagePromptReverseLanguage;
+    detail?: ImagePromptReverseDetail;
+    modelId?: string;
+    profileId?: string;
+    providerId?: string;
+    protocol?: ImagePromptReverseProtocol;
+    generatedAt: string;
+    editedAt?: string;
+    rawSummary?: unknown;
+  };
   tags: string[];
   note?: string;
   licenseStatus: InspirationLicenseStatus;

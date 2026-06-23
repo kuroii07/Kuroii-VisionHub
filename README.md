@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-本仓库当前处在“0.3.10 0.3 系列收口补丁 / 绿色版验证”阶段：
+Current checkpoint: `0.4.1` Prompt Workflow V3 / image reverse settings closure.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -150,6 +150,7 @@ visionhub-studio/
 - 平台接入页的“配置自检报告”已覆盖 Provider profile、Base URL、模型、协议路径、图生图映射、提示词润色独立凭据和本地保存目录，并可复制不含 API Key 的排查报告。
 - 图生图工作台已支持参考图拖拽、粘贴、排序、角色标记和最近生成图复用。
 - 灵感中心 V2 已完成图片收藏 Gallery 和提示词网站目录：图片收藏支持批量导入、搜索筛选、颜色 / 形状 / 格式 / 评分过滤；提示词网站支持国内外预设、紧凑列表、分类筛选、打开记录和自定义添加，并已优化为提示词网站优先加载、图片收藏按需懒加载。
+- 灵感中心图片收藏已接入真实图片反推 Prompt：改为「偏好设置」里的图片反推专用配置和独立凭据 `image-reverse:default`，支持 Responses / Chat Completions / Gemini generateContent 视觉输入协议；反推模型不会进入 AI 生图工作台模型列表，结果会写入反推 Prompt 字段，并可复制、套用到 AI 创作或保存为模板。
 - 提示词库 V2 已完成本轮收口：模板分类扩展、自定义模板、收藏 / 最近使用、变量填充、导入 / 导出，以及从作品画廊和灵感中心转入模板的复用链路都已落地。
 - 图片收藏目录已从作品画廊目录中独立出来，可在偏好设置里单独选择和打开；免费平台导入成品后会刷新灵感中心图片收藏。
 - 提示词润色已拆成本地规则和模型润色两条路径，模型润色使用独立凭据 `prompt-polish:default`。
@@ -165,6 +166,15 @@ visionhub-studio/
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.4.1 Prompt Workflow V3 / Image Reverse Settings
+
+- App version is now `0.4.1`, synchronized across package metadata, Tauri metadata, Cargo metadata, app version display, README, and roadmap docs.
+- Image reverse Prompt now uses the dedicated Preferences configuration and `image-reverse:default` credential channel; it no longer reuses generation provider profiles or appears in the AI generation model list.
+- Reverse Prompt supports Responses / Chat Completions / Gemini generateContent visual-input protocols; results are saved to `inferredPrompt` and `reversePrompt` metadata and can be copied, applied to AI Create, or saved as a Prompt template.
+- OpenAI-compatible reverse Prompt requests no longer send default `temperature`, improving compatibility with GPT-5.x and stricter aggregator models.
+- Inspiration detail drawer width/right offset was constrained to avoid right-edge clipping for long model names, errors, and action buttons.
+- Remaining `0.4.1` work: Prompt website excerpts, Prompt composer, save current Prompt as template/excerpt, and favorite/success filters for reuse records.
 
 ### v0.3.10 收口补丁 / 绿色版验证
 
@@ -623,7 +633,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.3.10
+- 版本：0.4.1
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。
@@ -774,8 +784,8 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - 修正作品画廊状态筛选：默认成功记录，并可明确切换失败记录或全部记录。
   - 补齐最近查看、最近设为参考的元数据写入和排序入口，保持现有按钮大小、位置和排版不变。
 - `0.4.1` Prompt 与灵感工作流 V3
-  - 提示词网站摘录、Prompt 组合器、灵感图片反推记录字段和跨页面复用。
-  - 从当前 Prompt 保存为模板或摘录。
+  - 已先落地灵感图片真实反推 Prompt：使用偏好设置中的图片反推专用配置和 `image-reverse:default` 独立密钥通道，支持图片输入 + 文本输出模型，结果可复制、套用和转模板；该模型不进入 AI 生图工作台。
+  - 后续继续补提示词网站摘录、Prompt 组合器、从当前 Prompt 保存为模板或摘录。
   - 复用记录增加常用标记和只看成功生成 Prompt。
 - `0.4.2` Provider 稳定接入 V5
   - 按“有文档、有账号、有 raw 错误证据”继续接入 Gemini / Nano Banana 官方、xAI / Grok Image、火山方舟 / Seedream、阿里百炼 / 通义万相等平台。
@@ -787,7 +797,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - 本地模型不拖慢在线中转站 / 聚合 API 主流程。
 - `0.4.4` 数据治理与迁移 V1
   - 设置导入、图库 / 灵感库健康检查、缺图 / 重复 / 路径不可达排查。
-  - 换电脑迁移向导：Provider profile id、系统凭据、图库目录、灵感目录、画廊元数据和提示词润色凭据。
+  - 换电脑迁移向导：Provider profile id、系统凭据、图库目录、灵感目录、画廊元数据、提示词润色凭据和图片反推专用凭据。
   - 备份恢复只处理非敏感索引和元数据，不包含 API Key、raw 大字段和生成图片。
 - `0.4.5` 全局体验与性能 QA
   - 全页面浅色 / 暗色、长文本、多语言、空状态、错误状态和大历史数据压力验收。

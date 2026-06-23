@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- 当前应用版本：`0.3.10`
+- Current app version: `0.4.1`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- 当前重点区域：0.3.10 收口补丁、提示词润色语言跟随原文、批量队列视觉 QA、绿色版启动验证，以及后续资料库 / Prompt / Provider / 本地模型的产品化收束
+- Current focus: `0.4.1` Prompt Workflow V3 / image reverse settings closure; next: Prompt website excerpts, Prompt composer, reuse-record favorites, Provider stability, local model improvements, and data governance.
 
 ## 2. 后续开发前必读
 
@@ -98,9 +98,9 @@
 | ~~`0.3.7`~~ | 偏好设置 V2 | 默认工作流、数据管理、首页模块控制和设置导入导出增强 | 已收口，不构建 release |
 | ~~`0.3.8`~~ | 平台接入 V4 | 官方 API 实接、服务模板排序、国内 / 国外标识、聚合站与本地 SD 后续接入路线 | 已收口，不构建 release |
 | `0.3.9` | 批量队列与多模型对比 V1 | 多 Prompt 队列、失败重试、同 Prompt 多模型横向对比、模板和暂停恢复 | 否，收口补丁 |
-| `0.3.10` | 0.3 系列收口补丁 | 提示词润色语言跟随原文、批量队列视觉 QA、已知小缺口整理、绿色版启动验证 | 绿色版 |
+| ~~`0.3.10`~~ | 0.3 final patch | Prompt polish language following source text, batch queue QA, known-gap cleanup, portable/release validation | closed |
 | `0.4.0` | 作品画廊与资料整理收口 V3 | 清理项目资产库路线残留、修正失败记录筛选、补齐最近查看 / 参考排序和画廊视觉 QA | 否 |
-| `0.4.1` | Prompt 与灵感工作流 V3 | 提示词网站摘录、Prompt 组合器、灵感图片反推记录和跨页面复用 | 否 |
+| `0.4.1` | Prompt Workflow V3 | image reverse settings closed; continue Prompt website excerpts, Prompt composer, and cross-page reuse | release validation this round |
 | `0.4.2` | Provider 稳定接入 V5 | 官方 API 增量、聚合站模板验证、能力测试和配置自检增强 | 否 |
 | `0.4.3` | 本地模型增强 V2 | Stable Diffusion WebUI / Forge 连接、ComfyUI 图生图和本地结果统一入库 | 否 |
 | `0.4.4` | 数据治理与迁移 V1 | 设置导入、图库 / 灵感库迁移、备份恢复和健康检查 | 否 |
@@ -112,7 +112,7 @@
 
 ### 4.1 路线分层说明
 
-- `0.3.10` 是当前阶段的最后一轮补丁，不再新增大模块，只处理已经暴露的体验问题、语言规则和视觉 QA。
+- `0.3.10` is closed as the final 0.3 patch baseline; `0.4.1` now focuses on image reverse settings closure first, then Prompt excerpts and composer.
 - `0.4.x` 是可用性增强阶段，重点让现有功能形成稳定工作流：作品画廊整理、Prompt 复用、Provider 稳定、本地模型增强、数据迁移和全局 QA。
 - `0.5.0` 是发布候选阶段，目标是把自用软件整理到可迁移、可复现、可打包验证的状态。
 - `v1.0` 前只处理发布、迁移、安装包、签名风险和 GitHub Release 边界，不再混入大功能。
@@ -678,6 +678,8 @@
 
 ### 5.21 `0.4.1` Prompt 与灵感工作流 V3
 
+状态：进行中，已先落地灵感图片真实反推 Prompt 的最小闭环，并将配置从平台接入拆出到「偏好设置」的图片反推 Prompt 专用配置。当前使用 `image-reverse:default` 独立凭据调用支持图片输入 + 文本输出的视觉模型，支持 Responses / Chat Completions / Gemini generateContent 协议；反推模型不会进入 AI 生图工作台模型列表。结果保存到 `inferredPrompt` 与 `reversePrompt` 元数据，可复制、套用到 AI 创作或转入提示词库。
+
 目标：
 
 - 把灵感中心、提示词网站、提示词库和 AI 创作台之间的 Prompt 流转打通。
@@ -685,9 +687,10 @@
 
 主要任务：
 
-- 提示词网站摘录：允许用户把网页上复制来的 Prompt 存成摘录，记录来源网站、语言、用途、标签和备注。
+- ~~灵感图片真实反推 Prompt：使用偏好设置里的图片反推专用配置与 `image-reverse:default` 独立凭据，支持 Responses / Chat Completions / Gemini generateContent 三类视觉输入协议；只在用户手动点击时调用，不自动消耗额度，也不污染生图模型列表。~~
 - Prompt 组合器：从主体、风格、镜头、光线、材质、色彩、约束等片段组合成完整 Prompt。
-- 灵感图片反推记录：先保留人工填写和模型结果字段，不伪装未接入的视觉反推能力。
+- ~~灵感图片真实反推 Prompt：已从复用平台接入配置实例改为图片反推专用配置，保留三类视觉输入协议；只在用户手动点击时调用，不自动消耗额度。~~
+- ~~灵感图片反推记录：保存模型、配置实例、协议、语言、细节强度和生成时间，不保存 API Key 或大体积 raw/base64。~~
 - 模型润色语言规则进入 UI 说明：默认跟随原文，可手动强制中文、英文或中英双语。
 - 提示词库增加“从当前 Prompt 保存为模板 / 摘录 / 项目 Prompt”的入口。
 - 复用记录增加“标记常用”和“只看成功生成 Prompt”，避免失败实验污染常用列表。
@@ -696,7 +699,8 @@
 
 - 从提示词网站复制来的日语、英语或中文 Prompt 能按原语言保存、润色和复用。
 - Prompt 摘录、模板和项目 Prompt 的边界清楚，不出现重复入口造成困惑。
-- 没有真实视觉反推模型时，不出现“一键反推成功”这类误导性按钮。
+- 没有可用视觉模型或 Key 时，反推入口显示可读失败，不出现“一键反推成功”这类误导性状态。
+- 反推功能只调用支持图片输入 + 文本输出的模型；普通文本模型或纯生图模型失败时给出协议 / 权限 / 模型能力相关提示。
 
 ### 5.22 `0.4.2` Provider 稳定接入 V5
 
@@ -752,7 +756,7 @@
 
 - 设置导入：补齐与导出设置备份配套的导入流程，导入前预览差异。
 - 图库和灵感库健康检查：缺图、重复记录、路径不可达、元数据损坏、评分 / 收藏孤儿关系。
-- 数据迁移向导：整理 Provider profile id、系统凭据、图库目录、灵感目录、画廊元数据和提示词润色凭据的迁移说明。
+- 数据迁移向导：整理 Provider profile id、系统凭据、图库目录、灵感目录、画廊元数据、提示词润色凭据和图片反推专用凭据的迁移说明。
 - 备份恢复：支持导出非敏感索引和元数据，不包含 API Key、raw 响应大字段和生成图片。
 - 大体积历史优化：继续避免 raw 中保存 base64 和大图片二进制。
 
@@ -813,7 +817,7 @@
 主要任务：
 
 - 整理稳定版验证清单：开发检查、release 构建、绿色版启动、NSIS / MSI 安装、卸载、浅色 / 深色模式。
-- 整理迁移说明：Provider profile id、系统凭据、图库目录、灵感中心、提示词润色凭据、AppData 边界。
+- 整理迁移说明：Provider profile id、系统凭据、图库目录、灵感中心、提示词润色凭据、图片反推专用凭据和 AppData 边界。
 - 整理 release notes 模板：本版新增、修复问题、已知限制、升级 / 迁移注意事项。
 - 整理未签名 Windows 安装包说明，明确 SmartScreen 风险；正式对外发布前再规划代码签名。
 - 完善构建产物 SHA256 记录方式：release exe、绿色版压缩包、MSI / NSIS 安装包。
@@ -888,4 +892,4 @@
 
 ## 9. 下一步推荐
 
-下一次正式开发建议先完成 `0.3.10` 收口补丁：确认提示词润色默认跟随原文语言、补齐批量队列浅色 / 窄屏 / 模板流程 QA，并把 README 与路线文档推送到 GitHub。之后进入 `0.4.0` 作品画廊与资料整理收口 V3，先清理项目资产库残留路线，再把失败记录筛选、最近查看和最近设为参考的画廊闭环收顺。官方 API、本地模型和迁移发布准备分别放到 `0.4.2`、`0.4.3`、`0.4.4` 到 `0.5.0`，避免把所有后续工作挤进一个版本。
+Next formal development should continue the remaining `0.4.1` Prompt workflow: Prompt website excerpts, saving the current Prompt as a template/excerpt, then Prompt composer and favorite markers for reuse records. `0.4.2` should move to Provider stability, `0.4.3` to local model improvements, and `0.4.4` through `0.5.0` to data governance, global QA, and release-candidate preparation.

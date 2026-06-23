@@ -1,6 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
   InspirationAsset,
+  ImagePromptReverseDetail,
+  ImagePromptReverseLanguage,
+  ImagePromptReverseProtocol,
   InspirationAssetImportRequest,
   InspirationLibrary,
   InspirationSource
@@ -40,12 +43,52 @@ interface BackendInspirationAsset {
   author?: string;
   original_prompt?: string;
   inferred_prompt?: string;
+  reverse_prompt?: BackendImagePromptReverseResult;
   tags: string[];
   note?: string;
   license_status: InspirationAsset['licenseStatus'];
   rating?: number;
   created_at: string;
   updated_at: string;
+}
+
+
+interface BackendImagePromptReverseResult {
+  prompt: string;
+  language?: ImagePromptReverseLanguage;
+  detail?: ImagePromptReverseDetail;
+  model_id?: string;
+  profile_id?: string;
+  provider_id?: string;
+  protocol?: ImagePromptReverseProtocol;
+  generated_at: string;
+  edited_at?: string;
+  raw_summary?: unknown;
+}
+
+export interface ReverseImagePromptRequest {
+  providerId: string;
+  profileId?: string;
+  modelId: string;
+  baseUrl: string;
+  protocol: ImagePromptReverseProtocol;
+  endpointPath?: string;
+  extraHeaders?: Record<string, string>;
+  secretId?: string;
+  imagePath?: string;
+  imageUrl?: string;
+  language: ImagePromptReverseLanguage;
+  detail: ImagePromptReverseDetail;
+}
+
+export interface ReverseImagePromptResult {
+  providerId: string;
+  profileId?: string;
+  modelId: string;
+  protocol: ImagePromptReverseProtocol;
+  prompt: string;
+  rawSummary?: unknown;
+  createdAt: string;
 }
 
 interface BackendInspirationLibrary {
@@ -105,6 +148,38 @@ function mapSourceToBackend(source: InspirationSource): BackendInspirationSource
   };
 }
 
+function mapReversePromptFromBackend(result?: BackendImagePromptReverseResult): InspirationAsset['reversePrompt'] {
+  if (!result || !result.prompt?.trim()) return undefined;
+  return {
+    prompt: result.prompt,
+    language: result.language,
+    detail: result.detail,
+    modelId: result.model_id,
+    profileId: result.profile_id,
+    providerId: result.provider_id,
+    protocol: result.protocol,
+    generatedAt: result.generated_at,
+    editedAt: result.edited_at,
+    rawSummary: result.raw_summary
+  };
+}
+
+function mapReversePromptToBackend(result?: InspirationAsset['reversePrompt']): BackendImagePromptReverseResult | undefined {
+  if (!result?.prompt?.trim()) return undefined;
+  return {
+    prompt: result.prompt,
+    language: result.language,
+    detail: result.detail,
+    model_id: result.modelId,
+    profile_id: result.profileId,
+    provider_id: result.providerId,
+    protocol: result.protocol,
+    generated_at: result.generatedAt,
+    edited_at: result.editedAt,
+    raw_summary: result.rawSummary
+  };
+}
+
 function mapAssetFromBackend(asset: BackendInspirationAsset): InspirationAsset {
   return {
     id: asset.id,
@@ -117,6 +192,7 @@ function mapAssetFromBackend(asset: BackendInspirationAsset): InspirationAsset {
     author: asset.author,
     originalPrompt: asset.original_prompt,
     inferredPrompt: asset.inferred_prompt,
+    reversePrompt: mapReversePromptFromBackend(asset.reverse_prompt),
     tags: asset.tags ?? [],
     note: asset.note,
     licenseStatus: asset.license_status,
@@ -138,6 +214,7 @@ function mapAssetToBackend(asset: InspirationAsset): BackendInspirationAsset {
     author: asset.author,
     original_prompt: asset.originalPrompt,
     inferred_prompt: asset.inferredPrompt,
+    reverse_prompt: mapReversePromptToBackend(asset.reversePrompt),
     tags: asset.tags ?? [],
     note: asset.note,
     license_status: asset.licenseStatus,
@@ -304,6 +381,46 @@ export async function saveInspirationAsset(asset: InspirationAsset): Promise<Ins
   const nextAsset = mapAssetFromBackend(saved);
   cachedAssets = [nextAsset, ...(cachedAssets ?? []).filter((item) => item.id !== nextAsset.id)];
   return nextAsset;
+}
+
+
+export async function reverseImagePrompt(request: ReverseImagePromptRequest): Promise<ReverseImagePromptResult> {
+  if (!isTauriRuntime()) {
+    throw new Error('图片反推提示词需要在桌面版中调用已配置的视觉模型。');
+  }
+  const result = await invoke<{
+    provider_id: string;
+    profile_id?: string;
+    model_id: string;
+    protocol: ImagePromptReverseProtocol;
+    prompt: string;
+    raw_summary?: unknown;
+    created_at: string;
+  }>('reverse_image_prompt', {
+    request: {
+      provider_id: request.providerId,
+      profile_id: request.profileId,
+      model_id: request.modelId,
+      base_url: request.baseUrl,
+      protocol: request.protocol,
+      endpoint_path: request.endpointPath,
+      extra_headers: request.extraHeaders,
+      secret_id: request.secretId,
+      image_path: request.imagePath,
+      image_url: request.imageUrl,
+      language: request.language,
+      detail: request.detail
+    }
+  });
+  return {
+    providerId: result.provider_id,
+    profileId: result.profile_id,
+    modelId: result.model_id,
+    protocol: result.protocol,
+    prompt: result.prompt,
+    rawSummary: result.raw_summary,
+    createdAt: result.created_at
+  };
 }
 
 export async function deleteInspirationAsset(assetId: string) {

@@ -295,6 +295,7 @@ struct InspirationAsset {
     author: Option<String>,
     original_prompt: Option<String>,
     inferred_prompt: Option<String>,
+    reverse_prompt: Option<ImagePromptReverseRecord>,
     #[serde(default)]
     tags: Vec<String>,
     note: Option<String>,
@@ -302,6 +303,47 @@ struct InspirationAsset {
     rating: Option<u8>,
     created_at: String,
     updated_at: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+struct ImagePromptReverseRecord {
+    prompt: String,
+    language: Option<String>,
+    detail: Option<String>,
+    model_id: Option<String>,
+    profile_id: Option<String>,
+    provider_id: Option<String>,
+    protocol: Option<String>,
+    generated_at: String,
+    edited_at: Option<String>,
+    raw_summary: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReverseImagePromptRequest {
+    provider_id: String,
+    profile_id: Option<String>,
+    model_id: String,
+    base_url: String,
+    protocol: String,
+    endpoint_path: Option<String>,
+    extra_headers: Option<std::collections::HashMap<String, String>>,
+    secret_id: Option<String>,
+    image_path: Option<String>,
+    image_url: Option<String>,
+    language: Option<String>,
+    detail: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ReverseImagePromptResult {
+    provider_id: String,
+    profile_id: Option<String>,
+    model_id: String,
+    protocol: String,
+    prompt: String,
+    raw_summary: Value,
+    created_at: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -1903,6 +1945,127 @@ async fn polish_prompt_with_provider(request: PromptPolishRequest) -> Result<Pro
     })
 }
 
+
+#[tauri::command]
+async fn reverse_image_prompt(
+    app: tauri::AppHandle,
+    request: ReverseImagePromptRequest,
+) -> Result<ReverseImagePromptResult, String> {
+    if request.model_id.trim().is_empty() {
+        return Err("请先选择支持图片输入的视觉模型。".to_string());
+    }
+    if request.base_url.trim().is_empty() {
+        return Err("请先选择带 Base URL 的模型配置实例。".to_string());
+    }
+
+    let api_key = read_provider_secret(request.secret_id.as_deref(), &request.provider_id)
+        .map_err(|_| "当前配置实例还没有保存 API Key，无法调用视觉模型反推。".to_string())?;
+    let base_url = normalize_base_url(&request.base_url)?;
+    let protocol = request.protocol.trim().to_string();
+    let image_data_url = resolve_reverse_prompt_image_data_url(&app, &request)?;
+    let instruction = build_image_prompt_reverse_instruction(
+        request.language.as_deref().unwrap_or("zh"),
+        request.detail.as_deref().unwrap_or("professional"),
+    );
+    let client = reqwest::Client::new();
+
+    let (endpoint, payload, auth_header_name) = match protocol.as_str() {
+        "responses" => {
+            let endpoint_path = normalize_endpoint_path(request.endpoint_path.as_deref(), "responses")?;
+            (
+                format!("{base_url}{endpoint_path}"),
+                build_image_prompt_reverse_responses_payload(&request.model_id, &instruction, &image_data_url),
+                "authorization",
+            )
+        }
+        "chat-completions" => {
+            let endpoint_path = normalize_endpoint_path(request.endpoint_path.as_deref(), "chat-completions")?;
+            (
+                format!("{base_url}{endpoint_path}"),
+                build_image_prompt_reverse_chat_payload(&request.model_id, &instruction, &image_data_url),
+                "authorization",
+            )
+        }
+        "gemini-generate-content" => {
+            let endpoint_path = request
+                .endpoint_path
+                .as_deref()
+                .map(|path| normalize_endpoint_path(Some(path), "custom-images"))
+                .transpose()?
+                .unwrap_or_else(|| "/v1beta/models/{model}:generateContent".to_string());
+            (
+                format!("{base_url}{}", endpoint_path.replace("{model}", request.model_id.trim())),
+                build_image_prompt_reverse_gemini_payload(&instruction, &image_data_url)?,
+                "x-goog-api-key",
+            )
+        }
+        other => return Err(format!("图片反推暂不支持协议：{other}")),
+    };
+
+    let mut builder = client.post(endpoint).json(&payload);
+    if auth_header_name == "x-goog-api-key" {
+        builder = builder.header("x-goog-api-key", &api_key);
+    } else {
+        builder = builder.bearer_auth(&api_key);
+    }
+
+    if let Some(headers) = request.extra_headers.clone() {
+        for (name, value) in headers {
+            if name.eq_ignore_ascii_case("authorization")
+                || name.eq_ignore_ascii_case("content-type")
+                || name.eq_ignore_ascii_case("x-goog-api-key")
+            {
+                continue;
+            }
+            builder = builder.header(name, value);
+        }
+    }
+
+    let response = builder
+        .send()
+        .await
+        .map_err(|error| format!("图片反推请求失败：{error}"))?;
+    let status = response.status();
+    let body_text = response
+        .text()
+        .await
+        .map_err(|error| format!("无法读取图片反推响应：{error}"))?;
+    let raw: Value = serde_json::from_str(&body_text).map_err(|error| {
+        let preview: String = body_text.chars().take(600).collect();
+        format!("图片反推响应不是 JSON：{error}. HTTP {status}. 响应预览：{preview}")
+    })?;
+
+    if !status.is_success() {
+        return Err(format_image_prompt_reverse_error(status.as_u16(), extract_error_message(&raw).as_deref()));
+    }
+
+    let prompt = extract_text_response(&raw)
+        .map(|value| clean_reverse_prompt_text(&value))
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| "模型已返回，但没有找到可用文本；请确认该模型支持图片输入和文本输出。".to_string())?;
+    let created_at = chrono_like_timestamp();
+    let raw_summary = serde_json::json!({
+        "http_status": status.as_u16(),
+        "protocol": protocol.clone(),
+        "model_id": request.model_id.trim(),
+        "text_chars": prompt.chars().count(),
+        "response_id": raw.get("id").and_then(|value| value.as_str()),
+        "has_candidates": raw.get("candidates").is_some(),
+        "has_choices": raw.get("choices").is_some(),
+        "has_output": raw.get("output").is_some()
+    });
+
+    Ok(ReverseImagePromptResult {
+        provider_id: request.provider_id,
+        profile_id: request.profile_id,
+        model_id: request.model_id,
+        protocol,
+        prompt,
+        raw_summary,
+        created_at,
+    })
+}
+
 #[tauri::command]
 fn load_generation_history(app: tauri::AppHandle) -> Result<Vec<GenerationRecord>, String> {
     let mut records = read_generation_history_records(&app)?;
@@ -2404,6 +2567,7 @@ fn import_inspiration_asset(
         author: optional_trimmed_string(request.author),
         original_prompt: optional_trimmed_string(request.original_prompt),
         inferred_prompt: None,
+        reverse_prompt: None,
         tags: clean_string_list(request.tags),
         note: optional_trimmed_string(request.note),
         license_status: request
@@ -2444,6 +2608,7 @@ fn save_inspiration_asset(
     asset.author = optional_trimmed_string(asset.author);
     asset.original_prompt = optional_trimmed_string(asset.original_prompt);
     asset.inferred_prompt = optional_trimmed_string(asset.inferred_prompt);
+    asset.reverse_prompt = normalize_reverse_prompt_record(asset.reverse_prompt);
     asset.note = optional_trimmed_string(asset.note);
     asset.rating = asset.rating.filter(|value| (1..=5).contains(value));
     if asset.image_path.is_some() || asset.image_url.as_deref().is_some_and(|url| url.starts_with("data:image/")) {
@@ -3191,6 +3356,24 @@ fn extract_text_response(raw: &Value) -> Option<String> {
                     if let Some(text) = part.get("text").and_then(|text| text.as_str()) {
                         return Some(text.to_string());
                     }
+                }
+            }
+        }
+    }
+    if let Some(candidates) = raw.get("candidates").and_then(|candidates| candidates.as_array()) {
+        for candidate in candidates {
+            if let Some(parts) = candidate
+                .get("content")
+                .and_then(|content| content.get("parts"))
+                .and_then(|parts| parts.as_array())
+            {
+                let text = parts
+                    .iter()
+                    .filter_map(|part| part.get("text").and_then(|text| text.as_str()))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if !text.trim().is_empty() {
+                    return Some(text);
                 }
             }
         }
@@ -4007,6 +4190,141 @@ fn is_allowed_inspiration_image_path(app: &tauri::AppHandle, path: &Path) -> Res
         .canonicalize()
         .map_err(|error| format!("Cannot resolve default inspiration image directory: {error}"))?;
     Ok(file.starts_with(root) || file.starts_with(default_root))
+}
+
+
+fn normalize_reverse_prompt_record(record: Option<ImagePromptReverseRecord>) -> Option<ImagePromptReverseRecord> {
+    let mut record = record?;
+    record.prompt = record.prompt.trim().to_string();
+    if record.prompt.is_empty() {
+        return None;
+    }
+    record.language = optional_trimmed_string(record.language);
+    record.detail = optional_trimmed_string(record.detail);
+    record.model_id = optional_trimmed_string(record.model_id);
+    record.profile_id = optional_trimmed_string(record.profile_id);
+    record.provider_id = optional_trimmed_string(record.provider_id);
+    record.protocol = optional_trimmed_string(record.protocol);
+    record.edited_at = optional_trimmed_string(record.edited_at);
+    if record.generated_at.trim().is_empty() {
+        record.generated_at = chrono_like_timestamp();
+    }
+    Some(record)
+}
+
+fn resolve_reverse_prompt_image_data_url(
+    app: &tauri::AppHandle,
+    request: &ReverseImagePromptRequest,
+) -> Result<String, String> {
+    if let Some(path) = request.image_path.as_deref().filter(|value| !value.trim().is_empty()) {
+        return inspiration_image_path_to_data_url(app, path);
+    }
+    if let Some(url) = request.image_url.as_deref().filter(|value| value.starts_with("data:image/")) {
+        return Ok(url.to_string());
+    }
+    Err("没有可用于反推的本地灵感图片。".to_string())
+}
+
+fn build_image_prompt_reverse_instruction(language: &str, detail: &str) -> String {
+    let language_rule = match language {
+        "en" => "Output in English.",
+        "source" => "Use the most natural language for the prompt; keep visible text, model names, style terms and proper nouns in their original language.",
+        _ => "使用中文输出。保留画面中可见文字、模型名、风格名和专有名词的原文。",
+    };
+    let detail_rule = match detail {
+        "concise" => "输出一段简洁但可直接使用的生图提示词，聚焦主体、风格、构图和光线。",
+        "detailed" => "输出一段细节充分的生图提示词，覆盖主体、场景、构图/镜头、光线、材质、色彩、氛围和质量要求。",
+        _ => "输出一段专业、结构完整、适合多模型复用的生图提示词，覆盖主体、场景、构图/镜头、光线、材质、色彩、画质、风格和必要约束。",
+    };
+    format!(
+        "你是 AI 图像提示词反推助手。请观察用户提供的图片，把它转写成可用于文生图或图生图的提示词。{language_rule}{detail_rule} 不要声称知道原作者、真实品牌或版权角色，除非画面中明确可见；不要输出解释、标题、Markdown 或项目符号，只输出最终提示词正文。"
+    )
+}
+
+fn build_image_prompt_reverse_responses_payload(model_id: &str, instruction: &str, image_data_url: &str) -> Value {
+    serde_json::json!({
+        "model": model_id.trim(),
+        "input": [{
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": instruction },
+                { "type": "input_image", "image_url": image_data_url }
+            ]
+        }],
+        "max_output_tokens": 900
+    })
+}
+
+fn build_image_prompt_reverse_chat_payload(model_id: &str, instruction: &str, image_data_url: &str) -> Value {
+    serde_json::json!({
+        "model": model_id.trim(),
+        "messages": [{
+            "role": "user",
+            "content": [
+                { "type": "text", "text": instruction },
+                { "type": "image_url", "image_url": { "url": image_data_url, "detail": "auto" } }
+            ]
+        }],
+        "max_tokens": 900
+    })
+}
+
+fn build_image_prompt_reverse_gemini_payload(instruction: &str, image_data_url: &str) -> Result<Value, String> {
+    let (mime_type, data) = data_url_to_inline_base64(image_data_url)?;
+    Ok(serde_json::json!({
+        "contents": [{
+            "role": "user",
+            "parts": [
+                { "inline_data": { "mime_type": mime_type, "data": data } },
+                { "text": instruction }
+            ]
+        }],
+        "generationConfig": {
+            "responseModalities": ["TEXT"],
+            "temperature": 0.4,
+            "maxOutputTokens": 900
+        }
+    }))
+}
+
+fn data_url_to_inline_base64(data_url: &str) -> Result<(String, String), String> {
+    let (bytes, extension) = decode_data_url_image(data_url)?;
+    let mime = match extension.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        _ => "image/png",
+    };
+    Ok((
+        mime.to_string(),
+        base64::engine::general_purpose::STANDARD.encode(bytes),
+    ))
+}
+
+fn clean_reverse_prompt_text(value: &str) -> String {
+    value
+        .trim()
+        .trim_matches('`')
+        .trim_matches('"')
+        .trim()
+        .to_string()
+}
+
+fn format_image_prompt_reverse_error(status_code: u16, json_message: Option<&str>) -> String {
+    let prefix = match status_code {
+        400 | 422 => "请求参数不被模型接受：请确认所选协议支持图片输入。",
+        401 => "认证失败：API Key 无效或未被中转站接受。",
+        403 => "权限不足：当前 Key/账号可能没有该视觉模型或图片输入权限。",
+        404 => "接口不存在：请检查 Base URL、反推协议和接口路径。",
+        429 => "请求受限：可能是余额不足、频率限制或并发限制。",
+        500..=599 => "供应商/中转站服务异常。",
+        _ => "图片反推接口请求失败。",
+    };
+    match json_message.filter(|message| !message.trim().is_empty()) {
+        Some(message) => format!("{prefix} HTTP {status_code}. 返回信息：{message}"),
+        None => format!("{prefix} HTTP {status_code}."),
+    }
 }
 
 fn optional_trimmed_string(value: Option<String>) -> Option<String> {
@@ -5170,6 +5488,7 @@ pub fn run() {
             diagnose_comfyui_connection,
             generate_comfyui_image,
             polish_prompt_with_provider,
+            reverse_image_prompt,
             load_generation_history,
             load_library_data,
             save_library_data,

@@ -222,6 +222,18 @@ interface InspirationAsset {
   author?: string;
   originalPrompt?: string;
   inferredPrompt?: string;
+  reversePrompt?: {
+    prompt: string;
+    language?: 'zh' | 'en' | 'source';
+    detail?: 'concise' | 'detailed' | 'professional';
+    modelId?: string;
+    profileId?: string;
+    providerId?: string;
+    protocol?: 'responses' | 'chat-completions' | 'gemini-generate-content';
+    generatedAt: string;
+    editedAt?: string;
+    rawSummary?: unknown;
+  };
   tags: string[];
   note?: string;
   licenseStatus: 'unknown' | 'reference-only' | 'commercial-confirmed';
@@ -304,7 +316,7 @@ interface InspirationAsset {
 
 ### 阶段 3：AI 辅助能力
 
-- 图片反推 Prompt
+- 图片反推 Prompt（已进入真实调用闭环：使用偏好设置里的图片反推专用配置、`image-reverse:default` 独立凭据和视觉输入协议，结果持久化到反推字段；不复用平台接入配置实例）; OpenAI-compatible reverse requests omit default `temperature`; detail drawer right-edge clipping is fixed)
 - Prompt 自动整理成模板
 - 按风格、主体、用途自动打标签
 - 相似收藏检测

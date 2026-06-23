@@ -9,10 +9,14 @@ export type PromptPolishEngine = 'local' | 'provider';
 export type PromptPolishLanguage = 'source' | 'zh' | 'en' | 'bilingual';
 export type PromptPolishProtocol = 'chat-completions' | 'responses';
 export type PromptPolishStrength = 'concise' | 'detailed' | 'professional' | 'cinematic' | 'commercial';
+export type ImagePromptReverseProtocol = 'chat-completions' | 'responses' | 'gemini-generate-content';
+export type ImagePromptReverseLanguage = 'zh' | 'en' | 'source';
+export type ImagePromptReverseDetail = 'concise' | 'detailed' | 'professional';
 export type DefaultReferenceRole = 'auto' | 'composition' | 'style' | 'character' | 'color';
 export type FileNamingRule = 'timestamp' | 'prompt-timestamp' | 'provider-date';
 
 export const PROMPT_POLISH_SECRET_ID = 'prompt-polish:default';
+export const IMAGE_PROMPT_REVERSE_SECRET_ID = 'image-reverse:default';
 
 export interface ColorOption {
   value: string;
@@ -65,6 +69,17 @@ export interface PromptPolishConfig {
   protocol: PromptPolishProtocol;
 }
 
+export interface ImagePromptReverseSettings {
+  displayName: string;
+  baseUrl: string;
+  modelId: string;
+  modelOptions: string[];
+  extraHeadersJson: string;
+  protocol: ImagePromptReverseProtocol;
+  language: ImagePromptReverseLanguage;
+  detail: ImagePromptReverseDetail;
+}
+
 export interface SavePreferences {
   fileNamingRule: FileNamingRule;
   groupByDate: boolean;
@@ -91,6 +106,7 @@ export interface AppSettings {
   generationDefaults: GenerationDefaults;
   promptHistory: PromptHistorySettings;
   promptPolish: PromptPolishSettings;
+  imagePromptReverse: ImagePromptReverseSettings;
   savePreferences: SavePreferences;
   homeModules: HomeModuleSettings;
 }
@@ -231,6 +247,24 @@ export const PROMPT_POLISH_PROTOCOL_OPTIONS: Array<{ value: PromptPolishProtocol
   { value: 'responses', label: 'Responses' }
 ];
 
+export const IMAGE_PROMPT_REVERSE_PROTOCOL_OPTIONS: Array<{ value: ImagePromptReverseProtocol; label: string }> = [
+  { value: 'chat-completions', label: 'Chat Completions 视觉输入' },
+  { value: 'responses', label: 'Responses 视觉输入' },
+  { value: 'gemini-generate-content', label: 'Gemini generateContent' }
+];
+
+export const IMAGE_PROMPT_REVERSE_LANGUAGE_OPTIONS: Array<{ value: ImagePromptReverseLanguage; label: string }> = [
+  { value: 'zh', label: '输出中文' },
+  { value: 'en', label: '输出英文' },
+  { value: 'source', label: '智能跟随' }
+];
+
+export const IMAGE_PROMPT_REVERSE_DETAIL_OPTIONS: Array<{ value: ImagePromptReverseDetail; label: string }> = [
+  { value: 'professional', label: '专业 Prompt' },
+  { value: 'detailed', label: '细节充分' },
+  { value: 'concise', label: '简洁描述' }
+];
+
 const STORAGE_KEY = 'visionhub.app.settings';
 const LEGACY_THEME_KEY = 'visionhub.themeMode';
 
@@ -274,6 +308,16 @@ export const defaultAppSettings: AppSettings = {
     strength: 'professional',
     protocol: 'chat-completions',
     fallbackToLocal: true
+  },
+  imagePromptReverse: {
+    displayName: '图片反推 Prompt 专用配置',
+    baseUrl: '',
+    modelId: '',
+    modelOptions: [],
+    extraHeadersJson: '{}',
+    protocol: 'chat-completions',
+    language: 'zh',
+    detail: 'professional'
   },
   savePreferences: {
     fileNamingRule: 'timestamp',
@@ -400,6 +444,31 @@ function normalizePromptPolish(value: Partial<PromptPolishSettings> | null | und
   };
 }
 
+
+function normalizeImagePromptReverse(value: Partial<ImagePromptReverseSettings> | null | undefined): ImagePromptReverseSettings {
+  const fallback = defaultAppSettings.imagePromptReverse;
+  const displayName = typeof value?.displayName === 'string' && value.displayName.trim()
+    ? value.displayName.trim()
+    : fallback.displayName;
+  const baseUrl = typeof value?.baseUrl === 'string' ? value.baseUrl.trim() : fallback.baseUrl;
+  const modelId = typeof value?.modelId === 'string' && value.modelId.trim()
+    ? value.modelId.trim()
+    : '';
+  const modelOptions = Array.isArray(value?.modelOptions)
+    ? Array.from(new Set(value.modelOptions.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map((item) => item.trim()))).slice(0, 200)
+    : fallback.modelOptions;
+  return {
+    displayName,
+    baseUrl,
+    modelId,
+    modelOptions,
+    extraHeadersJson: typeof value?.extraHeadersJson === 'string' && value.extraHeadersJson.trim() ? value.extraHeadersJson : fallback.extraHeadersJson,
+    protocol: pickStringOption(value?.protocol, IMAGE_PROMPT_REVERSE_PROTOCOL_OPTIONS, fallback.protocol),
+    language: pickStringOption(value?.language, IMAGE_PROMPT_REVERSE_LANGUAGE_OPTIONS, fallback.language),
+    detail: pickStringOption(value?.detail, IMAGE_PROMPT_REVERSE_DETAIL_OPTIONS, fallback.detail)
+  };
+}
+
 function normalizeSavePreferences(value: Partial<SavePreferences> | null | undefined): SavePreferences {
   const fallback = defaultAppSettings.savePreferences;
   return {
@@ -489,6 +558,7 @@ export function normalizeAppSettings(value: Partial<AppSettings> | null | undefi
     generationDefaults: normalizeGenerationDefaults(value?.generationDefaults),
     promptHistory: normalizePromptHistory(value?.promptHistory),
     promptPolish: normalizePromptPolish(value?.promptPolish),
+    imagePromptReverse: normalizeImagePromptReverse(value?.imagePromptReverse),
     savePreferences: normalizeSavePreferences(value?.savePreferences),
     homeModules: normalizeHomeModules(value?.homeModules)
   };

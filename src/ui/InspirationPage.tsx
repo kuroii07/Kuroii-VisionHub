@@ -40,10 +40,13 @@ import {
   importInspirationAsset,
   loadInspirationAssets,
   loadInspirationSources,
+  reverseImagePrompt,
   saveInspirationAsset,
   saveInspirationSource
 } from '../services/inspirationApi';
 import { openExternalUrl } from '../services/desktopApi';
+import { defaultEndpointForProtocol, parseExtraHeaders } from '../services/providerConfig';
+import { IMAGE_PROMPT_REVERSE_SECRET_ID, type ImagePromptReverseSettings } from '../services/appSettings';
 import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { useToastMessage } from './toast';
@@ -56,6 +59,7 @@ type AssetFormatFilter = 'all' | 'png' | 'jpg' | 'gif' | 'webp' | 'svg' | 'unkno
 type AssetRatingValue = 'unrated' | '1' | '2' | '3' | '4' | '5';
 type AssetRatingFilter = 'all' | AssetRatingValue;
 type AssetColorFilter = 'all' | 'red' | 'orange' | 'yellow' | 'green' | 'cyan' | 'blue' | 'purple' | 'pink' | 'mono';
+type ReversePromptStatus = { assetId: string; message?: string } | null;
 type SourceKindFilter = 'all' | 'preset' | 'custom';
 type SourceLoginFilter = 'all' | 'requires-login' | 'no-login';
 type SourceNavFilter = 'all' | 'preset' | 'custom' | InspirationSourceCategory | InspirationRegion;
@@ -1208,12 +1212,25 @@ function fallbackSourceFaviconUrls(source: InspirationSource) {
   return sourceFaviconCandidates(source).slice(1);
 }
 
+function endpointForImageReverseProtocol(protocol: ImagePromptReverseSettings['protocol']) {
+  if (protocol === 'gemini-generate-content') return '/v1beta/models/{model}:generateContent';
+  if (protocol === 'responses' || protocol === 'chat-completions') return defaultEndpointForProtocol(protocol);
+  return '/v1/chat/completions';
+}
+
+function reverseSettingLabel(value: string, fallback: string) {
+  return value.trim() || fallback;
+}
+
 export const InspirationPage = memo(function InspirationPage(props: {
   onPreview: (imageUrl: string, navigation?: ImagePreviewNavigation) => void;
   onUseAsReference: (asset: InspirationAsset) => void;
   onUsePrompt: (prompt: string) => void;
   onCreateTemplate: (title: string, prompt: string, tags: string[]) => string;
   onRequestConfirm: (request: ConfirmDialogRequest) => void;
+  imagePromptReverse: ImagePromptReverseSettings;
+  imagePromptReverseSecretAvailable: boolean;
+  onOpenSettings: () => void;
   importVersion?: number;
 }) {
   const [activeTab, setActiveTab] = useState<InspirationTab>('sources');
@@ -1272,6 +1289,8 @@ export const InspirationPage = memo(function InspirationPage(props: {
   const lastImportVersionRef = useRef(props.importVersion ?? 0);
   const [assetImageMeta, setAssetImageMeta] = useState<Record<string, AssetImageMeta>>({});
   const [renderedAssetCount, setRenderedAssetCount] = useState(ASSET_INITIAL_RENDER_COUNT);
+  const [reversePromptStatus, setReversePromptStatus] = useState<ReversePromptStatus>(null);
+  const [reversePromptError, setReversePromptError] = useState('');
   const pendingAssetImageMetaRef = useRef<Record<string, AssetImageMeta>>({});
   const assetImageMetaFlushRef = useRef<{ timerId: number | null; idleId: number | null }>({ timerId: null, idleId: null });
 
@@ -1542,6 +1561,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
     () => assets.find((asset) => asset.id === selectedAssetId) ?? null,
     [assets, selectedAssetId]
   );
+
   const contextAssets = useMemo(() => {
     if (!assetMenuTarget) return [];
     const selected = assets.filter((asset) => selectedAssetIds.includes(asset.id));
@@ -2097,8 +2117,66 @@ export const InspirationPage = memo(function InspirationPage(props: {
   }
 
   async function reversePromptForAsset(asset: InspirationAsset) {
-    if (!asset.imageUrl || !asset.imagePath) { setMessage('该图片暂不支持反推 Prompt。'); return; }
-    setMessage('反推 Prompt 功能将在后续版本接入视觉模型。目前可手动填写 Prompt 字段。');
+    if (!asset.imageUrl && !asset.imagePath) { setMessage('该图片暂不支持反推 Prompt。'); return; }
+    const settings = props.imagePromptReverse;
+    if (!settings.baseUrl.trim() || !settings.modelId.trim()) {
+      setMessage('请先到「偏好设置」配置图片反推 Prompt 的 Base URL 和模型 ID。');
+      return;
+    }
+    if (!props.imagePromptReverseSecretAvailable) {
+      setMessage('请先到「偏好设置」保存图片反推专用 API Key。');
+      return;
+    }
+    let extraHeaders: Record<string, string> = {};
+    try {
+      extraHeaders = parseExtraHeaders(settings.extraHeadersJson || '{}');
+    } catch (error) {
+      setMessage(`图片反推配置的额外 Headers JSON 无法解析：${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    const protocol = settings.protocol;
+    const endpointPath = endpointForImageReverseProtocol(protocol);
+    setReversePromptStatus({ assetId: asset.id, message: '正在调用视觉模型反推 Prompt…' });
+    setReversePromptError('');
+    try {
+      const result = await reverseImagePrompt({
+        providerId: 'image-prompt-reverse',
+        modelId: settings.modelId,
+        baseUrl: settings.baseUrl,
+        protocol,
+        endpointPath,
+        extraHeaders,
+        secretId: IMAGE_PROMPT_REVERSE_SECRET_ID,
+        imagePath: asset.imagePath,
+        imageUrl: asset.imageUrl,
+        language: settings.language,
+        detail: settings.detail
+      });
+      const saved = await saveInspirationAsset({
+        ...asset,
+        inferredPrompt: result.prompt,
+        reversePrompt: {
+          prompt: result.prompt,
+          language: settings.language,
+          detail: settings.detail,
+          modelId: result.modelId,
+          profileId: result.profileId,
+          providerId: result.providerId,
+          protocol: result.protocol,
+          generatedAt: result.createdAt,
+          rawSummary: result.rawSummary
+        }
+      });
+      setAssets((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+      setSelectedAssetId(saved.id);
+      setMessage('图片反推 Prompt 已完成并保存。');
+    } catch (error) {
+      const errorText = error instanceof Error ? error.message : String(error);
+      setReversePromptError(errorText);
+      setMessage(errorText);
+    } finally {
+      setReversePromptStatus(null);
+    }
   }
 
   function clearAssetSelection() { setSelectedAssetIds([]); setAssetMenuTarget(null); }
@@ -2621,7 +2699,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
                                 <button type="button" disabled={!asset.imageUrl} onClick={() => props.onUseAsReference(asset)}><ImagePlus size={13} /> 设为参考图</button>
                                 <button type="button" disabled={!prompt} onClick={() => void copyText('Prompt', prompt)}><Copy size={13} /> 复制 Prompt</button>
                                 <button type="button" disabled={!prompt} onClick={() => props.onUsePrompt(prompt)}><Sparkles size={13} /> 套用 Prompt</button>
-                                <button type="button" disabled={!asset.imageUrl} onClick={() => void reversePromptForAsset(asset)}><Search size={13} /> 反推提示词</button>
+                                <button type="button" disabled={!asset.imageUrl || reversePromptStatus?.assetId === asset.id} onClick={() => void reversePromptForAsset(asset)}><Search size={13} /> {reversePromptStatus?.assetId === asset.id ? '反推中' : '反推提示词'}</button>
                                 {asset.sourceUrl ? <button type="button" onClick={() => void openExternalUrl(asset.sourceUrl!)}><ExternalLink size={13} /> 打开原链接</button> : null}
                                 <span className="libraryMenuDivider" />
                                 <button type="button" onClick={() => startEditAsset(asset)}><Edit3 size={13} /> 编辑信息</button>
@@ -2687,6 +2765,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
                   <div className="libraryDetailActions">
                     <button className="miniButton primaryMini" disabled={!selectedAsset.imageUrl} onClick={() => props.onUseAsReference(selectedAsset)}><ImagePlus size={13} /> 参考</button>
                     <button className="miniButton" disabled={!assetPrompt(selectedAsset)} onClick={() => void copyText('Prompt', assetPrompt(selectedAsset))}><Copy size={13} /> Prompt</button>
+                    <button className="miniButton" disabled={!selectedAsset.imageUrl || reversePromptStatus?.assetId === selectedAsset.id} onClick={() => void reversePromptForAsset(selectedAsset)}><Search size={13} /> {reversePromptStatus?.assetId === selectedAsset.id ? '反推中' : '反推'}</button>
                     <button className="miniButton" disabled={!assetPrompt(selectedAsset)} onClick={() => createTemplate(selectedAsset)}><Bookmark size={13} /> 模板</button>
                     {editingAssetId === selectedAsset.id ? (
                       <button className="miniButton primaryMini" onClick={() => void updateAssetMetadata()}><Save size={13} /> 保存</button>
@@ -2728,9 +2807,30 @@ export const InspirationPage = memo(function InspirationPage(props: {
                     <span>原始 Prompt</span>
                     <p>{selectedAsset.originalPrompt || '未记录原始 Prompt。'}</p>
                   </section>
-                  <section className="assetDetailTextBlock">
-                    <span>反推 Prompt</span>
-                    <p>{selectedAsset.inferredPrompt || '还没有反推结果，后续可接入视觉模型后写入这里。'}</p>
+                  <section className="assetDetailTextBlock reversePromptBlock">
+                    <div className="assetDetailBlockHeader">
+                      <span>反推 Prompt</span>
+                      {selectedAsset.reversePrompt?.generatedAt ? <small>{selectedAsset.reversePrompt.modelId || '视觉模型'} / {new Date(selectedAsset.reversePrompt.generatedAt).toLocaleString()}</small> : null}
+                    </div>
+                    <div className="reversePromptConfigNote">
+                      图片反推配置已移到「偏好设置」的提示词辅助区域，使用独立 API Key，不再复用平台接入的生图配置实例。
+                    </div>
+                    <div className="reversePromptSummary" aria-label="当前图片反推配置">
+                      <span>{reverseSettingLabel(props.imagePromptReverse.displayName, '图片反推 Prompt')}</span>
+                      <small>{reverseSettingLabel(props.imagePromptReverse.modelId, '未设置模型')} · {props.imagePromptReverse.protocol} · {props.imagePromptReverse.detail} · {props.imagePromptReverse.language}</small>
+                      <em className={props.imagePromptReverseSecretAvailable ? 'ready' : ''}>{props.imagePromptReverseSecretAvailable ? 'API Key 已配置' : 'API Key 未配置'}</em>
+                      <button type="button" className="miniButton" onClick={props.onOpenSettings}><SlidersHorizontal size={13} /> 去偏好设置配置</button>
+                    </div>
+                    <p>{selectedAsset.inferredPrompt || '还没有反推结果。确认上方配置后，点击顶部“反推”即可写入这里。'}</p>
+                    {reversePromptStatus?.assetId === selectedAsset.id ? <em className="reversePromptHint">{reversePromptStatus.message}</em> : null}
+                    {reversePromptError ? <em className="reversePromptError">{reversePromptError}</em> : null}
+                    {selectedAsset.inferredPrompt ? (
+                      <div className="assetDetailActions">
+                        <button className="miniButton" type="button" onClick={() => void copyText('反推 Prompt', selectedAsset.inferredPrompt)}><Copy size={13} /> 复制反推</button>
+                        <button className="miniButton" type="button" onClick={() => props.onUsePrompt(selectedAsset.inferredPrompt!)}><Sparkles size={13} /> 套用反推</button>
+                        <button className="miniButton" type="button" onClick={() => createTemplate({ ...selectedAsset, originalPrompt: selectedAsset.inferredPrompt })}><Bookmark size={13} /> 存为模板</button>
+                      </div>
+                    ) : null}
                   </section>
                   <section className="assetDetailTextBlock">
                     <span>备注</span>
@@ -2784,7 +2884,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
                       <button type="button" role="menuitem" disabled={!assetPrompt(contextAssets[0])} onClick={() => { props.onUsePrompt(assetPrompt(contextAssets[0])); setAssetMenuTarget(null); }}>
                         <Sparkles size={13} /> 套用 Prompt
                       </button>
-                      <button type="button" role="menuitem" disabled={!contextAssets[0].imageUrl} onClick={() => { void reversePromptForAsset(contextAssets[0]); setAssetMenuTarget(null); }}>
+                      <button type="button" role="menuitem" disabled={!contextAssets[0].imageUrl || reversePromptStatus?.assetId === contextAssets[0].id} onClick={() => { void reversePromptForAsset(contextAssets[0]); setAssetMenuTarget(null); }}>
                         <Search size={13} /> 反推提示词
                       </button>
                       <button type="button" role="menuitem" onClick={() => { startEditAsset(contextAssets[0]); setAssetMenuTarget(null); }}>

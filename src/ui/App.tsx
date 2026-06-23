@@ -112,6 +112,10 @@ import {
   DEFAULT_REFERENCE_ROLE_OPTIONS,
   DEFAULT_SIZE_OPTIONS,
   FILE_NAMING_RULE_OPTIONS,
+  IMAGE_PROMPT_REVERSE_DETAIL_OPTIONS,
+  IMAGE_PROMPT_REVERSE_LANGUAGE_OPTIONS,
+  IMAGE_PROMPT_REVERSE_PROTOCOL_OPTIONS,
+  IMAGE_PROMPT_REVERSE_SECRET_ID,
   GENERATOR_ACCENT_OPTIONS,
   getRecommendedGlobalAccent,
   LANGUAGE_OPTIONS,
@@ -132,6 +136,7 @@ import {
   type AppSettings,
   type GenerationDefaults,
   type HomeModuleSettings,
+  type ImagePromptReverseSettings,
   type PromptHistorySettings,
   type PromptPolishSettings,
   type ThemeMode
@@ -170,7 +175,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
-const APP_VERSION = '0.3.10';
+const APP_VERSION = '0.4.1';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -2121,6 +2126,11 @@ export function App() {
   const [isSavingPromptPolishSecret, setIsSavingPromptPolishSecret] = useState(false);
   const [promptPolishDraft, setPromptPolishDraft] = useState<PromptPolishSettings>(() => appSettings.promptPolish);
   const [isRefreshingPromptPolishModels, setIsRefreshingPromptPolishModels] = useState(false);
+  const [imageReverseSecretDraft, setImageReverseSecretDraft] = useState('');
+  const [imageReverseSecretAvailable, setImageReverseSecretAvailable] = useState(false);
+  const [isSavingImageReverseSecret, setIsSavingImageReverseSecret] = useState(false);
+  const [imageReverseDraft, setImageReverseDraft] = useState<ImagePromptReverseSettings>(() => appSettings.imagePromptReverse);
+  const [isRefreshingImageReverseModels, setIsRefreshingImageReverseModels] = useState(false);
   const [activeUtilityModal, setActiveUtilityModal] = useState<UtilityModal>(null);
   const [freePlatformMessage, setFreePlatformMessage] = useState('');
   const [isSavingSecret, setIsSavingSecret] = useState(false);
@@ -2400,6 +2410,25 @@ export function App() {
   }, [desktopRuntime]);
 
   useEffect(() => {
+    if (!desktopRuntime) {
+      setImageReverseSecretAvailable(false);
+      return;
+    }
+    let isActive = true;
+    void getProviderSecretStatus(IMAGE_PROMPT_REVERSE_SECRET_ID)
+      .then((status) => {
+        if (isActive) setImageReverseSecretAvailable(status.available);
+      })
+      .catch(() => {
+        if (isActive) setImageReverseSecretAvailable(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [desktopRuntime]);
+
+  useEffect(() => {
     if (!desktopRuntime || !generationSupportsOpenAICompatible) {
       setGenerationSecretAvailable(false);
       return;
@@ -2430,6 +2459,10 @@ export function App() {
   useEffect(() => {
     setPromptPolishDraft(appSettings.promptPolish);
   }, [appSettings.promptPolish]);
+
+  useEffect(() => {
+    setImageReverseDraft(appSettings.imagePromptReverse);
+  }, [appSettings.imagePromptReverse]);
 
   useEffect(() => {
     if (page === 'providers') return;
@@ -4471,6 +4504,109 @@ export function App() {
     }
   }
 
+
+  async function saveImageReverseSecret() {
+    const trimmedSecret = imageReverseSecretDraft.trim();
+    if (!trimmedSecret) {
+      setSettingsMessage(imageReverseSecretAvailable ? '图片反推专用 API Key 已配置；如需更换，请先输入新的 Key。' : '请先填写图片反推专用 API Key。');
+      return false;
+    }
+    if (!desktopRuntime) {
+      setSettingsMessage('当前是网页预览模式，只有 Tauri 桌面端会写入系统凭据。');
+      return false;
+    }
+
+    setIsSavingImageReverseSecret(true);
+    try {
+      const status = await saveProviderSecret(IMAGE_PROMPT_REVERSE_SECRET_ID, trimmedSecret);
+      setImageReverseSecretAvailable(status.available);
+      setImageReverseSecretDraft('');
+      setSettingsMessage('图片反推专用 API Key 已保存，不会影响生图平台配置。');
+      return status.available;
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+      return false;
+    } finally {
+      setIsSavingImageReverseSecret(false);
+    }
+  }
+
+  function updateImageReverseDraft(patch: Partial<ImagePromptReverseSettings>) {
+    setImageReverseDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function saveImageReverseConfig() {
+    const displayName = imageReverseDraft.displayName.trim() || '图片反推 Prompt 专用配置';
+    const baseUrl = imageReverseDraft.baseUrl.trim();
+    const modelId = imageReverseDraft.modelId.trim();
+    try {
+      parseExtraHeaders(imageReverseDraft.extraHeadersJson);
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+      return;
+    }
+    const modelOptions = Array.from(
+      new Set([...imageReverseDraft.modelOptions, modelId].filter((item) => item.trim()).map((item) => item.trim()))
+    );
+    const nextSettings: ImagePromptReverseSettings = {
+      ...imageReverseDraft,
+      displayName,
+      baseUrl,
+      modelId,
+      modelOptions,
+      extraHeadersJson: imageReverseDraft.extraHeadersJson.trim() || '{}'
+    };
+    updateAppSettings({ imagePromptReverse: nextSettings });
+    setSettingsMessage('图片反推 Prompt 专用配置已保存；它不会进入 AI 生图工作台模型列表。');
+  }
+
+  async function refreshImageReverseModels() {
+    const baseUrl = imageReverseDraft.baseUrl.trim();
+    if (!baseUrl) {
+      setSettingsMessage('请先填写图片反推专用 Base URL。');
+      return;
+    }
+    if (imageReverseDraft.protocol === 'gemini-generate-content') {
+      setSettingsMessage('Gemini generateContent 暂不支持通过 /v1/models 自动刷新，请直接填写模型 ID。');
+      return;
+    }
+    if (!desktopRuntime) {
+      setSettingsMessage('当前是网页预览模式，只有 Tauri 桌面端可以刷新模型列表。');
+      return;
+    }
+    if (!imageReverseSecretAvailable) {
+      setSettingsMessage('请先保存图片反推专用 API Key，再刷新模型列表。');
+      return;
+    }
+
+    setIsRefreshingImageReverseModels(true);
+    try {
+      const models = await listOpenAICompatibleModels(
+        'image-prompt-reverse',
+        baseUrl,
+        parseExtraHeaders(imageReverseDraft.extraHeadersJson),
+        IMAGE_PROMPT_REVERSE_SECRET_ID
+      );
+      const modelOptions = Array.from(
+        new Set([...models.map((model) => model.id), imageReverseDraft.modelId.trim()].filter(Boolean))
+      );
+      if (!modelOptions.length) {
+        setSettingsMessage('模型接口已返回，但没有发现可用模型。');
+        return;
+      }
+      setImageReverseDraft((current) => ({
+        ...current,
+        modelOptions,
+        modelId: modelOptions.includes(current.modelId.trim()) ? current.modelId.trim() : ''
+      }));
+      setSettingsMessage(`已刷新 ${modelOptions.length} 个候选模型，请在图片反推模型框里选择或手动填写后保存配置。`);
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsRefreshingImageReverseModels(false);
+    }
+  }
+
   function buildProfileFromCurrentConfig(enable: boolean) {
     if (!isSelectedServiceConfigurable) {
       throw new Error('当前服务模板尚未接入，暂不能保存配置。');
@@ -5604,6 +5740,9 @@ export function App() {
             onUsePrompt={useInspirationPrompt}
             onCreateTemplate={createPromptTemplateFromInspiration}
             onRequestConfirm={requestConfirm}
+            imagePromptReverse={appSettings.imagePromptReverse}
+            imagePromptReverseSecretAvailable={imageReverseSecretAvailable}
+            onOpenSettings={() => navigateTo('settings')}
             importVersion={inspirationImportVersion}
           />
         ) : null}
@@ -5799,12 +5938,22 @@ export function App() {
             promptPolishSecretAvailable={promptPolishSecretAvailable}
             isSavingPromptPolishSecret={isSavingPromptPolishSecret}
             isRefreshingPromptPolishModels={isRefreshingPromptPolishModels}
+            imageReverseDraft={imageReverseDraft}
+            imageReverseSecretDraft={imageReverseSecretDraft}
+            imageReverseSecretAvailable={imageReverseSecretAvailable}
+            isSavingImageReverseSecret={isSavingImageReverseSecret}
+            isRefreshingImageReverseModels={isRefreshingImageReverseModels}
             onSettingsChange={updateAppSettings}
             onPromptPolishDraftChange={updatePromptPolishDraft}
             onSavePromptPolishConfig={savePromptPolishConfig}
             onRefreshPromptPolishModels={refreshPromptPolishModels}
             onPromptPolishSecretDraftChange={setPromptPolishSecretDraft}
             onSavePromptPolishSecret={savePromptPolishSecret}
+            onImageReverseDraftChange={updateImageReverseDraft}
+            onSaveImageReverseConfig={saveImageReverseConfig}
+            onRefreshImageReverseModels={refreshImageReverseModels}
+            onImageReverseSecretDraftChange={setImageReverseSecretDraft}
+            onSaveImageReverseSecret={saveImageReverseSecret}
             onSelectLibraryPath={selectLibraryDirectory}
             onResetLibraryPath={resetLibraryDirectoryOverride}
             onOpenLibraryDirectory={openLibraryDirectory}
@@ -6008,7 +6157,7 @@ function BatchQueuePage(props: {
           <span>Batch Queue</span>
           <h1>批量队列</h1>
         </div>
-        <p>0.3.10 当前支持单任务、批量变体和多模型对比组入队；点击“执行全部待处理”只确认一次，随后按稳妥串行自动跑完整个队列。</p>
+        <p>当前支持单任务、批量变体和多模型对比组入队；点击“执行全部待处理”只确认一次，随后按稳妥串行自动跑完整个队列。</p>
         <div className="batchQueueActions">
           <button
             type="button"
@@ -8330,12 +8479,22 @@ function SettingsPage(props: {
   promptPolishSecretAvailable: boolean;
   isSavingPromptPolishSecret: boolean;
   isRefreshingPromptPolishModels: boolean;
+  imageReverseDraft: ImagePromptReverseSettings;
+  imageReverseSecretDraft: string;
+  imageReverseSecretAvailable: boolean;
+  isSavingImageReverseSecret: boolean;
+  isRefreshingImageReverseModels: boolean;
   onSettingsChange: (patch: Partial<AppSettings>) => void;
   onPromptPolishDraftChange: (patch: Partial<PromptPolishSettings>) => void;
   onSavePromptPolishConfig: () => void;
   onRefreshPromptPolishModels: () => void;
   onPromptPolishSecretDraftChange: (value: string) => void;
   onSavePromptPolishSecret: () => void;
+  onImageReverseDraftChange: (patch: Partial<ImagePromptReverseSettings>) => void;
+  onSaveImageReverseConfig: () => void;
+  onRefreshImageReverseModels: () => void;
+  onImageReverseSecretDraftChange: (value: string) => void;
+  onSaveImageReverseSecret: () => void;
   onSelectLibraryPath: () => void;
   onResetLibraryPath: () => void;
   onOpenLibraryDirectory: () => void;
@@ -8354,6 +8513,7 @@ function SettingsPage(props: {
   const savePreferences = settings.savePreferences;
   const homeModules = settings.homeModules;
   const promptPolish = props.promptPolishDraft;
+  const imageReverse = props.imageReverseDraft;
   const promptPolishDefaultMode = resolvePolishMode(promptHistory.defaultPolishMode, promptPolish.engine);
   const promptPolishModeOptions = getPolishModesForEngine(promptPolish.engine);
   const defaultProvider = props.providers.find((provider) => provider.id === generationDefaults.defaultProviderId) ?? props.providers[0];
@@ -8384,6 +8544,14 @@ function SettingsPage(props: {
     props.onPromptPolishDraftChange(patch);
     if (options?.commit) {
       props.onSettingsChange({ promptPolish: nextPromptPolish });
+    }
+  }
+
+  function updateImageReverse(patch: Partial<ImagePromptReverseSettings>, options?: { commit?: boolean }) {
+    const nextImageReverse = { ...imageReverse, ...patch };
+    props.onImageReverseDraftChange(patch);
+    if (options?.commit) {
+      props.onSettingsChange({ imagePromptReverse: nextImageReverse });
     }
   }
 
@@ -8922,6 +9090,77 @@ function SettingsPage(props: {
         </div>
 
         <p className="settingsNotice">模型润色不会读取或导出你的 API Key；密钥由桌面端安全凭据存储在独立的润色通道。未配置或请求失败时，会按设置自动回退到本地规则润色。</p>
+        <div className="settingsConfigBlock imageReverseConfigBlock">
+          <div className="promptPolishConfigHeader">
+            <div className="settingsRowMain promptPolishIntro">
+              <strong>{'\u56fe\u7247\u53cd\u63a8 Prompt \u4e13\u7528\u914d\u7f6e'}</strong>
+              <small>{'\u7528\u4e8e\u7075\u611f\u56fe\u7247\u53cd\u63a8 Prompt \u7684\u89c6\u89c9\u7406\u89e3\u6a21\u578b\u3002\u5b83\u4e0d\u53c2\u4e0e AI \u751f\u56fe\u5de5\u4f5c\u53f0\uff0c\u4e0d\u4f1a\u51fa\u73b0\u5728\u751f\u56fe\u6a21\u578b\u5217\u8868\u3002'}</small>
+            </div>
+            <div className="promptPolishHeaderTools">
+              <div className="settingsPresetRow">
+                <button type="button" className={imageReverse.displayName === '\u805a\u5408\u7ad9\u56fe\u7247\u53cd\u63a8' ? 'active' : ''} onClick={() => updateImageReverse({ displayName: '\u805a\u5408\u7ad9\u56fe\u7247\u53cd\u63a8', baseUrl: '', modelId: '', modelOptions: [], protocol: 'chat-completions' })}>{'\u805a\u5408\u7ad9\u901a\u7528'}</button>
+                <button type="button" className={imageReverse.displayName === 'OpenAI \u5b98\u65b9\u56fe\u7247\u53cd\u63a8' ? 'active' : ''} onClick={() => updateImageReverse({ displayName: 'OpenAI \u5b98\u65b9\u56fe\u7247\u53cd\u63a8', baseUrl: OFFICIAL_OPENAI_BASE_URL, modelId: '', modelOptions: [], protocol: 'responses' })}>OpenAI {'\u5b98\u65b9'}</button>
+                <button type="button" className={imageReverse.displayName === 'Gemini \u56fe\u7247\u53cd\u63a8' ? 'active' : ''} onClick={() => updateImageReverse({ displayName: 'Gemini \u56fe\u7247\u53cd\u63a8', baseUrl: 'https://generativelanguage.googleapis.com', modelId: '', modelOptions: [], protocol: 'gemini-generate-content' })}>Gemini</button>
+              </div>
+              <div className="settingsStatusPills compact">
+                <span className={imageReverse.baseUrl.trim() ? 'ready' : ''}>Base URL</span>
+                <span className={imageReverse.modelId.trim() ? 'ready' : ''}>{'\u6a21\u578b ID'}</span>
+                <span className={props.imageReverseSecretAvailable ? 'ready' : ''}>API Key</span>
+              </div>
+            </div>
+          </div>
+          <div className="settingsConfigGrid">
+            <label>
+              {'\u914d\u7f6e\u540d\u79f0'}
+              <input value={imageReverse.displayName} placeholder={'\u56fe\u7247\u53cd\u63a8 Prompt \u4e13\u7528\u914d\u7f6e'} onChange={(event) => updateImageReverse({ displayName: event.target.value })} />
+            </label>
+            <label>
+              Base URL
+              <input value={imageReverse.baseUrl} placeholder={'\u4f8b\u5982 https://api.example.com'} onChange={(event) => updateImageReverse({ baseUrl: event.target.value })} />
+            </label>
+            <label>
+              {'\u6a21\u578b\u9009\u62e9 / \u624b\u52a8\u586b\u5199'}
+              <div className="settingsModelSelectRow">
+                <input value={imageReverse.modelId} list="image-reverse-model-options" placeholder={imageReverse.modelOptions.length > 0 ? '\u9009\u62e9\u5237\u65b0\u51fa\u7684\u6a21\u578b\uff0c\u6216\u624b\u52a8\u8f93\u5165\u6a21\u578b ID' : '\u586b\u5199\u652f\u6301\u56fe\u7247\u8f93\u5165\u548c\u6587\u672c\u8f93\u51fa\u7684\u6a21\u578b ID'} onChange={(event) => updateImageReverse({ modelId: event.target.value })} />
+                <datalist id="image-reverse-model-options">
+                  {imageReverse.modelOptions.map((modelId) => <option key={modelId} value={modelId} />)}
+                </datalist>
+                <button type="button" onClick={props.onRefreshImageReverseModels} disabled={props.isRefreshingImageReverseModels}>{props.isRefreshingImageReverseModels ? '\u5237\u65b0\u4e2d\u2026' : '\u5237\u65b0'}</button>
+              </div>
+              <small>{'\u4ec5\u7528\u4e8e\u89c6\u89c9\u7406\u89e3\u53cd\u63a8\uff1bGemini generateContent \u8bf7\u76f4\u63a5\u586b\u5199\u6a21\u578b ID\u3002'}</small>
+            </label>
+            <label>
+              API Key
+              <div className="settingsSecretInputRow">
+                <input type="password" value={props.imageReverseSecretDraft} placeholder={props.imageReverseSecretAvailable ? '\u5df2\u4fdd\u5b58\uff0c\u8f93\u5165\u65b0 Key \u53ef\u66ff\u6362' : '\u7c98\u8d34\u56fe\u7247\u53cd\u63a8\u4e13\u7528 API Key'} onChange={(event) => props.onImageReverseSecretDraftChange(event.target.value)} />
+                <button type="button" onClick={props.onSaveImageReverseSecret} disabled={props.isSavingImageReverseSecret}>{props.isSavingImageReverseSecret ? '\u4fdd\u5b58\u4e2d\u2026' : '\u4fdd\u5b58'}</button>
+              </div>
+              <small>{props.imageReverseSecretAvailable ? '\u56fe\u7247\u53cd\u63a8\u4e13\u7528 Key \u5df2\u914d\u7f6e\u3002' : '\u5c1a\u672a\u4fdd\u5b58\u56fe\u7247\u53cd\u63a8\u4e13\u7528 Key\u3002'}</small>
+            </label>
+            <div className="settingsListRow settingsTallRow settingsWideField embeddedSettingsRow">
+              <div className="settingsRowMain">
+                <strong>{'\u534f\u8bae\u3001\u8bed\u8a00\u4e0e\u7ec6\u8282'}</strong>
+                <small>{'\u6839\u636e\u4e2d\u8f6c\u7ad9\u6216\u5b98\u65b9 API \u7684\u89c6\u89c9\u8f93\u5165\u534f\u8bae\u9009\u62e9\uff1b\u666e\u901a\u7eaf\u6587\u672c\u6a21\u578b\u4e0d\u80fd\u53cd\u63a8\u56fe\u7247\u3002'}</small>
+              </div>
+              <div className="settingsInlineGrid triple">
+                <StudioSelect value={imageReverse.protocol} onChange={(value) => updateImageReverse({ protocol: value as ImagePromptReverseSettings['protocol'] })} options={IMAGE_PROMPT_REVERSE_PROTOCOL_OPTIONS} />
+                <StudioSelect value={imageReverse.detail} onChange={(value) => updateImageReverse({ detail: value as ImagePromptReverseSettings['detail'] })} options={IMAGE_PROMPT_REVERSE_DETAIL_OPTIONS} />
+                <StudioSelect value={imageReverse.language} onChange={(value) => updateImageReverse({ language: value as ImagePromptReverseSettings['language'] })} options={IMAGE_PROMPT_REVERSE_LANGUAGE_OPTIONS} />
+              </div>
+            </div>
+            <details className="settingsAdvancedBox settingsWideField">
+              <summary><span>{'\u9ad8\u7ea7\u8bbe\u7f6e\uff1aHeaders JSON'}</span><small>{'\u9ed8\u8ba4\u4fdd\u6301 {}'}</small></summary>
+              <p>{'\u7528\u4e8e\u7ed9\u5c11\u6570\u4e2d\u8f6c\u7ad9\u6216\u4f01\u4e1a API \u989d\u5916\u4f20\u8bf7\u6c42\u5934\u3002Authorization\u3001Content-Type \u4e0e x-goog-api-key \u4f1a\u7531\u7a0b\u5e8f\u6309\u534f\u8bae\u5904\u7406\u3002'}</p>
+              <textarea rows={3} value={imageReverse.extraHeadersJson} placeholder='{"X-Provider": "visionhub"}' onChange={(event) => updateImageReverse({ extraHeadersJson: event.target.value })} />
+            </details>
+            <div className="settingsConfigActions settingsWideField">
+              <button type="button" className="rowActionButton" onClick={props.onSaveImageReverseConfig}><ShieldCheck size={14} /> {'\u4fdd\u5b58\u56fe\u7247\u53cd\u63a8\u914d\u7f6e'}</button>
+              <small>{'\u4fdd\u5b58\u914d\u7f6e\u4e0d\u4f1a\u4fdd\u5b58 API Key\uff1bAPI Key \u4ecd\u9700\u5355\u72ec\u70b9\u51fb\u4e0a\u65b9\u201c\u4fdd\u5b58\u201d\u3002'}</small>
+            </div>
+          </div>
+        </div>
+
+        <p className="settingsNotice">{'\u56fe\u7247\u53cd\u63a8 Prompt \u4f7f\u7528\u72ec\u7acb\u51ed\u636e\u901a\u9053 image-reverse:default\uff0c\u4e0d\u590d\u7528\u751f\u56fe\u5e73\u53f0 Key\uff0c\u4e5f\u4e0d\u4f1a\u628a\u89c6\u89c9\u7406\u89e3\u6a21\u578b\u52a0\u5165 AI \u751f\u56fe\u5de5\u4f5c\u53f0\u3002'}</p>
       </article>
 
       <div className="settingsSectionLabel">作品保存偏好</div>
@@ -9228,6 +9467,9 @@ const CachedInspirationPage = memo(function CachedInspirationPage(props: {
   onUsePrompt: (prompt: string) => void;
   onCreateTemplate: (title: string, prompt: string, tags: string[]) => string;
   onRequestConfirm: (request: ConfirmDialogRequest) => void;
+  imagePromptReverse: ImagePromptReverseSettings;
+  imagePromptReverseSecretAvailable: boolean;
+  onOpenSettings: () => void;
   importVersion: number;
 }) {
   return (
@@ -9241,6 +9483,9 @@ const CachedInspirationPage = memo(function CachedInspirationPage(props: {
         onUsePrompt={props.onUsePrompt}
         onCreateTemplate={props.onCreateTemplate}
         onRequestConfirm={props.onRequestConfirm}
+        imagePromptReverse={props.imagePromptReverse}
+        imagePromptReverseSecretAvailable={props.imagePromptReverseSecretAvailable}
+        onOpenSettings={props.onOpenSettings}
         importVersion={props.importVersion}
       />
       {props.isActive && props.preview ? (
