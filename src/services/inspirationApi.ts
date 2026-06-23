@@ -6,7 +6,8 @@ import type {
   ImagePromptReverseProtocol,
   InspirationAssetImportRequest,
   InspirationLibrary,
-  InspirationSource
+  InspirationSource,
+  PromptExcerpt
 } from '../domain/inspirationTypes';
 import { isTauriRuntime } from './desktopApi';
 
@@ -30,6 +31,23 @@ interface BackendInspirationSource {
   created_at: string;
   updated_at: string;
   last_opened_at?: string;
+}
+
+interface BackendPromptExcerpt {
+  id: string;
+  title: string;
+  prompt: string;
+  source_name?: string;
+  source_url?: string;
+  language: PromptExcerpt['language'];
+  category: PromptExcerpt['category'];
+  tags: string[];
+  note?: string;
+  favorite?: boolean;
+  created_at: string;
+  updated_at: string;
+  last_used_at?: string;
+  used_count?: number;
 }
 
 interface BackendInspirationAsset {
@@ -94,11 +112,13 @@ export interface ReverseImagePromptResult {
 interface BackendInspirationLibrary {
   sources: BackendInspirationSource[];
   assets: BackendInspirationAsset[];
+  excerpts?: BackendPromptExcerpt[];
 }
 
 const LOCAL_STORAGE_KEY = 'visionhub.inspirations.fallback';
 let cachedSources: InspirationSource[] | null = null;
 let cachedAssets: InspirationAsset[] | null = null;
+let cachedExcerpts: PromptExcerpt[] | null = null;
 
 function mapSourceFromBackend(source: BackendInspirationSource): InspirationSource {
   return {
@@ -224,8 +244,47 @@ function mapAssetToBackend(asset: InspirationAsset): BackendInspirationAsset {
   };
 }
 
+
+function mapExcerptFromBackend(excerpt: BackendPromptExcerpt): PromptExcerpt {
+  return {
+    id: excerpt.id,
+    title: excerpt.title,
+    prompt: excerpt.prompt,
+    sourceName: excerpt.source_name,
+    sourceUrl: excerpt.source_url,
+    language: excerpt.language ?? 'auto',
+    category: excerpt.category ?? 'general',
+    tags: excerpt.tags ?? [],
+    note: excerpt.note,
+    favorite: excerpt.favorite,
+    createdAt: excerpt.created_at,
+    updatedAt: excerpt.updated_at,
+    lastUsedAt: excerpt.last_used_at,
+    usedCount: excerpt.used_count
+  };
+}
+
+function mapExcerptToBackend(excerpt: PromptExcerpt): BackendPromptExcerpt {
+  return {
+    id: excerpt.id,
+    title: excerpt.title,
+    prompt: excerpt.prompt,
+    source_name: excerpt.sourceName,
+    source_url: excerpt.sourceUrl,
+    language: excerpt.language,
+    category: excerpt.category,
+    tags: excerpt.tags ?? [],
+    note: excerpt.note,
+    favorite: excerpt.favorite,
+    created_at: excerpt.createdAt,
+    updated_at: excerpt.updatedAt,
+    last_used_at: excerpt.lastUsedAt,
+    used_count: excerpt.usedCount
+  };
+}
+
 function emptyLibrary(): InspirationLibrary {
-  return { sources: [], assets: [] };
+  return { sources: [], assets: [], excerpts: [] };
 }
 
 function loadFallbackLibrary(): InspirationLibrary {
@@ -235,7 +294,8 @@ function loadFallbackLibrary(): InspirationLibrary {
     const parsed = JSON.parse(raw) as InspirationLibrary;
     return {
       sources: Array.isArray(parsed.sources) ? parsed.sources : [],
-      assets: Array.isArray(parsed.assets) ? parsed.assets : []
+      assets: Array.isArray(parsed.assets) ? parsed.assets : [],
+      excerpts: Array.isArray(parsed.excerpts) ? parsed.excerpts : []
     };
   } catch (error) {
     console.warn('[VisionHub] inspiration fallback parse failed', error);
@@ -252,8 +312,8 @@ function nowId() {
 }
 
 export async function loadInspirationLibrary(): Promise<InspirationLibrary> {
-  const [sources, assets] = await Promise.all([loadInspirationSources(), loadInspirationAssets()]);
-  return { sources, assets };
+  const [sources, assets, excerpts] = await Promise.all([loadInspirationSources(), loadInspirationAssets(), loadPromptExcerpts()]);
+  return { sources, assets, excerpts };
 }
 
 export async function loadInspirationSources(): Promise<InspirationSource[]> {
@@ -281,15 +341,60 @@ export async function loadInspirationAssets(): Promise<InspirationAsset[]> {
 export async function reloadInspirationLibrary(): Promise<InspirationLibrary> {
   cachedSources = null;
   cachedAssets = null;
+  cachedExcerpts = null;
   if (!isTauriRuntime()) return loadFallbackLibrary();
   const result = await invoke<BackendInspirationLibrary>('load_inspirations');
   const library = {
     sources: (result.sources ?? []).map(mapSourceFromBackend),
-    assets: (result.assets ?? []).map(mapAssetFromBackend)
+    assets: (result.assets ?? []).map(mapAssetFromBackend),
+    excerpts: (result.excerpts ?? []).map(mapExcerptFromBackend)
   };
   cachedSources = library.sources;
   cachedAssets = library.assets;
+  cachedExcerpts = library.excerpts;
   return library;
+}
+
+
+export async function loadPromptExcerpts(): Promise<PromptExcerpt[]> {
+  if (cachedExcerpts) return cachedExcerpts;
+  if (!isTauriRuntime()) {
+    cachedExcerpts = loadFallbackLibrary().excerpts;
+    return cachedExcerpts;
+  }
+  const result = await invoke<BackendPromptExcerpt[]>('load_prompt_excerpts');
+  cachedExcerpts = (result ?? []).map(mapExcerptFromBackend);
+  return cachedExcerpts;
+}
+
+export async function savePromptExcerpt(excerpt: PromptExcerpt): Promise<PromptExcerpt> {
+  if (!isTauriRuntime()) {
+    const library = loadFallbackLibrary();
+    const nextExcerpt = { ...excerpt, updatedAt: nowId() };
+    const excerpts = [nextExcerpt, ...library.excerpts.filter((item) => item.id !== excerpt.id)];
+    saveFallbackLibrary({ ...library, excerpts });
+    cachedExcerpts = excerpts;
+    return nextExcerpt;
+  }
+  const saved = await invoke<BackendPromptExcerpt>('save_prompt_excerpt', {
+    excerpt: mapExcerptToBackend(excerpt)
+  });
+  const nextExcerpt = mapExcerptFromBackend(saved);
+  cachedExcerpts = [nextExcerpt, ...(cachedExcerpts ?? []).filter((item) => item.id !== nextExcerpt.id)];
+  return nextExcerpt;
+}
+
+export async function deletePromptExcerpt(excerptId: string) {
+  if (!isTauriRuntime()) {
+    const library = loadFallbackLibrary();
+    const excerpts = library.excerpts.filter((item) => item.id !== excerptId);
+    saveFallbackLibrary({ ...library, excerpts });
+    cachedExcerpts = excerpts;
+    return { id: excerptId, deleted: true };
+  }
+  const result = await invoke<{ id: string; deleted: boolean }>('delete_prompt_excerpt', { excerptId });
+  if (result.deleted) cachedExcerpts = (cachedExcerpts ?? []).filter((item) => item.id !== excerptId);
+  return result;
 }
 
 export async function saveInspirationSource(source: InspirationSource): Promise<InspirationSource> {

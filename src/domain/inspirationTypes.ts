@@ -13,6 +13,8 @@ export type InspirationSourceKind = 'preset' | 'custom';
 export type ImagePromptReverseLanguage = 'zh' | 'en' | 'source';
 export type ImagePromptReverseDetail = 'concise' | 'detailed' | 'professional';
 export type ImagePromptReverseProtocol = 'responses' | 'chat-completions' | 'gemini-generate-content';
+export type PromptExcerptLanguage = 'auto' | 'zh' | 'en' | 'ja' | 'mixed';
+export type PromptExcerptCategory = 'general' | 'portrait' | 'product' | 'scene' | 'character' | 'poster' | 'game-art' | 'photography' | 'negative' | 'other';
 
 export interface InspirationSource {
   id: string;
@@ -70,6 +72,24 @@ export interface InspirationAsset {
 export interface InspirationLibrary {
   sources: InspirationSource[];
   assets: InspirationAsset[];
+  excerpts: PromptExcerpt[];
+}
+
+export interface PromptExcerpt {
+  id: string;
+  title: string;
+  prompt: string;
+  sourceName?: string;
+  sourceUrl?: string;
+  language: PromptExcerptLanguage;
+  category: PromptExcerptCategory;
+  tags: string[];
+  note?: string;
+  favorite?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt?: string;
+  usedCount?: number;
 }
 
 export interface InspirationAssetImportRequest {

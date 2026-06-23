@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.4.1` Prompt Workflow V3 / image reverse settings closure.
+Current checkpoint: `0.4.1` Prompt Workflow V3 / image reverse + Prompt excerpts closure.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -151,6 +151,7 @@ Current checkpoint: `0.4.1` Prompt Workflow V3 / image reverse settings closure.
 - 图生图工作台已支持参考图拖拽、粘贴、排序、角色标记和最近生成图复用。
 - 灵感中心 V2 已完成图片收藏 Gallery 和提示词网站目录：图片收藏支持批量导入、搜索筛选、颜色 / 形状 / 格式 / 评分过滤；提示词网站支持国内外预设、紧凑列表、分类筛选、打开记录和自定义添加，并已优化为提示词网站优先加载、图片收藏按需懒加载。
 - 灵感中心图片收藏已接入真实图片反推 Prompt：改为「偏好设置」里的图片反推专用配置和独立凭据 `image-reverse:default`，支持 Responses / Chat Completions / Gemini generateContent 视觉输入协议；反推模型不会进入 AI 生图工作台模型列表，结果会写入反推 Prompt 字段，并可复制、套用到 AI 创作或保存为模板。
+- Prompt 摘录 V1 已并入灵感中心：支持手动摘录和从剪贴板摘录，可按类型 / 语言 / 来源 / 常用筛选，并支持套用到 AI 创作、复制、转为提示词模板、编辑和删除；数据保存在本地灵感目录，不做网页自动抓取。
 - 提示词库 V2 已完成本轮收口：模板分类扩展、自定义模板、收藏 / 最近使用、变量填充、导入 / 导出，以及从作品画廊和灵感中心转入模板的复用链路都已落地。
 - 图片收藏目录已从作品画廊目录中独立出来，可在偏好设置里单独选择和打开；免费平台导入成品后会刷新灵感中心图片收藏。
 - 提示词润色已拆成本地规则和模型润色两条路径，模型润色使用独立凭据 `prompt-polish:default`。
@@ -167,14 +168,15 @@ Current checkpoint: `0.4.1` Prompt Workflow V3 / image reverse settings closure.
 
 ## 近期更新记录
 
-### v0.4.1 Prompt Workflow V3 / Image Reverse Settings
+### v0.4.1 Prompt Workflow V3 / Image Reverse + Prompt Excerpts
 
 - App version is now `0.4.1`, synchronized across package metadata, Tauri metadata, Cargo metadata, app version display, README, and roadmap docs.
 - Image reverse Prompt now uses the dedicated Preferences configuration and `image-reverse:default` credential channel; it no longer reuses generation provider profiles or appears in the AI generation model list.
 - Reverse Prompt supports Responses / Chat Completions / Gemini generateContent visual-input protocols; results are saved to `inferredPrompt` and `reversePrompt` metadata and can be copied, applied to AI Create, or saved as a Prompt template.
 - OpenAI-compatible reverse Prompt requests no longer send default `temperature`, improving compatibility with GPT-5.x and stricter aggregator models.
 - Inspiration detail drawer width/right offset was constrained to avoid right-edge clipping for long model names, errors, and action buttons.
-- Remaining `0.4.1` work: Prompt website excerpts, Prompt composer, save current Prompt as template/excerpt, and favorite/success filters for reuse records.
+- Prompt Excerpts V1 adds a third Inspiration Center tab for manual excerpts and clipboard excerpts, with local persistence, search/filter, apply/copy/template conversion, edit/delete, and light/dark editor polish.
+- Remaining `0.4.1` work: Prompt composer, save current Prompt as template/excerpt, and favorite/success filters for reuse records.
 
 ### v0.3.10 收口补丁 / 绿色版验证
 
@@ -785,7 +787,8 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - 补齐最近查看、最近设为参考的元数据写入和排序入口，保持现有按钮大小、位置和排版不变。
 - `0.4.1` Prompt 与灵感工作流 V3
   - 已先落地灵感图片真实反推 Prompt：使用偏好设置中的图片反推专用配置和 `image-reverse:default` 独立密钥通道，支持图片输入 + 文本输出模型，结果可复制、套用和转模板；该模型不进入 AI 生图工作台。
-  - 后续继续补提示词网站摘录、Prompt 组合器、从当前 Prompt 保存为模板或摘录。
+  - 已落地 Prompt 摘录 V1：支持手动摘录、从剪贴板摘录、本地持久化、搜索筛选、套用到创作台和转为提示词模板。
+  - 后续继续补 Prompt 组合器、从当前 Prompt 保存为模板或摘录。
   - 复用记录增加常用标记和只看成功生成 Prompt。
 - `0.4.2` Provider 稳定接入 V5
   - 按“有文档、有账号、有 raw 错误证据”继续接入 Gemini / Nano Banana 官方、xAI / Grok Image、火山方舟 / Seedream、阿里百炼 / 通义万相等平台。

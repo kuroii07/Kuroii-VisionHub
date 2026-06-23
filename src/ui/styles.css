@@ -17274,6 +17274,7 @@ body {
 }
 
 .sourceLibraryShell.inactive,
+.promptExcerptShell.inactive,
 .inspirationAssetGalleryShell.inactive {
   position: absolute;
   inset: 0;
@@ -21599,4 +21600,169 @@ body {
     width: auto;
     max-width: none;
   }
+}
+
+.promptExcerptShell {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  margin-top: -2px;
+}
+
+.promptExcerptLayout {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+  gap: 12px;
+  align-items: start;
+}
+
+.promptExcerptList {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.promptExcerptCard {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--app-line);
+  border-radius: 20px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: var(--app-shadow-soft);
+}
+
+.promptExcerptCardHeader,
+.promptExcerptActions,
+.promptExcerptMeta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.promptExcerptCardHeader { justify-content: space-between; }
+.promptExcerptCardHeader div { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.promptExcerptCardHeader strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.promptExcerptText { margin: 0; color: var(--app-text-2); font-size: 13px; line-height: 1.58; overflow: hidden; overflow-wrap: anywhere; white-space: pre-wrap; }
+.promptExcerptTags { min-width: 0; }
+.promptExcerptMeta { justify-content: space-between; color: var(--app-muted); font-size: 12px; font-weight: 800; }
+.promptExcerptMeta span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.promptExcerptActions { flex-wrap: wrap; }
+
+.promptExcerptEditor {
+  position: sticky;
+  top: 18px;
+  width: 100%;
+  max-height: calc(100vh - 132px);
+  overflow: hidden;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: 16px;
+}
+
+.promptExcerptEditor .sourceEditorForm {
+  overflow: auto;
+  padding-right: 6px;
+  align-content: start;
+}
+
+.promptExcerptEditor .sourceEditorForm label:nth-child(2) textarea {
+  min-height: 126px;
+}
+
+.promptExcerptEditor .sourceEditorForm textarea {
+  min-height: 88px;
+}
+
+.promptExcerptEditor .sourceEditorActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--app-line);
+}
+
+.promptExcerptEditor .sourceEditorActions .miniButton {
+  justify-content: center;
+}
+
+.inspirationSwitchCheck {
+  width: 100%;
+  justify-content: space-between;
+  padding: 8px 12px;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.inspirationSwitchCheck:has(input:checked) {
+  color: var(--app-text);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 48%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
+}
+
+.inspirationSwitchCheck:has(input:checked) span {
+  color: var(--app-text);
+}
+
+.appShell.theme-light .inspirationSwitchCheck:has(input:checked),
+.theme-light .inspirationSwitchCheck:has(input:checked) {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 54%, #cbd5e1);
+  background: color-mix(in srgb, var(--app-accent-strong) 18%, #ffffff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-accent-strong) 18%, transparent);
+}
+
+.inspirationSwitchCheck span {
+  order: 1;
+}
+
+.inspirationSwitchCheck input {
+  order: 2;
+  width: 38px;
+  height: 22px;
+  min-height: 22px;
+  margin: 0;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-muted) 18%, var(--app-surface-2));
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.inspirationSwitchCheck input::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--app-surface);
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.2);
+  transition: transform 0.16s ease, background 0.16s ease;
+}
+
+.inspirationSwitchCheck input:checked {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 68%, var(--app-line));
+  background: linear-gradient(135deg, var(--app-accent-strong), color-mix(in srgb, var(--app-accent-strong) 72%, var(--app-primary)));
+}
+
+.appShell.theme-light .inspirationSwitchCheck input:checked,
+.theme-light .inspirationSwitchCheck input:checked {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 72%, #94a3b8);
+  background: linear-gradient(135deg, #38bdf8, var(--app-accent-strong));
+}
+
+.inspirationSwitchCheck input:checked::before {
+  transform: translateX(16px);
+  background: #ffffff;
+}
+
+@media (max-width: 1180px) {
+  .promptExcerptLayout { grid-template-columns: 1fr; }
+  .promptExcerptEditor { position: static; max-height: none; }
 }

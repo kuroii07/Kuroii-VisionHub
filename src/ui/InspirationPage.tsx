@@ -32,17 +32,23 @@ import type {
   InspirationLicenseStatus,
   InspirationRegion,
   InspirationSource,
-  InspirationSourceCategory
+  InspirationSourceCategory,
+  PromptExcerpt,
+  PromptExcerptCategory,
+  PromptExcerptLanguage
 } from '../domain/inspirationTypes';
 import {
   deleteInspirationAsset,
   deleteInspirationSource,
+  deletePromptExcerpt,
   importInspirationAsset,
   loadInspirationAssets,
   loadInspirationSources,
+  loadPromptExcerpts,
   reverseImagePrompt,
   saveInspirationAsset,
-  saveInspirationSource
+  saveInspirationSource,
+  savePromptExcerpt
 } from '../services/inspirationApi';
 import { openExternalUrl } from '../services/desktopApi';
 import { defaultEndpointForProtocol, parseExtraHeaders } from '../services/providerConfig';
@@ -51,7 +57,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { useToastMessage } from './toast';
 
-type InspirationTab = 'sources' | 'assets';
+type InspirationTab = 'sources' | 'assets' | 'excerpts';
 type AssetSourceFilter = 'all' | 'with-source' | 'without-source';
 type AssetPromptFilter = 'all' | 'with-inferred' | 'without-inferred';
 type AssetShapeFilter = 'all' | 'landscape' | 'portrait' | 'square' | 'wide' | 'tall' | 'four-three' | 'three-four' | 'sixteen-nine' | 'nine-sixteen' | 'custom';
@@ -63,6 +69,8 @@ type ReversePromptStatus = { assetId: string; message?: string } | null;
 type SourceKindFilter = 'all' | 'preset' | 'custom';
 type SourceLoginFilter = 'all' | 'requires-login' | 'no-login';
 type SourceNavFilter = 'all' | 'preset' | 'custom' | InspirationSourceCategory | InspirationRegion;
+type ExcerptSourceFilter = 'all' | 'with-source' | 'without-source';
+type ExcerptFavoriteFilter = 'all' | 'favorite';
 type ImagePreviewNavigation = {
   items: Array<{ id: string; imageUrl: string; label: string }>;
   currentId: string;
@@ -853,6 +861,55 @@ const assetColorOptions: Array<{ value: AssetColorFilter; label: string; color: 
   { value: 'mono', label: '黑白', color: '#64748b' }
 ];
 
+
+const excerptCategoryOptions: Array<{ value: PromptExcerptCategory | 'all'; label: string }> = [
+  { value: 'all', label: '全部类型' },
+  { value: 'general', label: '通用 Prompt' },
+  { value: 'portrait', label: '人像' },
+  { value: 'product', label: '产品' },
+  { value: 'scene', label: '场景' },
+  { value: 'character', label: '角色' },
+  { value: 'poster', label: '海报' },
+  { value: 'game-art', label: '游戏美术' },
+  { value: 'photography', label: '摄影' },
+  { value: 'negative', label: '负面提示词' },
+  { value: 'other', label: '其他' }
+];
+
+const excerptLanguageOptions: Array<{ value: PromptExcerptLanguage | 'all'; label: string }> = [
+  { value: 'all', label: '全部语言' },
+  { value: 'auto', label: '自动/未标注' },
+  { value: 'zh', label: '中文' },
+  { value: 'en', label: '英文' },
+  { value: 'ja', label: '日文' },
+  { value: 'mixed', label: '混合' }
+];
+
+const excerptSourceOptions: Array<{ value: ExcerptSourceFilter; label: string }> = [
+  { value: 'all', label: '全部来源' },
+  { value: 'with-source', label: '有来源' },
+  { value: 'without-source', label: '无来源' }
+];
+
+const excerptFavoriteOptions: Array<{ value: ExcerptFavoriteFilter; label: string }> = [
+  { value: 'all', label: '全部状态' },
+  { value: 'favorite', label: '只看常用' }
+];
+
+const emptyExcerptDraft = {
+  id: '',
+  title: '',
+  prompt: '',
+  sourceName: '',
+  sourceUrl: '',
+  language: 'auto' as PromptExcerptLanguage,
+  category: 'general' as PromptExcerptCategory,
+  tags: '',
+  note: '',
+  favorite: false,
+  createdAt: ''
+};
+
 const emptySourceDraft = {
   id: '',
   name: '',
@@ -890,6 +947,14 @@ const assetViewOptions: Array<{ value: 'adaptive' | 'square' | 'contain' | 'list
   { value: 'contain', label: '完整图' },
   { value: 'list', label: '列表' }
 ];
+
+function excerptCategoryLabel(value: PromptExcerptCategory) {
+  return excerptCategoryOptions.find((option) => option.value === value)?.label ?? value;
+}
+
+function excerptLanguageLabel(value: PromptExcerptLanguage) {
+  return excerptLanguageOptions.find((option) => option.value === value)?.label ?? value;
+}
 
 function categoryLabel(value: InspirationSourceCategory) {
   return sourceCategoryOptions.find((option) => option.value === value)?.label ?? value;
@@ -1237,9 +1302,12 @@ export const InspirationPage = memo(function InspirationPage(props: {
   const [isAssetTabMounted, setIsAssetTabMounted] = useState(false);
   const [sources, setSources] = useState<InspirationSource[]>([]);
   const [assets, setAssets] = useState<InspirationAsset[]>([]);
+  const [excerpts, setExcerpts] = useState<PromptExcerpt[]>([]);
   const [sourcesLoaded, setSourcesLoaded] = useState(false);
   const [assetsLoaded, setAssetsLoaded] = useState(false);
   const [assetsLoading, setAssetsLoading] = useState(false);
+  const [excerptsLoaded, setExcerptsLoaded] = useState(false);
+  const [excerptsLoading, setExcerptsLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [query, setQuery] = useState('');
   const [sourceCategory, setSourceCategory] = useState<InspirationSourceCategory | 'all'>('all');
@@ -1248,6 +1316,10 @@ export const InspirationPage = memo(function InspirationPage(props: {
   const [sourceLoginFilter, setSourceLoginFilter] = useState<SourceLoginFilter>('all');
   const [sourceCommercialFilter, setSourceCommercialFilter] = useState<InspirationCommercialReference | 'all'>('all');
   const [sourceNavFilter, setSourceNavFilter] = useState<SourceNavFilter>('all');
+  const [excerptCategory, setExcerptCategory] = useState<PromptExcerptCategory | 'all'>('all');
+  const [excerptLanguage, setExcerptLanguage] = useState<PromptExcerptLanguage | 'all'>('all');
+  const [excerptSourceFilter, setExcerptSourceFilter] = useState<ExcerptSourceFilter>('all');
+  const [excerptFavoriteFilter, setExcerptFavoriteFilter] = useState<ExcerptFavoriteFilter>('all');
   const [sourceViewMode, setSourceViewMode] = useState<'list' | 'card'>('list');
   const [sourceEditorOpen, setSourceEditorOpen] = useState(false);
   const [sourcePresetStats, setSourcePresetStats] = useState<Record<string, { openCount?: number; lastOpenedAt?: string }>>({});
@@ -1273,6 +1345,8 @@ export const InspirationPage = memo(function InspirationPage(props: {
   const [assetColorMenuOpen, setAssetColorMenuOpen] = useState(false);
   const [sourceDraft, setSourceDraft] = useState(emptySourceDraft);
   const [assetDraft, setAssetDraft] = useState(emptyAssetDraft);
+  const [excerptDraft, setExcerptDraft] = useState(emptyExcerptDraft);
+  const [excerptEditorOpen, setExcerptEditorOpen] = useState(false);
   const [assetEditDraft, setAssetEditDraft] = useState(emptyAssetDraft);
   const [assetFile, setAssetFile] = useState<File | null>(null);
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
@@ -1387,6 +1461,28 @@ export const InspirationPage = memo(function InspirationPage(props: {
       active = false;
     };
   }, [activeTab, assetsLoaded]);
+
+
+  useEffect(() => {
+    if (activeTab !== 'excerpts' || excerptsLoaded) return;
+    let active = true;
+    setExcerptsLoading(true);
+    loadPromptExcerpts()
+      .then((loadedExcerpts) => {
+        if (!active) return;
+        setExcerpts(loadedExcerpts);
+        setExcerptsLoaded(true);
+      })
+      .catch((error) => {
+        if (active) setMessage(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (active) setExcerptsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeTab, excerptsLoaded]);
 
   useEffect(() => {
     const version = props.importVersion ?? 0;
@@ -1507,6 +1603,34 @@ export const InspirationPage = memo(function InspirationPage(props: {
       });
   }, [allSources, normalizedQuery, sourceCategory, sourceCommercialFilter, sourceKindFilter, sourceLoginFilter, sourceNavFilter, sourceRegion]);
 
+
+  const recentPromptSource = useMemo(() => {
+    return allSources
+      .filter((source) => source.category === 'prompt-template')
+      .sort((left, right) => Number(right.lastOpenedAt ?? 0) - Number(left.lastOpenedAt ?? 0))[0] ?? null;
+  }, [allSources]);
+
+  const filteredExcerpts = useMemo(() => {
+    return excerpts
+      .filter((excerpt) => {
+        const hasSource = Boolean(excerpt.sourceName || excerpt.sourceUrl);
+        const haystack = [
+          excerpt.title,
+          excerpt.prompt,
+          excerpt.sourceName ?? '',
+          excerpt.sourceUrl ?? '',
+          excerpt.note ?? '',
+          ...excerpt.tags
+        ].join(' ').toLowerCase();
+        const matchesCategory = excerptCategory === 'all' || excerpt.category === excerptCategory;
+        const matchesLanguage = excerptLanguage === 'all' || excerpt.language === excerptLanguage;
+        const matchesSource = excerptSourceFilter === 'all' || (excerptSourceFilter === 'with-source' ? hasSource : !hasSource);
+        const matchesFavorite = excerptFavoriteFilter === 'all' || Boolean(excerpt.favorite);
+        return matchesCategory && matchesLanguage && matchesSource && matchesFavorite && (!normalizedQuery || haystack.includes(normalizedQuery));
+      })
+      .sort((left, right) => Number(right.updatedAt || right.createdAt) - Number(left.updatedAt || left.createdAt));
+  }, [excerptCategory, excerptFavoriteFilter, excerptLanguage, excerptSourceFilter, excerpts, normalizedQuery]);
+
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
       const prompt = asset.originalPrompt || asset.inferredPrompt || '';
@@ -1600,6 +1724,12 @@ export const InspirationPage = memo(function InspirationPage(props: {
     sourceCommercialFilter !== 'all',
     sourceNavFilter !== 'all'
   ].filter(Boolean).length;
+  const activeExcerptFilterCount = [
+    excerptCategory !== 'all',
+    excerptLanguage !== 'all',
+    excerptSourceFilter !== 'all',
+    excerptFavoriteFilter !== 'all'
+  ].filter(Boolean).length;
   const activeAssetFilterCount = [
     assetSourceFilter !== 'all',
     assetLicense !== 'all',
@@ -1634,6 +1764,163 @@ export const InspirationPage = memo(function InspirationPage(props: {
       if (frameId) window.cancelAnimationFrame(frameId);
     };
   }, [filteredAssetIdsSignature, filteredAssets.length]);
+
+
+  function resetExcerptDraft() {
+    setExcerptDraft(emptyExcerptDraft);
+    setExcerptEditorOpen(false);
+  }
+
+  function buildExcerptTitle(prompt: string) {
+    const compact = prompt.replace(/\s+/g, ' ').trim();
+    return compact.slice(0, 32) || '未命名摘录';
+  }
+
+  function openExcerptEditor(excerpt?: PromptExcerpt, seed?: Partial<typeof emptyExcerptDraft>) {
+    if (excerpt) {
+      setExcerptDraft({
+        id: excerpt.id,
+        title: excerpt.title,
+        prompt: excerpt.prompt,
+        sourceName: excerpt.sourceName ?? '',
+        sourceUrl: excerpt.sourceUrl ?? '',
+        language: excerpt.language,
+        category: excerpt.category,
+        tags: tagsToText(excerpt.tags),
+        note: excerpt.note ?? '',
+        favorite: Boolean(excerpt.favorite),
+        createdAt: excerpt.createdAt
+      });
+    } else {
+      const prompt = seed?.prompt ?? '';
+      setExcerptDraft({
+        ...emptyExcerptDraft,
+        ...seed,
+        title: seed?.title || buildExcerptTitle(prompt),
+        prompt
+      });
+    }
+    setActiveTab('excerpts');
+    setExcerptEditorOpen(true);
+  }
+
+  function clearExcerptFilters() {
+    setExcerptCategory('all');
+    setExcerptLanguage('all');
+    setExcerptSourceFilter('all');
+    setExcerptFavoriteFilter('all');
+    setQuery('');
+  }
+
+  async function createExcerptFromClipboard() {
+    try {
+      const prompt = (await navigator.clipboard?.readText())?.trim() ?? '';
+      if (!prompt) {
+        setMessage('剪贴板里没有可保存的文本 Prompt。');
+        return;
+      }
+      openExcerptEditor(undefined, {
+        prompt,
+        title: buildExcerptTitle(prompt),
+        sourceName: recentPromptSource?.name ?? '',
+        sourceUrl: recentPromptSource?.url ?? '',
+        tags: recentPromptSource ? tagsToText(recentPromptSource.tags.slice(0, 4)) : ''
+      });
+      setMessage('已从剪贴板读取 Prompt，可确认后保存为摘录。');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function submitExcerpt() {
+    const prompt = excerptDraft.prompt.trim();
+    if (!prompt) {
+      setMessage('请填写要保存的 Prompt 摘录。');
+      return;
+    }
+    try {
+      const now = String(Date.now());
+      const previous = excerptDraft.id ? excerpts.find((item) => item.id === excerptDraft.id) : undefined;
+      const saved = await savePromptExcerpt({
+        id: excerptDraft.id || timestampId('excerpt'),
+        title: excerptDraft.title.trim() || buildExcerptTitle(prompt),
+        prompt,
+        sourceName: excerptDraft.sourceName.trim() || undefined,
+        sourceUrl: excerptDraft.sourceUrl.trim() || undefined,
+        language: excerptDraft.language,
+        category: excerptDraft.category,
+        tags: parseTags(excerptDraft.tags),
+        note: excerptDraft.note.trim() || undefined,
+        favorite: excerptDraft.favorite,
+        createdAt: excerptDraft.createdAt || previous?.createdAt || now,
+        updatedAt: now,
+        lastUsedAt: previous?.lastUsedAt,
+        usedCount: previous?.usedCount
+      });
+      setExcerpts((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      setExcerptsLoaded(true);
+      resetExcerptDraft();
+      setMessage('Prompt 摘录已保存。');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function removeExcerpt(excerptId: string) {
+    props.onRequestConfirm({
+      title: '删除 Prompt 摘录',
+      message: '确定删除这条 Prompt 摘录吗？这只会删除摘录记录，不影响模板、作品和图片收藏。',
+      confirmLabel: '删除',
+      tone: 'danger',
+      onConfirm: async () => {
+        try {
+          await deletePromptExcerpt(excerptId);
+          setExcerpts((current) => current.filter((item) => item.id !== excerptId));
+          if (excerptDraft.id === excerptId) resetExcerptDraft();
+          setMessage('Prompt 摘录已删除。');
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : String(error));
+          throw error;
+        }
+      }
+    });
+  }
+
+  async function markExcerptUsed(excerpt: PromptExcerpt) {
+    const now = String(Date.now());
+    const saved = await savePromptExcerpt({
+      ...excerpt,
+      lastUsedAt: now,
+      usedCount: (excerpt.usedCount ?? 0) + 1,
+      updatedAt: excerpt.updatedAt
+    });
+    setExcerpts((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+  }
+
+  function useExcerpt(excerpt: PromptExcerpt) {
+    props.onUsePrompt(excerpt.prompt);
+    void markExcerptUsed(excerpt);
+  }
+
+  async function copyExcerpt(excerpt: PromptExcerpt) {
+    await copyText('Prompt 摘录', excerpt.prompt);
+    void markExcerptUsed(excerpt);
+  }
+
+  function createTemplateFromExcerpt(excerpt: PromptExcerpt) {
+    const result = props.onCreateTemplate(excerpt.title, excerpt.prompt, excerpt.tags);
+    void markExcerptUsed(excerpt);
+    setMessage(result);
+  }
+
+  async function toggleExcerptFavorite(excerpt: PromptExcerpt) {
+    try {
+      const saved = await savePromptExcerpt({ ...excerpt, favorite: !excerpt.favorite });
+      setExcerpts((current) => current.map((item) => (item.id === saved.id ? saved : item)));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
 
   function resetSourceDraft() {
     setSourceDraft(emptySourceDraft);
@@ -1990,6 +2277,25 @@ export const InspirationPage = memo(function InspirationPage(props: {
   }
 
 
+
+
+  function createExcerptFromAsset(asset: InspirationAsset) {
+    const prompt = assetPrompt(asset);
+    if (!prompt) {
+      setMessage('这张灵感图还没有 Prompt，先补充或反推 Prompt 后再保存摘录。');
+      return;
+    }
+    openExcerptEditor(undefined, {
+      title: asset.title,
+      prompt,
+      sourceName: asset.sourcePlatform || asset.author || '',
+      sourceUrl: asset.sourceUrl || '',
+      tags: tagsToText(asset.tags),
+      note: asset.inferredPrompt ? '来自灵感图片反推 Prompt。' : '来自灵感图片原始 Prompt。'
+    });
+  }
+
+
   function sourceDomain(url?: string) {
     return sourceHostname(url);
   }
@@ -2280,6 +2586,84 @@ export const InspirationPage = memo(function InspirationPage(props: {
         <button className={activeTab === 'assets' ? 'active' : ''} onClick={() => { resetSourceDraft(); setAssetMenuTarget(null); setActiveTab('assets'); }}>
           <Bookmark size={15} /> 图片收藏
         </button>
+        <button className={activeTab === 'excerpts' ? 'active' : ''} onClick={() => { resetSourceDraft(); setAssetMenuTarget(null); setActiveTab('excerpts'); }}>
+          <Sparkles size={15} /> Prompt 摘录
+        </button>
+      </section>
+
+
+      <section className={`promptExcerptShell ${activeTab === 'excerpts' ? 'active' : 'inactive'}`} aria-hidden={activeTab !== 'excerpts'}>
+        <div className="inspirationGallerySearchPanel sourceSearchPanel promptExcerptToolbar">
+          <label className="librarySearchBox">
+            <span>搜索摘录</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="标题 / Prompt / 来源 / 标签 / 备注" />
+          </label>
+          <div className="sourceSearchActions">
+            <div className="sourceSearchCountLine">
+              <span className="assetCount">{filteredExcerpts.length} / {excerpts.length} 条摘录</span>
+              {activeExcerptFilterCount > 0 ? <span className="selectionCount">筛选 {activeExcerptFilterCount} 项</span> : null}
+            </div>
+            <div className="sourceSearchActionRow">
+              <button className="miniButton" type="button" onClick={() => openExcerptEditor()} title="手动新建 Prompt 摘录"><Plus size={13} /> 手动摘录</button>
+              <button className="miniButton primaryMini" type="button" onClick={() => void createExcerptFromClipboard()} title="从剪贴板读取文本并保存摘录"><Copy size={13} /> 从剪贴板摘录</button>
+            </div>
+          </div>
+        </div>
+        <div className="inspirationGalleryFilterPanel sourceFilterPanel libraryStructuredFilters promptExcerptFilters">
+          <label><span>类型</span><StudioSelect className="libraryFilterSelect filterIconType" leadingIcon={<Database size={15} />} value={excerptCategory} onChange={(value) => setExcerptCategory(value as typeof excerptCategory)} options={excerptCategoryOptions} /></label>
+          <label><span>语言</span><StudioSelect className="libraryFilterSelect filterIconPlatform" leadingIcon={<Sparkles size={15} />} value={excerptLanguage} onChange={(value) => setExcerptLanguage(value as typeof excerptLanguage)} options={excerptLanguageOptions} /></label>
+          <label><span>来源</span><StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Link2 size={15} />} value={excerptSourceFilter} onChange={(value) => setExcerptSourceFilter(value as ExcerptSourceFilter)} options={excerptSourceOptions} /></label>
+          <label><span>常用</span><StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Star size={15} />} value={excerptFavoriteFilter} onChange={(value) => setExcerptFavoriteFilter(value as ExcerptFavoriteFilter)} options={excerptFavoriteOptions} /></label>
+          <button className="miniButton" type="button" title="清空 Prompt 摘录筛选" onClick={clearExcerptFilters}><X size={13} /> 清空</button>
+        </div>
+        <section className="promptExcerptLayout">
+          <div className="promptExcerptList">
+            {excerptsLoading ? (
+              <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>正在加载 Prompt 摘录</h3></div>
+            ) : filteredExcerpts.length === 0 ? (
+              <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>还没有 Prompt 摘录</h3><p>先在浏览器复制好的 Prompt，再点“从剪贴板摘录”；也可以手动新建。</p></div>
+            ) : filteredExcerpts.map((excerpt) => (
+              <article className="promptExcerptCard" key={excerpt.id}>
+                <div className="promptExcerptCardHeader">
+                  <div><span className="badge">{excerptCategoryLabel(excerpt.category)}</span><strong title={excerpt.title}>{excerpt.title}</strong></div>
+                  <button className={`iconMiniButton promptFavoriteButton ${excerpt.favorite ? 'active' : ''}`} type="button" onClick={() => void toggleExcerptFavorite(excerpt)} title={excerpt.favorite ? '取消常用' : '标记常用'} aria-label={excerpt.favorite ? '取消常用' : '标记常用'}><Star size={13} fill={excerpt.favorite ? 'currentColor' : 'none'} /></button>
+                </div>
+                <p className="promptExcerptText">{excerpt.prompt}</p>
+                <div className="templateTags promptExcerptTags">
+                  {excerpt.tags.slice(0, 5).map((tag) => <span key={tag}>{tag}</span>)}
+                  <span>{excerptLanguageLabel(excerpt.language)}</span>
+                </div>
+                <div className="promptExcerptMeta">
+                  <span>{excerpt.sourceName || sourceDomain(excerpt.sourceUrl) || '未记录来源'}</span>
+                  <span>{excerpt.usedCount ? `使用 ${excerpt.usedCount} 次` : '尚未使用'}</span>
+                </div>
+                <div className="promptExcerptActions">
+                  <button className="miniButton primaryMini" type="button" onClick={() => useExcerpt(excerpt)}><Sparkles size={13} /> 套用</button>
+                  <button className="miniButton" type="button" onClick={() => void copyExcerpt(excerpt)}><Copy size={13} /> 复制</button>
+                  <button className="miniButton" type="button" onClick={() => createTemplateFromExcerpt(excerpt)}><Bookmark size={13} /> 转模板</button>
+                  <button className="miniButton" type="button" onClick={() => openExcerptEditor(excerpt)}><Edit3 size={13} /> 编辑</button>
+                  <button className="miniButton dangerText" type="button" onClick={() => void removeExcerpt(excerpt.id)}><Trash2 size={13} /> 删除</button>
+                </div>
+              </article>
+            ))}
+          </div>
+          {excerptEditorOpen ? (
+            <aside className="sourceEditorDrawer promptExcerptEditor" aria-label={excerptDraft.id ? '编辑 Prompt 摘录' : '新增 Prompt 摘录'}>
+              <div className="panelTitleRow"><div><strong>{excerptDraft.id ? '编辑 Prompt 摘录' : '新增 Prompt 摘录'}</strong><p>默认不抓取浏览器内容，只保存你复制或手动整理的 Prompt。</p></div><button className="iconMiniButton" title="关闭摘录编辑" aria-label="关闭摘录编辑" onClick={resetExcerptDraft} type="button"><X size={13} /></button></div>
+              <div className="sourceEditorForm">
+                <label><span>标题</span><input value={excerptDraft.title} onChange={(event) => setExcerptDraft({ ...excerptDraft, title: event.target.value })} placeholder="例如：赛博角色人像构图" /></label>
+                <label><span>Prompt</span><textarea value={excerptDraft.prompt} onChange={(event) => setExcerptDraft({ ...excerptDraft, prompt: event.target.value })} rows={8} placeholder="粘贴或整理你在外部网站看到的 Prompt" /></label>
+                <div className="inspirationFormGrid"><label><span>类型</span><StudioSelect value={excerptDraft.category} onChange={(value) => setExcerptDraft({ ...excerptDraft, category: value as PromptExcerptCategory })} options={excerptCategoryOptions.filter((option) => option.value !== 'all') as Array<{ value: PromptExcerptCategory; label: string }>} /></label><label><span>语言</span><StudioSelect value={excerptDraft.language} onChange={(value) => setExcerptDraft({ ...excerptDraft, language: value as PromptExcerptLanguage })} options={excerptLanguageOptions.filter((option) => option.value !== 'all') as Array<{ value: PromptExcerptLanguage; label: string }>} /></label></div>
+                <label><span>来源名称</span><input value={excerptDraft.sourceName} onChange={(event) => setExcerptDraft({ ...excerptDraft, sourceName: event.target.value })} placeholder="例如：PromptHero" /></label>
+                <label><span>来源 URL</span><input value={excerptDraft.sourceUrl} onChange={(event) => setExcerptDraft({ ...excerptDraft, sourceUrl: event.target.value })} placeholder="https://..." /></label>
+                <label><span>标签</span><input value={excerptDraft.tags} onChange={(event) => setExcerptDraft({ ...excerptDraft, tags: event.target.value })} placeholder="人像，赛博，镜头" /></label>
+                <label><span>备注</span><textarea value={excerptDraft.note} onChange={(event) => setExcerptDraft({ ...excerptDraft, note: event.target.value })} rows={3} placeholder="这条 Prompt 适合怎么用、需要改哪里" /></label>
+                <label className="inspirationCheck inspirationSwitchCheck"><input type="checkbox" checked={excerptDraft.favorite} onChange={(event) => setExcerptDraft({ ...excerptDraft, favorite: event.target.checked })} /><span>标记为常用</span></label>
+              </div>
+              <div className="sourceEditorActions"><button className="miniButton" onClick={resetExcerptDraft} title="取消摘录" type="button"><X size={13} /> 取消</button><button className="miniButton primaryMini" onClick={() => void submitExcerpt()} title="保存摘录" type="button"><Save size={14} /> 保存摘录</button></div>
+            </aside>
+          ) : null}
+        </section>
       </section>
 
       <section className={`sourceLibraryShell ${activeTab === 'sources' ? 'active' : 'inactive'}`} aria-hidden={activeTab !== 'sources'}>

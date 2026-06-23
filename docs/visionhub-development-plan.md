@@ -8,7 +8,7 @@
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.4.1` Prompt Workflow V3 / image reverse settings closure; next: Prompt website excerpts, Prompt composer, reuse-record favorites, Provider stability, local model improvements, and data governance.
+- Current focus: `0.4.1` Prompt Workflow V3 / image reverse + Prompt excerpts closure; next: Prompt composer, reuse-record favorites, Provider stability, local model improvements, and data governance.
 
 ## 2. 后续开发前必读
 
@@ -100,7 +100,7 @@
 | `0.3.9` | 批量队列与多模型对比 V1 | 多 Prompt 队列、失败重试、同 Prompt 多模型横向对比、模板和暂停恢复 | 否，收口补丁 |
 | ~~`0.3.10`~~ | 0.3 final patch | Prompt polish language following source text, batch queue QA, known-gap cleanup, portable/release validation | closed |
 | `0.4.0` | 作品画廊与资料整理收口 V3 | 清理项目资产库路线残留、修正失败记录筛选、补齐最近查看 / 参考排序和画廊视觉 QA | 否 |
-| `0.4.1` | Prompt Workflow V3 | image reverse settings closed; continue Prompt website excerpts, Prompt composer, and cross-page reuse | release validation this round |
+| `0.4.1` | Prompt Workflow V3 | image reverse settings and Prompt excerpts closed; continue Prompt composer and cross-page reuse | release validation this round |
 | `0.4.2` | Provider 稳定接入 V5 | 官方 API 增量、聚合站模板验证、能力测试和配置自检增强 | 否 |
 | `0.4.3` | 本地模型增强 V2 | Stable Diffusion WebUI / Forge 连接、ComfyUI 图生图和本地结果统一入库 | 否 |
 | `0.4.4` | 数据治理与迁移 V1 | 设置导入、图库 / 灵感库迁移、备份恢复和健康检查 | 否 |
@@ -112,7 +112,7 @@
 
 ### 4.1 路线分层说明
 
-- `0.3.10` is closed as the final 0.3 patch baseline; `0.4.1` now focuses on image reverse settings closure first, then Prompt excerpts and composer.
+- `0.3.10` is closed as the final 0.3 patch baseline; `0.4.1` has closed image reverse settings and Prompt excerpts, then continues Prompt composer and reuse-record favorites.
 - `0.4.x` 是可用性增强阶段，重点让现有功能形成稳定工作流：作品画廊整理、Prompt 复用、Provider 稳定、本地模型增强、数据迁移和全局 QA。
 - `0.5.0` 是发布候选阶段，目标是把自用软件整理到可迁移、可复现、可打包验证的状态。
 - `v1.0` 前只处理发布、迁移、安装包、签名风险和 GitHub Release 边界，不再混入大功能。
@@ -678,7 +678,7 @@
 
 ### 5.21 `0.4.1` Prompt 与灵感工作流 V3
 
-状态：进行中，已先落地灵感图片真实反推 Prompt 的最小闭环，并将配置从平台接入拆出到「偏好设置」的图片反推 Prompt 专用配置。当前使用 `image-reverse:default` 独立凭据调用支持图片输入 + 文本输出的视觉模型，支持 Responses / Chat Completions / Gemini generateContent 协议；反推模型不会进入 AI 生图工作台模型列表。结果保存到 `inferredPrompt` 与 `reversePrompt` 元数据，可复制、套用到 AI 创作或转入提示词库。
+状态：进行中，已收口灵感图片真实反推 Prompt 与 Prompt 摘录 V1。图片反推已从平台接入拆出到「偏好设置」专用配置，使用 `image-reverse:default` 独立凭据；Prompt 摘录则提供手动摘录和从剪贴板摘录，支持本地持久化、筛选、套用到 AI 创作、复制、转提示词模板和编辑 / 删除。
 
 目标：
 
@@ -688,6 +688,7 @@
 主要任务：
 
 - ~~灵感图片真实反推 Prompt：使用偏好设置里的图片反推专用配置与 `image-reverse:default` 独立凭据，支持 Responses / Chat Completions / Gemini generateContent 三类视觉输入协议；只在用户手动点击时调用，不自动消耗额度，也不污染生图模型列表。~~
+- ~~Prompt 摘录 V1：支持手动摘录和从剪贴板摘录，本地保存 `prompt-excerpts.json`，可搜索 / 筛选 / 套用 / 复制 / 转模板 / 编辑 / 删除；不做网页自动抓取。~~
 - Prompt 组合器：从主体、风格、镜头、光线、材质、色彩、约束等片段组合成完整 Prompt。
 - ~~灵感图片真实反推 Prompt：已从复用平台接入配置实例改为图片反推专用配置，保留三类视觉输入协议；只在用户手动点击时调用，不自动消耗额度。~~
 - ~~灵感图片反推记录：保存模型、配置实例、协议、语言、细节强度和生成时间，不保存 API Key 或大体积 raw/base64。~~
@@ -892,4 +893,4 @@
 
 ## 9. 下一步推荐
 
-Next formal development should continue the remaining `0.4.1` Prompt workflow: Prompt website excerpts, saving the current Prompt as a template/excerpt, then Prompt composer and favorite markers for reuse records. `0.4.2` should move to Provider stability, `0.4.3` to local model improvements, and `0.4.4` through `0.5.0` to data governance, global QA, and release-candidate preparation.
+Next formal development should continue the remaining `0.4.1` Prompt workflow: saving the current Prompt as a template/excerpt, Prompt composer, and favorite markers for reuse records. `0.4.2` should move to Provider stability, `0.4.3` to local model improvements, and `0.4.4` through `0.5.0` to data governance, global QA, and release-candidate preparation.

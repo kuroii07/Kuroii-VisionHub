@@ -284,6 +284,25 @@ struct InspirationSource {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+struct PromptExcerpt {
+    id: String,
+    title: String,
+    prompt: String,
+    source_name: Option<String>,
+    source_url: Option<String>,
+    language: String,
+    category: String,
+    #[serde(default)]
+    tags: Vec<String>,
+    note: Option<String>,
+    favorite: Option<bool>,
+    created_at: String,
+    updated_at: String,
+    last_used_at: Option<String>,
+    used_count: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 struct InspirationAsset {
     id: String,
     title: String,
@@ -350,6 +369,7 @@ struct ReverseImagePromptResult {
 struct InspirationLibrary {
     sources: Vec<InspirationSource>,
     assets: Vec<InspirationAsset>,
+    excerpts: Vec<PromptExcerpt>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -2462,10 +2482,11 @@ fn import_library_image_paths(
 fn load_inspirations(app: tauri::AppHandle) -> Result<InspirationLibrary, String> {
     let sources = read_inspiration_sources(&app)?;
     let mut assets = read_inspiration_assets(&app)?;
+    let excerpts = read_prompt_excerpts(&app)?;
     for asset in &mut assets {
         hydrate_inspiration_asset_image_url(&app, asset);
     }
-    Ok(InspirationLibrary { sources, assets })
+    Ok(InspirationLibrary { sources, assets, excerpts })
 }
 
 #[tauri::command]
@@ -2523,6 +2544,72 @@ fn delete_inspiration_source(
         write_inspiration_sources(&app, &sources)?;
     }
     Ok(DeleteInspirationResult { id: source_id, deleted })
+}
+
+
+#[tauri::command]
+fn load_prompt_excerpts(app: tauri::AppHandle) -> Result<Vec<PromptExcerpt>, String> {
+    read_prompt_excerpts(&app)
+}
+
+#[tauri::command]
+fn save_prompt_excerpt(
+    app: tauri::AppHandle,
+    mut excerpt: PromptExcerpt,
+) -> Result<PromptExcerpt, String> {
+    let now = chrono_like_timestamp();
+    if excerpt.id.trim().is_empty() {
+        excerpt.id = format!("excerpt-{now}");
+    }
+    if excerpt.created_at.trim().is_empty() {
+        excerpt.created_at = now.clone();
+    }
+    excerpt.updated_at = now;
+    excerpt.title = excerpt.title.trim().to_string();
+    excerpt.prompt = excerpt.prompt.trim().to_string();
+    if excerpt.title.is_empty() {
+        excerpt.title = excerpt.prompt.chars().take(28).collect::<String>();
+    }
+    if excerpt.prompt.is_empty() {
+        return Err("Prompt excerpt cannot be empty.".to_string());
+    }
+    excerpt.source_name = optional_trimmed_string(excerpt.source_name);
+    excerpt.source_url = optional_trimmed_string(excerpt.source_url);
+    excerpt.note = optional_trimmed_string(excerpt.note);
+    excerpt.tags = clean_string_list(excerpt.tags);
+    if excerpt.language.trim().is_empty() {
+        excerpt.language = "auto".to_string();
+    }
+    if excerpt.category.trim().is_empty() {
+        excerpt.category = "general".to_string();
+    }
+
+    let mut excerpts = read_prompt_excerpts(&app)?;
+    excerpts.retain(|item| item.id != excerpt.id);
+    excerpts.insert(0, excerpt.clone());
+    excerpts.truncate(1500);
+    write_prompt_excerpts(&app, &excerpts)?;
+    Ok(excerpt)
+}
+
+#[tauri::command]
+fn delete_prompt_excerpt(
+    app: tauri::AppHandle,
+    excerpt_id: String,
+) -> Result<DeleteInspirationResult, String> {
+    let excerpt_id = excerpt_id.trim().to_string();
+    if excerpt_id.is_empty() {
+        return Err("Prompt excerpt id cannot be empty.".to_string());
+    }
+
+    let mut excerpts = read_prompt_excerpts(&app)?;
+    let before_len = excerpts.len();
+    excerpts.retain(|item| item.id != excerpt_id);
+    let deleted = excerpts.len() != before_len;
+    if deleted {
+        write_prompt_excerpts(&app, &excerpts)?;
+    }
+    Ok(DeleteInspirationResult { id: excerpt_id, deleted })
 }
 
 #[tauri::command]
@@ -3479,6 +3566,10 @@ fn inspiration_assets_file_path(app: &tauri::AppHandle) -> Result<PathBuf, Strin
     Ok(inspirations_dir(app)?.join("inspiration-assets.json"))
 }
 
+fn prompt_excerpts_file_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(inspirations_dir(app)?.join("prompt-excerpts.json"))
+}
+
 fn storage_settings_file_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir(app)?.join("storage-settings.json"))
 }
@@ -4115,6 +4206,38 @@ fn write_inspiration_sources(
         .map_err(|error| format!("Cannot write inspiration sources: {error}"))?;
     std::fs::rename(&tmp_path, &path)
         .map_err(|error| format!("Cannot replace inspiration sources: {error}"))?;
+    Ok(())
+}
+
+
+fn read_prompt_excerpts(app: &tauri::AppHandle) -> Result<Vec<PromptExcerpt>, String> {
+    let path = prompt_excerpts_file_path(app)?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let text = std::fs::read_to_string(&path)
+        .map_err(|error| format!("Cannot read prompt excerpts: {error}"))?;
+    if text.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut excerpts: Vec<PromptExcerpt> = serde_json::from_str(&text)
+        .map_err(|error| format!("Cannot parse prompt excerpts: {error}"))?;
+    excerpts.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    Ok(excerpts)
+}
+
+fn write_prompt_excerpts(
+    app: &tauri::AppHandle,
+    excerpts: &[PromptExcerpt],
+) -> Result<(), String> {
+    let path = prompt_excerpts_file_path(app)?;
+    let tmp_path = path.with_extension("json.tmp");
+    let text = serde_json::to_string_pretty(excerpts)
+        .map_err(|error| format!("Cannot serialize prompt excerpts: {error}"))?;
+    std::fs::write(&tmp_path, text)
+        .map_err(|error| format!("Cannot write prompt excerpts: {error}"))?;
+    std::fs::rename(&tmp_path, &path)
+        .map_err(|error| format!("Cannot replace prompt excerpts: {error}"))?;
     Ok(())
 }
 
@@ -5501,6 +5624,9 @@ pub fn run() {
             load_inspirations,
             load_inspiration_sources,
             load_inspiration_assets,
+            load_prompt_excerpts,
+            save_prompt_excerpt,
+            delete_prompt_excerpt,
             save_inspiration_source,
             delete_inspiration_source,
             import_inspiration_asset,
