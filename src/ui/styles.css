@@ -6572,9 +6572,30 @@ kbd {
   font-size: 12px;
 }
 
+.reuseSummaryBar > span {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.reuseSummaryBar small {
+  color: color-mix(in srgb, var(--app-accent-strong) 72%, var(--app-muted));
+  font-weight: 850;
+}
+
 .reuseSummaryBar strong {
   color: var(--app-text);
   font-weight: 900;
+}
+
+.reuseQuickActions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
 }
 
 .reuseSummaryBar button {
@@ -6591,6 +6612,13 @@ kbd {
 .reuseSummaryBar button:disabled {
   cursor: not-allowed;
   opacity: .52;
+}
+
+.reuseSummaryBar button.active,
+.reuseFavoriteButton.active {
+  color: color-mix(in srgb, var(--app-accent-strong) 84%, var(--app-text));
+  border-color: color-mix(in srgb, var(--app-accent-strong) 42%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 13%, var(--app-surface));
 }
 
 .reuseFilterPanel {
@@ -6639,6 +6667,11 @@ kbd {
   background: var(--app-surface-2);
 }
 
+.reuseRecordCard.favorite {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 7%, var(--app-surface-2));
+}
+
 .reuseRecordCard img,
 .reuseNoImage {
   width: 92px;
@@ -6660,6 +6693,32 @@ kbd {
   min-width: 0;
   display: grid;
   gap: 5px;
+}
+
+.reuseRecordHeader {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+
+.reuseRecordHeader > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.reuseRecordHeader strong,
+.reuseRecordHeader small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reuseFavoriteButton {
+  flex: 0 0 auto;
 }
 
 .reuseRecordCard p {

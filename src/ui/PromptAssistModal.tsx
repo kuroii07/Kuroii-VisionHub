@@ -1,8 +1,9 @@
-import { Copy, History, Trash2, Wand2, X } from 'lucide-react';
+import { Copy, History, Star, Trash2, Wand2, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { GenerationRecord } from '../domain/providerTypes';
 import { PROMPT_POLISH_SECRET_ID, promptPolishConfigId, type PromptHistorySettings, type PromptPolishSettings } from '../services/appSettings';
 import { polishPromptWithProvider } from '../services/desktopApi';
+import { readStorageValue, writeStorageValue } from '../services/safeStorage';
 import { parseExtraHeaders } from '../services/providerConfig';
 import {
   INSPIRATION_TEMPLATES,
@@ -38,6 +39,7 @@ interface PromptAssistModalProps {
 
 type ReuseModeFilter = 'all' | 'text-to-image' | 'image-to-image' | 'with-references';
 type ReuseStatusFilter = 'all' | GenerationRecord['status'];
+type ReuseFavoriteFilter = 'all' | 'favorite';
 type ReuseSortMode = 'newest' | 'oldest' | 'prompt-long' | 'prompt-short';
 
 type ComposerFieldId = 'subject' | 'scene' | 'style' | 'camera' | 'lighting' | 'material' | 'color' | 'constraints' | 'negative';
@@ -66,6 +68,24 @@ const EMPTY_COMPOSER_VALUES: ComposerValues = {
   constraints: '',
   negative: ''
 };
+
+const PROMPT_REUSE_FAVORITES_KEY = 'visionhub.promptReuseFavorites.v1';
+
+function loadPromptReuseFavoriteIds() {
+  try {
+    const raw = readStorageValue(PROMPT_REUSE_FAVORITES_KEY);
+    if (!raw) return new Set<string>();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set<string>();
+    return new Set(parsed.filter((value): value is string => typeof value === 'string' && value.trim().length > 0));
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function savePromptReuseFavoriteIds(ids: Set<string>) {
+  writeStorageValue(PROMPT_REUSE_FAVORITES_KEY, JSON.stringify(Array.from(ids)));
+}
 
 const COMPOSER_PRESETS: Array<{ id: string; title: string; description: string; values: Partial<ComposerValues> }> = [
   {
@@ -135,7 +155,9 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
   const [reuseModelFilter, setReuseModelFilter] = useState('all');
   const [reuseModeFilter, setReuseModeFilter] = useState<ReuseModeFilter>('all');
   const [reuseStatusFilter, setReuseStatusFilter] = useState<ReuseStatusFilter>('all');
+  const [reuseFavoriteFilter, setReuseFavoriteFilter] = useState<ReuseFavoriteFilter>('all');
   const [reuseSortMode, setReuseSortMode] = useState<ReuseSortMode>('newest');
+  const [reuseFavoriteIds, setReuseFavoriteIds] = useState<Set<string>>(() => loadPromptReuseFavoriteIds());
   const [copiedMessage, setCopiedMessage] = useState('');
   const [editableSourcePrompt, setEditableSourcePrompt] = useState(props.prompt);
   const [editableResultPrompt, setEditableResultPrompt] = useState('');
@@ -253,6 +275,11 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
     () => uniqueRecordOptions(reusableSourceRecords, (record) => record.modelId),
     [reusableSourceRecords]
   );
+  const favoriteReuseCount = useMemo(
+    () => reusableSourceRecords.filter((record) => reuseFavoriteIds.has(record.id)).length,
+    [reusableSourceRecords, reuseFavoriteIds]
+  );
+
   const promptRecords = useMemo(() => {
     const seen = new Set<string>();
     if (!props.promptHistorySettings.enabled) return [];
@@ -262,6 +289,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
       .filter((record) => reuseProviderFilter === 'all' || (record.providerName ?? record.providerId) === reuseProviderFilter)
       .filter((record) => reuseModelFilter === 'all' || record.modelId === reuseModelFilter)
       .filter((record) => reuseStatusFilter === 'all' || record.status === reuseStatusFilter)
+      .filter((record) => reuseFavoriteFilter === 'all' || reuseFavoriteIds.has(record.id))
       .filter((record) => {
         if (reuseModeFilter === 'all') return true;
         if (reuseModeFilter === 'with-references') return (record.referenceImages?.length ?? 0) > 0;
@@ -297,6 +325,8 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
     reuseModelFilter,
     reuseModeFilter,
     reuseStatusFilter,
+    reuseFavoriteFilter,
+    reuseFavoriteIds,
     reuseSortMode
   ]);
 
@@ -375,8 +405,27 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
       tone: 'danger',
       onConfirm: async () => {
         await props.onDeleteRecord?.(record.id);
+        setReuseFavoriteIds((current) => {
+          if (!current.has(record.id)) return current;
+          const next = new Set(current);
+          next.delete(record.id);
+          savePromptReuseFavoriteIds(next);
+          return next;
+        });
         setCopiedMessage('已删除软件记录，磁盘图片未删除');
       }
+    });
+  }
+
+  function toggleReuseFavorite(record: GenerationRecord) {
+    setReuseFavoriteIds((current) => {
+      const next = new Set(current);
+      const willFavorite = !next.has(record.id);
+      if (willFavorite) next.add(record.id);
+      else next.delete(record.id);
+      savePromptReuseFavoriteIds(next);
+      setCopiedMessage(willFavorite ? '已标记为常用 Prompt' : '已取消常用标记');
+      return next;
     });
   }
 
@@ -552,16 +601,20 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
             modelFilter={reuseModelFilter}
             modeFilter={reuseModeFilter}
             statusFilter={reuseStatusFilter}
+            favoriteFilter={reuseFavoriteFilter}
             sortMode={reuseSortMode}
+            favoriteCount={favoriteReuseCount}
             providerOptions={reuseProviderOptions}
             modelOptions={reuseModelOptions}
             showThumbnails={props.promptHistorySettings.showThumbnails}
             historyEnabled={props.promptHistorySettings.enabled}
+            isRecordFavorite={(recordId) => reuseFavoriteIds.has(recordId)}
             onQueryChange={setReuseQuery}
             onProviderFilterChange={setReuseProviderFilter}
             onModelFilterChange={setReuseModelFilter}
             onModeFilterChange={setReuseModeFilter}
             onStatusFilterChange={setReuseStatusFilter}
+            onFavoriteFilterChange={setReuseFavoriteFilter}
             onSortModeChange={setReuseSortMode}
             onResetFilters={() => {
               setReuseQuery('');
@@ -569,10 +622,12 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
               setReuseModelFilter('all');
               setReuseModeFilter('all');
               setReuseStatusFilter('all');
+              setReuseFavoriteFilter('all');
               setReuseSortMode('newest');
             }}
             onApplyPrompt={props.onApplyPrompt}
             onCopy={copyText}
+            onToggleFavorite={toggleReuseFavorite}
             onDeleteRecord={deleteReuseRecord}
           />
         ) : null}
@@ -859,20 +914,25 @@ function ReusePanel(props: {
   modelFilter: string;
   modeFilter: ReuseModeFilter;
   statusFilter: ReuseStatusFilter;
+  favoriteFilter: ReuseFavoriteFilter;
   sortMode: ReuseSortMode;
+  favoriteCount: number;
   providerOptions: string[];
   modelOptions: string[];
   showThumbnails: boolean;
   historyEnabled: boolean;
+  isRecordFavorite: (recordId: string) => boolean;
   onQueryChange: (query: string) => void;
   onProviderFilterChange: (value: string) => void;
   onModelFilterChange: (value: string) => void;
   onModeFilterChange: (value: ReuseModeFilter) => void;
   onStatusFilterChange: (value: ReuseStatusFilter) => void;
+  onFavoriteFilterChange: (value: ReuseFavoriteFilter) => void;
   onSortModeChange: (value: ReuseSortMode) => void;
   onResetFilters: () => void;
   onApplyPrompt: (prompt: string, placement: 'replace' | 'append') => void;
   onCopy: (prompt: string) => void;
+  onToggleFavorite: (record: GenerationRecord) => void;
   onDeleteRecord: (record: GenerationRecord) => void | Promise<void>;
 }) {
   const hasActiveFilters =
@@ -881,16 +941,38 @@ function ReusePanel(props: {
     props.modelFilter !== 'all' ||
     props.modeFilter !== 'all' ||
     props.statusFilter !== 'all' ||
+    props.favoriteFilter !== 'all' ||
     props.sortMode !== 'newest';
   return (
     <div className="promptAssistBody singleColumn">
       <div className="reuseSummaryBar">
         <span>
           已筛出 <strong>{props.records.length}</strong> 条 / 共 <strong>{props.totalRecords}</strong> 条
+          <small>常用 {props.favoriteCount} 条</small>
         </span>
-        <button type="button" onClick={props.onResetFilters} disabled={!hasActiveFilters}>
-          重置筛选
-        </button>
+        <div className="reuseQuickActions" aria-label="复用记录快捷筛选">
+          <button
+            type="button"
+            className={props.favoriteFilter === 'favorite' ? 'active' : ''}
+            onClick={() => props.onFavoriteFilterChange(props.favoriteFilter === 'favorite' ? 'all' : 'favorite')}
+            title={props.favoriteFilter === 'favorite' ? '显示全部复用记录' : '只看标记为常用的 Prompt'}
+            aria-pressed={props.favoriteFilter === 'favorite'}
+          >
+            <Star size={13} fill={props.favoriteFilter === 'favorite' ? 'currentColor' : 'none'} /> 只看常用
+          </button>
+          <button
+            type="button"
+            className={props.statusFilter === 'succeeded' ? 'active' : ''}
+            onClick={() => props.onStatusFilterChange(props.statusFilter === 'succeeded' ? 'all' : 'succeeded')}
+            title={props.statusFilter === 'succeeded' ? '显示全部状态' : '只看成功生成的 Prompt'}
+            aria-pressed={props.statusFilter === 'succeeded'}
+          >
+            只看成功
+          </button>
+          <button type="button" onClick={props.onResetFilters} disabled={!hasActiveFilters}>
+            重置筛选
+          </button>
+        </div>
       </div>
       <div className="reuseFilterPanel">
         <label className="reuseSearch">
@@ -957,35 +1039,52 @@ function ReusePanel(props: {
             <small>{props.historyEnabled ? '可以调整筛选条件，或生成新图片后再复用。' : '当前偏好设置已关闭 Prompt 历史。'}</small>
           </div>
         ) : (
-          props.records.map((record) => (
-            <article className="reuseRecordCard" key={record.id}>
-              {props.showThumbnails && record.imageUrls[0] ? <img src={record.imageUrls[0]} alt={record.prompt} /> : <div className="reuseNoImage">Prompt</div>}
-              <div>
-                <strong>{record.providerName ?? record.providerId}</strong>
-                <small>
-                  {record.modelId} · {formatGenerationMode(record)} · {record.status === 'succeeded' ? '成功' : record.status} · {formatTime(record.createdAt)}
-                </small>
-                <p>{record.prompt}</p>
-                <div className="assistActionRow">
-                  <button type="button" onClick={() => props.onApplyPrompt(record.prompt, 'replace')}>
-                    <Wand2 size={13} /> 复用
-                  </button>
-                  <button type="button" onClick={() => props.onApplyPrompt(record.prompt, 'append')}>追加</button>
-                  <button type="button" onClick={() => props.onCopy(record.prompt)}>
-                    <Copy size={13} /> 复制
-                  </button>
-                  <button
-                    className="dangerText"
-                    type="button"
-                    onClick={() => void props.onDeleteRecord(record)}
-                    title="只删除软件记录，不删除磁盘图片"
-                  >
-                    <Trash2 size={13} /> 删除记录
-                  </button>
+          props.records.map((record) => {
+            const isFavorite = props.isRecordFavorite(record.id);
+            return (
+              <article className={`reuseRecordCard ${isFavorite ? 'favorite' : ''}`} key={record.id}>
+                {props.showThumbnails && record.imageUrls[0] ? <img src={record.imageUrls[0]} alt={record.prompt} /> : <div className="reuseNoImage">Prompt</div>}
+                <div>
+                  <div className="reuseRecordHeader">
+                    <div>
+                      <strong>{record.providerName ?? record.providerId}</strong>
+                      <small>
+                        {record.modelId} · {formatGenerationMode(record)} · {record.status === 'succeeded' ? '成功' : record.status} · {formatTime(record.createdAt)}
+                      </small>
+                    </div>
+                    <button
+                      className={`iconMiniButton reuseFavoriteButton ${isFavorite ? 'active' : ''}`}
+                      type="button"
+                      onClick={() => props.onToggleFavorite(record)}
+                      title={isFavorite ? '取消常用 Prompt' : '标记为常用 Prompt'}
+                      aria-label={isFavorite ? '取消常用 Prompt' : '标记为常用 Prompt'}
+                      aria-pressed={isFavorite}
+                    >
+                      <Star size={13} fill={isFavorite ? 'currentColor' : 'none'} />
+                    </button>
+                  </div>
+                  <p>{record.prompt}</p>
+                  <div className="assistActionRow">
+                    <button type="button" onClick={() => props.onApplyPrompt(record.prompt, 'replace')}>
+                      <Wand2 size={13} /> 复用
+                    </button>
+                    <button type="button" onClick={() => props.onApplyPrompt(record.prompt, 'append')}>追加</button>
+                    <button type="button" onClick={() => props.onCopy(record.prompt)}>
+                      <Copy size={13} /> 复制
+                    </button>
+                    <button
+                      className="dangerText"
+                      type="button"
+                      onClick={() => void props.onDeleteRecord(record)}
+                      title="只删除软件记录，不删除磁盘图片"
+                    >
+                      <Trash2 size={13} /> 删除记录
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </article>
-          ))
+              </article>
+            );
+          })
         )}
       </div>
     </div>

@@ -178,7 +178,7 @@ Current checkpoint: `0.4.1` Prompt Workflow V3 / image reverse + Prompt excerpts
 - Inspiration detail drawer width/right offset was constrained to avoid right-edge clipping for long model names, errors, and action buttons.
 - Prompt Excerpts V1 adds a third Inspiration Center tab for manual excerpts and clipboard excerpts, with local persistence, search/filter, apply/copy/template conversion, edit/delete, and light/dark editor polish.
 - AI Create now keeps the main Prompt dock stable: the existing Save icon opens a low-noise Save menu for drafts, Prompt excerpts, and custom templates, while Prompt Composer V1 lives inside the Prompt assistant modal tab.
-- Remaining `0.4.1` work: favorite markers and success-only filters for reuse records; then move to Provider stability when this patch is accepted.
+- Reuse records now support local favorite markers and a one-click success-only Prompt filter, closing the remaining `0.4.1` Prompt workflow scope.
 
 ### v0.3.10 收口补丁 / 绿色版验证
 
@@ -791,7 +791,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - 已先落地灵感图片真实反推 Prompt：使用偏好设置中的图片反推专用配置和 `image-reverse:default` 独立密钥通道，支持图片输入 + 文本输出模型，结果可复制、套用和转模板；该模型不进入 AI 生图工作台。
   - 已落地 Prompt 摘录 V1：支持手动摘录、从剪贴板摘录、本地持久化、搜索筛选、套用到创作台和转为提示词模板。
   - 已补齐低打扰 Prompt 辅助入口：当前 Prompt 可保存为摘录或模板；Prompt 组合器收在弹窗 Tab 内，不改创作台主布局。
-  - 复用记录增加常用标记和只看成功生成 Prompt。
+  - 已完成复用记录常用标记和只看成功生成 Prompt，避免失败实验污染常用复用池。
 - `0.4.2` Provider 稳定接入 V5
   - 按“有文档、有账号、有 raw 错误证据”继续接入 Gemini / Nano Banana 官方、xAI / Grok Image、火山方舟 / Seedream、阿里百炼 / 通义万相等平台。
   - 聚合站只为高频、有文档或有真实错误证据的站点建立专用模板；其他继续走自定义 OpenAI-compatible。

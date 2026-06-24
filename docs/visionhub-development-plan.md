@@ -100,7 +100,7 @@
 | `0.3.9` | 批量队列与多模型对比 V1 | 多 Prompt 队列、失败重试、同 Prompt 多模型横向对比、模板和暂停恢复 | 否，收口补丁 |
 | ~~`0.3.10`~~ | 0.3 final patch | Prompt polish language following source text, batch queue QA, known-gap cleanup, portable/release validation | closed |
 | `0.4.0` | 作品画廊与资料整理收口 V3 | 清理项目资产库路线残留、修正失败记录筛选、补齐最近查看 / 参考排序和画廊视觉 QA | 否 |
-| `0.4.1` | Prompt Workflow V3 | image reverse, Prompt excerpts, current Prompt save, and Prompt composer closed; continue reuse-record favorites | release validation this round |
+| ~~`0.4.1`~~ | Prompt Workflow V3 | image reverse, Prompt excerpts, current Prompt save, Prompt composer, reuse-record favorites and success-only filters | closed |
 | `0.4.2` | Provider 稳定接入 V5 | 官方 API 增量、聚合站模板验证、能力测试和配置自检增强 | 否 |
 | `0.4.3` | 本地模型增强 V2 | Stable Diffusion WebUI / Forge 连接、ComfyUI 图生图和本地结果统一入库 | 否 |
 | `0.4.4` | 数据治理与迁移 V1 | 设置导入、图库 / 灵感库迁移、备份恢复和健康检查 | 否 |
@@ -678,7 +678,7 @@
 
 ### 5.21 `0.4.1` Prompt 与灵感工作流 V3
 
-状态：进行中，已收口灵感图片真实反推 Prompt、Prompt 摘录 V1、AI 创作台当前 Prompt 低打扰保存入口和 Prompt 组合器 V1。图片反推已从平台接入拆出到「偏好设置」专用配置，使用 `image-reverse:default` 独立凭据；Prompt 摘录支持手动摘录、从剪贴板摘录以及从 AI 创作台保存。
+状态：已收口。已完成灵感图片真实反推 Prompt、Prompt 摘录 V1、AI 创作台当前 Prompt 低打扰保存入口、Prompt 组合器 V1、复用记录常用标记和只看成功生成 Prompt。图片反推已从平台接入拆出到「偏好设置」专用配置，使用 `image-reverse:default` 独立凭据；Prompt 摘录支持手动摘录、从剪贴板摘录以及从 AI 创作台保存。
 
 目标：
 
@@ -694,7 +694,7 @@
 - ~~灵感图片反推记录：保存模型、配置实例、协议、语言、细节强度和生成时间，不保存 API Key 或大体积 raw/base64。~~
 - 模型润色语言规则进入 UI 说明：默认跟随原文，可手动强制中文、英文或中英双语。
 - ~~AI 创作台当前 Prompt 增加低打扰保存入口：保存菜单支持存草稿、保存为 Prompt 摘录、另存为提示词模板。~~ 项目 Prompt 作为后续项目化管理能力再定。
-- 复用记录增加“标记常用”和“只看成功生成 Prompt”，避免失败实验污染常用列表。
+- ~~复用记录增加“标记常用”和“只看成功生成 Prompt”，避免失败实验污染常用列表。~~
 
 验收标准：
 
@@ -893,4 +893,4 @@
 
 ## 9. 下一步推荐
 
-Next formal development should continue the remaining `0.4.1` Prompt workflow: favorite markers and success-only filters for reuse records. `0.4.2` should move to Provider stability, `0.4.3` to local model improvements, and `0.4.4` through `0.5.0` to data governance, global QA, and release-candidate preparation.
+Next formal development should move to `0.4.2` Provider stability. `0.4.3` should focus on local model improvements, and `0.4.4` through `0.5.0` should cover data governance, global QA, and release-candidate preparation.
