@@ -3347,6 +3347,11 @@ fn reveal_library_dir(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn reveal_backups_dir(app: tauri::AppHandle) -> Result<(), String> {
+    open_path_in_file_manager(backups_dir(&app)?)
+}
+
+#[tauri::command]
 fn reveal_inspiration_dir(app: tauri::AppHandle) -> Result<(), String> {
     open_path_in_file_manager(inspiration_images_dir(&app)?)
 }
@@ -6212,6 +6217,7 @@ pub fn run() {
             get_app_paths,
             reveal_app_data_dir,
             reveal_library_dir,
+            reveal_backups_dir,
             reveal_inspiration_dir,
             get_storage_settings,
             save_storage_settings,

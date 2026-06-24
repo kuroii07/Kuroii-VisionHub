@@ -106,6 +106,8 @@ for term in [
     "getPolishModesForEngine",
     "onOpenLibraryDirectory",
     "onOpenAppDataDirectory",
+    "onOpenBackupsDirectory",
+    "onExportMigrationGuide",
     "onExportSettingsBackup",
     "settingsMessage",
     "BatchQueuePage",
@@ -312,6 +314,8 @@ for term in [
     "diagnoseSdWebUIConnection",
     "generateSdWebUIImage",
     "Stable Diffusion WebUI / Forge",
+    "导出迁移说明",
+    "备份与迁移",
     "sdWebUI",
     "samplerName",
     "cfgScale",
@@ -379,7 +383,7 @@ for term in [
     assert term in provider_config_src, f"Provider config preset/import helper missing: {term}"
 
 desktop_api_src = (ROOT / "src/services/desktopApi.ts").read_text(encoding="utf-8")
-for term in ["revealAppDataDir", "revealLibraryDir", "exportSettingsBackup", "getAppPaths", "openExternalUrl", "polishPromptWithProvider", "diagnoseSdWebUIConnection", "generateSdWebUIImage"]:
+for term in ["revealAppDataDir", "revealLibraryDir", "revealBackupsDir", "exportSettingsBackup", "getAppPaths", "openExternalUrl", "polishPromptWithProvider", "diagnoseSdWebUIConnection", "generateSdWebUIImage"]:
     assert term in desktop_api_src, f"Desktop settings API missing: {term}"
 
 store_src = (ROOT / "src/store/useStudioStore.ts").read_text(encoding="utf-8")
@@ -427,7 +431,7 @@ for term in ["minimax-image", "MiniMax API Key", "image-01-live", "gemini-image"
     assert term in manifests_src, f"Provider manifest missing: {term}"
 
 tauri_src = (ROOT / "src-tauri/src/main.rs").read_text(encoding="utf-8")
-for term in ["get_app_paths", "reveal_app_data_dir", "reveal_library_dir", "export_settings_backup", "open_external_url", "diagnose_sd_webui_connection", "generate_sd_webui_image", "sampler_name", "cfg_scale", "upload_comfyui_reference_image", "load_image_nodes", "polish_prompt_with_provider", "PromptPolishRequest", "extract_text_response", "prompt_polish_mode_rules", "ensure_prompt_polish_changed", "generate_minimax_image", "visionhub_minimax_request", "visionhub_minimax_diagnostic", "subject_reference", "build_minimax_subject_reference", "generate_gemini_image", "visionhub_gemini_request", "visionhub_gemini_diagnostic", "gemini_reference_part", "inlineData", "sanitize_generation_record_raw", "visionhub_redacted_image_payload", "collect_embedded_image_urls"]:
+for term in ["get_app_paths", "reveal_app_data_dir", "reveal_library_dir", "reveal_backups_dir", "export_settings_backup", "open_external_url", "diagnose_sd_webui_connection", "generate_sd_webui_image", "sampler_name", "cfg_scale", "upload_comfyui_reference_image", "load_image_nodes", "polish_prompt_with_provider", "PromptPolishRequest", "extract_text_response", "prompt_polish_mode_rules", "ensure_prompt_polish_changed", "generate_minimax_image", "visionhub_minimax_request", "visionhub_minimax_diagnostic", "subject_reference", "build_minimax_subject_reference", "generate_gemini_image", "visionhub_gemini_request", "visionhub_gemini_diagnostic", "gemini_reference_part", "inlineData", "sanitize_generation_record_raw", "visionhub_redacted_image_payload", "collect_embedded_image_urls"]:
     assert term in tauri_src, f"Tauri settings command missing: {term}"
 assert '"images-minimal"' in tauri_src and '"/v1/images/generations"' in tauri_src, "Minimal Images protocol missing"
 

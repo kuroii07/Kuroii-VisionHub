@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.4.3`
+- Current app version: `0.4.4`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.4.3` local model improvements are implemented as first-slice local endpoints; next: local-model live QA, then `0.4.4` data governance and migration.
+- Current focus: `0.4.4` lightweight migration support: practical data directory entries and migration guide export, without a standalone health-check center.
 
 ## 2. 后续开发前必读
 
@@ -102,8 +102,8 @@
 | `0.4.0` | 作品画廊与资料整理收口 V3 | 清理项目资产库路线残留、修正失败记录筛选、补齐最近查看 / 参考排序和画廊视觉 QA | 否 |
 | ~~`0.4.1`~~ | Prompt Workflow V3 | image reverse, Prompt excerpts, current Prompt save, Prompt composer, reuse-record favorites and success-only filters | closed |
 | ~~`0.4.2`~~ | Provider 稳定接入 V5 | 官方 API 增量、聚合站模板验证、能力测试和配置自检增强 | closed |
-| `0.4.3` | 本地模型增强 V2 | Stable Diffusion WebUI / Forge 连接、ComfyUI 图生图和本地结果统一入库 | first slice implemented |
-| `0.4.4` | 数据治理与迁移 V1 | 设置导入、图库 / 灵感库迁移、备份恢复和健康检查 | 否 |
+| ~~`0.4.3`~~ | 本地模型增强 V2 | Stable Diffusion WebUI / Forge 连接、ComfyUI 图生图和本地结果统一入库 | first slice implemented |
+| `0.4.4` | 轻量迁移支持 V1 | 数据目录入口、备份目录入口、迁移说明导出和安全边界说明 | 否 |
 | `0.4.5` | 全局体验与性能 QA | 浅色 / 暗色、长文本、多语言、空状态、错误状态和大型历史性能收口 | 否 |
 | `0.5.0` | 发布候选准备 | 版本号、内部验证脚本、迁移文档、release notes 草稿和绿色版验收 | 视情况 |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
@@ -748,26 +748,29 @@
 - 本地服务未启动、地址错误、workflow 不兼容时错误可读。
 - ComfyUI 和 SD WebUI / Forge 不混用配置语义。
 
-### 5.24 `0.4.4` 数据治理与迁移 V1
+### 5.24 `0.4.4` 轻量迁移支持 V1
+
+状态 2026-06-24：本阶段不做独立“健康检查中心”，避免增加复杂度和低价值扫描；优先做用户真正会用到的目录入口和迁移说明。
 
 目标：
 
-- 为长期使用和换电脑继续开发做数据层准备。
-- 明确哪些数据在仓库里，哪些在 AppData / 图库目录 / 系统凭据里。
+- 为换电脑、重装系统和手动备份提供清晰指引。
+- 明确哪些数据在 AppData / 图库目录 / 灵感目录 / 系统凭据里。
+- 不自动清理、不自动修复、不删除磁盘文件。
 
 主要任务：
 
-- 设置导入：补齐与导出设置备份配套的导入流程，导入前预览差异。
-- 图库和灵感库健康检查：缺图、重复记录、路径不可达、元数据损坏、评分 / 收藏孤儿关系。
-- 数据迁移向导：整理 Provider profile id、系统凭据、图库目录、灵感目录、画廊元数据、提示词润色凭据和图片反推专用凭据的迁移说明。
-- 备份恢复：支持导出非敏感索引和元数据，不包含 API Key、raw 响应大字段和生成图片。
-- 大体积历史优化：继续避免 raw 中保存 base64 和大图片二进制。
+- 数据目录入口：打开 AppData、作品画廊目录、图片收藏目录和备份目录。
+- 迁移说明导出：生成一份不含 API Key 的 Markdown，列出需要复制的目录、Provider profile id、需要重新输入的凭据和推荐迁移步骤。
+- 设置备份保留：继续导出应用设置、平台配置和本地历史；API Key 仍不导出。
+- 安全边界说明：提示 prompt-polish:default、image-reverse:default 和 profile:<profileId> 系统凭据需要在新电脑重新输入。
 
 验收标准：
 
-- 用户能知道换电脑需要迁移哪些目录和哪些凭据需要重新输入。
-- 设置导入不会覆盖系统凭据，也不会清空现有图库。
-- 健康检查只报告和修复软件记录，不默认删除磁盘文件。
+- 用户能一键打开关键数据目录和备份目录。
+- 用户能导出一份可读的迁移说明。
+- 迁移说明不包含 API Key、生成图片二进制、raw 大字段或任意系统凭据。
+- 不做健康检查中心、不做自动修复、不默认删除文件。
 
 ### 5.25 `0.4.5` 全局体验与性能 QA
 
@@ -895,4 +898,4 @@
 
 ## 9. 下一步推荐
 
-Next formal development should move to `0.4.3` local model improvements. `0.4.4` through `0.5.0` should cover data governance, global QA, and release-candidate preparation.
+Next formal development after `0.4.4` should move to `0.4.5` global experience and performance QA, then `0.5.0` release-candidate preparation.

@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.4.3` Local Model Improvements V2 / SD WebUI + Forge txt2img, ComfyUI LoadImage img2img first slice, and local result gallery saving.
+Current checkpoint: `0.4.4` Lightweight Migration Support V1 / data directory entries, backup directory entry, and no-secret migration guide export.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -170,6 +170,14 @@ Current checkpoint: `0.4.3` Local Model Improvements V2 / SD WebUI + Forge txt2i
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.4.4 Lightweight Migration Support V1
+
+- App version is now `0.4.4`, synchronized across package metadata, Tauri metadata, Cargo metadata, app version display, README, and roadmap docs.
+- Preferences now exposes practical data entries for AppData, gallery, inspiration images, and backup directory access.
+- A new migration guide export creates a readable Markdown file that lists data directories, Provider profile ids, credential channels to re-enter, and recommended migration steps.
+- This version intentionally does not add a standalone health-check center, automatic repair, duplicate cleanup, or destructive file operations.
+- Migration guide export does not include API Keys, system credentials, generated image binaries, or raw response blobs.
 
 ### v0.4.3 Local Model Improvements V2 / SD WebUI + ComfyUI first slice
 
@@ -819,10 +827,10 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - Stable Diffusion WebUI / Forge 连接诊断、txt2img 和结果入库。
   - ComfyUI 图生图、参考图上传和 API workflow 节点映射提示。
   - 本地模型不拖慢在线中转站 / 聚合 API 主流程。
-- `0.4.4` 数据治理与迁移 V1
-  - 设置导入、图库 / 灵感库健康检查、缺图 / 重复 / 路径不可达排查。
-  - 换电脑迁移向导：Provider profile id、系统凭据、图库目录、灵感目录、画廊元数据、提示词润色凭据和图片反推专用凭据。
-  - 备份恢复只处理非敏感索引和元数据，不包含 API Key、raw 大字段和生成图片。
+- `0.4.4` 轻量迁移支持 V1
+  - 不做独立健康检查中心，避免低价值扫描和复杂自动修复。
+  - 偏好设置集中提供 AppData、作品画廊、图片收藏和备份目录入口。
+  - 导出不含 API Key 的迁移说明，列出 Provider profile id、需要复制的目录和需要重新输入的凭据。
 - `0.4.5` 全局体验与性能 QA
   - 全页面浅色 / 暗色、长文本、多语言、空状态、错误状态和大历史数据压力验收。
   - 检查图标按钮 tooltip、`aria-label`、危险操作确认和大型列表性能。

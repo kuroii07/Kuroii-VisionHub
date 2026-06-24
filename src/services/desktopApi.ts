@@ -567,6 +567,11 @@ export async function revealLibraryDir() {
   await invoke('reveal_library_dir');
 }
 
+export async function revealBackupsDir() {
+  if (!isTauriRuntime()) return;
+  await invoke('reveal_backups_dir');
+}
+
 export async function revealInspirationDir() {
   if (!isTauriRuntime()) return;
   await invoke('reveal_inspiration_dir');

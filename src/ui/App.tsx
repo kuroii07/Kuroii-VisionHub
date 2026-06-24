@@ -57,6 +57,7 @@ import {
   diagnoseSdWebUIConnection,
   getProviderSecretStatus,
   exportSettingsBackup,
+  getAppPaths,
   generateComfyUIImage,
   generateSdWebUIImage,
   generateOpenAIImage,
@@ -72,6 +73,7 @@ import {
   revealGenerationFile,
   revealInspirationDir,
   revealLibraryDir,
+  revealBackupsDir,
   saveGenerationRecord,
   saveLibraryData,
   saveProviderSecret,
@@ -4450,6 +4452,19 @@ export function App() {
     }
   }
 
+  async function openBackupsDirectory() {
+    if (!desktopRuntime) {
+      setSettingsMessage('请在 Tauri 桌面端打开备份目录。');
+      return;
+    }
+    try {
+      await revealBackupsDir();
+      setSettingsMessage('已打开备份目录。');
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async function selectLibraryDirectory() {
     if (!desktopRuntime) {
       setSettingsMessage('请在 Tauri 桌面端修改本地图库路径。');
@@ -4537,6 +4552,103 @@ export function App() {
         }
       });
       setSettingsMessage(`已导出设置备份：${result.path}`);
+      await revealGenerationFile(result.path);
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function exportMigrationGuide() {
+    if (!desktopRuntime) {
+      setSettingsMessage('请在 Tauri 桌面端导出迁移说明。');
+      return;
+    }
+    try {
+      const [paths, latestStorageSettings] = await Promise.all([
+        getAppPaths(),
+        storageSettings ? Promise.resolve(storageSettings) : getStorageSettings()
+      ]);
+      const guideStorageSettings = latestStorageSettings ?? storageSettings;
+      const createdAt = new Date().toISOString();
+      const providerLines = providerProfiles.length
+        ? providerProfiles.map((profile) => [
+            `- ${profile.displayName || profile.id}`,
+            `  - profile id: ${profile.id}`,
+            `  - provider: ${profile.providerId}`,
+            `  - model: ${profile.modelId || '未配置'}`,
+            `  - base URL: ${profile.baseUrl || '未配置'}`,
+            `  - secret id: profile:${profile.id}（系统凭据，迁移后需要重新输入 API Key）`,
+            `  - extra headers: ${profile.extraHeadersJson && profile.extraHeadersJson !== '{}' ? '已配置但不写入迁移说明，避免泄露敏感 Header' : '未配置'}`
+          ].join('\n')).join('\n')
+        : '- 当前没有保存的 Provider profile。';
+      const content = [
+        '# VisionHub Studio 迁移说明',
+        '',
+        `生成时间：${createdAt}`,
+        `应用版本：${APP_VERSION}`,
+        '',
+        '## 这份说明的用途',
+        '',
+        '这不是自动恢复脚本，也不会包含 API Key。它只告诉你换电脑、重装系统或备份时需要复制哪些目录，以及哪些凭据需要重新输入。',
+        '',
+        '## 需要复制的目录 / 文件',
+        '',
+        `- 应用数据目录：${paths?.app_data_dir ?? '未读取到'}`,
+        `- 作品画廊目录：${guideStorageSettings?.resolved_library_dir ?? paths?.library_dir ?? '未读取到'}`,
+        `- 图片收藏目录：${guideStorageSettings?.resolved_inspiration_dir ?? '未读取到'}`,
+        `- 备份目录：${paths?.backups_dir ?? '未读取到'}`,
+        `- 生成历史文件：${paths?.history_file ?? '未读取到'}`,
+        `- 画廊元数据文件：${paths?.library_meta_file ?? '未读取到'}`,
+        `- 存储设置文件：${guideStorageSettings?.settings_file ?? '未读取到'}`,
+        '',
+        '## 不会自动迁移的内容',
+        '',
+        '- API Key：保存在系统凭据里，不导出、不写入这份说明。',
+        '- prompt-polish:default：提示词润色独立凭据，换电脑后重新输入。',
+        '- image-reverse:default：图片反推独立凭据，换电脑后重新输入。',
+        '- profile:<profileId>：每个 Provider profile 的系统凭据，换电脑后按下面 profile id 重新输入。',
+        '- 安装包、dist、target、node_modules 等构建产物：不需要复制，源码可重新构建。',
+        '',
+        '## Provider profiles',
+        '',
+        providerLines,
+        '',
+        '## 当前软件设置摘要',
+        '',
+        `- 启动页：${appSettings.startupPage}`,
+        `- 主题：${appSettings.themeMode}`,
+        `- 语言：${appSettings.language}`,
+        `- 默认生图平台：${appSettings.generationDefaults.defaultProviderId}`,
+        `- 默认模型：${appSettings.generationDefaults.defaultModelId}`,
+        `- 默认尺寸：${appSettings.generationDefaults.defaultSize}`,
+        `- 默认数量：${appSettings.generationDefaults.defaultCount}`,
+        `- 提示词润色配置数量：${appSettings.promptPolish.savedConfigs.length}`,
+        `- 图片反推模型：${appSettings.imagePromptReverse.modelId || '未配置'}`,
+        '',
+        '## 推荐迁移步骤',
+        '',
+        '1. 在旧电脑导出“设置备份”和这份“迁移说明”。',
+        '2. 复制应用数据目录、作品画廊目录、图片收藏目录到新电脑。',
+        '3. 在新电脑安装 / 构建 VisionHub Studio。',
+        '4. 打开偏好设置，把作品画廊目录和图片收藏目录指向新位置。',
+        '5. 到平台接入页按 profile id 重新输入 API Key，并运行测试连接 / 配置自检。',
+        '6. 如果使用提示词润色或图片反推，分别重新输入 prompt-polish:default 和 image-reverse:default 对应密钥。',
+        '',
+        '## 安全边界',
+        '',
+        '- 这份说明不包含 API Key。',
+        '- 这份说明不包含生成图片二进制。',
+        '- 这份说明不包含 raw 大字段。',
+        '- 迁移时不要清空旧电脑数据，确认新电脑能正常打开后再自行归档。',
+        ''
+      ].join('\n');
+      const suggestedFileName = `visionhub-migration-guide-${Date.now()}.md`;
+      const result = await saveTextFileWithDialog({ suggestedFileName, content });
+      if (!result.saved || !result.path) {
+        setSettingsMessage('已取消导出迁移说明。');
+        return;
+      }
+      setSettingsMessage(`已导出迁移说明：${result.path}`);
       await revealGenerationFile(result.path);
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
@@ -6189,7 +6301,9 @@ export function App() {
             onResetInspirationPath={resetInspirationDirectoryOverride}
             onOpenInspirationDirectory={openInspirationDirectory}
             onOpenAppDataDirectory={openAppDataDirectory}
+            onOpenBackupsDirectory={openBackupsDirectory}
             onExportSettingsBackup={exportCurrentSettingsBackup}
+            onExportMigrationGuide={exportMigrationGuide}
             onOpenSystemInfo={() => setActiveUtilityModal('system-info')}
             onOpenShortcuts={() => setActiveUtilityModal('shortcuts')}
             onCheckUpdates={checkForUpdates}
@@ -8828,7 +8942,9 @@ function SettingsPage(props: {
   onResetInspirationPath: () => void;
   onOpenInspirationDirectory: () => void;
   onOpenAppDataDirectory: () => void;
+  onOpenBackupsDirectory: () => void;
   onExportSettingsBackup: () => void;
+  onExportMigrationGuide: () => void;
   onOpenSystemInfo: () => void;
   onOpenShortcuts: () => void;
   onCheckUpdates: () => void;
@@ -9596,22 +9712,32 @@ function SettingsPage(props: {
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>{'\u5e94\u7528\u6570\u636e\u76ee\u5f55'}</strong>
-            <small>{'\u5305\u542b\u751f\u6210\u5386\u53f2\u3001\u672c\u5730\u56fe\u518c\u3001\u5907\u4efd\u6587\u4ef6\u548c\u5e94\u7528\u6570\u636e\u3002'}</small>
+            <strong>应用数据目录</strong>
+            <small>包含生成历史、画廊元数据、备份文件和应用本地数据；不会显示或导出系统凭据。</small>
           </div>
-          <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onOpenAppDataDirectory}>
-            <FolderOpen size={15} /> {'\u6253\u5f00'}
-          </button>
+          <div className="settingsPathActions">
+            <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onOpenAppDataDirectory}>
+              <FolderOpen size={15} /> 打开数据目录
+            </button>
+            <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onOpenBackupsDirectory}>
+              <HardDrive size={15} /> 打开备份目录
+            </button>
+          </div>
         </div>
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>备份与恢复</strong>
-            <small>{'\u5bfc\u51fa\u5e94\u7528\u8bbe\u7f6e\u3001\u5e73\u53f0\u914d\u7f6e\u548c\u672c\u5730\u5386\u53f2\u3002API Key \u4e0d\u4f1a\u88ab\u5bfc\u51fa\u3002'}</small>
+            <strong>备份与迁移</strong>
+            <small>导出设置备份或迁移说明；API Key、系统凭据、生成图片二进制和 raw 大字段不会写入迁移说明。</small>
           </div>
-          <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onExportSettingsBackup}>
-            <Download size={15} /> {'\u5bfc\u51fa\u8bbe\u7f6e'}
-          </button>
+          <div className="settingsPathActions">
+            <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onExportSettingsBackup}>
+              <Download size={15} /> 导出设置
+            </button>
+            <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onExportMigrationGuide}>
+              <ClipboardPaste size={15} /> 导出迁移说明
+            </button>
+          </div>
         </div>
       </article>
 
