@@ -140,6 +140,30 @@ struct ComfyUIGenerationRequest {
     output_compression: Option<u8>,
     count: Option<u8>,
     timeout_ms: Option<u64>,
+    generation_mode: Option<String>,
+    reference_images: Option<Vec<ReferenceImage>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SdWebUIDiagnosisRequest {
+    base_url: String,
+    timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SdWebUIGenerationRequest {
+    base_url: String,
+    prompt: String,
+    negative_prompt: Option<String>,
+    size: String,
+    seed: Option<u64>,
+    count: Option<u8>,
+    output_format: Option<String>,
+    output_compression: Option<u8>,
+    timeout_ms: Option<u64>,
+    sampler_name: Option<String>,
+    steps: Option<u32>,
+    cfg_scale: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -161,6 +185,20 @@ struct ComfyUIDiagnosisResult {
     object_info_node_count: Option<usize>,
     queue_running: Option<usize>,
     queue_pending: Option<usize>,
+    endpoints: Vec<ComfyUIDiagnosisEndpoint>,
+    message: String,
+}
+
+#[derive(Debug, Serialize)]
+struct SdWebUIDiagnosisResult {
+    base_url: String,
+    resolved_base_url: String,
+    checked_at: String,
+    latency_ms: u128,
+    online: bool,
+    sd_model_checkpoint: Option<String>,
+    sampler_count: Option<usize>,
+    model_count: Option<usize>,
     endpoints: Vec<ComfyUIDiagnosisEndpoint>,
     message: String,
 }
@@ -1284,8 +1322,43 @@ async fn generate_comfyui_image(
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "ComfyUI Workflow".to_string());
+    let reference_images = request.reference_images.clone().unwrap_or_default();
+    let generation_mode = request.generation_mode.as_deref().unwrap_or("text-to-image");
+    let uploaded_reference_image = if generation_mode == "image-to-image" || !reference_images.is_empty() {
+        let Some(reference) = reference_images.first() else {
+            return Ok(comfyui_failed_result(
+                &request,
+                &workflow_name,
+                started.elapsed().as_millis(),
+                "ComfyUI 图生图需要先添加至少一张参考图。".to_string(),
+                serde_json::json!({
+                    "visionhub_comfyui_error": "missing_reference_image",
+                    "workflow_name": workflow_name
+                }),
+            ));
+        };
+        match upload_comfyui_reference_image(&client, &resolved_base_url, reference, 0).await {
+            Ok(name) => Some(name),
+            Err(error) => {
+                return Ok(comfyui_failed_result(
+                    &request,
+                    &workflow_name,
+                    started.elapsed().as_millis(),
+                    error,
+                    serde_json::json!({
+                        "visionhub_comfyui_error": "reference_upload_failed",
+                        "workflow_name": workflow_name,
+                        "reference_count": reference_images.len()
+                    }),
+                ));
+            }
+        }
+    } else {
+        None
+    };
+
     let mut workflow = request.workflow.clone();
-    let mapping = match apply_comfyui_workflow_inputs(&mut workflow, &request) {
+    let mapping = match apply_comfyui_workflow_inputs(&mut workflow, &request, uploaded_reference_image.as_deref()) {
         Ok(mapping) => mapping,
         Err(error) => {
             return Ok(comfyui_failed_result(
@@ -1408,8 +1481,8 @@ async fn generate_comfyui_image(
             "visionhub_comfyui_mapping": mapping
         }),
         created_at: chrono_like_timestamp(),
-        generation_mode: Some("text-to-image".to_string()),
-        reference_images: Some(Vec::new()),
+        generation_mode: Some(generation_mode.to_string()),
+        reference_images: Some(reference_images),
     })
 }
 
@@ -1547,8 +1620,8 @@ fn comfyui_failed_result(
         error: Some(error),
         raw,
         created_at: chrono_like_timestamp(),
-        generation_mode: Some("text-to-image".to_string()),
-        reference_images: Some(Vec::new()),
+        generation_mode: Some(request.generation_mode.clone().unwrap_or_else(|| "text-to-image".to_string())),
+        reference_images: Some(request.reference_images.clone().unwrap_or_default()),
     }
 }
 
@@ -1615,9 +1688,77 @@ async fn poll_comfyui_history(
     }
 }
 
+
+async fn upload_comfyui_reference_image(
+    client: &reqwest::Client,
+    base_url: &str,
+    reference: &ReferenceImage,
+    index: usize,
+) -> Result<String, String> {
+    let image_url = reference
+        .data_url
+        .as_deref()
+        .or(reference.preview_url.as_deref());
+    let (bytes, extension) = if let Some(image_url) = image_url {
+        if image_url.starts_with("data:image/") {
+            decode_data_url_image(image_url)?
+        } else if image_url.starts_with("http://") || image_url.starts_with("https://") {
+            download_remote_image(client, image_url).await?
+        } else {
+            return Err("参考图格式不受支持，请重新选择本地图片或图库图片。".to_string());
+        }
+    } else {
+        return Err("参考图没有可上传的图片数据，请重新添加本地图片或从图库转换为参考图。".to_string());
+    };
+
+    let raw_name = reference
+        .name
+        .clone()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| format!("visionhub-reference-{}.{}", index + 1, extension));
+    let mut file_name = sanitize_filename(&raw_name);
+    if !file_name.contains('.') {
+        file_name.push('.');
+        file_name.push_str(&extension);
+    }
+    let part = reqwest::multipart::Part::bytes(bytes)
+        .file_name(file_name)
+        .mime_str(mime_from_extension(&extension))
+        .map_err(|error| format!("无法附加 ComfyUI 参考图：{error}"))?;
+    let form = reqwest::multipart::Form::new()
+        .part("image", part)
+        .text("type", "input".to_string())
+        .text("overwrite", "true".to_string());
+    let response = client
+        .post(format!("{base_url}/upload/image"))
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|error| format!("ComfyUI 参考图上传失败：{error}"))?;
+    let status = response.status();
+    let body_text = response
+        .text()
+        .await
+        .map_err(|error| format!("ComfyUI 参考图上传响应读取失败：{error}"))?;
+    let raw: Value = serde_json::from_str(&body_text).map_err(|error| {
+        let preview: String = body_text.chars().take(240).collect();
+        format!("ComfyUI 参考图上传返回不是 JSON：{error}。预览：{preview}")
+    })?;
+    if !status.is_success() {
+        return Err(extract_error_message(&raw).unwrap_or_else(|| format!("ComfyUI 参考图上传失败：HTTP {status}")));
+    }
+    raw
+        .get("name")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| "ComfyUI 参考图上传成功，但响应中没有返回文件名。".to_string())
+}
+
 fn apply_comfyui_workflow_inputs(
     workflow: &mut Value,
     request: &ComfyUIGenerationRequest,
+    uploaded_reference_image: Option<&str>,
 ) -> Result<Value, String> {
     let Some(nodes) = workflow.as_object_mut() else {
         return Err("当前导入的 workflow 不是 ComfyUI API workflow。请在 ComfyUI 里启用 Dev mode 后导出 API 格式 workflow。".to_string());
@@ -1637,6 +1778,7 @@ fn apply_comfyui_workflow_inputs(
     let mut negative_node_ids: Vec<String> = Vec::new();
     let mut sampler_node_ids: Vec<String> = Vec::new();
     let mut size_node_ids: Vec<String> = Vec::new();
+    let mut load_image_node_ids: Vec<String> = Vec::new();
 
     for (node_id, node) in nodes.iter() {
         let class_type = node.get("class_type").and_then(Value::as_str).unwrap_or("");
@@ -1653,6 +1795,9 @@ fn apply_comfyui_workflow_inputs(
         }
         if lower.contains("emptylatent") || lower.contains("latentsize") {
             size_node_ids.push(node_id.clone());
+        }
+        if lower.contains("loadimage") && inputs.and_then(|inputs| inputs.get("image")).is_some() {
+            load_image_node_ids.push(node_id.clone());
         }
     }
 
@@ -1748,12 +1893,29 @@ fn apply_comfyui_workflow_inputs(
         }
     }
 
+    if let Some(uploaded_name) = uploaded_reference_image {
+        if load_image_node_ids.is_empty() {
+            return Err("当前 ComfyUI API workflow 没有识别到 LoadImage 节点，无法自动写入参考图；请导入包含 LoadImage 的图生图 workflow。".to_string());
+        }
+        for node_id in &load_image_node_ids {
+            if let Some(inputs) = nodes
+                .get_mut(node_id)
+                .and_then(|node| node.get_mut("inputs"))
+                .and_then(Value::as_object_mut)
+            {
+                inputs.insert("image".to_string(), Value::String(uploaded_name.to_string()));
+            }
+        }
+    }
+
     Ok(serde_json::json!({
         "format": "comfyui-api-workflow",
         "positive_nodes": positive_node_ids,
         "negative_nodes": negative_node_ids,
         "sampler_nodes": sampler_node_ids,
         "size_nodes": size_node_ids,
+        "load_image_nodes": load_image_node_ids,
+        "uploaded_reference_image": uploaded_reference_image,
         "width": width,
         "height": height,
         "seed": seed,
@@ -1883,6 +2045,418 @@ async fn save_comfyui_images_to_library(
         saved_paths.push(path_to_user_string(&path));
     }
     Ok(saved_paths)
+}
+
+#[tauri::command]
+async fn diagnose_sd_webui_connection(request: SdWebUIDiagnosisRequest) -> Result<SdWebUIDiagnosisResult, String> {
+    let started = std::time::Instant::now();
+    let base_url = request.base_url.trim();
+    if base_url.is_empty() {
+        return Err("请填写 Stable Diffusion WebUI / Forge 的 Base URL。".to_string());
+    }
+    let resolved_base_url = normalize_base_url(base_url)?;
+    let timeout_ms = request.timeout_ms.unwrap_or(8_000).clamp(2_000, 20_000);
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(timeout_ms))
+        .build()
+        .map_err(|error| format!("无法创建 SD WebUI 诊断客户端：{error}"))?;
+
+    let mut endpoints = Vec::new();
+    let mut sd_model_checkpoint: Option<String> = None;
+    let mut sampler_count: Option<usize> = None;
+    let mut model_count: Option<usize> = None;
+
+    match fetch_sd_webui_json(&client, &resolved_base_url, "/sdapi/v1/options").await {
+        Ok((status, raw)) => {
+            sd_model_checkpoint = raw
+                .get("sd_model_checkpoint")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            endpoints.push(ComfyUIDiagnosisEndpoint {
+                path: "/sdapi/v1/options".to_string(),
+                ok: true,
+                status: Some(status.as_u16()),
+                detail: sd_model_checkpoint
+                    .as_ref()
+                    .map(|model| format!("当前 checkpoint：{model}"))
+                    .unwrap_or_else(|| "options 端点可访问，但未读取到当前 checkpoint。".to_string()),
+            });
+        }
+        Err(error) => endpoints.push(ComfyUIDiagnosisEndpoint {
+            path: "/sdapi/v1/options".to_string(),
+            ok: false,
+            status: error.status,
+            detail: error.detail,
+        }),
+    }
+
+    match fetch_sd_webui_json(&client, &resolved_base_url, "/sdapi/v1/samplers").await {
+        Ok((status, raw)) => {
+            sampler_count = raw.as_array().map(|value| value.len());
+            endpoints.push(ComfyUIDiagnosisEndpoint {
+                path: "/sdapi/v1/samplers".to_string(),
+                ok: true,
+                status: Some(status.as_u16()),
+                detail: sampler_count
+                    .map(|count| format!("已读取 {count} 个采样器。"))
+                    .unwrap_or_else(|| "samplers 端点可访问，但响应不是数组。".to_string()),
+            });
+        }
+        Err(error) => endpoints.push(ComfyUIDiagnosisEndpoint {
+            path: "/sdapi/v1/samplers".to_string(),
+            ok: false,
+            status: error.status,
+            detail: error.detail,
+        }),
+    }
+
+    match fetch_sd_webui_json(&client, &resolved_base_url, "/sdapi/v1/sd-models").await {
+        Ok((status, raw)) => {
+            model_count = raw.as_array().map(|value| value.len());
+            endpoints.push(ComfyUIDiagnosisEndpoint {
+                path: "/sdapi/v1/sd-models".to_string(),
+                ok: true,
+                status: Some(status.as_u16()),
+                detail: model_count
+                    .map(|count| format!("已读取 {count} 个模型 / checkpoint。"))
+                    .unwrap_or_else(|| "sd-models 端点可访问，但响应不是数组。".to_string()),
+            });
+        }
+        Err(error) => endpoints.push(ComfyUIDiagnosisEndpoint {
+            path: "/sdapi/v1/sd-models".to_string(),
+            ok: false,
+            status: error.status,
+            detail: error.detail,
+        }),
+    }
+
+    let online = endpoints.iter().any(|endpoint| endpoint.ok);
+    let success_count = endpoints.iter().filter(|endpoint| endpoint.ok).count();
+    let message = if online {
+        let mut fragments: Vec<String> = Vec::new();
+        if let Some(model) = sd_model_checkpoint.as_deref() {
+            fragments.push(format!("checkpoint：{model}"));
+        }
+        if let Some(count) = sampler_count {
+            fragments.push(format!("采样器 {count}"));
+        }
+        if let Some(count) = model_count {
+            fragments.push(format!("模型 {count}"));
+        }
+        format!(
+            "Stable Diffusion WebUI / Forge 已响应：{success_count}/3 个端点可用{}。",
+            if fragments.is_empty() { "，可以尝试 txt2img".to_string() } else { format!(", {}", fragments.join(", ")) }
+        )
+    } else {
+        "Stable Diffusion WebUI / Forge 没有暴露可用 API。请确认服务已启动、地址正确，并且启动时带有 --api。".to_string()
+    };
+
+    Ok(SdWebUIDiagnosisResult {
+        base_url: base_url.to_string(),
+        resolved_base_url,
+        checked_at: chrono_like_timestamp(),
+        latency_ms: started.elapsed().as_millis(),
+        online,
+        sd_model_checkpoint,
+        sampler_count,
+        model_count,
+        endpoints,
+        message,
+    })
+}
+
+#[tauri::command]
+async fn generate_sd_webui_image(
+    app: tauri::AppHandle,
+    request: SdWebUIGenerationRequest,
+) -> Result<ImageGenerationResult, String> {
+    let started = std::time::Instant::now();
+    let base_url = request.base_url.trim();
+    if base_url.is_empty() {
+        return Err("请填写 Stable Diffusion WebUI / Forge 的 Base URL。".to_string());
+    }
+    if request.prompt.trim().is_empty() {
+        return Err("请填写 Prompt。".to_string());
+    }
+
+    let resolved_base_url = normalize_base_url(base_url)?;
+    let timeout_ms = request.timeout_ms.unwrap_or(240_000).clamp(10_000, 900_000);
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(timeout_ms))
+        .build()
+        .map_err(|error| format!("无法创建 SD WebUI 客户端：{error}"))?;
+    let (width, height) = parse_image_size(&request.size).unwrap_or((1024, 1024));
+    let count = request.count.unwrap_or(1).max(1).min(4);
+    let seed = request
+        .seed
+        .map(|value| value.min(i64::MAX as u64) as i64)
+        .unwrap_or(-1);
+    let steps = request.steps.unwrap_or(20).clamp(1, 150);
+    let cfg_scale = request.cfg_scale.unwrap_or(7.0).clamp(1.0, 30.0);
+    let sampler_name = request
+        .sampler_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let mut payload = serde_json::json!({
+        "prompt": request.prompt,
+        "negative_prompt": request.negative_prompt.clone().unwrap_or_default(),
+        "width": width,
+        "height": height,
+        "batch_size": count,
+        "n_iter": 1,
+        "seed": seed,
+        "steps": steps,
+        "cfg_scale": cfg_scale,
+        "save_images": false,
+        "send_images": true
+    });
+    if let Some(sampler_name) = sampler_name {
+        payload["sampler_name"] = Value::String(sampler_name.to_string());
+    }
+
+    let endpoint = format!("{resolved_base_url}/sdapi/v1/txt2img");
+    let response = match client.post(endpoint).json(&payload).send().await {
+        Ok(response) => response,
+        Err(error) => {
+            return Ok(sd_webui_failed_result(
+                &request,
+                started.elapsed().as_millis(),
+                format!("SD WebUI /txt2img 请求失败：{error}"),
+                serde_json::json!({ "visionhub_sd_webui_error": "txt2img_request_failed", "payload": payload }),
+            ));
+        }
+    };
+    let status = response.status();
+    let body_text = match response.text().await {
+        Ok(text) => text,
+        Err(error) => {
+            return Ok(sd_webui_failed_result(
+                &request,
+                started.elapsed().as_millis(),
+                format!("SD WebUI /txt2img 响应读取失败：{error}"),
+                serde_json::json!({ "visionhub_sd_webui_error": "txt2img_response_read_failed" }),
+            ));
+        }
+    };
+    let raw: Value = match serde_json::from_str(&body_text) {
+        Ok(raw) => raw,
+        Err(error) => {
+            let preview: String = body_text.chars().take(500).collect();
+            return Ok(sd_webui_failed_result(
+                &request,
+                started.elapsed().as_millis(),
+                format!("SD WebUI /txt2img 返回了非 JSON 响应：{error}。响应预览：{preview}"),
+                serde_json::json!({ "visionhub_sd_webui_error": "txt2img_json_parse_failed", "preview": preview }),
+            ));
+        }
+    };
+    if !status.is_success() {
+        return Ok(sd_webui_failed_result(
+            &request,
+            started.elapsed().as_millis(),
+            extract_error_message(&raw).unwrap_or_else(|| format!("SD WebUI /txt2img HTTP {status}")),
+            serde_json::json!({ "visionhub_sd_webui_error": "txt2img_http_failed", "raw": raw_without_sd_webui_images(&raw) }),
+        ));
+    }
+
+    let image_urls = raw
+        .get("images")
+        .and_then(Value::as_array)
+        .map(|images| {
+            images
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| {
+                    let trimmed = value.trim();
+                    if trimmed.starts_with("data:image/") {
+                        trimmed.to_string()
+                    } else {
+                        format!("data:image/png;base64,{trimmed}")
+                    }
+                })
+                .collect::<Vec<String>>()
+        })
+        .unwrap_or_default();
+
+    if image_urls.is_empty() {
+        return Ok(sd_webui_failed_result(
+            &request,
+            started.elapsed().as_millis(),
+            "SD WebUI /txt2img 没有返回图片数组。".to_string(),
+            serde_json::json!({ "visionhub_sd_webui_error": "txt2img_no_images", "raw": raw_without_sd_webui_images(&raw) }),
+        ));
+    }
+
+    let local_image_paths = match save_sd_webui_images_to_library(&app, &image_urls, &request).await {
+        Ok(paths) => paths,
+        Err(error) => {
+            return Ok(sd_webui_failed_result(
+                &request,
+                started.elapsed().as_millis(),
+                error,
+                serde_json::json!({ "visionhub_sd_webui_error": "txt2img_save_failed", "raw": raw_without_sd_webui_images(&raw) }),
+            ));
+        }
+    };
+    let display_image_urls = display_library_image_urls_for_paths(&app, &local_image_paths, &[]);
+    let model_id = raw
+        .get("info")
+        .and_then(Value::as_str)
+        .and_then(extract_sd_webui_checkpoint_from_info)
+        .unwrap_or_else(|| "sd-webui-txt2img".to_string());
+
+    Ok(ImageGenerationResult {
+        id: format!("sd-webui-{}", chrono_like_timestamp_millis()),
+        provider_id: "sd-webui-local".to_string(),
+        model_id,
+        status: "succeeded".to_string(),
+        prompt: request.prompt,
+        image_urls: display_image_urls,
+        local_image_paths,
+        cost_hint: Some("本地 Stable Diffusion WebUI / Forge 生成，不消耗在线 API 额度。".to_string()),
+        duration_ms: Some(started.elapsed().as_millis()),
+        error: None,
+        raw: serde_json::json!({
+            "endpoint": "/sdapi/v1/txt2img",
+            "parameters": raw.get("parameters"),
+            "info": raw.get("info"),
+            "visionhub_sd_webui": {
+                "width": width,
+                "height": height,
+                "count": count,
+                "seed": seed,
+                "steps": steps,
+                "cfg_scale": cfg_scale,
+                "sampler_name": sampler_name
+            }
+        }),
+        created_at: chrono_like_timestamp(),
+        generation_mode: Some("text-to-image".to_string()),
+        reference_images: Some(Vec::new()),
+    })
+}
+
+struct SdWebUIDiagnosisError {
+    status: Option<u16>,
+    detail: String,
+}
+
+async fn fetch_sd_webui_json(
+    client: &reqwest::Client,
+    base_url: &str,
+    path: &str,
+) -> Result<(reqwest::StatusCode, Value), SdWebUIDiagnosisError> {
+    let endpoint = format!("{base_url}{path}");
+    let response = client
+        .get(endpoint)
+        .send()
+        .await
+        .map_err(|error| SdWebUIDiagnosisError {
+            status: None,
+            detail: format!("连接失败：{error}。请确认 A1111 WebUI / Forge 已在该端口启动，并且带有 --api。"),
+        })?;
+    let status = response.status();
+    let body_text = response
+        .text()
+        .await
+        .map_err(|error| SdWebUIDiagnosisError {
+            status: Some(status.as_u16()),
+            detail: format!("响应读取失败：{error}"),
+        })?;
+    let trimmed_body = body_text.trim_start();
+    if trimmed_body.starts_with('<') {
+        let preview: String = body_text.chars().take(180).collect();
+        return Err(SdWebUIDiagnosisError {
+            status: Some(status.as_u16()),
+            detail: format!("响应不是 JSON，可能访问到了 WebUI 页面而不是 API；请启用 --api。响应预览：{preview}"),
+        });
+    }
+    let raw: Value = serde_json::from_str(&body_text).map_err(|error| SdWebUIDiagnosisError {
+        status: Some(status.as_u16()),
+        detail: format!("JSON 解析失败：{error}"),
+    })?;
+    if !status.is_success() {
+        return Err(SdWebUIDiagnosisError {
+            status: Some(status.as_u16()),
+            detail: extract_error_message(&raw).unwrap_or_else(|| format!("HTTP {status}")),
+        });
+    }
+    Ok((status, raw))
+}
+
+fn sd_webui_failed_result(
+    request: &SdWebUIGenerationRequest,
+    duration_ms: u128,
+    error: String,
+    raw: Value,
+) -> ImageGenerationResult {
+    ImageGenerationResult {
+        id: format!("sd-webui-{}", chrono_like_timestamp_millis()),
+        provider_id: "sd-webui-local".to_string(),
+        model_id: "sd-webui-txt2img".to_string(),
+        status: "failed".to_string(),
+        prompt: request.prompt.clone(),
+        image_urls: Vec::new(),
+        local_image_paths: Vec::new(),
+        cost_hint: Some("本地 Stable Diffusion WebUI / Forge 生成，不消耗在线 API 额度。".to_string()),
+        duration_ms: Some(duration_ms),
+        error: Some(error),
+        raw,
+        created_at: chrono_like_timestamp(),
+        generation_mode: Some("text-to-image".to_string()),
+        reference_images: Some(Vec::new()),
+    }
+}
+
+async fn save_sd_webui_images_to_library(
+    app: &tauri::AppHandle,
+    image_urls: &[String],
+    request: &SdWebUIGenerationRequest,
+) -> Result<Vec<String>, String> {
+    let dir = library_dir(app)?;
+    let mut saved_paths = Vec::new();
+    for (index, image_url) in image_urls.iter().enumerate() {
+        let (bytes, source_extension) = decode_data_url_image(image_url)?;
+        let (bytes, extension) = convert_generated_image_bytes(
+            bytes,
+            &source_extension,
+            request.output_format.as_deref(),
+            request.output_compression,
+        )?;
+        let filename = format!(
+            "{}-sd-webui-txt2img-{}.{}",
+            chrono_like_timestamp_millis(),
+            index + 1,
+            extension
+        );
+        let path = dir.join(filename);
+        std::fs::write(&path, bytes)
+            .map_err(|error| format!("无法保存 SD WebUI 生成图片：{error}"))?;
+        saved_paths.push(path_to_user_string(&path));
+    }
+    Ok(saved_paths)
+}
+
+fn raw_without_sd_webui_images(raw: &Value) -> Value {
+    let mut value = raw.clone();
+    if let Some(object) = value.as_object_mut() {
+        if let Some(images) = object.get("images").and_then(Value::as_array) {
+            object.insert("images".to_string(), serde_json::json!({ "count": images.len(), "omitted": true }));
+        }
+    }
+    value
+}
+
+fn extract_sd_webui_checkpoint_from_info(info: &str) -> Option<String> {
+    let parsed: Value = serde_json::from_str(info).ok()?;
+    parsed
+        .get("sd_model_name")
+        .or_else(|| parsed.get("sd_model_checkpoint"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
 }
 
 #[tauri::command]
@@ -5610,6 +6184,8 @@ pub fn run() {
             list_openai_compatible_models,
             diagnose_comfyui_connection,
             generate_comfyui_image,
+            diagnose_sd_webui_connection,
+            generate_sd_webui_image,
             polish_prompt_with_provider,
             reverse_image_prompt,
             load_generation_history,

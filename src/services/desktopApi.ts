@@ -91,6 +91,34 @@ interface BackendComfyUIDiagnosisResult {
   message: string;
 }
 
+export interface SdWebUIDiagnosisResult {
+  baseUrl: string;
+  resolvedBaseUrl: string;
+  checkedAt: string;
+  latencyMs: number;
+  online: boolean;
+  sdModelCheckpoint?: string | null;
+  samplerCount?: number | null;
+  modelCount?: number | null;
+  endpoints: ComfyUIDiagnosisEndpoint[];
+  message: string;
+}
+
+interface BackendSdWebUIDiagnosisResult {
+  base_url: string;
+  resolved_base_url: string;
+  checked_at: string;
+  latency_ms: number;
+  online: boolean;
+  sd_model_checkpoint?: string | null;
+  sampler_count?: number | null;
+  model_count?: number | null;
+  endpoints: ComfyUIDiagnosisEndpoint[];
+  message: string;
+}
+
+interface BackendSdWebUIGenerationResult extends BackendImageGenerationResult {}
+
 interface BackendPromptPolishResult {
   provider_id: string;
   model_id: string;
@@ -317,6 +345,8 @@ export async function generateComfyUIImage(request: {
   outputFormat?: ImageGenerationRequest['outputFormat'];
   outputCompression?: ImageGenerationRequest['outputCompression'];
   timeoutMs?: number;
+  generationMode?: ImageGenerationRequest['generationMode'];
+  references?: ReferenceImage[];
 }) {
   const result = await invoke<BackendComfyUIGenerationResult>('generate_comfyui_image', {
     request: {
@@ -330,7 +360,63 @@ export async function generateComfyUIImage(request: {
       count: request.count,
       output_format: request.outputFormat,
       output_compression: request.outputCompression,
+      timeout_ms: request.timeoutMs,
+      generation_mode: request.generationMode,
+      reference_images: request.references?.map(mapReferenceToBackend)
+    }
+  });
+  return mapBackendResult(result);
+}
+
+export async function diagnoseSdWebUIConnection(request: { baseUrl: string; timeoutMs?: number }): Promise<SdWebUIDiagnosisResult> {
+  const result = await invoke<BackendSdWebUIDiagnosisResult>('diagnose_sd_webui_connection', {
+    request: {
+      base_url: request.baseUrl,
       timeout_ms: request.timeoutMs
+    }
+  });
+  return {
+    baseUrl: result.base_url,
+    resolvedBaseUrl: result.resolved_base_url,
+    checkedAt: result.checked_at,
+    latencyMs: result.latency_ms,
+    online: result.online,
+    sdModelCheckpoint: result.sd_model_checkpoint,
+    samplerCount: result.sampler_count,
+    modelCount: result.model_count,
+    endpoints: result.endpoints,
+    message: result.message
+  };
+}
+
+export async function generateSdWebUIImage(request: {
+  baseUrl: string;
+  prompt: string;
+  negativePrompt?: string;
+  size: string;
+  seed?: number;
+  count?: number;
+  outputFormat?: ImageGenerationRequest['outputFormat'];
+  outputCompression?: ImageGenerationRequest['outputCompression'];
+  timeoutMs?: number;
+  samplerName?: string;
+  steps?: number;
+  cfgScale?: number;
+}) {
+  const result = await invoke<BackendSdWebUIGenerationResult>('generate_sd_webui_image', {
+    request: {
+      base_url: request.baseUrl,
+      prompt: request.prompt,
+      negative_prompt: request.negativePrompt,
+      size: request.size,
+      seed: request.seed,
+      count: request.count,
+      output_format: request.outputFormat,
+      output_compression: request.outputCompression,
+      timeout_ms: request.timeoutMs,
+      sampler_name: request.samplerName,
+      steps: request.steps,
+      cfg_scale: request.cfgScale
     }
   });
   return mapBackendResult(result);

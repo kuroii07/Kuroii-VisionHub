@@ -529,6 +529,9 @@ export function ModernGeneratePage(props: {
   const [promptStyleId, setPromptStyleId] = useState('auto');
   const [seedInput, setSeedInput] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
+  const [sdSamplerName, setSdSamplerName] = useState('');
+  const [sdStepsInput, setSdStepsInput] = useState('20');
+  const [sdCfgScaleInput, setSdCfgScaleInput] = useState('7');
   const [referenceStrength, setReferenceStrength] = useState('auto');
   const [referenceRoles, setReferenceRoles] = useState<Record<string, string>>({});
   const [preserveComposition, setPreserveComposition] = useState(true);
@@ -642,11 +645,15 @@ export function ModernGeneratePage(props: {
           protocol: selectedQuickPolishConfig?.protocol ?? props.promptPolishSettings.protocol
         };
   const isComfyUILocalProvider = props.selectedProvider.id === 'comfyui-local';
+  const isSdWebUILocalProvider = props.selectedProvider.id === 'sd-webui-local';
+  const isLocalGenerationProvider = isComfyUILocalProvider || isSdWebUILocalProvider;
   const modelValue = props.supportsOpenAICompatible ? props.providerConfig.modelId : props.selectedModelId;
   const activeProfileName = isComfyUILocalProvider
     ? 'ComfyUI 本地 workflow'
-    : props.activeProfile?.displayName ?? (props.supportsOpenAICompatible ? '未保存配置实例' : props.selectedProvider.name);
-  const activeProfileStatus = isComfyUILocalProvider
+    : isSdWebUILocalProvider
+      ? 'SD WebUI / Forge 本地端点'
+      : props.activeProfile?.displayName ?? (props.supportsOpenAICompatible ? '未保存配置实例' : props.selectedProvider.name);
+  const activeProfileStatus = isLocalGenerationProvider
     ? '本地服务'
     : props.activeProfile
     ? props.activeProfile.lastTestStatus === 'passed'
@@ -657,12 +664,14 @@ export function ModernGeneratePage(props: {
           ? '失败'
           : '未测试'
     : props.supportsOpenAICompatible ? '草稿 / 旧配置' : '内置平台';
-  const activeProfileSecretText = isComfyUILocalProvider
+  const activeProfileSecretText = isLocalGenerationProvider
     ? '无需密钥'
     : props.activeProfileSecretAvailable ? '密钥已绑定' : '密钥未绑定';
   const activeProfileModelProbeText = isComfyUILocalProvider
     ? props.isRealProviderReady ? 'API workflow 可提交' : '需导入 API workflow'
-    : props.activeProfile?.lastModelProbe
+    : isSdWebUILocalProvider
+      ? props.isRealProviderReady ? 'txt2img 可提交' : '需本地端点'
+      : props.activeProfile?.lastModelProbe
     ? props.activeProfile.lastModelProbe.available ? '当前模型已命中' : '当前模型未命中'
     : '模型未探测';
   const selectedRatio = ratioFromSize(props.size);
@@ -1427,6 +1436,15 @@ export function ModernGeneratePage(props: {
     const trimmedSeed = seedInput.trim();
     const parsedSeed = trimmedSeed ? Number(trimmedSeed) : Number.NaN;
     const seed = trimmedSeed && Number.isFinite(parsedSeed) ? Math.max(0, Math.round(parsedSeed)) : undefined;
+    const parsedSdSteps = sdStepsInput.trim() ? Number(sdStepsInput.trim()) : Number.NaN;
+    const parsedSdCfgScale = sdCfgScaleInput.trim() ? Number(sdCfgScaleInput.trim()) : Number.NaN;
+    const sdWebUIOptions = isSdWebUILocalProvider
+      ? {
+          samplerName: sdSamplerName.trim() || undefined,
+          steps: Number.isFinite(parsedSdSteps) ? Math.max(1, Math.min(150, Math.round(parsedSdSteps))) : undefined,
+          cfgScale: Number.isFinite(parsedSdCfgScale) ? Math.max(1, Math.min(30, Math.round(parsedSdCfgScale * 10) / 10)) : undefined
+        }
+      : undefined;
     const advancedGenerationOptions = {
       negativePrompt: trimmedNegativePrompt || undefined,
       seed
@@ -1450,11 +1468,19 @@ export function ModernGeneratePage(props: {
             capabilityStatus: imageToImageStatus,
             multiReferenceStatus,
             referenceRoles: referenceRoleMap
-          }
+          },
+          ...(sdWebUIOptions ? { sdWebUI: sdWebUIOptions } : {})
         }
       };
     }
-    return { mode: 'text-to-image', references: [], outputFormat, outputCompression, ...advancedGenerationOptions };
+    return {
+      mode: 'text-to-image',
+      references: [],
+      outputFormat,
+      outputCompression,
+      ...advancedGenerationOptions,
+      metadata: sdWebUIOptions ? { sdWebUI: sdWebUIOptions } : undefined
+    };
   }
 
   function isCurrentSizeSupportedByModel() {
@@ -2048,7 +2074,9 @@ export function ModernGeneratePage(props: {
           <div className={`connectionState ${props.isRealProviderReady ? 'ready' : ''}`}>
             <ShieldCheck size={14} /> {isComfyUILocalProvider
               ? props.isRealProviderReady ? 'ComfyUI API workflow 已就绪' : '需要 API workflow 才能提交'
-              : props.isRealProviderReady ? '真实通道已就绪' : '未配置密钥时使用演示模式'}
+              : isSdWebUILocalProvider
+                ? props.isRealProviderReady ? 'SD WebUI / Forge txt2img 已就绪' : '需要本地 WebUI / Forge 端点'
+                : props.isRealProviderReady ? '真实通道已就绪' : '未配置密钥时使用演示模式'}
           </div>
           <div className="activeProfileSummary">
             <div className="activeProfileLine">
@@ -2175,6 +2203,36 @@ export function ModernGeneratePage(props: {
               onChange={(event) => setSeedInput(event.target.value.replace(/[^\d]/g, '').slice(0, 12))}
             />
           </label>
+          {isSdWebUILocalProvider ? (
+            <>
+              <label>
+                采样器
+                <input
+                  value={sdSamplerName}
+                  placeholder="留空使用 WebUI 默认，例如 Euler a"
+                  onChange={(event) => setSdSamplerName(event.target.value.slice(0, 80))}
+                />
+              </label>
+              <label>
+                步数
+                <input
+                  value={sdStepsInput}
+                  inputMode="numeric"
+                  placeholder="20"
+                  onChange={(event) => setSdStepsInput(event.target.value.replace(/[^\d]/g, '').slice(0, 3))}
+                />
+              </label>
+              <label>
+                CFG Scale
+                <input
+                  value={sdCfgScaleInput}
+                  inputMode="decimal"
+                  placeholder="7"
+                  onChange={(event) => setSdCfgScaleInput(event.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1').slice(0, 5))}
+                />
+              </label>
+            </>
+          ) : null}
           <label>
             负面提示词
             <textarea
@@ -2184,7 +2242,7 @@ export function ModernGeneratePage(props: {
               onChange={(event) => setNegativePrompt(event.target.value)}
             />
           </label>
-          <small>填写后会随请求记录，并传给支持 Seed / 负面提示词字段的兼容接口。</small>
+          <small>{isSdWebUILocalProvider ? 'SD WebUI / Forge 会接收 Seed、负面提示词、采样器、步数和 CFG；其余平台只记录并传递通用字段。' : '填写后会随请求记录，并传给支持 Seed / 负面提示词字段的兼容接口。'}</small>
         </section>
       </aside>
       {isBatchToolsOpen ? (

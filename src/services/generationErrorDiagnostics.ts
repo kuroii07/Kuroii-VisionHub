@@ -98,6 +98,32 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     });
   }
 
+  if (record?.providerId === 'sd-webui-local' || lower.includes('visionhub_sd_webui') || lower.includes('sd webui') || lower.includes('stable diffusion webui') || lower.includes('txt2img')) {
+    const needsEndpoint = lower.includes('frontend_preflight_failed') || lower.includes('--api') || lower.includes('connection') || lower.includes('base url');
+    return buildDiagnosis({
+      category: needsEndpoint ? 'network' : 'unknown',
+      severity: 'error',
+      title: needsEndpoint ? 'SD WebUI / Forge 本地 API 不可用' : 'SD WebUI / Forge 本地生成失败',
+      summary: record?.error || extractRawErrorMessage(raw) || '本地 SD WebUI / Forge txt2img 未完成，请检查端点、模型、采样器或参数。',
+      actions: needsEndpoint
+        ? [
+            '确认 Stable Diffusion WebUI / Forge 已启动，并且启动参数包含 --api。',
+            '到“平台接入 > 本地模型 > Stable Diffusion WebUI / Forge”检查 Base URL 和端口。',
+            '先在浏览器打开 WebUI，确认本地服务可访问，再运行“测试连接”。'
+          ]
+        : [
+            '先在 WebUI / Forge 的 txt2img 页面测试同一段 Prompt。',
+            '检查 checkpoint、采样器、图片尺寸和显存余量。',
+            '打开失败记录详情，查看原始 /sdapi/v1/txt2img 响应。'
+          ],
+      details,
+      rawMessage,
+      httpStatus,
+      traceId,
+      requestId
+    });
+  }
+
   if (potentialBackground) {
     return buildDiagnosis({
       category: 'timeout-background',

@@ -126,13 +126,15 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.4.2` Provider Stability V5 / non-consuming diagnostics, profile-safe config normalization, and Provider self-check hardening.
+Current checkpoint: `0.4.3` Local Model Improvements V2 / SD WebUI + Forge txt2img, ComfyUI LoadImage img2img first slice, and local result gallery saving.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
 - 平台接入页已加入能力矩阵 V2，并将完整矩阵改为按需展开，配置详情保持优先显示。
 - 平台接入 V3 已完成本轮收口：配置实例支持模型列表刷新、当前模型探测、非消耗诊断、真实试生图区分，以及与 AI 创作页当前启用配置的状态同步。
 - 本地模型路线 MVP 已完成 ComfyUI 优先接入：连接诊断、API workflow 导入、workflow 管理、AI 创作台文生图提交、任务轮询、结果下载和作品画廊保存均已跑通。
+- 0.4.3 本地模型增强已接入 Stable Diffusion WebUI / Forge：本地端点诊断、`/sdapi/v1/txt2img`、Seed / 负面提示词 / 采样器 / 步数 / CFG 轻量参数，以及作品画廊保存。
+- ComfyUI 图生图第一切片已支持包含 LoadImage 节点的 API workflow：上传第一张参考图、写入 LoadImage、轮询结果并入库；ControlNet、多输入节点策略和 SD WebUI img2img 后续再做。
 - ComfyUI 诊断会在本地模板页自动刷新；本地服务关闭后会从旧的在线状态回落到离线 / 未连通提示，避免继续显示旧的测试通过结果。
 - ComfyUI 在线状态来自本机 `127.0.0.1:8188` 的实时接口响应；如果关闭界面后仍显示在线，通常表示后台 `python.exe` / 启动脚本仍在监听端口。
 - ComfyUI 目前要求导入 API Format workflow；普通 UI workflow 会保留解析预览，但不会误导为可直接生成。
@@ -169,13 +171,21 @@ Current checkpoint: `0.4.2` Provider Stability V5 / non-consuming diagnostics, p
 
 ## 近期更新记录
 
+### v0.4.3 Local Model Improvements V2 / SD WebUI + ComfyUI first slice
+
+- App version is now `0.4.3`, synchronized across package metadata, Tauri metadata, Cargo metadata, app version display, README, and roadmap docs.
+- Stable Diffusion WebUI / Forge is no longer shown as planning-only: Platform Access now exposes local endpoint configuration, connection diagnosis, and Creative Desk generation through `/sdapi/v1/txt2img`.
+- SD WebUI / Forge txt2img saves generated images into the VisionHub gallery and supports Seed, negative prompt, sampler, steps, CFG Scale, output format, and output compression forwarding.
+- ComfyUI now supports the first image-to-image slice for API workflows that contain a `LoadImage` node: VisionHub uploads the first reference image to `/upload/image`, writes the returned filename into LoadImage, polls history, downloads outputs, and saves them to the gallery.
+- Local model paths remain separated from cloud provider profiles: no API Key, no online quota, no AiMaMi / Clash / system proxy changes.
+
 ### v0.4.2 Provider Stability V5 / Self-check Hardening
 
 - App version is now `0.4.2`, synchronized across package metadata, Tauri metadata, Cargo metadata, app version display, README, and roadmap docs.
 - Provider configs now normalize legacy and partial saved fields on load/save, so older profiles keep their original `profile:${profileId}` credential binding without crashing diagnostics.
 - Provider profile to config conversion now always goes through the shared normalization layer, protecting Base URL, model ID, protocol, endpoint path, image-to-image adapter, headers, and model options.
 - Provider self-check now previews the target endpoint, capability boundary, reference-image submission route, model-list boundary, and cost/retry risk without submitting an image-generation request.
-- The right-side ?????? action no longer passes the React click event as a profile object; the function also ignores non-profile inputs defensively, matching the left-side profile latency test behavior.
+- The right-side self-check action no longer passes the React click event as a profile object; the function also ignores non-profile inputs defensively, matching the left-side profile latency test behavior.
 - This version intentionally does not add unverified new provider templates; Gemini / Grok / Seedream / DashScope specific adapters remain gated by official docs, real account access, or raw error evidence.
 
 ### v0.4.1 Prompt Workflow V3 / Image Reverse + Prompt Excerpts

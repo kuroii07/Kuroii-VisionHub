@@ -180,10 +180,10 @@ export const providerManifests: ProviderManifest[] = [
     phase: 'local-lab',
     executionModes: ['async-polling', 'custom-http'],
     homepage: 'http://127.0.0.1:8188',
-    auth: { type: 'local-endpoint', label: '本地 ComfyUI Endpoint', secretStorageKey: 'provider.comfyui.endpoint' },
+    auth: { type: 'local-endpoint', label: '本地 ComfyUI 端点', secretStorageKey: 'provider.comfyui.endpoint' },
     capabilities: {
-      textToImage: 'planned',
-      imageToImage: 'planned',
+      textToImage: 'supported',
+      imageToImage: 'partial',
       editImage: 'planned',
       multiReferenceImage: 'planned',
       generateSeries: 'planned',
@@ -195,12 +195,46 @@ export const providerManifests: ProviderManifest[] = [
     models: [
       {
         id: 'comfy-workflow-json',
-        label: 'ComfyUI Workflow JSON',
-        description: '后期接入本地 Flux / SDXL 工作流。',
+        label: 'ComfyUI API Workflow JSON',
+        description: '使用导出的 ComfyUI API workflow 进行本地文生图；包含 LoadImage 节点时可尝试图生图。',
         defaultSize: '1024x1024',
-        tags: ['local', 'future']
+        tags: ['local', 'workflow', 'txt2img', 'img2img']
       }
     ],
-    notes: ['本地模型后置，不影响在线平台接入的首发路线。']
+    notes: ['本地模型保持辅助入口，不影响在线平台优先的主路线。']
+  },
+  {
+    id: 'sd-webui-local',
+    name: 'Stable Diffusion WebUI / Forge',
+    vendor: 'Local',
+    region: 'local',
+    phase: 'local-lab',
+    executionModes: ['sync', 'custom-http'],
+    homepage: 'http://127.0.0.1:7860',
+    auth: { type: 'local-endpoint', label: '本地 SD WebUI / Forge 端点', secretStorageKey: 'provider.sdwebui.endpoint' },
+    capabilities: {
+      textToImage: 'supported',
+      imageToImage: 'planned',
+      editImage: 'planned',
+      multiReferenceImage: 'planned',
+      generateSeries: 'planned',
+      imageToVideo: 'unsupported',
+      promptPolish: 'unsupported',
+      chineseTextRendering: 'unknown',
+      localWorkflow: 'supported'
+    },
+    models: [
+      {
+        id: 'sd-webui-txt2img',
+        label: 'SD WebUI / Forge txt2img',
+        description: '调用 /sdapi/v1/txt2img，并把本地生成结果保存到 VisionHub 作品画廊。',
+        defaultSize: '1024x1024',
+        tags: ['local', 'stable-diffusion', 'forge', 'txt2img']
+      }
+    ],
+    notes: [
+      'Stable Diffusion WebUI / Forge 必须以 --api 启动。',
+      '0.4.3 优先支持 txt2img 与轻量参数；img2img、ControlNet 和完整参数面板后续再接入。'
+    ]
   }
 ];

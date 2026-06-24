@@ -54,9 +54,11 @@ import {
   chooseLibraryDir,
   deleteProviderSecret,
   diagnoseComfyUIConnection,
+  diagnoseSdWebUIConnection,
   getProviderSecretStatus,
   exportSettingsBackup,
   generateComfyUIImage,
+  generateSdWebUIImage,
   generateOpenAIImage,
   getStorageSettings,
   importLibraryImagesFromFiles,
@@ -77,6 +79,7 @@ import {
   saveStorageSettings,
   type LibraryDataPayload,
   type ComfyUIDiagnosisResult,
+  type SdWebUIDiagnosisResult,
   type StorageSettings
 } from '../services/desktopApi';
 import { diagnoseGenerationFailure, type GenerationFailureCategory, type GenerationFailureSeverity } from '../services/generationErrorDiagnostics';
@@ -386,6 +389,14 @@ type LocalComfyUIDiagnosticState = {
   result: ComfyUIDiagnosisResult | null;
   error: string;
 };
+type LocalSdWebUIConfig = {
+  baseUrl: string;
+};
+type LocalSdWebUIDiagnosticState = {
+  status: LocalModelDiagnosticStatus;
+  result: SdWebUIDiagnosisResult | null;
+  error: string;
+};
 type LocalComfyUIWorkflowFormat = 'api' | 'ui' | 'unknown';
 type LocalComfyUIWorkflowNodeRole = 'prompt' | 'sampler' | 'checkpoint' | 'size' | 'output' | 'loader' | 'other';
 type LocalComfyUIWorkflowNode = {
@@ -429,8 +440,11 @@ const LIBRARY_CUSTOM_QUICK_FILTERS_STORAGE_KEY = 'visionhub.library.customQuickF
 const LIBRARY_ORGANIZATION_STORAGE_KEY = 'visionhub.library.organization.v1';
 const LOCAL_COMFYUI_CONFIG_STORAGE_KEY = 'visionhub.local.comfyui.config.v1';
 const LOCAL_COMFYUI_WORKFLOW_STORAGE_KEY = 'visionhub.local.comfyui.workflow.v1';
+const LOCAL_SD_WEBUI_CONFIG_STORAGE_KEY = 'visionhub.local.sdwebui.config.v1';
 const DEFAULT_COMFYUI_BASE_URL = 'http://127.0.0.1:8188';
+const DEFAULT_SD_WEBUI_BASE_URL = 'http://127.0.0.1:7860';
 const LOCAL_COMFYUI_DIAGNOSTIC_TIMEOUT_MS = 12_000;
+const LOCAL_SD_WEBUI_DIAGNOSTIC_TIMEOUT_MS = 12_000;
 
 const providerPlatformOptions: ProviderPlatformOption[] = [
   {
@@ -636,27 +650,28 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     id: 'local-comfyui',
     platformType: 'local',
     label: 'ComfyUI',
-    description: '本地 ComfyUI 已支持连接诊断、API workflow 导入和 AI 创作台最小文生图测试。',
-    status: 'local-plan',
+    description: '本地 ComfyUI 已支持连接诊断、API workflow 导入、文生图和带 LoadImage 节点的图生图测试。',
+    status: 'configurable',
     region: 'local',
     sortRank: 10,
     providerId: 'comfyui-local',
     supportsTextToImage: true,
-    supportsImageToImage: false,
+    supportsImageToImage: true,
     requiresPolling: true,
-    notes: ['先支持 ComfyUI API workflow；UI workflow 需要从 ComfyUI 重新导出 API 格式。', '当前 MVP 会自动写入 Prompt、负面提示词、尺寸和 Seed。']
+    notes: ['支持 ComfyUI API workflow；普通 UI workflow 需要从 ComfyUI 重新导出 API 格式。', '当前会自动写入 Prompt、负面提示词、尺寸、Seed；图生图会上传第一张参考图并写入 LoadImage 节点。']
   },
   {
     id: 'local-sd-webui',
     platformType: 'local',
     label: 'Stable Diffusion WebUI / Forge',
-    description: '本地主流候选；V4 后续先做连接诊断和 txt2img。',
-    status: 'local-plan',
+    description: '0.4.3 已支持本地连接诊断、txt2img 文生图和作品画廊保存；WebUI / Forge 启动时需要带 --api。',
+    status: 'configurable',
     region: 'local',
     sortRank: 20,
+    providerId: 'sd-webui-local',
     supportsTextToImage: true,
-    supportsImageToImage: true,
-    notes: ['后续接入本地 endpoint、采样器、尺寸和 ControlNet 参数。']
+    supportsImageToImage: false,
+    notes: ['A1111 Stable Diffusion WebUI 或 Forge 需要以 --api 启动。', '当前切片支持 txt2img、Seed、负面提示词、采样器、步数、CFG 和作品画廊保存；img2img / ControlNet 后续再接入。']
   }
 ];
 
@@ -736,6 +751,26 @@ function loadLocalComfyUIConfig(): LocalComfyUIConfig {
 
 function saveLocalComfyUIConfig(config: LocalComfyUIConfig) {
   writeStorageValue(LOCAL_COMFYUI_CONFIG_STORAGE_KEY, JSON.stringify(config));
+}
+
+function loadLocalSdWebUIConfig(): LocalSdWebUIConfig {
+  const raw = readStorageValue(LOCAL_SD_WEBUI_CONFIG_STORAGE_KEY);
+  if (!raw) return { baseUrl: DEFAULT_SD_WEBUI_BASE_URL };
+  try {
+    const parsed = JSON.parse(raw) as Partial<LocalSdWebUIConfig>;
+    return {
+      baseUrl: typeof parsed.baseUrl === 'string' && parsed.baseUrl.trim()
+        ? parsed.baseUrl.trim()
+        : DEFAULT_SD_WEBUI_BASE_URL
+    };
+  } catch (error) {
+    console.warn('[VisionHub] local SD WebUI config parse failed; using default', error);
+    return { baseUrl: DEFAULT_SD_WEBUI_BASE_URL };
+  }
+}
+
+function saveLocalSdWebUIConfig(config: LocalSdWebUIConfig) {
+  writeStorageValue(LOCAL_SD_WEBUI_CONFIG_STORAGE_KEY, JSON.stringify(config));
 }
 
 function createLocalWorkflowPreset(summary: LocalComfyUIWorkflowSummary, name?: string, rawWorkflow?: unknown): LocalComfyUIWorkflowPreset {
@@ -2148,6 +2183,12 @@ export function App() {
     result: null,
     error: ''
   });
+  const [localSdWebUIConfig, setLocalSdWebUIConfig] = useState<LocalSdWebUIConfig>(() => loadLocalSdWebUIConfig());
+  const [localSdWebUIDiagnostic, setLocalSdWebUIDiagnostic] = useState<LocalSdWebUIDiagnosticState>({
+    status: 'idle',
+    result: null,
+    error: ''
+  });
   const [localComfyUIWorkflowStore, setLocalComfyUIWorkflowStore] = useState<LocalComfyUIWorkflowStore>(() => loadLocalComfyUIWorkflowStore());
   const [isComfyUIWorkflowManagerOpen, setIsComfyUIWorkflowManagerOpen] = useState(false);
   const [localComfyUIWorkflowError, setLocalComfyUIWorkflowError] = useState('');
@@ -2174,6 +2215,8 @@ export function App() {
   const autoRecheckedRecordIdsRef = useRef<Set<string>>(new Set());
   const localComfyUIDiagnosticRequestRef = useRef(0);
   const localComfyUIAutoCheckRunningRef = useRef(false);
+  const localSdWebUIDiagnosticRequestRef = useRef(0);
+  const localSdWebUIAutoCheckRunningRef = useRef(false);
   const batchQueueStopRequestedRef = useRef(false);
   const themeSwitchTimerRef = useRef<number | null>(null);
   const [systemTheme, setSystemTheme] = useState<'dark' | 'light'>(() =>
@@ -2271,9 +2314,14 @@ export function App() {
     desktopRuntime &&
     selectedProviderId === 'comfyui-local' &&
     Boolean(activeComfyUIWorkflowPreset?.rawWorkflow);
+  const isSdWebUIGenerationReady =
+    desktopRuntime &&
+    selectedProviderId === 'sd-webui-local' &&
+    Boolean(localSdWebUIConfig.baseUrl.trim());
   const isRealProviderReady = desktopRuntime && (
     (generationProviderUsesConfig && generationSecretAvailable) ||
-    isComfyUIGenerationReady
+    isComfyUIGenerationReady ||
+    isSdWebUIGenerationReady
   );
   const homeProviderNameMap = useMemo(
     () => new Map(providers.map((provider) => [provider.id, provider.name])),
@@ -2630,6 +2678,7 @@ export function App() {
     setConfigActionState('idle');
     setProviderDiagnostics([]);
     setLocalComfyUIDiagnostic({ status: 'idle', result: null, error: '' });
+    setLocalSdWebUIDiagnostic({ status: 'idle', result: null, error: '' });
     if (template.providerId) {
       setSelectedProvider(template.providerId);
     }
@@ -2681,6 +2730,60 @@ export function App() {
       if (requestId !== localComfyUIDiagnosticRequestRef.current) return;
       const message = error instanceof Error ? error.message : String(error);
       setLocalComfyUIDiagnostic({
+        status: 'failed',
+        result: null,
+        error: message
+      });
+      if (!silent) setConfigMessage(message);
+    }
+  }
+
+
+  function updateLocalSdWebUIBaseUrl(baseUrl: string) {
+    const nextConfig = { baseUrl };
+    setLocalSdWebUIConfig(nextConfig);
+    saveLocalSdWebUIConfig(nextConfig);
+    localSdWebUIDiagnosticRequestRef.current += 1;
+    setLocalSdWebUIDiagnostic((current) => ({ ...current, status: 'idle', error: '' }));
+  }
+
+  async function runLocalSdWebUIDiagnostics(options?: { silent?: boolean }) {
+    const silent = Boolean(options?.silent);
+    if (!desktopRuntime) {
+      setLocalSdWebUIDiagnostic({
+        status: 'failed',
+        result: null,
+        error: 'Stable Diffusion WebUI / Forge 本地诊断需要在 Tauri 桌面版中运行。'
+      });
+      return;
+    }
+    const requestId = localSdWebUIDiagnosticRequestRef.current + 1;
+    localSdWebUIDiagnosticRequestRef.current = requestId;
+    setLocalSdWebUIDiagnostic((current) => ({ ...current, status: 'checking', error: '' }));
+    if (!silent) setConfigMessage('正在测试 Stable Diffusion WebUI / Forge 本地连接...');
+    try {
+      const result = await Promise.race([
+        diagnoseSdWebUIConnection({
+          baseUrl: localSdWebUIConfig.baseUrl,
+          timeoutMs: LOCAL_SD_WEBUI_DIAGNOSTIC_TIMEOUT_MS
+        }),
+        new Promise<never>((_, reject) => {
+          window.setTimeout(() => {
+            reject(new Error('SD WebUI / Forge 诊断 12 秒内未响应，请检查本地服务地址、端口以及是否带 --api 启动。'));
+          }, LOCAL_SD_WEBUI_DIAGNOSTIC_TIMEOUT_MS);
+        })
+      ]);
+      if (requestId !== localSdWebUIDiagnosticRequestRef.current) return;
+      setLocalSdWebUIDiagnostic({
+        status: result.online ? 'online' : 'offline',
+        result,
+        error: ''
+      });
+      if (!silent) setConfigMessage(result.message);
+    } catch (error) {
+      if (requestId !== localSdWebUIDiagnosticRequestRef.current) return;
+      const message = error instanceof Error ? error.message : String(error);
+      setLocalSdWebUIDiagnostic({
         status: 'failed',
         result: null,
         error: message
@@ -2744,7 +2847,105 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [desktopRuntime, page, selectedServiceTemplate.id, localComfyUIConfig.baseUrl]);
 
+
+  useEffect(() => {
+    if (!desktopRuntime || page !== 'providers' || selectedServiceTemplate.id !== 'local-sd-webui') return;
+
+    const runSilentCheck = () => {
+      if (localSdWebUIAutoCheckRunningRef.current) return;
+      localSdWebUIAutoCheckRunningRef.current = true;
+      void runLocalSdWebUIDiagnostics({ silent: true })
+        .finally(() => {
+          localSdWebUIAutoCheckRunningRef.current = false;
+        });
+    };
+
+    runSilentCheck();
+    const timer = window.setInterval(runSilentCheck, 10_000);
+    return () => window.clearInterval(timer);
+  }, [desktopRuntime, page, selectedServiceTemplate.id, localSdWebUIConfig.baseUrl]);
+
   async function runCreativeDeskGenerate(options?: Parameters<typeof generate>[0]) {
+    if (selectedProviderId === 'sd-webui-local') {
+      useStudioStore.setState({ isGenerating: true });
+      try {
+        if (!desktopRuntime) {
+          throw new Error('Stable Diffusion WebUI / Forge 本地生成需要在 Tauri 桌面版中运行。');
+        }
+        if ((options?.mode ?? 'text-to-image') === 'image-to-image') {
+          throw new Error('0.4.3 的 SD WebUI / Forge 切片暂只支持 txt2img；img2img 和 ControlNet 后续版本再接入。');
+        }
+        const trimmedPrompt = prompt.trim();
+        if (!trimmedPrompt) {
+          throw new Error('请先填写 Prompt，再运行 SD WebUI / Forge 本地生成。');
+        }
+        const sdWebUIOptions = options?.metadata?.sdWebUI;
+        const sdWebUIParameters = sdWebUIOptions && typeof sdWebUIOptions === 'object' && !Array.isArray(sdWebUIOptions)
+          ? sdWebUIOptions as { samplerName?: unknown; steps?: unknown; cfgScale?: unknown }
+          : {};
+        const result = await generateSdWebUIImage({
+          baseUrl: localSdWebUIConfig.baseUrl,
+          prompt: trimmedPrompt,
+          negativePrompt: options?.negativePrompt,
+          size,
+          seed: options?.seed,
+          count,
+          outputFormat: options?.outputFormat,
+          outputCompression: options?.outputCompression,
+          timeoutMs: 240_000,
+          samplerName: typeof sdWebUIParameters.samplerName === 'string' ? sdWebUIParameters.samplerName : undefined,
+          steps: typeof sdWebUIParameters.steps === 'number' ? sdWebUIParameters.steps : undefined,
+          cfgScale: typeof sdWebUIParameters.cfgScale === 'number' ? sdWebUIParameters.cfgScale : undefined
+        });
+        const recordsToSave = splitImageResultIntoSingleImageRecords({
+          ...result,
+          generationMode: 'text-to-image',
+          referenceImages: []
+        });
+        const savedRecords: GenerationRecord[] = [];
+        for (const record of recordsToSave) {
+          savedRecords.push(await saveGenerationRecord(record, 'Stable Diffusion WebUI / Forge'));
+        }
+        for (const saved of [...savedRecords].reverse()) {
+          addResult(saved);
+        }
+        const firstSaved = savedRecords[0];
+        if (firstSaved?.status === 'succeeded' && firstSaved.imageUrls[0]) {
+          setGeneratePreviewUrl(firstSaved.imageUrls[0]);
+          setConfigMessage(savedRecords.length > 1 ? `SD WebUI / Forge 已生成 ${savedRecords.length} 张图片，并保存到作品画廊。` : 'SD WebUI / Forge 已生成成功，并保存到作品画廊。');
+        } else {
+          setConfigMessage(`SD WebUI / Forge 生成失败：${firstSaved?.error ?? '没有返回图片'}。失败记录已保存到作品画廊。`);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const failed: GenerationRecord = {
+          id: `sd-webui-error-${Date.now()}`,
+          providerId: 'sd-webui-local',
+          providerName: 'Stable Diffusion WebUI / Forge',
+          modelId: 'sd-webui-txt2img',
+          status: 'failed',
+          prompt,
+          imageUrls: [],
+          localImagePaths: [],
+          costHint: '本地 Stable Diffusion WebUI / Forge 生成，不消耗在线 API 额度。',
+          error: message,
+          raw: {
+            visionhub_sd_webui_error: 'frontend_preflight_failed',
+            baseUrl: localSdWebUIConfig.baseUrl
+          },
+          createdAt: new Date().toISOString(),
+          generationMode: options?.mode ?? 'text-to-image',
+          referenceImages: []
+        };
+        const saved = await saveGenerationRecord(failed, failed.providerName);
+        addResult(saved);
+        setConfigMessage(`SD WebUI / Forge 生成失败：${message}。失败记录已保存到作品画廊。`);
+      } finally {
+        useStudioStore.setState({ isGenerating: false });
+      }
+      return;
+    }
+
     if (selectedProviderId !== 'comfyui-local') {
       await generate(options);
       return;
@@ -2755,12 +2956,14 @@ export function App() {
       localComfyUIWorkflowStore.presets.find((item) => item.id === localComfyUIWorkflowStore.activeId) ??
       localComfyUIWorkflowStore.presets[0] ??
       null;
+    const generationMode = options?.mode ?? 'text-to-image';
+    const references = options?.references ?? [];
     try {
       if (!desktopRuntime) {
         throw new Error('ComfyUI 本地生成需要 Tauri 桌面端运行时。');
       }
-      if ((options?.mode ?? 'text-to-image') === 'image-to-image') {
-        throw new Error('ComfyUI 创作台 MVP 先支持文生图；图生图需要后续单独做图片上传和节点映射。');
+      if (generationMode === 'image-to-image' && references.length === 0) {
+        throw new Error('ComfyUI 图生图需要先添加至少一张参考图。');
       }
       if (!activeWorkflowPreset) {
         throw new Error('请先到平台接入 > 本地模型 > ComfyUI 导入 API workflow。');
@@ -2779,12 +2982,14 @@ export function App() {
         count,
         outputFormat: options?.outputFormat,
         outputCompression: options?.outputCompression,
-        timeoutMs: 180_000
+        timeoutMs: 180_000,
+        generationMode,
+        references
       });
       const recordsToSave = splitImageResultIntoSingleImageRecords({
         ...result,
-        generationMode: 'text-to-image',
-        referenceImages: []
+        generationMode,
+        referenceImages: references
       });
       const savedRecords: GenerationRecord[] = [];
       for (const record of recordsToSave) {
@@ -2815,11 +3020,12 @@ export function App() {
         error: message,
         raw: {
           visionhub_comfyui_error: 'frontend_preflight_failed',
-          workflow: activeWorkflowPreset?.summary.fileName ?? null
+          workflow: activeWorkflowPreset?.summary.fileName ?? null,
+          referenceCount: references.length
         },
         createdAt: new Date().toISOString(),
-        generationMode: options?.mode ?? 'text-to-image',
-        referenceImages: []
+        generationMode,
+        referenceImages: references
       };
       const saved = await saveGenerationRecord(failed, failed.providerName);
       addResult(saved);
@@ -5939,8 +6145,12 @@ export function App() {
             localComfyUIDiagnostic={localComfyUIDiagnostic}
             localComfyUIWorkflowStore={localComfyUIWorkflowStore}
             localComfyUIWorkflowError={localComfyUIWorkflowError}
+            localSdWebUIConfig={localSdWebUIConfig}
+            localSdWebUIDiagnostic={localSdWebUIDiagnostic}
             onLocalComfyUIBaseUrlChange={updateLocalComfyUIBaseUrl}
             onRunLocalComfyUIDiagnostics={runLocalComfyUIDiagnostics}
+            onLocalSdWebUIBaseUrlChange={updateLocalSdWebUIBaseUrl}
+            onRunLocalSdWebUIDiagnostics={runLocalSdWebUIDiagnostics}
             onImportLocalComfyUIWorkflow={importLocalComfyUIWorkflow}
             onClearLocalComfyUIWorkflow={clearLocalComfyUIWorkflow}
             onToggleComfyUIWorkflowManager={() => setIsComfyUIWorkflowManagerOpen(true)}
@@ -7643,8 +7853,12 @@ function ProviderSettingsPage(props: {
   localComfyUIDiagnostic: LocalComfyUIDiagnosticState;
   localComfyUIWorkflowStore: LocalComfyUIWorkflowStore;
   localComfyUIWorkflowError: string;
+  localSdWebUIConfig: LocalSdWebUIConfig;
+  localSdWebUIDiagnostic: LocalSdWebUIDiagnosticState;
   onLocalComfyUIBaseUrlChange: (baseUrl: string) => void;
   onRunLocalComfyUIDiagnostics: () => void;
+  onLocalSdWebUIBaseUrlChange: (baseUrl: string) => void;
+  onRunLocalSdWebUIDiagnostics: () => void;
   onImportLocalComfyUIWorkflow: (file: File | null) => void;
   onClearLocalComfyUIWorkflow: () => void;
   onToggleComfyUIWorkflowManager: () => void;
@@ -7681,9 +7895,10 @@ function ProviderSettingsPage(props: {
     : generationProfile
       ? `AI 创作使用 ${generationProfile.displayName}`
       : 'AI 创作暂无配置';
+  const usesProviderProfiles = props.isSelectedServiceConfigurable && props.selectedServiceTemplate.platformType !== 'local';
   const profileFilterOptions = buildProviderProfileFilterOptions(props.providerProfiles);
   const filteredProviderProfiles = props.providerProfiles.filter((profile) => matchesProviderProfileFilter(profile, profileFilter));
-  const visibleProviderProfiles = props.isSelectedServiceConfigurable ? filteredProviderProfiles : [];
+  const visibleProviderProfiles = usesProviderProfiles ? filteredProviderProfiles : [];
   const readinessItems = buildProviderReadinessItems({
     profile: activeProfile,
     config: props.providerConfig,
@@ -7745,7 +7960,9 @@ function ProviderSettingsPage(props: {
   }));
   const workflowFileInputRef = useRef<HTMLInputElement | null>(null);
   const isComfyUITemplate = props.selectedServiceTemplate.id === 'local-comfyui';
+  const isSdWebUITemplate = props.selectedServiceTemplate.id === 'local-sd-webui';
   const comfyUIResult = props.localComfyUIDiagnostic.result;
+  const sdWebUIResult = props.localSdWebUIDiagnostic.result;
   const activeWorkflowPreset = props.localComfyUIWorkflowStore.presets.find((item) => item.id === props.localComfyUIWorkflowStore.activeId) ?? props.localComfyUIWorkflowStore.presets[0] ?? null;
   const comfyUIStatusLabel: Record<LocalModelDiagnosticStatus, string> = {
     idle: '未测试',
@@ -7803,7 +8020,7 @@ function ProviderSettingsPage(props: {
               type="button"
               className="miniButton profileAddButton"
               onClick={props.onNewProfile}
-              disabled={!props.isSelectedServiceConfigurable}
+              disabled={!usesProviderProfiles}
             >
               <Plus size={14} /> 新增
             </button>
@@ -7822,10 +8039,10 @@ function ProviderSettingsPage(props: {
             ))}
           </div>
           <div className="profileList">
-            {!props.isSelectedServiceConfigurable ? (
+            {!usesProviderProfiles ? (
               <div className="profileEmpty">
-                <strong>{providerServiceStatusLabel[props.selectedServiceTemplate.status]}</strong>
-                <span>当前模板只展示规划，暂不开放保存、启用或真实试生图。</span>
+                <strong>{props.selectedServiceTemplate.platformType === 'local' ? '本地端点配置' : providerServiceStatusLabel[props.selectedServiceTemplate.status]}</strong>
+                <span>{props.selectedServiceTemplate.platformType === 'local' ? '本地服务在右侧填写地址并测试，不创建云端配置实例，也不会占用在线额度。' : '当前模板只展示规划，暂不开放保存、启用或真实试生图。'}</span>
               </div>
             ) : props.providerProfiles.length === 0 ? (
               <div className="profileEmpty">
@@ -7924,7 +8141,7 @@ function ProviderSettingsPage(props: {
                 <HardDrive size={18} />
                 <div>
                   <strong>本地实验室 MVP</strong>
-                  <span>已支持 API workflow 文生图测试；普通 UI workflow 需要重新导出 API 格式后才能在创作台提交。</span>
+                  <span>已支持 API workflow 文生图测试；包含 LoadImage 节点的 API workflow 可尝试图生图。普通 UI workflow 仍需重新导出 API 格式。</span>
                 </div>
               </div>
               <label>
@@ -7982,7 +8199,7 @@ function ProviderSettingsPage(props: {
                 <div className="localWorkflowHeader">
                   <div>
                     <strong>Workflow JSON</strong>
-                    <small>导入 API workflow 后，AI 创作台会写入 Prompt、尺寸和 Seed 并提交本地队列。</small>
+                    <small>导入 API workflow 后，AI 创作台会写入 Prompt、尺寸、Seed；图生图会上传第一张参考图并写入 LoadImage 节点。</small>
                   </div>
                   <div className="localWorkflowActions">
                     <input
@@ -8026,6 +8243,91 @@ function ProviderSettingsPage(props: {
                   </div>
                 )}
               </section>
+              <div className="serviceTemplateNotes">
+                {props.selectedServiceTemplate.notes.map((note) => (
+                  <span key={note}>{note}</span>
+                ))}
+              </div>
+            </div>
+          ) : isSdWebUITemplate ? (
+            <div className="localLabBox">
+              <div className="providerConfigHeader">
+                <div>
+                  <strong>Stable Diffusion WebUI / Forge 连接诊断</strong>
+                  <small>仅读取本地 /sdapi/v1 基础端点；不会改动模型、代理或系统网络设置。</small>
+                </div>
+                <span className={`serviceStatusBadge localDiagnostic-${props.localSdWebUIDiagnostic.status}`}>
+                  {comfyUIStatusLabel[props.localSdWebUIDiagnostic.status]}
+                </span>
+              </div>
+              <ServiceTemplateMeta template={props.selectedServiceTemplate} />
+              <div className="localLabNotice">
+                <HardDrive size={18} />
+                <div>
+                  <strong>0.4.3 本地 txt2img 切片</strong>
+                  <span>支持连接诊断、txt2img 文生图和作品画廊保存；img2img / ControlNet 后续版本再接入。</span>
+                </div>
+              </div>
+              <label>
+                本地服务地址
+                <div className="localEndpointRow">
+                  <input
+                    value={props.localSdWebUIConfig.baseUrl}
+                    onChange={(event) => props.onLocalSdWebUIBaseUrlChange(event.target.value)}
+                    placeholder={DEFAULT_SD_WEBUI_BASE_URL}
+                  />
+                  <button
+                    type="button"
+                    className="iconButton"
+                    onClick={props.onRunLocalSdWebUIDiagnostics}
+                    disabled={!props.desktopRuntime || props.localSdWebUIDiagnostic.status === 'checking'}
+                    title="测试 Stable Diffusion WebUI / Forge 本地 API 连接"
+                    aria-label="测试 Stable Diffusion WebUI / Forge 本地 API 连接"
+                  >
+                    <Gauge size={15} /> {props.localSdWebUIDiagnostic.status === 'checking' ? '测试中...' : '测试连接'}
+                  </button>
+                </div>
+                <small className="providerFieldHint">
+                  默认 WebUI / Forge 地址通常是 {DEFAULT_SD_WEBUI_BASE_URL}；如果改过端口，请填写实际地址。服务启动时需要带 --api。
+                </small>
+              </label>
+              {props.localSdWebUIDiagnostic.error ? (
+                <div className="localDiagnosticMessage failed">{props.localSdWebUIDiagnostic.error}</div>
+              ) : sdWebUIResult ? (
+                <section className={`localDiagnosticMessage ${sdWebUIResult.online ? 'online' : 'offline'}`}>
+                  <strong>{sdWebUIResult.message}</strong>
+                  <span>{sdWebUIResult.resolvedBaseUrl} - {sdWebUIResult.latencyMs} ms</span>
+                </section>
+              ) : (
+                <div className="localDiagnosticMessage idle">填写本地服务地址后点击“测试连接”。如果本地服务没启动，不会影响中转站 / 聚合 API 工作流。</div>
+              )}
+              {sdWebUIResult ? (
+                <div className="localDiagnosticStats">
+                  <span>当前模型 {sdWebUIResult.sdModelCheckpoint ?? '-'}</span>
+                  <span>采样器 {sdWebUIResult.samplerCount ?? '-'}</span>
+                  <span>模型 {sdWebUIResult.modelCount ?? '-'}</span>
+                </div>
+              ) : null}
+              {sdWebUIResult ? (
+                <div className="localEndpointList">
+                  {sdWebUIResult.endpoints.map((endpoint) => (
+                    <div className={`localEndpointItem ${endpoint.ok ? 'pass' : 'fail'}`} key={endpoint.path}>
+                      <span>{endpoint.ok ? '通过' : '失败'}</span>
+                      <div>
+                        <strong>{endpoint.path}{endpoint.status ? ` - HTTP ${endpoint.status}` : ''}</strong>
+                        <small>{endpoint.detail}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="localLabNotice">
+                <Sparkles size={18} />
+                <div>
+                  <strong>创作台使用方式</strong>
+                  <span>到 AI 创作台把平台切换为 Stable Diffusion WebUI / Forge，输入 Prompt 后会调用 /sdapi/v1/txt2img 并保存到作品画廊。</span>
+                </div>
+              </div>
               <div className="serviceTemplateNotes">
                 {props.selectedServiceTemplate.notes.map((note) => (
                   <span key={note}>{note}</span>
@@ -13017,6 +13319,7 @@ function getDefaultProviderServiceTemplateForProvider(providerId: string) {
   if (providerId === 'openai-gpt-image') return getProviderServiceTemplate('official-openai');
   if (providerId === 'minimax-image') return getProviderServiceTemplate('official-minimax');
   if (providerId === 'gemini-image') return getProviderServiceTemplate('official-gemini');
+  if (providerId === 'sd-webui-local') return getProviderServiceTemplate('local-sd-webui');
   return providerServiceTemplates.find((template) => template.providerId === providerId);
 }
 
@@ -13026,7 +13329,7 @@ function providerProfileBelongsToTemplate(
 ) {
   if (!template.providerId || profile.providerId !== template.providerId) return false;
   if (profile.serviceTemplateId) return profile.serviceTemplateId === template.id;
-  return template.id === 'aggregator-openai-compatible' || template.id === 'official-openai' || template.id === 'official-minimax' || template.id === 'official-gemini';
+  return template.id === 'aggregator-openai-compatible' || template.id === 'official-openai' || template.id === 'official-minimax' || template.id === 'official-gemini' || template.id === 'local-sd-webui';
 }
 
 function providerGenerationLabel(provider: ReturnType<typeof listProviders>[number]) {

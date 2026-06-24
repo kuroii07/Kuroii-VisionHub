@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.4.2`
+- Current app version: `0.4.3`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.4.2` Provider Stability V5 is closed; next: `0.4.3` local model improvements, then data governance and global QA.
+- Current focus: `0.4.3` local model improvements are implemented as first-slice local endpoints; next: local-model live QA, then `0.4.4` data governance and migration.
 
 ## 2. 后续开发前必读
 
@@ -101,8 +101,8 @@
 | ~~`0.3.10`~~ | 0.3 final patch | Prompt polish language following source text, batch queue QA, known-gap cleanup, portable/release validation | closed |
 | `0.4.0` | 作品画廊与资料整理收口 V3 | 清理项目资产库路线残留、修正失败记录筛选、补齐最近查看 / 参考排序和画廊视觉 QA | 否 |
 | ~~`0.4.1`~~ | Prompt Workflow V3 | image reverse, Prompt excerpts, current Prompt save, Prompt composer, reuse-record favorites and success-only filters | closed |
-| `0.4.2` | Provider 稳定接入 V5 | 官方 API 增量、聚合站模板验证、能力测试和配置自检增强 | 否 |
-| `0.4.3` | 本地模型增强 V2 | Stable Diffusion WebUI / Forge 连接、ComfyUI 图生图和本地结果统一入库 | 否 |
+| ~~`0.4.2`~~ | Provider 稳定接入 V5 | 官方 API 增量、聚合站模板验证、能力测试和配置自检增强 | closed |
+| `0.4.3` | 本地模型增强 V2 | Stable Diffusion WebUI / Forge 连接、ComfyUI 图生图和本地结果统一入库 | first slice implemented |
 | `0.4.4` | 数据治理与迁移 V1 | 设置导入、图库 / 灵感库迁移、备份恢复和健康检查 | 否 |
 | `0.4.5` | 全局体验与性能 QA | 浅色 / 暗色、长文本、多语言、空状态、错误状态和大型历史性能收口 | 否 |
 | `0.5.0` | 发布候选准备 | 版本号、内部验证脚本、迁移文档、release notes 草稿和绿色版验收 | 视情况 |
@@ -727,6 +727,8 @@
 
 ### 5.23 `0.4.3` 本地模型增强 V2
 
+状态 2026-06-24：SD WebUI / Forge 第一切片已在代码中落地：本地连接诊断、`/sdapi/v1/txt2img`、作品画廊保存、Provider manifest、AI 创作台本地生成路径、基础错误诊断，以及 Seed / 负面提示词 / 采样器 / 步数 / CFG 的轻量参数传递；ComfyUI 图生图第一切片也已接入，支持上传第一张参考图并写入 API workflow 的 LoadImage 节点。SD WebUI img2img / ControlNet、ComfyUI 多输入节点策略和更完整的模型参数面板后续再做。
+
 目标：
 
 - 在不拖慢在线平台主流程的前提下，补齐本地模型的第二阶段能力。
@@ -734,8 +736,8 @@
 
 主要任务：
 
-- Stable Diffusion WebUI / Forge：连接诊断、txt2img、结果保存、基础错误分类。
-- ComfyUI 图生图：参考图上传、节点映射提示、API workflow 中可替换 Prompt / Seed / 尺寸 / 输入图的安全路径。
+- Stable Diffusion WebUI / Forge：连接诊断、txt2img、结果保存、基础错误分类和 AI 创作台轻量高级参数。
+- ComfyUI 图生图：已支持第一张参考图上传、LoadImage 节点写入、失败时提示节点不兼容；后续再做多输入节点策略。
 - 本地模型结果统一进入作品画廊，记录来源、workflow 摘要、模型 / checkpoint 和保存路径。
 - 本地服务状态缓存改进：避免服务关闭后继续显示旧的在线状态。
 - 本地模型配置页明确 API workflow 与普通 UI workflow 的区别。
