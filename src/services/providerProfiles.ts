@@ -41,7 +41,7 @@ export function providerProfileSecretId(profileId: string) {
 }
 
 export function profileToProviderConfig(profile: ProviderConnectionProfile): OpenAICompatibleConfig {
-  return {
+  return normalizeProviderConfig({
     displayName: profile.displayName,
     baseUrl: profile.baseUrl,
     modelId: profile.modelId,
@@ -50,7 +50,7 @@ export function profileToProviderConfig(profile: ProviderConnectionProfile): Ope
     endpointPath: profile.endpointPath,
     extraHeadersJson: profile.extraHeadersJson,
     modelOptions: profile.modelOptions
-  };
+  });
 }
 
 export function createProviderProfile(

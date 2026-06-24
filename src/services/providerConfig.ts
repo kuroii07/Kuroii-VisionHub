@@ -8,6 +8,14 @@ export type OpenAICompatibleProtocol =
   | 'chat-completions'
   | 'custom-images';
 
+const OPENAI_COMPATIBLE_PROTOCOLS: OpenAICompatibleProtocol[] = [
+  'images',
+  'images-minimal',
+  'responses',
+  'chat-completions',
+  'custom-images'
+];
+
 export const IMAGE_TO_IMAGE_ADAPTERS: ImageToImageAdapter[] = [
   'auto',
   'openai-images-edit',
@@ -159,10 +167,10 @@ export function loadProviderConfig(providerId: string): OpenAICompatibleConfig {
     }
   }
 
-  return {
+  return normalizeProviderConfig({
     ...defaultOpenAICompatibleConfig,
     ...(map[providerId] ?? {})
-  };
+  });
 }
 
 export function saveProviderConfig(providerId: string, config: OpenAICompatibleConfig) {
@@ -177,7 +185,7 @@ export function saveProviderConfig(providerId: string, config: OpenAICompatibleC
     }
   }
 
-  map[providerId] = config;
+  map[providerId] = normalizeProviderConfig(config);
   writeStorageValue(STORAGE_KEY, JSON.stringify(map));
 }
 
@@ -186,17 +194,22 @@ export function normalizeProviderConfig(config: Partial<OpenAICompatibleConfig>)
     ...defaultOpenAICompatibleConfig,
     ...config
   };
+  const protocol = OPENAI_COMPATIBLE_PROTOCOLS.includes(merged.protocol as OpenAICompatibleProtocol)
+    ? merged.protocol as OpenAICompatibleProtocol
+    : defaultOpenAICompatibleConfig.protocol;
 
   return {
     ...merged,
     displayName: String(merged.displayName || defaultOpenAICompatibleConfig.displayName),
     baseUrl: String(merged.baseUrl || defaultOpenAICompatibleConfig.baseUrl).trim(),
     modelId: String(merged.modelId || defaultOpenAICompatibleConfig.modelId).trim(),
-    protocol: merged.protocol,
+    protocol,
     imageToImageAdapter: normalizeImageToImageAdapter(merged.imageToImageAdapter),
-    endpointPath: normalizeEndpointPath(merged.endpointPath, merged.protocol),
+    endpointPath: normalizeEndpointPath(merged.endpointPath, protocol),
     extraHeadersJson: String(merged.extraHeadersJson || '{}'),
-    modelOptions: Array.isArray(merged.modelOptions) ? merged.modelOptions.map(String) : []
+    modelOptions: Array.isArray(merged.modelOptions)
+      ? merged.modelOptions.map((item) => String(item).trim()).filter(Boolean)
+      : []
   };
 }
 

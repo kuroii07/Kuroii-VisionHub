@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.4.1` Prompt Workflow V3 / image reverse + Prompt excerpts + low-noise Prompt assistant.
+Current checkpoint: `0.4.2` Provider Stability V5 / non-consuming diagnostics, profile-safe config normalization, and Provider self-check hardening.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -168,6 +168,15 @@ Current checkpoint: `0.4.1` Prompt Workflow V3 / image reverse + Prompt excerpts
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.4.2 Provider Stability V5 / Self-check Hardening
+
+- App version is now `0.4.2`, synchronized across package metadata, Tauri metadata, Cargo metadata, app version display, README, and roadmap docs.
+- Provider configs now normalize legacy and partial saved fields on load/save, so older profiles keep their original `profile:${profileId}` credential binding without crashing diagnostics.
+- Provider profile to config conversion now always goes through the shared normalization layer, protecting Base URL, model ID, protocol, endpoint path, image-to-image adapter, headers, and model options.
+- Provider self-check now previews the target endpoint, capability boundary, reference-image submission route, model-list boundary, and cost/retry risk without submitting an image-generation request.
+- The right-side ?????? action no longer passes the React click event as a profile object; the function also ignores non-profile inputs defensively, matching the left-side profile latency test behavior.
+- This version intentionally does not add unverified new provider templates; Gemini / Grok / Seedream / DashScope specific adapters remain gated by official docs, real account access, or raw error evidence.
 
 ### v0.4.1 Prompt Workflow V3 / Image Reverse + Prompt Excerpts
 

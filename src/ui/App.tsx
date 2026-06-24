@@ -175,7 +175,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
-const APP_VERSION = '0.4.1';
+const APP_VERSION = '0.4.2';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -247,6 +247,9 @@ type ProviderDiagnosticsReportContext = {
   profileName?: string;
   profileId?: string | null;
   modelId?: string;
+  endpointPreview?: string;
+  protocolLabel?: string;
+  imageToImageAdapterLabel?: string;
   generatedAt: string;
 };
 type ProviderPlatformOption = {
@@ -4808,6 +4811,9 @@ export function App() {
         profileName: selectedProfile?.displayName,
         profileId: selectedProfile?.id ?? selectedProfileId,
         modelId: providerConfig.modelId,
+        protocolLabel: protocolLabel(providerConfig.protocol),
+        endpointPreview: providerEndpointPreview(providerConfig),
+        imageToImageAdapterLabel: imageToImageAdapterLabel(resolveImageToImageAdapterForDisplay(providerConfig, selectedProvider.id)),
         generatedAt: new Date().toISOString()
       });
       await navigator.clipboard?.writeText(report);
@@ -5149,10 +5155,11 @@ export function App() {
     }
   }
 
-  async function runProviderDiagnostics(targetProfile?: ProviderConnectionProfile) {
+  async function runProviderDiagnostics(targetProfile?: ProviderConnectionProfile | unknown) {
+    const diagnosticProfile = isProviderConnectionProfileLike(targetProfile) ? targetProfile : undefined;
     setIsRunningDiagnostics(true);
     const checks: ProviderDiagnosticItem[] = [];
-    if (!targetProfile && !isSelectedServiceConfigurable) {
+    if (!diagnosticProfile && !isSelectedServiceConfigurable) {
       const plannedChecks: ProviderDiagnosticItem[] = [
         {
           id: 'template-status',
@@ -5166,10 +5173,10 @@ export function App() {
       setIsRunningDiagnostics(false);
       return;
     }
-    const targetProviderId = targetProfile?.providerId ?? selectedProvider.id;
+    const targetProviderId = diagnosticProfile?.providerId ?? selectedProvider.id;
     const targetProvider = providers.find((provider) => provider.id === targetProviderId) ?? selectedProvider;
-    const targetConfig = targetProfile ? profileToProviderConfig(targetProfile) : providerConfig;
-    const targetSecretId = targetProfile ? providerProfileSecretId(targetProfile.id) : activeSecretId();
+    const targetConfig = normalizeProviderConfig(diagnosticProfile ? profileToProviderConfig(diagnosticProfile) : providerConfig);
+    const targetSecretId = diagnosticProfile ? providerProfileSecretId(diagnosticProfile.id) : activeSecretId();
     const targetSupportsOpenAICompatible = providerUsesConfig(targetProviderId);
     const targetSupportsModelList = providerSupportsOpenAICompatibleModelList(targetProviderId);
     const startedAt = performance.now();
@@ -5205,8 +5212,8 @@ export function App() {
       push({
         id: 'profile-secret-channel',
         label: '配置实例与密钥通道',
-        level: targetProfile || selectedProfileId ? 'pass' : 'info',
-        detail: targetProfile || selectedProfileId
+        level: diagnosticProfile || selectedProfileId ? 'pass' : 'info',
+        detail: diagnosticProfile || selectedProfileId
           ? '当前配置已绑定独立密钥；配置 ID 保持不变，系统凭据不会随文案调整重建。'
           : '当前是临时配置草稿；保存为配置实例后会使用独立密钥。'
       });
@@ -5289,7 +5296,7 @@ export function App() {
           const legacyStatus = await getProviderSecretStatus(targetProviderId);
           currentSecretAvailable = legacyStatus.available;
         }
-        if (!targetProfile || targetProfile.id === selectedProfileId) {
+        if (!diagnosticProfile || diagnosticProfile.id === selectedProfileId) {
           setSecretAvailable(currentSecretAvailable);
         }
       }
@@ -5301,8 +5308,12 @@ export function App() {
         detail: currentSecretAvailable ? '系统安全凭据里已有密钥。' : '尚未保存密钥；可以先填写 API Key，再点击保存或保存并启用。'
       });
 
+      const targetTemplate = diagnosticProfile?.serviceTemplateId
+        ? getProviderServiceTemplate(diagnosticProfile.serviceTemplateId)
+        : getDefaultProviderServiceTemplateForProvider(targetProviderId) ?? selectedServiceTemplate;
+
       buildProviderReadinessItems({
-        profile: targetProfile ?? selectedProfile,
+        profile: diagnosticProfile ?? selectedProfile,
         config: targetConfig,
         providerId: targetProviderId,
         desktopRuntime,
@@ -5310,6 +5321,13 @@ export function App() {
         serviceConfigurable: true,
         supportsOpenAICompatible: targetSupportsOpenAICompatible
       }).forEach((item) => push({ ...item, id: `readiness-${item.id}` }));
+
+      buildProviderStabilityDiagnosticItems({
+        config: targetConfig,
+        providerId: targetProviderId,
+        template: targetTemplate,
+        supportsModelList: targetSupportsModelList
+      }).forEach((item) => push({ ...item, id: `stability-${item.id}` }));
 
       push({
         id: 'protocol',
@@ -5350,7 +5368,7 @@ export function App() {
           polishSecretAvailable = polishStatus.available;
           setPromptPolishSecretAvailable(polishSecretAvailable);
         }
-        const polishConfigReady = Boolean(appSettings.promptPolish.baseUrl.trim() && appSettings.promptPolish.modelId.trim());
+        const polishConfigReady = Boolean(safeProviderConfigText(appSettings.promptPolish.baseUrl) && safeProviderConfigText(appSettings.promptPolish.modelId));
         push({
           id: 'prompt-polish-channel',
           label: '提示词润色通道',
@@ -5397,7 +5415,7 @@ export function App() {
                 checkedAt: new Date().toISOString(),
                 message: modelListUnsupportedMessage(targetProviderId, nextConfig.modelId)
               };
-        if (!targetProfile || targetProfile.id === selectedProfileId) {
+        if (!diagnosticProfile || diagnosticProfile.id === selectedProfileId) {
           setProviderConfig(nextConfig);
           saveProviderConfig(targetProviderId, nextConfig);
           setSelectedModel(nextConfig.modelId);
@@ -5465,7 +5483,7 @@ export function App() {
         if (isModelListUnavailableError(error)) {
           const latencyMs = Math.round(performance.now() - startedAt);
           const nextConfig = ensureManualModelOption(targetConfig);
-          if (!targetProfile || targetProfile.id === selectedProfileId) {
+          if (!diagnosticProfile || diagnosticProfile.id === selectedProfileId) {
             setProviderConfig(nextConfig);
             saveProviderConfig(targetProviderId, nextConfig);
             setSelectedModel(nextConfig.modelId);
@@ -5501,7 +5519,7 @@ export function App() {
       });
     } finally {
       updateProviderProfileTestState(
-        targetProfile?.id ?? selectedProfileId,
+        diagnosticProfile?.id ?? selectedProfileId,
         profileStatus,
         Math.round(performance.now() - startedAt),
         profileMessage,
@@ -8272,7 +8290,13 @@ function ProviderSettingsPage(props: {
                     <small>默认做非消耗检查；“真实试生图”会调用接口并可能消耗额度，当前 API Key 不可用时先不要点。</small>
                   </div>
                   <div className="diagnosticsActions">
-                    <button className="rowActionButton" onClick={props.onRunDiagnostics} disabled={props.isRunningDiagnostics}>
+                    <button
+                      className="rowActionButton"
+                      onClick={() => {
+                        void props.onRunDiagnostics();
+                      }}
+                      disabled={props.isRunningDiagnostics}
+                    >
                       <RefreshCcw size={15} /> {props.isRunningDiagnostics ? '自检中…' : '运行自检'}
                     </button>
                     <button className="rowActionButton" onClick={props.onCopyDiagnostics} disabled={!props.diagnostics.length} title="复制不含 API Key 的配置自检报告">
@@ -13111,6 +13135,118 @@ function imageToImageAdapterDiagnosticDetail(config: OpenAICompatibleConfig, pro
     'json-image-array': 'JSON 使用 image 首图 + images 数组，适合自定义中转。'
   };
   return `${prefix}；${fieldSummary[resolved]}`;
+}
+
+function safeProviderConfigText(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function isProviderConnectionProfileLike(value: unknown): value is ProviderConnectionProfile {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const candidate = value as Partial<ProviderConnectionProfile>;
+  return typeof candidate.id === 'string' && typeof candidate.providerId === 'string';
+}
+
+function providerEndpointPreview(config: Partial<OpenAICompatibleConfig>) {
+  const protocol = config.protocol ?? 'images';
+  const endpointPath = safeProviderConfigText(config.endpointPath);
+  const normalizedPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath || defaultEndpointForProtocol(protocol)}`;
+  const modelPath = normalizedPath.replace('{model}', encodeURIComponent(safeProviderConfigText(config.modelId) || '{model}'));
+  try {
+    const baseUrl = new URL(safeProviderConfigText(config.baseUrl));
+    const originAndPath = `${baseUrl.origin}${baseUrl.pathname.replace(/\/+$/, '')}`;
+    return `${originAndPath}${modelPath}`;
+  } catch {
+    return modelPath;
+  }
+}
+
+function endpointRiskHint(config: Partial<OpenAICompatibleConfig>, providerId: string) {
+  const protocol = config.protocol ?? 'images';
+  const endpointPath = safeProviderConfigText(config.endpointPath);
+  const expectedEndpointPath = isGeminiProvider(providerId)
+    ? '/v1beta/models/{model}:generateContent'
+    : isMiniMaxProvider(providerId)
+      ? '/v1/image_generation'
+      : defaultEndpointForProtocol(protocol);
+  if (!endpointPath.startsWith('/')) {
+    return `\u63a5\u53e3\u8def\u5f84\u5efa\u8bae\u4ee5 / \u5f00\u5934\uff1b\u6309\u5f53\u524d\u534f\u8bae\u9ed8\u8ba4\u5e94\u4e3a ${expectedEndpointPath}\u3002`;
+  }
+  if (endpointPath !== expectedEndpointPath) {
+    return `\u5f53\u524d\u4f7f\u7528\u81ea\u5b9a\u4e49\u8def\u5f84 ${endpointPath}\uff1b\u8bf7\u786e\u8ba4\u670d\u52a1\u5546\u6587\u6863\u8981\u6c42\uff0c\u4e0d\u8981\u628a Base URL \u548c\u63a5\u53e3\u8def\u5f84\u91cd\u590d\u62fc\u63a5\u3002`;
+  }
+  return `\u5f53\u524d\u4f7f\u7528\u8be5\u534f\u8bae\u7684\u9ed8\u8ba4\u8def\u5f84 ${expectedEndpointPath}\u3002`;
+}
+
+function referenceSubmissionHint(config: OpenAICompatibleConfig, providerId: string, template?: ProviderServiceTemplate) {
+  const resolved = resolveImageToImageAdapterForDisplay(config, providerId);
+  if (template?.supportsImageToImage === false) return '\u5f53\u524d\u670d\u52a1\u6a21\u677f\u6807\u8bb0\u4e3a\u4e0d\u652f\u6301\u56fe\u751f\u56fe\uff1bAI \u521b\u4f5c\u53f0\u4e0d\u5e94\u628a\u53c2\u8003\u56fe\u5f53\u4f5c\u771f\u5b9e\u80fd\u529b\u627f\u8bfa\u3002';
+  if (isGeminiProvider(providerId)) return 'Gemini \u5b98\u65b9\u4f1a\u628a\u53c2\u8003\u56fe\u4f5c\u4e3a inlineData parts \u63d0\u4ea4\uff1b\u662f\u5426\u652f\u6301\u591a\u56fe\u7f16\u8f91\u9700\u771f\u5b9e\u5e26\u56fe\u6d4b\u8bd5\u3002';
+  if (isMiniMaxProvider(providerId)) return 'MiniMax \u5b98\u65b9\u5f53\u524d\u53ea\u63d0\u4ea4\u7b2c\u4e00\u5f20\u53c2\u8003\u56fe\u4f5c\u4e3a subject_reference.character\uff0c\u591a\u5f20\u53c2\u8003\u56fe\u6682\u4e0d\u53d1\u9001\u3002';
+  const hints: Record<Exclude<ImageToImageAdapter, 'auto'>, string> = {
+    'openai-images-edit': '\u4f1a\u4f7f\u7528 multipart \u4e0a\u4f20\u53c2\u8003\u56fe\uff0c\u9002\u5408\u5b98\u65b9 Images edits \u8def\u7ebf\u3002',
+    'responses-input-image': '\u4f1a\u628a\u53c2\u8003\u56fe\u653e\u5165 Responses input_image \u5185\u5bb9\u5757\u3002',
+    'chat-image-url': '\u4f1a\u628a\u53c2\u8003\u56fe\u653e\u5165 Chat Completions image_url \u5185\u5bb9\u5757\u3002',
+    'json-image-array': '\u4f1a\u63d0\u4ea4 image \u9996\u56fe\u548c images \u6570\u7ec4\uff0c\u9002\u5408\u81ea\u5b9a\u4e49\u4e2d\u8f6c\u7ad9\uff1b\u5b57\u6bb5\u540d\u9700\u4ee5\u670d\u52a1\u5546\u6587\u6863\u4e3a\u51c6\u3002'
+  };
+  return hints[resolved];
+}
+
+function providerCostRiskHint(config: OpenAICompatibleConfig, template?: ProviderServiceTemplate) {
+  const parts = ['\u914d\u7f6e\u81ea\u68c0\u4e0d\u63d0\u4ea4\u751f\u56fe\u8bf7\u6c42\uff0c\u4e0d\u6d88\u8017\u989d\u5ea6\uff1b\u53ea\u6709\u201c\u771f\u5b9e\u8bd5\u751f\u56fe\u201d\u3001AI \u521b\u4f5c\u53f0\u751f\u6210\u6216\u6279\u91cf\u961f\u5217\u6267\u884c\u4f1a\u8c03\u7528\u63a5\u53e3\u3002'];
+  if (config.protocol === 'responses' || template?.requiresPolling) {
+    parts.push('\u5f53\u524d\u8def\u7ebf\u53ef\u80fd\u5b58\u5728\u5f02\u6b65\u4efb\u52a1\u6216\u540e\u53f0\u8f6e\u8be2\uff1b\u540c\u6b65\u8d85\u65f6\u4e0d\u4e00\u5b9a\u4ee3\u8868\u672a\u6263\u8d39\uff0c\u5931\u8d25\u540e\u5efa\u8bae\u5148\u67e5\u540e\u53f0\u4efb\u52a1\u518d\u91cd\u8bd5\u3002');
+  }
+  if (template?.status === 'planned' || template?.status === 'local-plan') {
+    parts.push('\u8be5\u670d\u52a1\u6a21\u677f\u4ecd\u662f\u89c4\u5212\u72b6\u6001\uff0c\u4e0d\u5e94\u5f00\u653e\u4fdd\u5b58\u542f\u7528\u6216\u771f\u5b9e\u8bd5\u751f\u56fe\u3002');
+  }
+  return parts.join(' ');
+}
+
+function buildProviderStabilityDiagnosticItems(input: {
+  config: OpenAICompatibleConfig;
+  providerId: string;
+  template?: ProviderServiceTemplate;
+  supportsModelList: boolean;
+}): ProviderDiagnosticItem[] {
+  const resolvedAdapter = resolveImageToImageAdapterForDisplay(input.config, input.providerId);
+  const template = input.template;
+  return [
+    {
+      id: 'endpoint-preview',
+      label: '\u76ee\u6807\u63a5\u53e3\u9884\u89c8',
+      level: safeProviderConfigText(input.config.baseUrl) && safeProviderConfigText(input.config.endpointPath) ? 'pass' : 'warn',
+      detail: `${providerEndpointPreview(input.config)}\uff1b${endpointRiskHint(input.config, input.providerId)}`
+    },
+    {
+      id: 'capability-boundary',
+      label: '\u80fd\u529b\u8fb9\u754c',
+      level: template?.status === 'planned' || template?.status === 'local-plan' ? 'info' : 'pass',
+      detail: template
+        ? `${providerServiceStatusLabel[template.status]} \u00b7 \u6587\u751f\u56fe\uff1a${template.supportsTextToImage === false ? '\u672a\u627f\u8bfa' : '\u53ef\u68c0\u67e5'}\uff1b\u56fe\u751f\u56fe\uff1a${template.supportsImageToImage === false ? '\u672a\u627f\u8bfa' : '\u53ef\u68c0\u67e5'}\uff1b${template.requiresPolling ? '\u53ef\u80fd\u5f02\u6b65\u4efb\u52a1\u3002' : '\u672a\u6807\u8bb0\u5f02\u6b65\u4efb\u52a1\u3002'}`
+        : '\u672a\u7ed1\u5b9a\u5177\u4f53\u670d\u52a1\u6a21\u677f\uff1b\u6309\u5f53\u524d Provider \u914d\u7f6e\u505a\u901a\u7528 OpenAI-compatible \u68c0\u67e5\u3002'
+    },
+    {
+      id: 'reference-submission',
+      label: '\u53c2\u8003\u56fe\u63d0\u4ea4\u65b9\u5f0f',
+      level: template?.supportsImageToImage === false ? 'warn' : 'info',
+      detail: `${imageToImageAdapterLabel(resolvedAdapter)}\uff1a${referenceSubmissionHint(input.config, input.providerId, template)}`
+    },
+    {
+      id: 'cost-risk-boundary',
+      label: '\u6d88\u8017\u4e0e\u91cd\u8bd5\u8fb9\u754c',
+      level: 'info',
+      detail: providerCostRiskHint(input.config, template)
+    },
+    {
+      id: 'model-list-boundary',
+      label: '\u6a21\u578b\u5217\u8868\u8fb9\u754c',
+      level: input.supportsModelList ? 'info' : 'pass',
+      detail: input.supportsModelList
+        ? '\u5f53\u524d Provider \u652f\u6301\u5c1d\u8bd5\u8bfb\u53d6 /v1/models\uff1b\u5982\u679c\u4e2d\u8f6c\u7ad9\u62e6\u622a\u8be5\u63a5\u53e3\uff0c\u53ef\u624b\u52a8\u586b\u5199\u6a21\u578b ID \u540e\u7528\u771f\u5b9e\u8bd5\u751f\u56fe\u9a8c\u8bc1\u3002'
+        : '\u5f53\u524d\u5b98\u65b9\u6a21\u677f\u4e0d\u4f9d\u8d56 /v1/models\uff0c\u6309\u5185\u7f6e\u6216\u624b\u52a8\u6a21\u578b ID \u8bca\u65ad\u3002'
+    }
+  ];
 }
 
 function formatTime(value: string) {

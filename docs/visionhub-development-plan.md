@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.4.1`
+- Current app version: `0.4.2`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.4.1` Prompt Workflow V3 / image reverse + Prompt excerpts + low-noise Prompt assistant; next: reuse-record favorites, Provider stability, local model improvements, and data governance.
+- Current focus: `0.4.2` Provider Stability V5 is closed; next: `0.4.3` local model improvements, then data governance and global QA.
 
 ## 2. 后续开发前必读
 
@@ -112,7 +112,7 @@
 
 ### 4.1 路线分层说明
 
-- `0.3.10` is closed as the final 0.3 patch baseline; `0.4.1` has closed image reverse settings, Prompt excerpts, low-noise current Prompt saving, and Prompt composer, then continues reuse-record favorites.
+- `0.3.10` is closed as the final 0.3 patch baseline; `0.4.1` closed the Prompt workflow scope; `0.4.2` closed Provider self-check hardening without adding unverified provider templates.
 - `0.4.x` 是可用性增强阶段，重点让现有功能形成稳定工作流：作品画廊整理、Prompt 复用、Provider 稳定、本地模型增强、数据迁移和全局 QA。
 - `0.5.0` 是发布候选阶段，目标是把自用软件整理到可迁移、可复现、可打包验证的状态。
 - `v1.0` 前只处理发布、迁移、安装包、签名风险和 GitHub Release 边界，不再混入大功能。
@@ -893,4 +893,4 @@
 
 ## 9. 下一步推荐
 
-Next formal development should move to `0.4.2` Provider stability. `0.4.3` should focus on local model improvements, and `0.4.4` through `0.5.0` should cover data governance, global QA, and release-candidate preparation.
+Next formal development should move to `0.4.3` local model improvements. `0.4.4` through `0.5.0` should cover data governance, global QA, and release-candidate preparation.
