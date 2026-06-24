@@ -38,6 +38,13 @@ import { PROMPT_POLISH_SECRET_ID, promptPolishConfigId } from '../services/appSe
 import { parseExtraHeaders, type OpenAICompatibleConfig } from '../services/providerConfig';
 import type { ProviderConnectionProfile } from '../services/providerProfiles';
 import { diagnoseGenerationFailure, isPotentialBackgroundCompletion } from '../services/generationErrorDiagnostics';
+import { savePromptExcerpt } from '../services/inspirationApi';
+import {
+  createPromptTemplate,
+  loadPromptTemplates,
+  savePromptTemplates,
+  type PromptTemplateCategory
+} from '../services/promptTemplates';
 import { readStorageValue, writeStorageValue } from '../services/safeStorage';
 import { useStudioStore } from '../store/useStudioStore';
 import type { ConfirmDialogRequest } from './confirmDialog';
@@ -397,6 +404,51 @@ function mergePromptDraft(drafts: PromptDraft[], draft: PromptDraft | null) {
   return [draft, ...deduped].slice(0, 12);
 }
 
+
+function buildSavedPromptTitle(prompt: string, fallback = '当前 Prompt') {
+  const firstLine = prompt
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean) ?? '';
+  const compact = firstLine.replace(/\s+/g, ' ').slice(0, 32).trim();
+  return compact || fallback;
+}
+
+function inferPromptExcerptLanguage(prompt: string) {
+  if (/[\u3040-\u30ff]/.test(prompt)) return 'ja' as const;
+  if (/[\u4e00-\u9fff]/.test(prompt)) return 'zh' as const;
+  if (/[a-zA-Z]/.test(prompt)) return 'en' as const;
+  return 'auto' as const;
+}
+
+function inferPromptExcerptCategory(prompt: string) {
+  const normalized = prompt.toLowerCase();
+  if (/negative|不要|避免|no\s|without/.test(normalized)) return 'negative' as const;
+  if (/角色|character|portrait|头像|立绘/.test(normalized)) return 'character' as const;
+  if (/产品|商品|product|ecommerce|packshot/.test(normalized)) return 'product' as const;
+  if (/海报|poster|kv|cover|封面/.test(normalized)) return 'poster' as const;
+  if (/游戏|game|道具|icon|asset/.test(normalized)) return 'game-art' as const;
+  if (/摄影|photo|camera|lens|镜头/.test(normalized)) return 'photography' as const;
+  if (/场景|scene|landscape|environment/.test(normalized)) return 'scene' as const;
+  return 'general' as const;
+}
+
+function inferPromptTemplateCategory(prompt: string, mode: DefaultGenerationMode): PromptTemplateCategory {
+  if (mode === 'image') return 'image-to-image';
+  const normalized = prompt.toLowerCase();
+  if (/海报|poster|kv|cover|封面/.test(normalized)) return 'commercial-poster';
+  if (/产品|商品|product|ecommerce|packshot/.test(normalized)) return 'ecommerce';
+  if (/角色|character|portrait|头像|立绘/.test(normalized)) return 'character';
+  if (/游戏|game|道具|icon|asset/.test(normalized)) return 'game-asset';
+  if (/ui|图标|icon|logo/.test(normalized)) return 'icon-ui';
+  if (/小红书|社媒|social|thumbnail|封面/.test(normalized)) return 'social-cover';
+  return 'style';
+}
+
+function buildSavedPromptTags(mode: DefaultGenerationMode) {
+  return ['AI创作台', mode === 'image' ? '图生图' : '文生图', '当前Prompt'];
+}
+
 function resolveActivePromptPolishConfigId(settings: PromptPolishSettings) {
   const currentConfigId = promptPolishConfigId(settings.displayName, settings.baseUrl);
   const exactConfig = settings.savedConfigs.find((config) => config.id === currentConfigId);
@@ -495,6 +547,14 @@ export function ModernGeneratePage(props: {
   const [promptDrafts, setPromptDrafts] = useState<PromptDraft[]>(() => loadPromptDrafts());
   const [draftNotice, setDraftNotice] = useState('');
   const [isDraftLibraryOpen, setIsDraftLibraryOpen] = useState(false);
+  const [isPromptSaveMenuOpen, setIsPromptSaveMenuOpen] = useState(false);
+  const [promptSaveMenuPosition, setPromptSaveMenuPosition] = useState<{
+    top?: number;
+    bottom?: number;
+    right: number;
+    placement: 'above' | 'below';
+  } | null>(null);
+  const [isSavingPromptAsset, setIsSavingPromptAsset] = useState(false);
   const [isBatchToolsOpen, setIsBatchToolsOpen] = useState(false);
   const [isQueueMenuOpen, setIsQueueMenuOpen] = useState(false);
   const [queueMenuPosition, setQueueMenuPosition] = useState<{ top: number; right: number } | null>(null);
@@ -507,6 +567,9 @@ export function ModernGeneratePage(props: {
   const [batchRatioValues, setBatchRatioValues] = useState<string[]>(() => [ratioFromSize(props.size)]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const promptSaveMenuRef = useRef<HTMLDivElement | null>(null);
+  const promptSaveMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const promptSaveMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const queueMenuRef = useRef<HTMLDivElement | null>(null);
   const queueMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const queueMenuPanelRef = useRef<HTMLDivElement | null>(null);
@@ -749,6 +812,33 @@ export function ModernGeneratePage(props: {
     });
   }, [compareCandidateIdSet, compareProfileCandidates, props.activeProfile?.id]);
 
+  function updatePromptSaveMenuPosition() {
+    const rect = promptSaveMenuButtonRef.current?.getBoundingClientRect();
+    if (!rect) {
+      setPromptSaveMenuPosition(null);
+      return;
+    }
+    const viewportPadding = 12;
+    const gap = 8;
+    const estimatedMenuHeight = 214;
+    const right = Math.max(viewportPadding, Math.round(window.innerWidth - rect.right));
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const shouldOpenAbove = spaceBelow < estimatedMenuHeight + gap && rect.top > estimatedMenuHeight + gap;
+    if (shouldOpenAbove) {
+      setPromptSaveMenuPosition({
+        bottom: Math.max(viewportPadding, Math.round(window.innerHeight - rect.top + gap)),
+        right,
+        placement: 'above'
+      });
+      return;
+    }
+    setPromptSaveMenuPosition({
+      top: Math.max(viewportPadding, Math.round(rect.bottom + gap)),
+      right,
+      placement: 'below'
+    });
+  }
+
   function updateQueueMenuPosition() {
     const rect = queueMenuButtonRef.current?.getBoundingClientRect();
     if (!rect) {
@@ -786,6 +876,32 @@ export function ModernGeneratePage(props: {
       window.removeEventListener('scroll', updateQueueMenuPosition, true);
     };
   }, [isQueueMenuOpen]);
+
+  useEffect(() => {
+    if (!isPromptSaveMenuOpen) return undefined;
+    updatePromptSaveMenuPosition();
+
+    function closePromptSaveMenuOnOutsideClick(event: MouseEvent) {
+      if (promptSaveMenuRef.current?.contains(event.target as Node)) return;
+      if (promptSaveMenuPanelRef.current?.contains(event.target as Node)) return;
+      setIsPromptSaveMenuOpen(false);
+    }
+
+    function closePromptSaveMenuOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setIsPromptSaveMenuOpen(false);
+    }
+
+    document.addEventListener('mousedown', closePromptSaveMenuOnOutsideClick);
+    document.addEventListener('keydown', closePromptSaveMenuOnEscape);
+    window.addEventListener('resize', updatePromptSaveMenuPosition);
+    window.addEventListener('scroll', updatePromptSaveMenuPosition, true);
+    return () => {
+      document.removeEventListener('mousedown', closePromptSaveMenuOnOutsideClick);
+      document.removeEventListener('keydown', closePromptSaveMenuOnEscape);
+      window.removeEventListener('resize', updatePromptSaveMenuPosition);
+      window.removeEventListener('scroll', updatePromptSaveMenuPosition, true);
+    };
+  }, [isPromptSaveMenuOpen]);
 
   useEffect(() => {
     if (props.referenceImages.length > 0) {
@@ -848,6 +964,63 @@ export function ModernGeneratePage(props: {
     }
     updatePromptDrafts(mergePromptDraft(promptDrafts, draft));
     showDraftNotice('Prompt 草稿已保存。');
+  }
+
+  function saveCurrentPromptAsTemplate() {
+    const prompt = props.prompt.trim();
+    if (!prompt) {
+      setIsPromptSaveMenuOpen(false);
+      showDraftNotice('当前 Prompt 为空，未保存模板。');
+      return;
+    }
+    const template = createPromptTemplate({
+      title: buildSavedPromptTitle(prompt, '创作台 Prompt'),
+      category: inferPromptTemplateCategory(prompt, mode),
+      tone: '从 AI 创作台保存',
+      description: '从 AI 创作台当前 Prompt 保存的自定义模板。',
+      prompt,
+      tags: buildSavedPromptTags(mode)
+    });
+    const currentTemplates = loadPromptTemplates();
+    const nextTemplates = [template, ...currentTemplates.filter((item) => item.prompt.trim() !== prompt)].slice(0, 300);
+    savePromptTemplates(nextTemplates);
+    setIsPromptSaveMenuOpen(false);
+    showDraftNotice('已保存为提示词模板，可在提示词库查看。');
+  }
+
+  async function saveCurrentPromptAsExcerpt() {
+    const prompt = props.prompt.trim();
+    if (!prompt || isSavingPromptAsset) {
+      if (!prompt) {
+        setIsPromptSaveMenuOpen(false);
+        showDraftNotice('当前 Prompt 为空，未保存摘录。');
+      }
+      return;
+    }
+    const now = String(Date.now());
+    setIsSavingPromptAsset(true);
+    try {
+      await savePromptExcerpt({
+        id: `current-prompt-${now}`,
+        title: buildSavedPromptTitle(prompt, '创作台 Prompt'),
+        prompt,
+        sourceName: 'AI 创作台',
+        language: inferPromptExcerptLanguage(prompt),
+        category: inferPromptExcerptCategory(prompt),
+        tags: buildSavedPromptTags(mode),
+        note: '从 AI 创作台当前 Prompt 保存。',
+        favorite: false,
+        createdAt: now,
+        updatedAt: now
+      });
+      setIsPromptSaveMenuOpen(false);
+      showDraftNotice('已保存为 Prompt 摘录，可在灵感中心查看。');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      showDraftNotice(`Prompt 摘录保存失败：${message}`);
+    } finally {
+      setIsSavingPromptAsset(false);
+    }
   }
 
   function applyPromptDraft(draft: PromptDraft) {
@@ -1706,12 +1879,48 @@ export function ModernGeneratePage(props: {
               <span>{promptLength} 字符</span>
             </div>
             <div className="promptActions" aria-label="提示词辅助功能">
-              <button type="button" className="chipButton" data-tooltip="打开灵感库" onClick={() => setAssistMode('inspiration')}>
-                <Sparkles size={13} /> 模板灵感
+              <button type="button" className="chipButton" data-tooltip="打开模板灵感" onClick={() => setAssistMode('inspiration')}>
+                <Sparkles size={13} /> Prompt 辅助
               </button>
-              <button type="button" className="chipButton promptSaveIconButton" data-tooltip="保存当前 Prompt 草稿" aria-label="保存当前 Prompt 草稿" onClick={() => saveCurrentPromptDraft()}>
-                <Save size={14} />
-              </button>
+              <div className="promptSaveMenuWrap" ref={promptSaveMenuRef}>
+                <button
+                  type="button"
+                  className="chipButton promptSaveIconButton"
+                  data-tooltip="保存 / 沉淀当前 Prompt"
+                  aria-label="保存或沉淀当前 Prompt"
+                  ref={promptSaveMenuButtonRef}
+                  aria-haspopup="menu"
+                  aria-expanded={isPromptSaveMenuOpen}
+                  onClick={() => {
+                    updatePromptSaveMenuPosition();
+                    setIsPromptSaveMenuOpen((open) => !open);
+                  }}
+                >
+                  <Save size={14} />
+                </button>
+                {isPromptSaveMenuOpen && promptSaveMenuPosition && queueMenuPortalHost ? createPortal((
+                  <div
+                    className={`promptSaveFloatingMenu is${promptSaveMenuPosition.placement === 'above' ? 'Above' : 'Below'}`}
+                    ref={promptSaveMenuPanelRef}
+                    role="menu"
+                    aria-label="保存当前 Prompt"
+                    style={{ top: promptSaveMenuPosition.top, bottom: promptSaveMenuPosition.bottom, right: promptSaveMenuPosition.right }}
+                  >
+                    <button type="button" role="menuitem" onClick={() => { saveCurrentPromptDraft(); setIsPromptSaveMenuOpen(false); }}>
+                      <strong>存为草稿</strong>
+                      <small>临时保存到创作台草稿库，方便稍后回填。</small>
+                    </button>
+                    <button type="button" role="menuitem" disabled={isSavingPromptAsset} onClick={() => void saveCurrentPromptAsExcerpt()}>
+                      <strong>保存为 Prompt 摘录</strong>
+                      <small>进入灵感中心摘录库，适合分类、筛选和复用。</small>
+                    </button>
+                    <button type="button" role="menuitem" onClick={saveCurrentPromptAsTemplate}>
+                      <strong>另存为提示词模板</strong>
+                      <small>进入提示词库，作为可复用模板继续编辑。</small>
+                    </button>
+                  </div>
+                ), queueMenuPortalHost) : null}
+              </div>
               <button type="button" className="chipButton" data-tooltip="打开 Prompt 草稿库" onClick={() => setIsDraftLibraryOpen(true)}>
                 <Library size={13} /> 草稿 {promptDrafts.length}/12
               </button>
@@ -1734,6 +1943,7 @@ export function ModernGeneratePage(props: {
               </button>
             </div>
           </div>
+          {draftNotice ? <p className="promptSaveNotice" role="status">{draftNotice}</p> : null}
           <div className="promptInputRow">
             <textarea
               ref={promptInputRef}

@@ -86,6 +86,8 @@ const SOURCE_FAVICON_CACHE_KEY = 'visionhub.inspiration.sourceFaviconCache.v4';
 const SOURCE_PRESET_TIMESTAMP = 'preset';
 const ASSET_INITIAL_RENDER_COUNT = 48;
 const ASSET_RENDER_BATCH_SIZE = 72;
+const EXCERPT_INITIAL_RENDER_COUNT = 40;
+const EXCERPT_RENDER_BATCH_SIZE = 60;
 const SOURCE_FAVICON_DOMAIN_ALIASES: Record<string, string[]> = {
   'jimeng.jianying.com': ['www.jimeng.com', 'jimeng.com'],
   'klingai.kuaishou.com': ['klingai.com', 'www.klingai.com', 'kling.ai'],
@@ -1363,6 +1365,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
   const lastImportVersionRef = useRef(props.importVersion ?? 0);
   const [assetImageMeta, setAssetImageMeta] = useState<Record<string, AssetImageMeta>>({});
   const [renderedAssetCount, setRenderedAssetCount] = useState(ASSET_INITIAL_RENDER_COUNT);
+  const [renderedExcerptCount, setRenderedExcerptCount] = useState(EXCERPT_INITIAL_RENDER_COUNT);
   const [reversePromptStatus, setReversePromptStatus] = useState<ReversePromptStatus>(null);
   const [reversePromptError, setReversePromptError] = useState('');
   const pendingAssetImageMetaRef = useRef<Record<string, AssetImageMeta>>({});
@@ -1551,6 +1554,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
   }, [assetMenuTarget]);
 
   const normalizedQuery = query.trim().toLowerCase();
+  const hasSearchQuery = normalizedQuery.length > 0;
   const allSources = useMemo(() => {
     const customSources = sources.map((source) => ({ ...source, sourceKind: source.sourceKind ?? 'custom' as const }));
     const customUrlSet = new Set(customSources.map((source) => source.url.trim().toLowerCase()).filter(Boolean));
@@ -1610,43 +1614,64 @@ export const InspirationPage = memo(function InspirationPage(props: {
       .sort((left, right) => Number(right.lastOpenedAt ?? 0) - Number(left.lastOpenedAt ?? 0))[0] ?? null;
   }, [allSources]);
 
+  const excerptSearchIndex = useMemo(() => {
+    if (!hasSearchQuery) return null;
+    return new Map<string, string>(excerpts.map((excerpt) => [
+      excerpt.id,
+      [
+        excerpt.title,
+        excerpt.prompt,
+        excerpt.sourceName ?? '',
+        excerpt.sourceUrl ?? '',
+        excerpt.note ?? '',
+        ...excerpt.tags
+      ].join(' ').toLowerCase()
+    ] as [string, string]));
+  }, [excerpts, hasSearchQuery]);
+
+  const assetSearchIndex = useMemo(() => {
+    if (!hasSearchQuery) return null;
+    return new Map<string, string>(assets.map((asset) => {
+      const prompt = asset.originalPrompt || asset.inferredPrompt || '';
+      return [
+        asset.id,
+        [
+          asset.title,
+          asset.sourceUrl ?? '',
+          asset.sourcePlatform ?? '',
+          asset.author ?? '',
+          prompt,
+          asset.note ?? '',
+          ...asset.tags
+        ].join(' ').toLowerCase()
+      ] as [string, string];
+    }));
+  }, [assets, hasSearchQuery]);
+
   const filteredExcerpts = useMemo(() => {
     return excerpts
       .filter((excerpt) => {
         const hasSource = Boolean(excerpt.sourceName || excerpt.sourceUrl);
-        const haystack = [
-          excerpt.title,
-          excerpt.prompt,
-          excerpt.sourceName ?? '',
-          excerpt.sourceUrl ?? '',
-          excerpt.note ?? '',
-          ...excerpt.tags
-        ].join(' ').toLowerCase();
         const matchesCategory = excerptCategory === 'all' || excerpt.category === excerptCategory;
         const matchesLanguage = excerptLanguage === 'all' || excerpt.language === excerptLanguage;
         const matchesSource = excerptSourceFilter === 'all' || (excerptSourceFilter === 'with-source' ? hasSource : !hasSource);
         const matchesFavorite = excerptFavoriteFilter === 'all' || Boolean(excerpt.favorite);
-        return matchesCategory && matchesLanguage && matchesSource && matchesFavorite && (!normalizedQuery || haystack.includes(normalizedQuery));
+        const matchesQuery = !normalizedQuery || (excerptSearchIndex?.get(excerpt.id)?.includes(normalizedQuery) ?? false);
+        return matchesCategory && matchesLanguage && matchesSource && matchesFavorite && matchesQuery;
       })
       .sort((left, right) => Number(right.updatedAt || right.createdAt) - Number(left.updatedAt || left.createdAt));
-  }, [excerptCategory, excerptFavoriteFilter, excerptLanguage, excerptSourceFilter, excerpts, normalizedQuery]);
+  }, [excerptCategory, excerptFavoriteFilter, excerptLanguage, excerptSearchIndex, excerptSourceFilter, excerpts, normalizedQuery]);
+
+  const filteredExcerptIdsSignature = useMemo(() => filteredExcerpts.map((excerpt) => excerpt.id).join('|'), [filteredExcerpts]);
+  const visibleExcerpts = useMemo(
+    () => filteredExcerpts.slice(0, Math.min(renderedExcerptCount, filteredExcerpts.length)),
+    [filteredExcerpts, renderedExcerptCount]
+  );
 
   const filteredAssets = useMemo(() => {
     return assets.filter((asset) => {
-      const prompt = asset.originalPrompt || asset.inferredPrompt || '';
       const hasSource = Boolean(asset.sourceUrl || asset.sourcePlatform || asset.author);
       const hasInferredPrompt = Boolean(asset.inferredPrompt?.trim());
-      const haystack = [
-        asset.title,
-        asset.sourceUrl ?? '',
-        asset.sourcePlatform ?? '',
-        asset.author ?? '',
-        prompt,
-        asset.note ?? '',
-        ...asset.tags
-      ]
-        .join(' ')
-        .toLowerCase();
       const matchesLicense = assetLicense === 'all' || asset.licenseStatus === assetLicense;
       const matchesSource = assetSourceFilter === 'all' || (assetSourceFilter === 'with-source' ? hasSource : !hasSource);
       const matchesPrompt = assetPromptFilter === 'all' || (assetPromptFilter === 'with-inferred' ? hasInferredPrompt : !hasInferredPrompt);
@@ -1662,9 +1687,10 @@ export const InspirationPage = memo(function InspirationPage(props: {
         (assetRatingFilter === 'unrated' && !rating) ||
         (assetRatingFilter !== 'unrated' && rating === Number(assetRatingFilter));
       const matchesColor = colorFamiliesMatchFilter(colorFamilies, assetColorFilter);
-      return matchesLicense && matchesSource && matchesPrompt && matchesShape && matchesFormat && matchesRating && matchesColor && (!normalizedQuery || haystack.includes(normalizedQuery));
+      const matchesQuery = !normalizedQuery || (assetSearchIndex?.get(asset.id)?.includes(normalizedQuery) ?? false);
+      return matchesLicense && matchesSource && matchesPrompt && matchesShape && matchesFormat && matchesRating && matchesColor && matchesQuery;
     });
-  }, [assetColorFilter, assetFormatFilter, assetImageMeta, assetLicense, assetPromptFilter, assetRatingFilter, assetShapeFilter, assetSourceFilter, assets, normalizedQuery]);
+  }, [assetColorFilter, assetFormatFilter, assetImageMeta, assetLicense, assetPromptFilter, assetRatingFilter, assetSearchIndex, assetShapeFilter, assetSourceFilter, assets, normalizedQuery]);
   const filteredAssetIdsSignature = useMemo(() => filteredAssets.map((asset) => asset.id).join('|'), [filteredAssets]);
   const visibleAssets = useMemo(
     () => filteredAssets.slice(0, Math.min(renderedAssetCount, filteredAssets.length)),
@@ -1739,6 +1765,36 @@ export const InspirationPage = memo(function InspirationPage(props: {
     assetFormatFilter !== 'all',
     assetRatingFilter !== 'all'
   ].filter(Boolean).length;
+
+  useEffect(() => {
+    if (activeTab !== 'excerpts') {
+      setRenderedExcerptCount(EXCERPT_INITIAL_RENDER_COUNT);
+      return;
+    }
+
+    const total = filteredExcerpts.length;
+    const initialCount = Math.min(EXCERPT_INITIAL_RENDER_COUNT, total);
+    setRenderedExcerptCount(initialCount);
+    if (total <= initialCount) return;
+
+    let cancelled = false;
+    let frameId = 0;
+    let nextCount = initialCount;
+    const renderNextBatch = () => {
+      frameId = window.requestAnimationFrame(() => {
+        if (cancelled) return;
+        nextCount = Math.min(nextCount + EXCERPT_RENDER_BATCH_SIZE, total);
+        setRenderedExcerptCount(nextCount);
+        if (nextCount < total) renderNextBatch();
+      });
+    };
+
+    renderNextBatch();
+    return () => {
+      cancelled = true;
+      if (frameId) window.cancelAnimationFrame(frameId);
+    };
+  }, [activeTab, filteredExcerptIdsSignature, filteredExcerpts.length]);
 
   useEffect(() => {
     const total = filteredAssets.length;
@@ -2616,13 +2672,13 @@ export const InspirationPage = memo(function InspirationPage(props: {
           <label><span>常用</span><StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Star size={15} />} value={excerptFavoriteFilter} onChange={(value) => setExcerptFavoriteFilter(value as ExcerptFavoriteFilter)} options={excerptFavoriteOptions} /></label>
           <button className="miniButton" type="button" title="清空 Prompt 摘录筛选" onClick={clearExcerptFilters}><X size={13} /> 清空</button>
         </div>
-        <section className="promptExcerptLayout">
+        <section className={`promptExcerptLayout ${excerptEditorOpen ? 'withEditor' : ''}`}>
           <div className="promptExcerptList">
             {excerptsLoading ? (
               <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>正在加载 Prompt 摘录</h3></div>
             ) : filteredExcerpts.length === 0 ? (
               <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>还没有 Prompt 摘录</h3><p>先在浏览器复制好的 Prompt，再点“从剪贴板摘录”；也可以手动新建。</p></div>
-            ) : filteredExcerpts.map((excerpt) => (
+            ) : visibleExcerpts.map((excerpt) => (
               <article className="promptExcerptCard" key={excerpt.id}>
                 <div className="promptExcerptCardHeader">
                   <div><span className="badge">{excerptCategoryLabel(excerpt.category)}</span><strong title={excerpt.title}>{excerpt.title}</strong></div>

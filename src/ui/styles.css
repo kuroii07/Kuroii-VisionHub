@@ -5843,6 +5843,31 @@ kbd {
   letter-spacing: -0.02em;
 }
 
+.promptAssistModeTabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px 0;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.promptAssistModeTabs button {
+  min-height: 34px;
+  border: 1px solid var(--app-line);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  padding: 0 14px;
+  color: var(--app-text-2);
+  background: var(--app-surface-2);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.promptAssistModeTabs button.active {
+  color: color-mix(in srgb, var(--app-accent-strong) 78%, var(--app-text));
+  border-color: color-mix(in srgb, var(--app-accent-strong) 36%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 12%, var(--app-surface));
+}
+
 .promptAssistClose {
   width: 38px;
   height: 38px;
@@ -5894,16 +5919,19 @@ kbd {
 .assistTemplateFilters {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 7px;
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 2;
-  padding: 0 0 4px;
-  background: color-mix(in srgb, var(--app-bg) 72%, transparent);
-  backdrop-filter: blur(10px);
+  min-width: 0;
+  max-width: 100%;
+  margin: 0 0 2px;
+  padding: 0 2px 4px;
+  overflow: visible;
 }
 
 .assistTemplateFilters button {
+  flex: 0 0 auto;
   min-height: 30px;
   border: 1px solid var(--app-line);
   border-radius: 999px;
@@ -5912,6 +5940,7 @@ kbd {
   background: var(--app-surface-2);
   font-size: 11px;
   font-weight: 850;
+  white-space: nowrap;
 }
 
 .assistTemplateFilters button.active {
@@ -5976,6 +6005,106 @@ kbd {
   border-color: color-mix(in srgb, var(--app-accent-strong) 48%, var(--app-line));
   background: color-mix(in srgb, var(--app-accent-strong) 14%, var(--app-surface));
   box-shadow: 0 14px 34px color-mix(in srgb, var(--app-accent-strong) 14%, transparent);
+}
+
+.composerBody {
+  grid-template-columns: 270px minmax(0, 1fr);
+}
+
+.composerPresetList {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.composerPresetCard,
+.composerPresetHint {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--app-line);
+  border-radius: 16px;
+  padding: 12px;
+  color: var(--app-text);
+  text-align: left;
+  background: var(--app-surface-2);
+}
+
+.composerPresetCard:hover {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 34%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 9%, var(--app-surface-2));
+}
+
+.composerPresetCard strong,
+.composerPresetHint strong {
+  font-size: 13px;
+}
+
+.composerPresetCard small,
+.composerPresetHint small {
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.composerPresetHint {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--app-accent-strong) 7%, var(--app-surface-2));
+}
+
+.composerDetailPanel {
+  grid-template-rows: auto minmax(0, 1.1fr) minmax(120px, 0.7fr) auto;
+}
+
+.composerFieldGrid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.composerField {
+  display: grid;
+  gap: 6px;
+  color: var(--app-accent);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.composerFieldWide {
+  grid-column: span 2;
+}
+
+.composerField input,
+.composerField textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 13px;
+  padding: 10px 11px;
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 84%, transparent);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+  outline: none;
+}
+
+.composerField input { min-height: 38px; }
+
+.composerField textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.composerField input:focus,
+.composerField textarea:focus {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 44%, var(--app-line));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--app-accent-strong) 10%, transparent);
 }
 
 .assistDetailPanel {
@@ -8844,10 +8973,97 @@ body {
   font-size: 12px;
 }
 
+.workspaceGenerate .promptSaveNotice {
+  width: fit-content;
+  max-width: 100%;
+  margin: -2px 0 0;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 28%, var(--app-line));
+  border-radius: 12px;
+  color: color-mix(in srgb, var(--app-accent-strong) 82%, var(--app-text));
+  background: color-mix(in srgb, var(--app-accent-strong) 10%, var(--app-surface-2));
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .workspaceGenerate .promptActions .promptSaveIconButton {
   width: 34px;
   min-width: 34px;
   padding-inline: 0;
+}
+
+.workspaceGenerate .promptSaveMenuWrap {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
+.appShell .promptSaveFloatingMenu {
+  position: fixed;
+  z-index: 9300;
+  width: min(292px, calc(100vw - 24px));
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--app-line-strong);
+  border-radius: 16px;
+  color: var(--app-text);
+  background: var(--app-bg);
+  box-shadow: 0 20px 54px rgba(2, 6, 23, 0.28);
+}
+
+.appShell .promptSaveFloatingMenu::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 15px;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  border-left: 1px solid var(--app-line-strong);
+  border-top: 1px solid var(--app-line-strong);
+  background: var(--app-bg);
+}
+
+.appShell .promptSaveFloatingMenu.isAbove::before {
+  top: auto;
+  bottom: -6px;
+  border-top: 0;
+  border-left: 0;
+  border-right: 1px solid var(--app-line-strong);
+  border-bottom: 1px solid var(--app-line-strong);
+}
+
+.appShell .promptSaveFloatingMenu button {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 9px 10px;
+  color: var(--app-text);
+  text-align: left;
+  background: transparent;
+}
+
+.appShell .promptSaveFloatingMenu button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--app-accent-strong) 30%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 9%, var(--app-surface-2));
+}
+
+.appShell .promptSaveFloatingMenu button:disabled {
+  cursor: not-allowed;
+  opacity: .48;
+}
+
+.appShell .promptSaveFloatingMenu strong {
+  font-size: 12px;
+}
+
+.appShell .promptSaveFloatingMenu small {
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .workspaceGenerate .promptPolishQuickSelect .studioSelectMenu {
@@ -21612,9 +21828,13 @@ body {
 .promptExcerptLayout {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: start;
+}
+
+.promptExcerptLayout.withEditor {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 420px);
 }
 
 .promptExcerptList {
@@ -21655,12 +21875,18 @@ body {
 
 .promptExcerptEditor {
   position: sticky;
-  top: 18px;
+  top: 12px;
+  right: auto;
+  bottom: auto;
+  z-index: 2;
   width: 100%;
-  max-height: calc(100vh - 132px);
+  height: fit-content;
+  max-height: min(720px, calc(100vh - 132px));
   overflow: hidden;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  align-self: start;
   padding: 16px;
+  box-shadow: 0 18px 48px rgba(2, 6, 23, 0.16);
 }
 
 .promptExcerptEditor .sourceEditorForm {
@@ -21763,6 +21989,14 @@ body {
 }
 
 @media (max-width: 1180px) {
-  .promptExcerptLayout { grid-template-columns: 1fr; }
-  .promptExcerptEditor { position: static; max-height: none; }
+  .promptExcerptLayout,
+  .promptExcerptLayout.withEditor {
+    grid-template-columns: 1fr;
+  }
+
+  .promptExcerptEditor {
+    position: static;
+    max-height: none;
+    order: -1;
+  }
 }

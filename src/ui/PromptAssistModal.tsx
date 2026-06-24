@@ -40,6 +40,78 @@ type ReuseModeFilter = 'all' | 'text-to-image' | 'image-to-image' | 'with-refere
 type ReuseStatusFilter = 'all' | GenerationRecord['status'];
 type ReuseSortMode = 'newest' | 'oldest' | 'prompt-long' | 'prompt-short';
 
+type ComposerFieldId = 'subject' | 'scene' | 'style' | 'camera' | 'lighting' | 'material' | 'color' | 'constraints' | 'negative';
+type ComposerValues = Record<ComposerFieldId, string>;
+
+const COMPOSER_FIELDS: Array<{ id: ComposerFieldId; label: string; placeholder: string; multiline?: boolean }> = [
+  { id: 'subject', label: '主体', placeholder: '例如：雨夜露营的机械猫、新品耳机、红衣少女' },
+  { id: 'scene', label: '场景', placeholder: '例如：霓虹街头、极简展台、森林遗迹' },
+  { id: 'style', label: '风格', placeholder: '例如：电影感写实、精修二次元、高级商业海报' },
+  { id: 'camera', label: '镜头 / 构图', placeholder: '例如：低机位仰拍、居中对称、85mm 人像镜头' },
+  { id: 'lighting', label: '光影', placeholder: '例如：柔和轮廓光、蓝紫霓虹光、棚拍柔光' },
+  { id: 'material', label: '材质 / 细节', placeholder: '例如：磨砂金属、透明玻璃、潮湿石板地面' },
+  { id: 'color', label: '色彩', placeholder: '例如：黑金配色、低饱和蓝灰、高对比酸性色' },
+  { id: 'constraints', label: '约束 / 质量', placeholder: '例如：主体清晰，无文字水印，构图干净，高清', multiline: true },
+  { id: 'negative', label: '负面约束', placeholder: '例如：不要多余手指、不要 logo、不要错乱文字', multiline: true }
+];
+
+const EMPTY_COMPOSER_VALUES: ComposerValues = {
+  subject: '',
+  scene: '',
+  style: '',
+  camera: '',
+  lighting: '',
+  material: '',
+  color: '',
+  constraints: '',
+  negative: ''
+};
+
+const COMPOSER_PRESETS: Array<{ id: string; title: string; description: string; values: Partial<ComposerValues> }> = [
+  {
+    id: 'cinematic-character',
+    title: '电影感角色',
+    description: '适合人像、角色卡和氛围图。',
+    values: { style: '电影感写实，情绪克制，画面高级', camera: '85mm 人像镜头，中近景，主体突出', lighting: '柔和轮廓光，背景有层次', constraints: '五官清晰，构图稳定，细节丰富，无文字水印' }
+  },
+  {
+    id: 'premium-product',
+    title: '高级产品图',
+    description: '适合电商主图、新品发布和商业海报。',
+    values: { scene: '极简商业展台，干净背景', style: '高级商业摄影，品牌广告质感', camera: '居中构图，产品占据视觉主体', lighting: '棚拍柔光，精致边缘高光', constraints: '产品边缘清晰，材质真实，无多余文字和 logo' }
+  },
+  {
+    id: 'game-asset',
+    title: '游戏资产',
+    description: '适合道具、技能图标、角色装备和奖励卡。',
+    values: { style: '游戏美术设定，轮廓强，小尺寸可读', camera: '居中展示，背景简洁，主体完整', lighting: '明确高光和能量辉光', material: '材质边界清晰，结构易识别', constraints: '适合游戏 UI 复用，不要复杂背景，不要文字' }
+  },
+  {
+    id: 'social-cover',
+    title: '社媒封面',
+    description: '适合小红书、B 站、短视频缩略图和教程封面。',
+    values: { style: '高识别、强对比、信息清晰的社媒封面风格', camera: '主体放大，留出标题区，构图有点击吸引力', color: '高对比主色，移动端信息流里醒目', constraints: '主体一眼可见，文字区清楚预留，画面不拥挤' }
+  }
+];
+
+function buildComposerPrompt(values: ComposerValues) {
+  const parts = [
+    values.subject.trim(),
+    values.scene.trim() ? `位于${values.scene.trim()}` : '',
+    values.style.trim(),
+    values.camera.trim(),
+    values.lighting.trim(),
+    values.material.trim(),
+    values.color.trim(),
+    values.constraints.trim()
+  ].filter(Boolean);
+  const positivePrompt = parts.join('，');
+  const negativePrompt = values.negative.trim();
+  if (positivePrompt && negativePrompt) return `${positivePrompt}\n负面约束：${negativePrompt}`;
+  if (negativePrompt) return `负面约束：${negativePrompt}`;
+  return positivePrompt;
+}
+
 export function PromptAssistModal(props: PromptAssistModalProps) {
   function resolveInitialPolishConfigId() {
     const currentConfigId = promptPolishConfigId(props.promptPolishSettings.displayName, props.promptPolishSettings.baseUrl);
@@ -47,9 +119,11 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
     return exactConfig?.id ?? props.promptPolishSettings.savedConfigs[0]?.id ?? '__current__';
   }
 
+  const [activeMode, setActiveMode] = useState<PromptAssistMode | 'composer'>(props.mode);
   const [selectedTemplateId, setSelectedTemplateId] = useState(INSPIRATION_TEMPLATES[0].id);
   const [templateFilter, setTemplateFilter] = useState<'all' | InspirationTemplateGroup>('all');
   const [templateValues, setTemplateValues] = useState<Record<string, string>>({});
+  const [composerValues, setComposerValues] = useState<ComposerValues>(EMPTY_COMPOSER_VALUES);
   const [polishMode, setPolishMode] = useState(() =>
     resolvePolishMode(
       props.promptHistorySettings.defaultPolishMode || getDefaultPolishMode(props.promptPolishSettings.engine),
@@ -77,6 +151,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
 
   const selectedTemplate =
     INSPIRATION_TEMPLATES.find((template) => template.id === selectedTemplateId) ?? INSPIRATION_TEMPLATES[0];
+  const composerPrompt = useMemo(() => buildComposerPrompt(composerValues), [composerValues]);
   const filteredTemplates = useMemo(
     () => templateFilter === 'all'
       ? INSPIRATION_TEMPLATES
@@ -122,6 +197,10 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
     () => getPolishModesForEngine(props.promptPolishSettings.engine),
     [props.promptPolishSettings.engine]
   );
+
+  useEffect(() => {
+    setActiveMode(props.mode);
+  }, [props.mode]);
 
   useEffect(() => {
     const nextConfigId = resolveInitialPolishConfigId();
@@ -337,8 +416,39 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
     setTemplateValues({});
   }
 
+  function updateComposerValue(fieldId: ComposerFieldId, value: string) {
+    setComposerValues((current) => ({ ...current, [fieldId]: value }));
+  }
+
+  function applyComposerPreset(presetId: string) {
+    const preset = COMPOSER_PRESETS.find((item) => item.id === presetId);
+    if (!preset) return;
+    setComposerValues((current) => ({ ...current, ...preset.values }));
+  }
+
+  function useCurrentPromptAsComposerSubject() {
+    const prompt = props.prompt.trim();
+    if (!prompt) {
+      setCopiedMessage('当前创作台 Prompt 为空。');
+      return;
+    }
+    setComposerValues((current) => ({ ...current, subject: prompt }));
+  }
+
+  function clearComposerValues() {
+    setComposerValues(EMPTY_COMPOSER_VALUES);
+  }
+
   const title =
-    props.mode === 'inspiration' ? '模板灵感' : props.mode === 'polish' ? '提示词润色' : '复用记录';
+    activeMode === 'composer' ? 'Prompt 组合器' : activeMode === 'inspiration' ? '模板灵感' : activeMode === 'polish' ? '提示词润色' : '复用记录';
+  const subtitle =
+    activeMode === 'composer'
+      ? '按主体、场景、风格、镜头和约束组合完整 Prompt'
+      : activeMode === 'inspiration'
+        ? '选择模板并回填到创作台'
+        : activeMode === 'polish'
+          ? '本地或模型结构化重写后回填提示词'
+          : '从历史记录里找回好用的 Prompt';
 
   return (
     <div className="promptAssistBackdrop" onClick={props.onClose}>
@@ -346,14 +456,14 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
         <header className="promptAssistHeader">
           <div>
             <span>{title}</span>
-            <strong>{props.mode === 'inspiration' ? '选择模板并回填到创作台' : props.mode === 'polish' ? '本地或模型结构化重写后回填提示词' : '从历史记录里找回好用的 Prompt'}</strong>
+            <strong>{subtitle}</strong>
           </div>
           <button className="promptAssistClose" onClick={props.onClose} aria-label="关闭" title="关闭">
             <X size={18} />
           </button>
         </header>
 
-        {props.mode === 'inspiration' ? (
+        {activeMode === 'inspiration' ? (
           <InspirationPanel
             selectedTemplate={selectedTemplate}
             templates={filteredTemplates}
@@ -371,7 +481,22 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
           />
         ) : null}
 
-        {props.mode === 'polish' ? (
+        {activeMode === 'composer' ? (
+          <ComposerPanel
+            values={composerValues}
+            prompt={composerPrompt}
+            presets={COMPOSER_PRESETS}
+            currentPrompt={props.prompt}
+            onValueChange={updateComposerValue}
+            onApplyPreset={applyComposerPreset}
+            onUseCurrentPrompt={useCurrentPromptAsComposerSubject}
+            onClear={clearComposerValues}
+            onApplyPrompt={props.onApplyPrompt}
+            onCopy={copyText}
+          />
+        ) : null}
+
+        {activeMode === 'polish' ? (
           <PolishPanel
             sourcePrompt={editableSourcePrompt}
             polishMode={polishMode}
@@ -418,7 +543,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
           />
         ) : null}
 
-        {props.mode === 'reuse' ? (
+        {activeMode === 'reuse' ? (
           <ReusePanel
             query={reuseQuery}
             records={promptRecords}
@@ -452,7 +577,90 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
           />
         ) : null}
 
+
       </section>
+    </div>
+  );
+}
+
+function ComposerPanel(props: {
+  values: ComposerValues;
+  prompt: string;
+  presets: typeof COMPOSER_PRESETS;
+  currentPrompt: string;
+  onValueChange: (fieldId: ComposerFieldId, value: string) => void;
+  onApplyPreset: (presetId: string) => void;
+  onUseCurrentPrompt: () => void;
+  onClear: () => void;
+  onApplyPrompt: (prompt: string, placement: 'replace' | 'append') => void;
+  onCopy: (prompt: string) => void;
+}) {
+  const hasCurrentPrompt = props.currentPrompt.trim().length > 0;
+  return (
+    <div className="promptAssistBody twoColumn composerBody">
+      <aside className="composerPresetList" aria-label="Prompt 组合器预设">
+        <div className="assistTemplateCount">
+          <strong>{props.presets.length}</strong>
+          <span>个组合预设</span>
+        </div>
+        {props.presets.map((preset) => (
+          <button type="button" className="composerPresetCard" key={preset.id} onClick={() => props.onApplyPreset(preset.id)}>
+            <strong>{preset.title}</strong>
+            <small>{preset.description}</small>
+          </button>
+        ))}
+        <div className="composerPresetHint">
+          <strong>不改主界面</strong>
+          <small>组合器只在弹窗内工作，回填后才会影响当前 Prompt。</small>
+        </div>
+      </aside>
+
+      <div className="assistDetailPanel composerDetailPanel">
+        <div className="assistTemplateSummary composerSummary">
+          <div>
+            <span>V1</span>
+            <strong>从片段组合完整 Prompt</strong>
+          </div>
+          <p>先填主体，再按需补风格、镜头、光影和约束；不会自动覆盖创作台内容。</p>
+        </div>
+        <div className="composerFieldGrid">
+          {COMPOSER_FIELDS.map((field) => (
+            <label className={field.multiline ? 'composerField composerFieldWide' : 'composerField'} key={field.id}>
+              <span>{field.label}</span>
+              {field.multiline ? (
+                <textarea
+                  value={props.values[field.id]}
+                  placeholder={field.placeholder}
+                  rows={3}
+                  onChange={(event) => props.onValueChange(field.id, event.target.value)}
+                />
+              ) : (
+                <input
+                  value={props.values[field.id]}
+                  placeholder={field.placeholder}
+                  onChange={(event) => props.onValueChange(field.id, event.target.value)}
+                />
+              )}
+            </label>
+          ))}
+        </div>
+        <PromptPreview title="组合结果" prompt={props.prompt} />
+        <AssistActions
+          prompt={props.prompt}
+          onApplyPrompt={props.onApplyPrompt}
+          onCopy={props.onCopy}
+          extraActions={(
+            <>
+              <button type="button" onClick={props.onUseCurrentPrompt} disabled={!hasCurrentPrompt} title="将当前创作台 Prompt 放入主体栏">
+                带入当前
+              </button>
+              <button type="button" onClick={props.onClear}>
+                清空组合
+              </button>
+            </>
+          )}
+        />
+      </div>
     </div>
   );
 }
