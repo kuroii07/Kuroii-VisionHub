@@ -180,7 +180,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
-const APP_VERSION = '0.4.2';
+const APP_VERSION = '0.4.5';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -6011,17 +6011,6 @@ export function App() {
           ))}
         </nav>
 
-        <div className="sidebarDock">
-          <div className="sectionTitle">工作区</div>
-          <div className="dockCard">
-            <strong>当前状态</strong>
-            <span>{homeResultSummary.total} 条记录，{homeResultSummary.failed} 条失败，{homeResultSummary.pending} 条待核查。</span>
-          </div>
-          <div className="dockCard subtle">
-            <strong>批量队列</strong>
-            <span>{batchQueueAggregate.total} 个任务，{batchQueueAggregate.pending} 个待执行。</span>
-          </div>
-        </div>
         <div className="sidebarFooter">
           <button
             className="themeToggle"
@@ -8271,6 +8260,8 @@ function ProviderSettingsPage(props: {
                     className="iconButton"
                     onClick={props.onRunLocalComfyUIDiagnostics}
                     disabled={!props.desktopRuntime || props.localComfyUIDiagnostic.status === 'checking'}
+                    title="测试 ComfyUI 本地连接"
+                    aria-label="测试 ComfyUI 本地连接"
                   >
                     <Gauge size={15} /> {props.localComfyUIDiagnostic.status === 'checking' ? '测试中…' : '测试连接'}
                   </button>
@@ -8508,6 +8499,8 @@ function ProviderSettingsPage(props: {
                     className="iconButton secretSaveButton"
                     onClick={props.onSaveSecret}
                     disabled={!props.desktopRuntime || props.isSavingSecret || !props.secretDraft.trim()}
+                    title="保存当前配置实例密钥"
+                    aria-label="保存当前配置实例密钥"
                   >
                     {props.isSavingSecret ? '保存中…' : '保存密钥'}
                   </button>
@@ -8548,7 +8541,7 @@ function ProviderSettingsPage(props: {
                   >
                     {props.isProbingModel ? '…' : '探测'}
                   </button>
-                  <button className="iconButton" onClick={props.onPinModel}>
+                  <button className="iconButton" onClick={props.onPinModel} title="设为默认模型" aria-label="设为默认模型">
                     默认
                   </button>
                 </div>
@@ -8890,7 +8883,7 @@ function ComfyUIWorkflowManagerModal(props: {
                   <strong>{activePreset.name}</strong>
                   <small>{activePreset.summary.fileName} · {workflowFormatLabel(activePreset.summary.format)}</small>
                 </div>
-                <button type="button" className="miniButton dangerMiniButton" onClick={() => props.onDelete(activePreset.id)}>
+                <button type="button" className="miniButton dangerMiniButton" onClick={() => props.onDelete(activePreset.id)} title={`删除工作流 ${activePreset.name}`} aria-label={`删除工作流 ${activePreset.name}`}>
                   <Trash2 size={14} /> 删除
                 </button>
               </div>

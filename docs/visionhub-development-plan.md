@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.4.4`
+- Current app version: `0.4.5`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.4.4` lightweight migration support: practical data directory entries and migration guide export, without a standalone health-check center.
+- Current focus: `0.4.5` global experience and performance QA: UI QA baseline, accessibility names, long-text guards, empty/error states, and large-list performance guards without redesigning AI Create Desk.
 
 ## 2. 后续开发前必读
 
@@ -103,8 +103,8 @@
 | ~~`0.4.1`~~ | Prompt Workflow V3 | image reverse, Prompt excerpts, current Prompt save, Prompt composer, reuse-record favorites and success-only filters | closed |
 | ~~`0.4.2`~~ | Provider 稳定接入 V5 | 官方 API 增量、聚合站模板验证、能力测试和配置自检增强 | closed |
 | ~~`0.4.3`~~ | 本地模型增强 V2 | Stable Diffusion WebUI / Forge 连接、ComfyUI 图生图和本地结果统一入库 | first slice implemented |
-| `0.4.4` | 轻量迁移支持 V1 | 数据目录入口、备份目录入口、迁移说明导出和安全边界说明 | 否 |
-| `0.4.5` | 全局体验与性能 QA | 浅色 / 暗色、长文本、多语言、空状态、错误状态和大型历史性能收口 | 否 |
+| ~~`0.4.4`~~ | 轻量迁移支持 V1 | 数据目录入口、备份目录入口、迁移说明导出和安全边界说明 | closed |
+| `0.4.5` | 全局体验与性能 QA | 浅色 / 暗色、长文本、多语言、空状态、错误状态和大型历史性能收口 | first QA pass implemented |
 | `0.5.0` | 发布候选准备 | 版本号、内部验证脚本、迁移文档、release notes 草稿和绿色版验收 | 视情况 |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
@@ -774,6 +774,8 @@
 
 ### 5.25 `0.4.5` 全局体验与性能 QA
 
+Status 2026-07-01: first QA baseline implemented. Added static UI QA script, smoke integration, icon-button accessible-name checks, long-text CSS guards, empty/error-state checks, and Inspiration Center incremental-rendering/performance guards. Visual screenshot QA can continue in a follow-up pass.
+
 目标：
 
 - 在功能继续增加前，集中做一次全局体验和性能收口。
@@ -898,4 +900,4 @@
 
 ## 9. 下一步推荐
 
-Next formal development after `0.4.4` should move to `0.4.5` global experience and performance QA, then `0.5.0` release-candidate preparation.
+Next formal development after the `0.4.5` first QA pass should either finish screenshot-based visual QA or move to `0.5.0` release-candidate preparation.

@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import re
+import runpy
 
 ROOT = Path(__file__).resolve().parents[1]
 required = [
@@ -26,6 +27,7 @@ required = [
     "src/services/desktopApi.ts",
     "src/ui/GeneratePage.tsx",
     "src/ui/PromptAssistModal.tsx",
+    "scripts/ui_qa_check.py",
     "src-tauri/tauri.conf.json",
     "src-tauri/Cargo.toml",
     "docs/provider-contract.md",
@@ -36,6 +38,9 @@ required = [
 missing = [path for path in required if not (ROOT / path).exists()]
 if missing:
     raise SystemExit(f"Missing required files: {missing}")
+
+ui_qa = runpy.run_path(str(ROOT / "scripts/ui_qa_check.py"))
+ui_qa["main"]()
 
 package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
 assert package["name"] == "visionhub-studio"

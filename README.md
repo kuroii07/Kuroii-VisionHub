@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.4.4` Lightweight Migration Support V1 / data directory entries, backup directory entry, and no-secret migration guide export.
+Current checkpoint: `0.4.5` Global Experience and Performance QA / UI QA baseline, accessibility names, long-text guards, empty/error states, and large-list performance guards.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -170,6 +170,14 @@ Current checkpoint: `0.4.4` Lightweight Migration Support V1 / data directory en
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.4.5 Global Experience and Performance QA
+
+- App version is now `0.4.5`, synchronized across package metadata, Tauri metadata, Cargo metadata, app version display, README, and roadmap docs.
+- Added `scripts/ui_qa_check.py` as the first global UI QA baseline for mojibake scans, icon-button accessible names, long-text guards, empty/error states, and Inspiration Center large-list performance guards.
+- `scripts/smoke_check.py` now runs the UI QA baseline so future smoke checks catch regressions before build/push.
+- Provider/local diagnostic messages, Provider config headers, and gallery Prompt detail text now have safer overflow wrapping/ellipsis behavior for long model names, paths, errors, and Prompts.
+- This pass intentionally avoids a broad visual redesign and keeps AI Create Desk layout stable.
 
 ### v0.4.4 Lightweight Migration Support V1
 
@@ -827,7 +835,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - Stable Diffusion WebUI / Forge 连接诊断、txt2img 和结果入库。
   - ComfyUI 图生图、参考图上传和 API workflow 节点映射提示。
   - 本地模型不拖慢在线中转站 / 聚合 API 主流程。
-- `0.4.4` 轻量迁移支持 V1
+- ~~`0.4.4`~~ 轻量迁移支持 V1 - closed
   - 不做独立健康检查中心，避免低价值扫描和复杂自动修复。
   - 偏好设置集中提供 AppData、作品画廊、图片收藏和备份目录入口。
   - 导出不含 API Key 的迁移说明，列出 Provider profile id、需要复制的目录和需要重新输入的凭据。
