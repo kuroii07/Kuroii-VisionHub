@@ -774,7 +774,7 @@
 
 ### 5.25 `0.4.5` 全局体验与性能 QA
 
-Status 2026-07-01: first QA baseline implemented. Added static UI QA script, smoke integration, icon-button accessible-name checks, long-text CSS guards, empty/error-state checks, and Inspiration Center incremental-rendering/performance guards. Visual screenshot QA can continue in a follow-up pass.
+Status 2026-07-02: first QA baseline plus prompt-tool settings consolidation implemented. Static UI QA now covers prompt-tool separation, icon-button accessible names, long-text CSS guards, empty/error-state checks, gallery/inspiration large-data guards, and Inspiration Center incremental-rendering/performance guards. Visual screenshot QA can continue in a follow-up pass.
 
 目标：
 
@@ -788,7 +788,7 @@ Status 2026-07-01: first QA baseline implemented. Added static UI QA script, smo
 - 大型历史性能：作品画廊、灵感图片、生成记录、批量队列和模板列表的加载与切换。
 - 空 / 错误状态统一：加载失败、无记录、缺图、无 Key、无模型、无本地服务。
 - 可访问性和按钮语义：图标按钮 tooltip、`aria-label`、危险操作二次确认。
-- 偏好设置里的提示词与历史后续会拆出独立工具区，优先收束提示词润色配置和图片反推配置，避免长配置继续挤占普通设置页。
+- ~~偏好设置里的提示词与历史后续会拆出独立工具区，优先收束提示词润色配置和图片反推配置，避免长配置继续挤占普通设置页。~~ 已完成：普通历史策略保留在“提示词与历史”，提示词润色和图片反推 Prompt 配置收束到独立“提示词工具区”。
 
 验收标准：
 

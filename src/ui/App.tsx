@@ -9323,6 +9323,31 @@ function SettingsPage(props: {
           </div>
         </div>
 
+        <p className="settingsNotice compact">提示词润色引擎、专用接口和图片反推 Prompt 配置已收束到下方「提示词工具区」，这里仅保留普通历史策略。</p>
+      </article>
+
+      <div className="settingsSectionLabel">提示词工具区</div>
+      <article className="settingsGroupCard promptToolsGroup">
+        <div className="promptToolsHero">
+          <div>
+            <strong>AI 提示词工具区</strong>
+            <small>把提示词润色和图片反推 Prompt 从普通偏好里拆出来，继续使用独立凭据通道，不挤占 AI 创作台主界面。</small>
+          </div>
+          <div className="promptToolBadges" aria-label="提示词工具凭据通道">
+            <span>prompt-polish:default</span>
+            <span>image-reverse:default</span>
+          </div>
+        </div>
+
+        <section className="promptToolCard" aria-labelledby="prompt-polish-tool-title">
+          <div className="promptToolCardHeader">
+            <div>
+              <strong id="prompt-polish-tool-title">提示词润色</strong>
+              <small>本地规则与模型润色分开管理；模型润色只使用下方文本模型配置，不复用生图平台 Key。</small>
+            </div>
+            <span>文本润色通道</span>
+          </div>
+
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
             <strong>提示词润色引擎</strong>
@@ -9525,6 +9550,17 @@ function SettingsPage(props: {
         </div>
 
         <p className="settingsNotice">模型润色不会读取或导出你的 API Key；密钥由桌面端安全凭据存储在独立的润色通道。未配置或请求失败时，会按设置自动回退到本地规则润色。</p>
+        </section>
+
+        <section className="promptToolCard" aria-labelledby="image-reverse-tool-title">
+          <div className="promptToolCardHeader">
+            <div>
+              <strong id="image-reverse-tool-title">图片反推 Prompt</strong>
+              <small>视觉理解模型只服务灵感图片反推，不进入生图模型列表，也不影响当前中转站生图工作流。</small>
+            </div>
+            <span>图片反推通道</span>
+          </div>
+
         <div className="settingsConfigBlock imageReverseConfigBlock">
           <div className="promptPolishConfigHeader">
             <div className="settingsRowMain promptPolishIntro">
@@ -9596,6 +9632,7 @@ function SettingsPage(props: {
         </div>
 
         <p className="settingsNotice">{'\u56fe\u7247\u53cd\u63a8 Prompt \u4f7f\u7528\u72ec\u7acb\u51ed\u636e\u901a\u9053 image-reverse:default\uff0c\u4e0d\u590d\u7528\u751f\u56fe\u5e73\u53f0 Key\uff0c\u4e5f\u4e0d\u4f1a\u628a\u89c6\u89c9\u7406\u89e3\u6a21\u578b\u52a0\u5165 AI \u751f\u56fe\u5de5\u4f5c\u53f0\u3002'}</p>
+        </section>
       </article>
 
       <div className="settingsSectionLabel">作品保存偏好</div>

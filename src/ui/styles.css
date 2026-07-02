@@ -4487,6 +4487,104 @@ kbd {
   padding: 18px 20px 20px;
   border-bottom: 1px solid var(--app-line);
 }
+
+.settingsNotice.compact {
+  padding-top: 10px;
+  padding-bottom: 12px;
+}
+.settingsGroupCard.promptToolsGroup {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  overflow: visible;
+}
+.promptToolsHero {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 2px 2px;
+}
+.promptToolsHero > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.promptToolsHero strong,
+.promptToolCardHeader strong {
+  min-width: 0;
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+.promptToolsHero small,
+.promptToolCardHeader small {
+  min-width: 0;
+  display: block;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.promptToolBadges {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.promptToolBadges span,
+.promptToolCardHeader > span {
+  max-width: 100%;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--app-accent-strong) 30%, var(--app-line));
+  border-radius: 999px;
+  padding: 0 10px;
+  color: var(--app-text-2);
+  background: color-mix(in srgb, var(--app-accent-strong) 8%, var(--app-surface-2));
+  font-size: 11px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.promptToolCard {
+  min-width: 0;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--app-surface-2) 82%, transparent);
+}
+.promptToolCardHeader {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px 0;
+}
+.promptToolCardHeader > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+.promptToolCard .settingsConfigBlock {
+  border-bottom-color: var(--app-line);
+  background: transparent;
+}
+.promptToolCard .settingsListRow:first-of-type {
+  border-top: 0;
+}
+.promptToolCard .settingsNotice {
+  background: color-mix(in srgb, var(--app-surface) 28%, transparent);
+}
 .promptPolishConfigHeader {
   display: grid;
   grid-template-columns: minmax(260px, 1fr) auto;
@@ -4963,6 +5061,13 @@ kbd {
     justify-content: stretch;
   }
   .settingsStatusPills { justify-content: flex-start; }
+  .promptToolsHero,
+  .promptToolCardHeader {
+    flex-direction: column;
+  }
+  .promptToolBadges {
+    justify-content: flex-start;
+  }
   .promptPolishConfigHeader { grid-template-columns: 1fr; }
   .promptPolishHeaderTools {
     min-width: 0;

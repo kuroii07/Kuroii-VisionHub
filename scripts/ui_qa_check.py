@@ -63,9 +63,16 @@ def assert_long_text_css_guards() -> None:
         ".profileMain",
         ".libraryDetailSection.promptDetailSection p",
         ".promptExcerptText",
+        ".promptExcerptMeta span",
         ".promptTemplatePreview textarea",
         ".providerConfigHeader small",
         ".localDiagnosticMessage",
+        ".promptToolsHero small",
+        ".promptToolCardHeader small",
+        ".settingsConfigGrid input",
+        ".settingsConfigGrid textarea",
+        ".promptPolishConfigInstances button small",
+        ".inspirationDetailDrawer .reversePromptBlock",
     ]
     for selector in required_selectors:
         if selector not in css:
@@ -89,6 +96,43 @@ def assert_incremental_rendering_guards() -> None:
         fail("Missing performance guards: " + ", ".join(missing))
 
 
+def assert_large_data_surface_guards() -> None:
+    app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
+    inspiration = (ROOT / "src/ui/InspirationPage.tsx").read_text(encoding="utf-8")
+    checks = {
+        "lazy mount gallery and inspiration pages": "isLibraryPageMounted" in app and "isInspirationPageMounted" in app,
+        "library memoized record map": "const libraryRecordMap = useMemo" in app,
+        "library memoized filtering": "const filteredItems = useMemo" in app,
+        "inspiration asset visible slice": "visibleAssets" in inspiration and "setRenderedAssetCount" in inspiration,
+        "inspiration excerpt visible slice": "visibleExcerpts" in inspiration and "setRenderedExcerptCount" in inspiration,
+        "prompt excerpt search index": "excerptSearchIndex" in inspiration,
+        "asset search index": "assetSearchIndex" in inspiration,
+    }
+    missing = [name for name, ok in checks.items() if not ok]
+    if missing:
+        fail("Missing large-data surface guards: " + ", ".join(missing))
+
+
+def assert_prompt_tool_settings_are_separated() -> None:
+    app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
+    history_idx = app.find("提示词与历史")
+    tool_group_idx = app.find('className="settingsGroupCard promptToolsGroup"')
+    polish_idx = app.find('prompt-polish-tool-title')
+    reverse_idx = app.find('image-reverse-tool-title')
+    checks = {
+        "history section exists": history_idx >= 0,
+        "prompt tool group exists": tool_group_idx >= 0,
+        "prompt tool group follows history": history_idx >= 0 and tool_group_idx > history_idx,
+        "polish card inside tool group": tool_group_idx >= 0 and polish_idx > tool_group_idx,
+        "image reverse card inside tool group": tool_group_idx >= 0 and reverse_idx > tool_group_idx,
+        "independent polish credential badge": "prompt-polish:default" in app,
+        "independent image reverse credential badge": "image-reverse:default" in app,
+    }
+    missing = [name for name, ok in checks.items() if not ok]
+    if missing:
+        fail("Prompt tool settings are not separated cleanly: " + ", ".join(missing))
+
+
 def assert_empty_and_error_states_exist() -> None:
     app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
     generate = (ROOT / "src/ui/GeneratePage.tsx").read_text(encoding="utf-8")
@@ -109,8 +153,10 @@ def main() -> None:
     assert_icon_buttons_have_accessible_names()
     assert_long_text_css_guards()
     assert_incremental_rendering_guards()
+    assert_large_data_surface_guards()
+    assert_prompt_tool_settings_are_separated()
     assert_empty_and_error_states_exist()
-    print("UI QA check passed: accessibility names, long-text/performance guards, empty/error states, and mojibake scan are OK.")
+    print("UI QA check passed: accessibility names, prompt-tool separation, long-text/large-data performance guards, empty/error states, and mojibake scan are OK.")
 
 
 if __name__ == "__main__":
