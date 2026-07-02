@@ -22071,8 +22071,8 @@ body {
 
 /* 0.4.5 micro UI polish: keep reference menus above preview and slim sidebar chrome. */
 .appShell {
-  grid-template-columns: 256px minmax(0, 1fr);
-  --sidebar-current-width: 256px;
+  grid-template-columns: 228px minmax(0, 1fr);
+  --sidebar-current-width: 228px;
 }
 
 .appShell.sidebarCollapsed {
@@ -22081,8 +22081,11 @@ body {
 }
 
 .appShell .sidebar {
-  padding: 22px 18px;
-  gap: 20px;
+  width: var(--sidebar-current-width);
+  min-width: var(--sidebar-current-width);
+  max-width: var(--sidebar-current-width);
+  padding: 20px 14px 10px;
+  gap: 18px;
 }
 
 .appShell.sidebarCollapsed .sidebar {
@@ -22092,12 +22095,18 @@ body {
 }
 
 .appShell .sidebarFooter {
+  margin-top: auto;
+  padding-top: 12px;
+  padding-bottom: 0;
   gap: 8px;
+  position: static;
+  bottom: auto;
+  background: transparent;
 }
 
 .appShell .sidebarFooter .themeToggle,
 .appShell .sidebarFooter .sidebarCollapseButton {
-  width: calc(100% - 24px);
+  width: 100%;
   min-height: 34px;
   height: 34px;
   padding: 0 10px;

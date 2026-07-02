@@ -167,6 +167,7 @@ Current checkpoint: `0.4.5` Global Experience and Performance QA / UI QA baselin
 - Responses 长任务已加入 background + store 尝试和轮询查询；中转站不支持时会回退同步请求。
 - 0.3.9 批量队列与多模型对比 V1 已进入可用性收尾：AI 创作台保留基础生图参数优先显示，批量变体和多模型对比统一收进队列下拉菜单和“批量 / 对比”弹窗；可把当前文生图 / 图生图参数加入当前选中的本地批量队列，也可在“批量变体”按多 Prompt × 多画面比例创建任务，或在“多模型对比”选择多个配置实例，一键按同一 Prompt 创建对比组任务。批量队列页已支持自定义队列、新建 / 重命名 / 删除队列、当前队列切换、单任务确认执行、取消、失败任务单个或批量重新入队、失败或已取消任务删除、连续队列执行、当前任务完成后暂停 / 继续、对比结果并排查看，以及本地批量模板保存 / 套用 / 删除；删除只移除本地队列任务或队列快照，不删除作品画廊记录或磁盘图片。
 - 0.3.10 收口补丁已完成绿色版构建验证：Windows release exe 已同步到本地绿色版目录，启动不再出现调试控制台；工作区首页“继续上次创作”保持左右排版，左侧预览按原始图片比例完整显示，右侧标题和 Prompt 保持摘要展示，避免长文本撑破首页布局。
+- 偏好设置里的“提示词与历史”后续会继续收束：提示词润色配置和图片反推配置先整理成独立工具区，避免配置项继续挤占普通设置页；如果后续继续增长，再拆成单独的提示词工具页。
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
@@ -177,6 +178,7 @@ Current checkpoint: `0.4.5` Global Experience and Performance QA / UI QA baselin
 - Added `scripts/ui_qa_check.py` as the first global UI QA baseline for mojibake scans, icon-button accessible names, long-text guards, empty/error states, and Inspiration Center large-list performance guards.
 - `scripts/smoke_check.py` now runs the UI QA baseline so future smoke checks catch regressions before build/push.
 - Provider/local diagnostic messages, Provider config headers, and gallery Prompt detail text now have safer overflow wrapping/ellipsis behavior for long model names, paths, errors, and Prompts.
+- Preferences Prompt/history settings are earmarked for a follow-up split into a dedicated prompt-tools area, starting with Prompt polish and image reverse configuration consolidation.
 - This pass intentionally avoids a broad visual redesign and keeps AI Create Desk layout stable.
 
 ### v0.4.4 Lightweight Migration Support V1
