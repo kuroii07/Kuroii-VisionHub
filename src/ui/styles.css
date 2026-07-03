@@ -22251,3 +22251,114 @@ body {
 .workspaceGenerate .referenceRoleSelect.open .studioSelectMenu {
   z-index: 90 !important;
 }
+
+
+/* 0.4.6 English i18n layout guards: keep longer labels from breaking the create desk. */
+.appShell[data-language="en-US"] .workspaceGenerate,
+.appShell[data-language="en-US"] .workspaceGenerate * {
+  min-width: 0;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .quickToolbar,
+.appShell[data-language="en-US"] .workspaceGenerate .promptActions,
+.appShell[data-language="en-US"] .workspaceGenerate .promptControlRow,
+.appShell[data-language="en-US"] .workspaceGenerate .batchVariantActions,
+.appShell[data-language="en-US"] .workspaceGenerate .compareProfileActions {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .modeToggle,
+.appShell[data-language="en-US"] .workspaceGenerate .chipButton,
+.appShell[data-language="en-US"] .workspaceGenerate .quickQueueButton,
+.appShell[data-language="en-US"] .workspaceGenerate .referenceAdd,
+.appShell[data-language="en-US"] .workspaceGenerate .referenceClear,
+.appShell[data-language="en-US"] .workspaceGenerate .miniButton,
+.appShell[data-language="en-US"] .workspaceGenerate .primaryGenerate {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptActions .chipButton {
+  max-width: 178px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptPolishQuickGroup {
+  max-width: min(100%, 330px);
+  flex-wrap: nowrap;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptPolishQuickSelect {
+  width: 118px;
+  flex-basis: 118px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptControlRow {
+  grid-template-columns: repeat(5, minmax(76px, 1fr)) minmax(142px, 1.35fr);
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptControlRow label,
+.appShell[data-language="en-US"] .workspaceGenerate .providerRailCard label,
+.appShell[data-language="en-US"] .workspaceGenerate .advancedParamsCard label,
+.appShell[data-language="en-US"] .workspaceGenerate .imageTuningCard label {
+  overflow-wrap: anywhere;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .railTitle,
+.appShell[data-language="en-US"] .workspaceGenerate .railHint,
+.appShell[data-language="en-US"] .workspaceGenerate .capabilityNotice,
+.appShell[data-language="en-US"] .workspaceGenerate .batchToolsHeader small,
+.appShell[data-language="en-US"] .workspaceGenerate .batchVariantHeader small,
+.appShell[data-language="en-US"] .workspaceGenerate .compareProfileHeader small,
+.appShell[data-language="en-US"] .workspaceGenerate .batchToolsEmpty small,
+.appShell[data-language="en-US"] .workspaceGenerate .promptDraftEmpty small {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .studioSelectValue,
+.appShell[data-language="en-US"] .workspaceGenerate .studioSelectOptionText,
+.appShell[data-language="en-US"] .workspaceGenerate .resolutionList small,
+.appShell[data-language="en-US"] .workspaceGenerate .compareProfileOption small,
+.appShell[data-language="en-US"] .workspaceGenerate .batchToolsSummary span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .appShell[data-language="en-US"] .workspaceGenerate .promptControlRow {
+    grid-template-columns: repeat(3, minmax(92px, 1fr));
+  }
+}
+
+/* 0.4.6 English i18n guard: Prompt excerpts keep long English labels inside the Inspiration Center layout. */
+[data-language="en-US"] .promptExcerptShell *,
+[data-language="en-US"] .promptExcerptEditor * {
+  min-width: 0;
+}
+
+[data-language="en-US"] .promptExcerptToolbar,
+[data-language="en-US"] .promptExcerptFilters,
+[data-language="en-US"] .promptExcerptActions,
+[data-language="en-US"] .sourceEditorActions {
+  flex-wrap: wrap;
+}
+
+[data-language="en-US"] .promptExcerptCardHeader,
+[data-language="en-US"] .promptExcerptMeta,
+[data-language="en-US"] .promptExcerptTags {
+  overflow-wrap: anywhere;
+}
+
+[data-language="en-US"] .promptExcerptActions .miniButton,
+[data-language="en-US"] .promptExcerptToolbar .miniButton,
+[data-language="en-US"] .promptExcerptFilters .miniButton {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

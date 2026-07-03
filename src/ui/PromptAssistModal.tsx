@@ -20,10 +20,12 @@ import {
   type PromptAssistMode
 } from '../services/promptAssist';
 import { StudioSelect } from './StudioSelect';
+import type { Translator } from '../i18n';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { useToastMessage } from './toast';
 
 interface PromptAssistModalProps {
+  t: Translator;
   mode: PromptAssistMode;
   prompt: string;
   results: GenerationRecord[];
@@ -45,16 +47,16 @@ type ReuseSortMode = 'newest' | 'oldest' | 'prompt-long' | 'prompt-short';
 type ComposerFieldId = 'subject' | 'scene' | 'style' | 'camera' | 'lighting' | 'material' | 'color' | 'constraints' | 'negative';
 type ComposerValues = Record<ComposerFieldId, string>;
 
-const COMPOSER_FIELDS: Array<{ id: ComposerFieldId; label: string; placeholder: string; multiline?: boolean }> = [
-  { id: 'subject', label: '主体', placeholder: '例如：雨夜露营的机械猫、新品耳机、红衣少女' },
-  { id: 'scene', label: '场景', placeholder: '例如：霓虹街头、极简展台、森林遗迹' },
-  { id: 'style', label: '风格', placeholder: '例如：电影感写实、精修二次元、高级商业海报' },
-  { id: 'camera', label: '镜头 / 构图', placeholder: '例如：低机位仰拍、居中对称、85mm 人像镜头' },
-  { id: 'lighting', label: '光影', placeholder: '例如：柔和轮廓光、蓝紫霓虹光、棚拍柔光' },
-  { id: 'material', label: '材质 / 细节', placeholder: '例如：磨砂金属、透明玻璃、潮湿石板地面' },
-  { id: 'color', label: '色彩', placeholder: '例如：黑金配色、低饱和蓝灰、高对比酸性色' },
-  { id: 'constraints', label: '约束 / 质量', placeholder: '例如：主体清晰，无文字水印，构图干净，高清', multiline: true },
-  { id: 'negative', label: '负面约束', placeholder: '例如：不要多余手指、不要 logo、不要错乱文字', multiline: true }
+const COMPOSER_FIELDS: Array<{ id: ComposerFieldId; multiline?: boolean }> = [
+  { id: 'subject' },
+  { id: 'scene' },
+  { id: 'style' },
+  { id: 'camera' },
+  { id: 'lighting' },
+  { id: 'material' },
+  { id: 'color' },
+  { id: 'constraints', multiline: true },
+  { id: 'negative', multiline: true }
 ];
 
 const EMPTY_COMPOSER_VALUES: ComposerValues = {
@@ -114,10 +116,65 @@ const COMPOSER_PRESETS: Array<{ id: string; title: string; description: string; 
   }
 ];
 
-function buildComposerPrompt(values: ComposerValues) {
+function i18nKey(key: string) {
+  return key as Parameters<Translator>[0];
+}
+
+function composerFieldLabel(fieldId: ComposerFieldId, t: Translator) {
+  return t(i18nKey(`assist.composer.field.${fieldId}.label`));
+}
+
+function composerFieldPlaceholder(fieldId: ComposerFieldId, t: Translator) {
+  return t(i18nKey(`assist.composer.field.${fieldId}.placeholder`));
+}
+
+function composerPresetTitle(presetId: string, fallback: string, t: Translator) {
+  const key = i18nKey(`assist.composer.preset.${presetId}.title`);
+  const translated = t(key);
+  return translated === key ? fallback : translated;
+}
+
+function composerPresetDescription(presetId: string, fallback: string, t: Translator) {
+  const key = i18nKey(`assist.composer.preset.${presetId}.description`);
+  const translated = t(key);
+  return translated === key ? fallback : translated;
+}
+
+function inspirationFilterLabel(filter: { id: 'all' | InspirationTemplateGroup; label: string }, t: Translator) {
+  const key = i18nKey(`assist.inspiration.filter.${filter.id}`);
+  const translated = t(key);
+  return translated === key ? filter.label : translated;
+}
+
+function polishModeLabel(mode: { id: string; label: string; scope: 'local' | 'provider' }, t: Translator) {
+  const key = i18nKey(`assist.polish.mode.${mode.scope}.${mode.id}.label`);
+  const translated = t(key);
+  return translated === key ? mode.label : translated;
+}
+
+function polishModeDescription(mode: { id: string; description: string; scope: 'local' | 'provider' }, t: Translator) {
+  const key = i18nKey(`assist.polish.mode.${mode.scope}.${mode.id}.description`);
+  const translated = t(key);
+  return translated === key ? mode.description : translated;
+}
+
+function promptStyleLabel(style: { id: string; label: string }, t: Translator) {
+  const key = i18nKey(`assist.polish.style.${style.id}.label`);
+  const translated = t(key);
+  return translated === key ? style.label : translated;
+}
+
+function promptStyleDescription(style: { id: string; description: string }, t: Translator) {
+  const key = i18nKey(`assist.polish.style.${style.id}.description`);
+  const translated = t(key);
+  return translated === key ? style.description : translated;
+}
+
+function buildComposerPrompt(values: ComposerValues, t: Translator) {
+  const scene = values.scene.trim();
   const parts = [
     values.subject.trim(),
-    values.scene.trim() ? `位于${values.scene.trim()}` : '',
+    scene ? t('assist.composer.scenePrefix', { scene }) : '',
     values.style.trim(),
     values.camera.trim(),
     values.lighting.trim(),
@@ -125,14 +182,16 @@ function buildComposerPrompt(values: ComposerValues) {
     values.color.trim(),
     values.constraints.trim()
   ].filter(Boolean);
-  const positivePrompt = parts.join('，');
+  const positivePrompt = parts.join(t('assist.composer.separator'));
   const negativePrompt = values.negative.trim();
-  if (positivePrompt && negativePrompt) return `${positivePrompt}\n负面约束：${negativePrompt}`;
-  if (negativePrompt) return `负面约束：${negativePrompt}`;
+  if (positivePrompt && negativePrompt) return `${positivePrompt}
+${t('assist.composer.negativePrefix', { prompt: negativePrompt })}`;
+  if (negativePrompt) return t('assist.composer.negativePrefix', { prompt: negativePrompt });
   return positivePrompt;
 }
 
 export function PromptAssistModal(props: PromptAssistModalProps) {
+  const t = props.t;
   function resolveInitialPolishConfigId() {
     const currentConfigId = promptPolishConfigId(props.promptPolishSettings.displayName, props.promptPolishSettings.baseUrl);
     const exactConfig = props.promptPolishSettings.savedConfigs.find((config) => config.id === currentConfigId);
@@ -173,7 +232,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
 
   const selectedTemplate =
     INSPIRATION_TEMPLATES.find((template) => template.id === selectedTemplateId) ?? INSPIRATION_TEMPLATES[0];
-  const composerPrompt = useMemo(() => buildComposerPrompt(composerValues), [composerValues]);
+  const composerPrompt = useMemo(() => buildComposerPrompt(composerValues, t), [composerValues, t]);
   const filteredTemplates = useMemo(
     () => templateFilter === 'all'
       ? INSPIRATION_TEMPLATES
@@ -333,9 +392,9 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
   async function copyText(value: string) {
     try {
       await navigator.clipboard?.writeText(value);
-      setCopiedMessage('已复制');
+      setCopiedMessage(t('assist.copy.ok'));
     } catch {
-      setCopiedMessage('复制失败，请手动选中文本复制');
+      setCopiedMessage(t('assist.copy.failed'));
     }
   }
 
@@ -346,15 +405,15 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
       setEditableResultPrompt(nextLocalPrompt);
       setLastAutoPolishedPrompt(nextLocalPrompt);
       setIsResultManuallyEdited(false);
-      setPolishMessage('当前使用本地规则润色，未调用模型。');
+      setPolishMessage(t('assist.polish.localMessage'));
       return;
     }
     if (!polishBaseUrl) {
-      setPolishMessage('请先到偏好设置填写提示词润色专用 Base URL。');
+      setPolishMessage(t('assist.polish.needBaseUrl'));
       return;
     }
     if (!polishModelId) {
-      setPolishMessage('请先到偏好设置填写提示词润色专用模型 ID。');
+      setPolishMessage(t('assist.polish.needModel'));
       return;
     }
 
@@ -364,7 +423,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
       const result = await polishPromptWithProvider({
         providerId: 'prompt-polish',
         modelId: polishModelId,
-        prompt: editableSourcePrompt.trim() || '一个清晰明确的画面主体',
+        prompt: editableSourcePrompt.trim() || t('assist.polish.defaultSubject'),
         modeId: polishMode,
         styleId: props.promptStyleId,
         settings: { ...effectivePolishSettings, modelId: polishModelId },
@@ -374,7 +433,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
       });
       setModelPolishedPrompt(result.polishedPrompt);
       setIsResultManuallyEdited(false);
-      setPolishMessage(`模型润色完成：${result.modelId}`);
+      setPolishMessage(t('assist.polish.done', { model: result.modelId }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (props.promptPolishSettings.fallbackToLocal && !isResultManuallyEdited) {
@@ -385,8 +444,8 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
       }
       setPolishMessage(
         props.promptPolishSettings.fallbackToLocal
-          ? `模型润色失败，已回退本地规则：${message}`
-          : `模型润色失败：${message}`
+          ? t('assist.polish.failedFallback', { message })
+          : t('assist.polish.failed', { message })
       );
     } finally {
       setIsPolishing(false);
@@ -395,13 +454,13 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
 
   async function deleteReuseRecord(record: GenerationRecord) {
     if (!props.onDeleteRecord) {
-      setCopiedMessage('当前环境暂不支持删除记录');
+      setCopiedMessage(t('assist.reuse.deleteUnsupported'));
       return;
     }
     props.onRequestConfirm({
-      title: '删除复用记录',
-      message: '这条记录只会从 VisionHub 软件记录中移除，不会删除磁盘上的图片文件。',
-      confirmLabel: '删除记录',
+      title: t('assist.reuse.deleteTitle'),
+      message: t('assist.reuse.deleteMessage'),
+      confirmLabel: t('assist.reuse.deleteConfirm'),
       tone: 'danger',
       onConfirm: async () => {
         await props.onDeleteRecord?.(record.id);
@@ -412,7 +471,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
           savePromptReuseFavoriteIds(next);
           return next;
         });
-        setCopiedMessage('已删除软件记录，磁盘图片未删除');
+        setCopiedMessage(t('assist.reuse.deleted'));
       }
     });
   }
@@ -424,7 +483,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
       if (willFavorite) next.add(record.id);
       else next.delete(record.id);
       savePromptReuseFavoriteIds(next);
-      setCopiedMessage(willFavorite ? '已标记为常用 Prompt' : '已取消常用标记');
+      setCopiedMessage(willFavorite ? t('assist.reuse.favoriteOn') : t('assist.reuse.favoriteOff'));
       return next;
     });
   }
@@ -443,7 +502,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
     setEditableSourcePrompt(props.prompt);
     setModelPolishedPrompt('');
     setIsResultManuallyEdited(false);
-    setPolishMessage('已恢复为当前创作台提示词。');
+    setPolishMessage(t('assist.polish.resetDone'));
   }
 
   function swapPolishPrompts() {
@@ -452,7 +511,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
     setEditableResultPrompt(editableSourcePrompt);
     setModelPolishedPrompt('');
     setIsResultManuallyEdited(true);
-    setPolishMessage('已交换原提示词和润色结果。');
+    setPolishMessage(t('assist.polish.swapDone'));
   }
 
   function changeTemplateFilter(filter: 'all' | InspirationTemplateGroup) {
@@ -478,7 +537,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
   function useCurrentPromptAsComposerSubject() {
     const prompt = props.prompt.trim();
     if (!prompt) {
-      setCopiedMessage('当前创作台 Prompt 为空。');
+      setCopiedMessage(t('assist.reuse.emptyCurrent'));
       return;
     }
     setComposerValues((current) => ({ ...current, subject: prompt }));
@@ -489,15 +548,15 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
   }
 
   const title =
-    activeMode === 'composer' ? 'Prompt 组合器' : activeMode === 'inspiration' ? '模板灵感' : activeMode === 'polish' ? '提示词润色' : '复用记录';
+    activeMode === 'composer' ? t('assist.title.composer') : activeMode === 'inspiration' ? t('assist.title.inspiration') : activeMode === 'polish' ? t('assist.title.polish') : t('assist.title.reuse');
   const subtitle =
     activeMode === 'composer'
-      ? '按主体、场景、风格、镜头和约束组合完整 Prompt'
+      ? t('assist.subtitle.composer')
       : activeMode === 'inspiration'
-        ? '选择模板并回填到创作台'
+        ? t('assist.subtitle.inspiration')
         : activeMode === 'polish'
-          ? '本地或模型结构化重写后回填提示词'
-          : '从历史记录里找回好用的 Prompt';
+          ? t('assist.subtitle.polish')
+          : t('assist.subtitle.reuse');
 
   return (
     <div className="promptAssistBackdrop" onClick={props.onClose}>
@@ -507,13 +566,14 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
             <span>{title}</span>
             <strong>{subtitle}</strong>
           </div>
-          <button className="promptAssistClose" onClick={props.onClose} aria-label="关闭" title="关闭">
+          <button className="promptAssistClose" onClick={props.onClose} aria-label={t('assist.close')} title={t('assist.close')}>
             <X size={18} />
           </button>
         </header>
 
         {activeMode === 'inspiration' ? (
           <InspirationPanel
+            t={t}
             selectedTemplate={selectedTemplate}
             templates={filteredTemplates}
             templateFilter={templateFilter}
@@ -532,6 +592,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
 
         {activeMode === 'composer' ? (
           <ComposerPanel
+            t={t}
             values={composerValues}
             prompt={composerPrompt}
             presets={COMPOSER_PRESETS}
@@ -547,6 +608,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
 
         {activeMode === 'polish' ? (
           <PolishPanel
+            t={t}
             sourcePrompt={editableSourcePrompt}
             polishMode={polishMode}
             polishModes={availablePolishModes}
@@ -594,6 +656,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
 
         {activeMode === 'reuse' ? (
           <ReusePanel
+            t={t}
             query={reuseQuery}
             records={promptRecords}
             totalRecords={reusableSourceRecords.length}
@@ -639,6 +702,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
 }
 
 function ComposerPanel(props: {
+  t: Translator;
   values: ComposerValues;
   prompt: string;
   presets: typeof COMPOSER_PRESETS;
@@ -653,20 +717,20 @@ function ComposerPanel(props: {
   const hasCurrentPrompt = props.currentPrompt.trim().length > 0;
   return (
     <div className="promptAssistBody twoColumn composerBody">
-      <aside className="composerPresetList" aria-label="Prompt 组合器预设">
+      <aside className="composerPresetList" aria-label={props.t('assist.composer.presetsAria')}>
         <div className="assistTemplateCount">
           <strong>{props.presets.length}</strong>
-          <span>个组合预设</span>
+          <span>{props.t('assist.composer.presetCount')}</span>
         </div>
         {props.presets.map((preset) => (
           <button type="button" className="composerPresetCard" key={preset.id} onClick={() => props.onApplyPreset(preset.id)}>
-            <strong>{preset.title}</strong>
-            <small>{preset.description}</small>
+            <strong>{composerPresetTitle(preset.id, preset.title, props.t)}</strong>
+            <small>{composerPresetDescription(preset.id, preset.description, props.t)}</small>
           </button>
         ))}
         <div className="composerPresetHint">
-          <strong>不改主界面</strong>
-          <small>组合器只在弹窗内工作，回填后才会影响当前 Prompt。</small>
+          <strong>{props.t('assist.composer.safeHintTitle')}</strong>
+          <small>{props.t('assist.composer.safeHint')}</small>
         </div>
       </aside>
 
@@ -674,43 +738,44 @@ function ComposerPanel(props: {
         <div className="assistTemplateSummary composerSummary">
           <div>
             <span>V1</span>
-            <strong>从片段组合完整 Prompt</strong>
+            <strong>{props.t('assist.composer.summaryTitle')}</strong>
           </div>
-          <p>先填主体，再按需补风格、镜头、光影和约束；不会自动覆盖创作台内容。</p>
+          <p>{props.t('assist.composer.summaryHint')}</p>
         </div>
         <div className="composerFieldGrid">
           {COMPOSER_FIELDS.map((field) => (
             <label className={field.multiline ? 'composerField composerFieldWide' : 'composerField'} key={field.id}>
-              <span>{field.label}</span>
+              <span>{composerFieldLabel(field.id, props.t)}</span>
               {field.multiline ? (
                 <textarea
                   value={props.values[field.id]}
-                  placeholder={field.placeholder}
+                  placeholder={composerFieldPlaceholder(field.id, props.t)}
                   rows={3}
                   onChange={(event) => props.onValueChange(field.id, event.target.value)}
                 />
               ) : (
                 <input
                   value={props.values[field.id]}
-                  placeholder={field.placeholder}
+                  placeholder={composerFieldPlaceholder(field.id, props.t)}
                   onChange={(event) => props.onValueChange(field.id, event.target.value)}
                 />
               )}
             </label>
           ))}
         </div>
-        <PromptPreview title="组合结果" prompt={props.prompt} />
+        <PromptPreview t={props.t} title={props.t('assist.composer.resultTitle')} prompt={props.prompt} />
         <AssistActions
+          t={props.t}
           prompt={props.prompt}
           onApplyPrompt={props.onApplyPrompt}
           onCopy={props.onCopy}
           extraActions={(
             <>
-              <button type="button" onClick={props.onUseCurrentPrompt} disabled={!hasCurrentPrompt} title="将当前创作台 Prompt 放入主体栏">
-                带入当前
+              <button type="button" onClick={props.onUseCurrentPrompt} disabled={!hasCurrentPrompt} title={props.t('assist.composer.useCurrentTitle')}>
+                {props.t('assist.composer.useCurrent')}
               </button>
               <button type="button" onClick={props.onClear}>
-                清空组合
+                {props.t('assist.composer.clear')}
               </button>
             </>
           )}
@@ -721,6 +786,7 @@ function ComposerPanel(props: {
 }
 
 function InspirationPanel(props: {
+  t: Translator;
   selectedTemplate: InspirationTemplate;
   templates: InspirationTemplate[];
   templateFilter: 'all' | InspirationTemplateGroup;
@@ -735,7 +801,7 @@ function InspirationPanel(props: {
   return (
     <div className="promptAssistBody twoColumn">
       <aside className="assistTemplateList">
-        <div className="assistTemplateFilters" aria-label="模板用途筛选">
+        <div className="assistTemplateFilters" aria-label={props.t('assist.inspiration.filtersAria')}>
           {INSPIRATION_TEMPLATE_FILTERS.map((filter) => (
             <button
               type="button"
@@ -743,16 +809,16 @@ function InspirationPanel(props: {
               className={filter.id === props.templateFilter ? 'active' : ''}
               onClick={() => props.onTemplateFilterChange(filter.id)}
               aria-pressed={filter.id === props.templateFilter}
-              title={`筛选：${filter.label}`}
+              title={props.t('assist.inspiration.filterTitle', { filter: inspirationFilterLabel(filter, props.t) })}
             >
-              {filter.label}
+              {inspirationFilterLabel(filter, props.t)}
             </button>
           ))}
         </div>
 
         <div className="assistTemplateCount">
           <strong>{props.templates.length}</strong>
-          <span>个模板</span>
+          <span>{props.t('assist.inspiration.templateCount')}</span>
         </div>
 
         {props.templates.map((template) => (
@@ -791,14 +857,15 @@ function InspirationPanel(props: {
             </label>
           ))}
         </div>
-        <PromptPreview prompt={props.prompt} />
-        <AssistActions prompt={props.prompt} onApplyPrompt={props.onApplyPrompt} onCopy={props.onCopy} />
+        <PromptPreview t={props.t} prompt={props.prompt} />
+        <AssistActions t={props.t} prompt={props.prompt} onApplyPrompt={props.onApplyPrompt} onCopy={props.onCopy} />
       </div>
     </div>
   );
 }
 
 function PolishPanel(props: {
+  t: Translator;
   sourcePrompt: string;
   polishMode: string;
   polishModes: typeof POLISH_MODES;
@@ -830,27 +897,27 @@ function PolishPanel(props: {
         <StudioSelect
           value={props.polishMode}
           onChange={props.onModeChange}
-          options={props.polishModes.map((mode) => ({ value: mode.id, label: mode.label, description: mode.description }))}
+          options={props.polishModes.map((mode) => ({ value: mode.id, label: polishModeLabel(mode, props.t), description: polishModeDescription(mode, props.t) }))}
         />
         <StudioSelect
           value={props.promptStyleId}
           onChange={props.onStyleChange}
-          placeholder="画风/风格"
-          options={PROMPT_STYLE_PRESETS.map((style) => ({ value: style.id, label: style.label, description: style.description }))}
+          placeholder={props.t('assist.polish.stylePlaceholder')}
+          options={PROMPT_STYLE_PRESETS.map((style) => ({ value: style.id, label: promptStyleLabel(style, props.t), description: promptStyleDescription(style, props.t) }))}
         />
-        <small>{props.polishModes.find((mode) => mode.id === props.polishMode)?.description}</small>
+        <small>{props.polishModes.find((mode) => mode.id === props.polishMode) ? polishModeDescription(props.polishModes.find((mode) => mode.id === props.polishMode)!, props.t) : ''}</small>
       </div>
       <div className="polishEngineBar">
         <div>
-          <strong>{props.engine === 'provider' ? '模型结构化重写已启用' : '本地结构化重写已启用'}</strong>
-          <small>{props.engine === 'provider' ? '可切换偏好设置里保存的文本模型。' : '当前按本地规则生成结构化预览，不会调用模型。'}</small>
+          <strong>{props.engine === 'provider' ? props.t('assist.polish.providerOn') : props.t('assist.polish.localOn')}</strong>
+          <small>{props.engine === 'provider' ? props.t('assist.polish.providerHint') : props.t('assist.polish.localHint')}</small>
         </div>
         <div className="polishModelPicker">
           <StudioSelect
             className={`polishConfigSelect noSelectCheck ${props.engine === 'local' ? 'mutedSelect' : ''}`}
             value={props.configId}
             onChange={props.onConfigChange}
-            placeholder="润色配置"
+            placeholder={props.t('assist.polish.configPlaceholder')}
             options={props.configOptions}
             disabled={props.engine === 'local'}
           />
@@ -859,45 +926,48 @@ function PolishPanel(props: {
               className="polishModelSelect noSelectCheck"
               value={props.polishModelId}
               onChange={props.onModelChange}
-              placeholder="选择润色模型"
+              placeholder={props.t('assist.polish.modelPlaceholder')}
               options={props.polishModelOptions.map((modelId) => ({ value: modelId, label: modelId }))}
             />
           ) : (
-            <span className="polishModelTag active">本地规则</span>
+            <span className="polishModelTag active">{props.t('assist.polish.localTag')}</span>
           )}
         </div>
         <button className="polishRunButton" onClick={props.onRunModelPolish} disabled={props.isPolishing || (props.engine === 'provider' && !props.polishReady)}>
-          <Wand2 size={13} /> {props.engine === 'provider' ? (props.isPolishing ? '重写中…' : '开始模型重写') : '应用本地重写'}
+          <Wand2 size={13} /> {props.engine === 'provider' ? (props.isPolishing ? props.t('assist.polish.running') : props.t('assist.polish.runModel')) : props.t('assist.polish.runLocal')}
         </button>
       </div>
       {props.engine === 'provider' && !props.polishReady ? (
-        <p className="polishConfigHint">请先到偏好设置填写润色专用 Base URL、模型 ID，并保存润色专用 API Key。</p>
+        <p className="polishConfigHint">{props.t('assist.polish.configHint')}</p>
       ) : null}
       <div className="polishCompareGrid">
         <PromptEditorBox
-          title="原提示词"
+          t={props.t}
+          title={props.t('assist.polish.sourceTitle')}
           value={props.sourcePrompt}
-          placeholder="输入或修改要润色的原始提示词。为空时会使用默认主体进行润色。"
+          placeholder={props.t('assist.polish.sourcePlaceholder')}
           onChange={props.onSourcePromptChange}
         />
         <PromptEditorBox
-          title="润色结果"
+          t={props.t}
+          title={props.t('assist.polish.resultTitle')}
           value={props.resultPrompt}
-          placeholder="润色结果会显示在这里，也可以直接手动修改后回填。"
+          placeholder={props.t('assist.polish.resultPlaceholder')}
           onChange={props.onResultPromptChange}
         />
       </div>
       <AssistActions
+        t={props.t}
         prompt={props.resultPrompt}
         onApplyPrompt={props.onApplyPrompt}
         onCopy={props.onCopy}
         extraActions={(
           <>
-            <button type="button" onClick={props.onResetSourcePrompt} title="恢复为打开弹窗时的创作台提示词">
-              恢复原文
+            <button type="button" onClick={props.onResetSourcePrompt} title={props.t('assist.polish.resetTitle')}>
+              {props.t('assist.polish.reset')}
             </button>
-            <button type="button" onClick={props.onSwapPrompts} title="把润色结果放到左侧继续二次润色">
-              交换左右
+            <button type="button" onClick={props.onSwapPrompts} title={props.t('assist.polish.swapTitle')}>
+              {props.t('assist.polish.swap')}
             </button>
           </>
         )}
@@ -907,6 +977,7 @@ function PolishPanel(props: {
 }
 
 function ReusePanel(props: {
+  t: Translator;
   query: string;
   records: GenerationRecord[];
   totalRecords: number;
@@ -947,87 +1018,87 @@ function ReusePanel(props: {
     <div className="promptAssistBody singleColumn">
       <div className="reuseSummaryBar">
         <span>
-          已筛出 <strong>{props.records.length}</strong> 条 / 共 <strong>{props.totalRecords}</strong> 条
-          <small>常用 {props.favoriteCount} 条</small>
+          {props.t('assist.reuse.summary', { shown: props.records.length, total: props.totalRecords })}
+          <small>{props.t('assist.reuse.favoriteCount', { count: props.favoriteCount })}</small>
         </span>
-        <div className="reuseQuickActions" aria-label="复用记录快捷筛选">
+        <div className="reuseQuickActions" aria-label={props.t('assist.reuse.quickAria')}>
           <button
             type="button"
             className={props.favoriteFilter === 'favorite' ? 'active' : ''}
             onClick={() => props.onFavoriteFilterChange(props.favoriteFilter === 'favorite' ? 'all' : 'favorite')}
-            title={props.favoriteFilter === 'favorite' ? '显示全部复用记录' : '只看标记为常用的 Prompt'}
+            title={props.favoriteFilter === 'favorite' ? props.t('assist.reuse.showAll') : props.t('assist.reuse.onlyFavoriteTitle')}
             aria-pressed={props.favoriteFilter === 'favorite'}
           >
-            <Star size={13} fill={props.favoriteFilter === 'favorite' ? 'currentColor' : 'none'} /> 只看常用
+            <Star size={13} fill={props.favoriteFilter === 'favorite' ? 'currentColor' : 'none'} /> {props.t('assist.reuse.onlyFavorite')}
           </button>
           <button
             type="button"
             className={props.statusFilter === 'succeeded' ? 'active' : ''}
             onClick={() => props.onStatusFilterChange(props.statusFilter === 'succeeded' ? 'all' : 'succeeded')}
-            title={props.statusFilter === 'succeeded' ? '显示全部状态' : '只看成功生成的 Prompt'}
+            title={props.statusFilter === 'succeeded' ? props.t('assist.reuse.showAllStatus') : props.t('assist.reuse.onlySucceededTitle')}
             aria-pressed={props.statusFilter === 'succeeded'}
           >
-            只看成功
+            {props.t('assist.reuse.onlySucceeded')}
           </button>
           <button type="button" onClick={props.onResetFilters} disabled={!hasActiveFilters}>
-            重置筛选
+            {props.t('assist.reuse.resetFilters')}
           </button>
         </div>
       </div>
       <div className="reuseFilterPanel">
         <label className="reuseSearch">
-          搜索记录
+          {props.t('assist.reuse.searchLabel')}
           <input
             value={props.query}
-            placeholder="搜索 Prompt / 平台 / 模型"
+            placeholder={props.t('assist.reuse.searchPlaceholder')}
             onChange={(event) => props.onQueryChange(event.target.value)}
           />
         </label>
         <label>
-          平台
+          {props.t('assist.reuse.provider')}
           <select value={props.providerFilter} onChange={(event) => props.onProviderFilterChange(event.target.value)}>
-            <option value="all">全部平台</option>
+            <option value="all">{props.t('assist.reuse.allProviders')}</option>
             {props.providerOptions.map((provider) => (
               <option key={provider} value={provider}>{provider}</option>
             ))}
           </select>
         </label>
         <label>
-          模型
+          {props.t('assist.reuse.model')}
           <select value={props.modelFilter} onChange={(event) => props.onModelFilterChange(event.target.value)}>
-            <option value="all">全部模型</option>
+            <option value="all">{props.t('assist.reuse.allModels')}</option>
             {props.modelOptions.map((model) => (
               <option key={model} value={model}>{model}</option>
             ))}
           </select>
         </label>
         <label>
-          类型
+          {props.t('assist.reuse.type')}
           <select value={props.modeFilter} onChange={(event) => props.onModeFilterChange(event.target.value as ReuseModeFilter)}>
-            <option value="all">全部类型</option>
-            <option value="text-to-image">文生图</option>
-            <option value="image-to-image">图生图</option>
-            <option value="with-references">有参考图</option>
+            <option value="all">{props.t('assist.reuse.allTypes')}</option>
+            <option value="text-to-image">{props.t('assist.reuse.textToImage')}</option>
+            <option value="image-to-image">{props.t('assist.reuse.imageToImage')}</option>
+            <option value="with-references">{props.t('assist.reuse.withReferences')}</option>
           </select>
         </label>
         <label>
-          状态
+          {props.t('assist.reuse.status')}
           <select value={props.statusFilter} onChange={(event) => props.onStatusFilterChange(event.target.value as ReuseStatusFilter)}>
-            <option value="all">全部状态</option>
-            <option value="succeeded">成功</option>
-            <option value="failed">失败</option>
-            <option value="running">运行中</option>
-            <option value="queued">排队中</option>
-            <option value="cancelled">已取消</option>
+            <option value="all">{props.t('assist.reuse.allStatuses')}</option>
+            <option value="succeeded">{props.t('assist.reuse.statusSucceeded')}</option>
+            <option value="failed">{props.t('assist.reuse.statusFailed')}</option>
+            <option value="running">{props.t('assist.reuse.statusRunning')}</option>
+            <option value="queued">{props.t('assist.reuse.statusQueued')}</option>
+            <option value="cancelled">{props.t('assist.reuse.statusCancelled')}</option>
           </select>
         </label>
         <label>
-          排序
+          {props.t('assist.reuse.sort')}
           <select value={props.sortMode} onChange={(event) => props.onSortModeChange(event.target.value as ReuseSortMode)}>
-            <option value="newest">最近生成</option>
-            <option value="oldest">最早生成</option>
-            <option value="prompt-long">Prompt 最长</option>
-            <option value="prompt-short">Prompt 最短</option>
+            <option value="newest">{props.t('assist.reuse.sortNewest')}</option>
+            <option value="oldest">{props.t('assist.reuse.sortOldest')}</option>
+            <option value="prompt-long">{props.t('assist.reuse.sortLong')}</option>
+            <option value="prompt-short">{props.t('assist.reuse.sortShort')}</option>
           </select>
         </label>
       </div>
@@ -1035,8 +1106,8 @@ function ReusePanel(props: {
         {props.records.length === 0 ? (
           <div className="assistEmpty">
             <History size={30} />
-            <strong>暂无可复用记录</strong>
-            <small>{props.historyEnabled ? '可以调整筛选条件，或生成新图片后再复用。' : '当前偏好设置已关闭 Prompt 历史。'}</small>
+            <strong>{props.t('assist.reuse.emptyTitle')}</strong>
+            <small>{props.historyEnabled ? props.t('assist.reuse.emptyHintEnabled') : props.t('assist.reuse.emptyHintDisabled')}</small>
           </div>
         ) : (
           props.records.map((record) => {
@@ -1049,15 +1120,15 @@ function ReusePanel(props: {
                     <div>
                       <strong>{record.providerName ?? record.providerId}</strong>
                       <small>
-                        {record.modelId} · {formatGenerationMode(record)} · {record.status === 'succeeded' ? '成功' : record.status} · {formatTime(record.createdAt)}
+                        {record.modelId} · {formatGenerationMode(record, props.t)} · {record.status === 'succeeded' ? props.t('assist.reuse.statusSucceeded') : record.status} · {formatTime(record.createdAt)}
                       </small>
                     </div>
                     <button
                       className={`iconMiniButton reuseFavoriteButton ${isFavorite ? 'active' : ''}`}
                       type="button"
                       onClick={() => props.onToggleFavorite(record)}
-                      title={isFavorite ? '取消常用 Prompt' : '标记为常用 Prompt'}
-                      aria-label={isFavorite ? '取消常用 Prompt' : '标记为常用 Prompt'}
+                      title={isFavorite ? props.t('assist.reuse.favoriteRemove') : props.t('assist.reuse.favoriteAdd')}
+                      aria-label={isFavorite ? props.t('assist.reuse.favoriteRemove') : props.t('assist.reuse.favoriteAdd')}
                       aria-pressed={isFavorite}
                     >
                       <Star size={13} fill={isFavorite ? 'currentColor' : 'none'} />
@@ -1066,19 +1137,19 @@ function ReusePanel(props: {
                   <p>{record.prompt}</p>
                   <div className="assistActionRow">
                     <button type="button" onClick={() => props.onApplyPrompt(record.prompt, 'replace')}>
-                      <Wand2 size={13} /> 复用
+                      <Wand2 size={13} /> {props.t('assist.reuse.use')}
                     </button>
-                    <button type="button" onClick={() => props.onApplyPrompt(record.prompt, 'append')}>追加</button>
+                    <button type="button" onClick={() => props.onApplyPrompt(record.prompt, 'append')}>{props.t('assist.actions.append')}</button>
                     <button type="button" onClick={() => props.onCopy(record.prompt)}>
-                      <Copy size={13} /> 复制
+                      <Copy size={13} /> {props.t('assist.actions.copy')}
                     </button>
                     <button
                       className="dangerText"
                       type="button"
                       onClick={() => void props.onDeleteRecord(record)}
-                      title="只删除软件记录，不删除磁盘图片"
+                      title={props.t('assist.reuse.deleteSoftTitle')}
                     >
-                      <Trash2 size={13} /> 删除记录
+                      <Trash2 size={13} /> {props.t('assist.reuse.delete')}
                     </button>
                   </div>
                 </div>
@@ -1091,13 +1162,13 @@ function ReusePanel(props: {
   );
 }
 
-function PromptPreview(props: { title?: string; prompt: string }) {
+function PromptPreview(props: { t: Translator; title?: string; prompt: string }) {
   const length = props.prompt.trim().length;
   return (
     <div className="promptPreviewBox">
       <strong>
-        {props.title ?? 'Prompt 预览'}
-        <span>{length} 字符</span>
+        {props.title ?? props.t('assist.preview.title')}
+        <span>{props.t('assist.preview.length', { count: length })}</span>
       </strong>
       <p>{props.prompt}</p>
     </div>
@@ -1105,6 +1176,7 @@ function PromptPreview(props: { title?: string; prompt: string }) {
 }
 
 function PromptEditorBox(props: {
+  t: Translator;
   title: string;
   value: string;
   placeholder: string;
@@ -1115,7 +1187,7 @@ function PromptEditorBox(props: {
     <label className="promptEditorBox">
       <span>
         <strong>{props.title}</strong>
-        <small>{length} 字符</small>
+        <small>{props.t('assist.preview.length', { count: length })}</small>
       </span>
       <textarea
         value={props.value}
@@ -1127,6 +1199,7 @@ function PromptEditorBox(props: {
 }
 
 function AssistActions(props: {
+  t: Translator;
   prompt: string;
   onApplyPrompt: (prompt: string, placement: 'replace' | 'append') => void;
   onCopy: (prompt: string) => void;
@@ -1136,11 +1209,11 @@ function AssistActions(props: {
   return (
     <div className="assistActionRow">
       <button disabled={!canUsePrompt} onClick={() => props.onApplyPrompt(props.prompt, 'replace')}>
-        <Wand2 size={13} /> 回填
+        <Wand2 size={13} /> {props.t('assist.actions.apply')}
       </button>
-      <button disabled={!canUsePrompt} onClick={() => props.onApplyPrompt(props.prompt, 'append')}>追加</button>
+      <button disabled={!canUsePrompt} onClick={() => props.onApplyPrompt(props.prompt, 'append')}>{props.t('assist.actions.append')}</button>
       <button disabled={!canUsePrompt} onClick={() => props.onCopy(props.prompt)}>
-        <Copy size={13} /> 复制
+        <Copy size={13} /> {props.t('assist.actions.copy')}
       </button>
       {props.extraActions}
     </div>
@@ -1166,9 +1239,9 @@ function recordTimeMs(value: string) {
   return Number.isNaN(time) ? 0 : time;
 }
 
-function formatGenerationMode(record: GenerationRecord) {
-  if ((record.referenceImages?.length ?? 0) > 0) return `有参考图 ${record.referenceImages?.length}`;
-  return (record.generationMode ?? 'text-to-image') === 'image-to-image' ? '图生图' : '文生图';
+function formatGenerationMode(record: GenerationRecord, t: Translator) {
+  if ((record.referenceImages?.length ?? 0) > 0) return t('assist.reuse.withReferenceCount', { count: record.referenceImages?.length ?? 0 });
+  return (record.generationMode ?? 'text-to-image') === 'image-to-image' ? t('assist.reuse.imageToImage') : t('assist.reuse.textToImage');
 }
 
 function uniqueRecordOptions(records: GenerationRecord[], selector: (record: GenerationRecord) => string | undefined) {

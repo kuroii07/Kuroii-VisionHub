@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.4.5` Global Experience and Performance QA / prompt-tool settings consolidation, UI QA baseline, accessibility names, long-text guards, empty/error states, and large-list performance guards.
+Current checkpoint: `0.4.6` Chinese / English internationalization V1 / shared i18n dictionary, app shell, workspace home, and preference entry-point migration.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -171,6 +171,13 @@ Current checkpoint: `0.4.5` Global Experience and Performance QA / prompt-tool s
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.4.6 Chinese / English Internationalization V1
+
+- App version is now `0.4.6`, synchronized across package metadata, Tauri metadata, Cargo metadata, app version display, README, and roadmap docs.
+- Added shared `src/i18n` dictionary and a typed translator so UI text can migrate out of scattered hardcoded strings.
+- Language switching now covers the app shell, navigation, theme toggle, workspace home, and the Preferences header / Appearance entry points.
+- This is the first i18n slice; user prompts, model names, provider names, raw API errors, file paths, and user-saved templates remain untranslated by design.
 
 ### v0.4.5 Global Experience and Performance QA
 

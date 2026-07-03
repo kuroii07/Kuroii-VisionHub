@@ -157,6 +157,7 @@ import {
 } from '../services/promptTemplates';
 import { importInspirationAsset } from '../services/inspirationApi';
 import { FREE_PLATFORMS, buildFreePlatformPrompt, type FreePlatform } from '../services/freePlatforms';
+import { createTranslator, type Translator } from '../i18n';
 import { readStorageValue, writeStorageValue } from '../services/safeStorage';
 import {
   appendBatchQueueTasks,
@@ -180,7 +181,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
-const APP_VERSION = '0.4.5';
+const APP_VERSION = '0.4.6';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -5935,30 +5936,18 @@ export function App() {
     }
   }
 
-  const shellIsEnglish = appSettings.language === 'en-US';
-  const navLabels: Record<Page, string> = shellIsEnglish
-    ? {
-        home: 'Workspace',
-        generate: 'AI Create',
-        batch: 'Batch Queue',
-        free: 'Free Tools',
-        library: 'Gallery',
-        inspiration: 'Inspiration',
-        templates: 'Prompt Library',
-        providers: 'Providers',
-        settings: 'Preferences'
-      }
-    : {
-        home: '工作台',
-        generate: 'AI 创作',
-        batch: '批量队列',
-        free: '免费平台',
-        library: '作品画廊',
-        inspiration: '灵感中心',
-        templates: '提示词库',
-        providers: '平台接入',
-        settings: '偏好设置'
-      };
+  const t = useMemo(() => createTranslator(appSettings.language), [appSettings.language]);
+  const navLabels: Record<Page, string> = {
+    home: t('nav.home'),
+    generate: t('nav.generate'),
+    batch: t('nav.batch'),
+    free: t('nav.free'),
+    library: t('nav.library'),
+    inspiration: t('nav.inspiration'),
+    templates: t('nav.templates'),
+    providers: t('nav.providers'),
+    settings: t('nav.settings')
+  };
   const navItems: Array<{ page: Page; label: string; icon: ReactNode }> = [
     { page: 'home', label: navLabels.home, icon: <Grid2X2 size={18} /> },
     { page: 'generate', label: navLabels.generate, icon: <Wand2 size={18} /> },
@@ -5992,7 +5981,7 @@ export function App() {
           </div>
           <div className="brandText">
             <strong>VisionHub Studio</strong>
-            <span>{shellIsEnglish ? 'AI image workspace' : 'AI 生图工作台'}</span>
+            <span>{t('app.subtitle')}</span>
           </div>
           
         </div>
@@ -6056,6 +6045,7 @@ export function App() {
         ) : null}
         {isInspirationPageMounted ? (
           <CachedInspirationPage
+            t={t}
             isActive={page === 'inspiration'}
             preview={inspirationPreview}
             onPreview={openInspirationPreview}
@@ -6090,6 +6080,7 @@ export function App() {
             referenceRecords={homeReferenceRecords}
             providerNameMap={homeProviderNameMap}
             homeModules={appSettings.homeModules}
+              t={t}
             onNavigate={navigateTo}
             onUseRecordAsReference={useRecordAsReference}
             onOpenComfyUIWorkflowManager={() => setIsComfyUIWorkflowManagerOpen(true)}
@@ -6097,6 +6088,7 @@ export function App() {
         ) : page === 'generate' ? (
           <>
             <ModernGeneratePage
+              t={t}
               providers={providers}
               selectedProvider={generationSelectedProvider}
               selectedProviderId={selectedProviderId}
@@ -6163,6 +6155,7 @@ export function App() {
           </>
         ) : page === 'batch' ? (
           <BatchQueuePage
+            t={t}
             queues={batchQueueStore.queues}
             results={results}
             templates={batchQueueTemplates}
@@ -6190,6 +6183,7 @@ export function App() {
           />
         ) : page === 'free' ? (
           <FreeGenerationPage
+            t={t}
             prompt={prompt}
             onCopyPrompt={copyPromptForPlatform}
             onOpenPlatform={openPlatform}
@@ -6262,6 +6256,7 @@ export function App() {
             providers={providers}
             desktopRuntime={desktopRuntime}
             storageSettings={storageSettings}
+            t={t}
             promptPolishDraft={promptPolishDraft}
             promptPolishSecretDraft={promptPolishSecretDraft}
             promptPolishSecretAvailable={promptPolishSecretAvailable}
@@ -6304,6 +6299,7 @@ export function App() {
           null
         ) : page === 'templates' ? (
           <PromptTemplatesPage
+            t={t}
             onUseTemplate={(templatePrompt) => {
               setPrompt(templatePrompt);
               navigateTo('generate');
@@ -6376,6 +6372,7 @@ export function App() {
 }
 
 function BatchQueuePage(props: {
+  t: Translator;
   queues: BatchGenerationQueue[];
   results: GenerationRecord[];
   templates: BatchQueueTemplate[];
@@ -6401,6 +6398,30 @@ function BatchQueuePage(props: {
   onApplyTemplate: (templateId: string) => void;
   onDeleteTemplate: (templateId: string) => void;
 }) {
+  const t = props.t;
+  const queueStatusLabel = (status: BatchGenerationQueue['status']) => {
+    const labels: Record<BatchGenerationQueue['status'], string> = {
+      draft: t('batch.status.draft'),
+      ready: t('batch.status.ready'),
+      running: t('batch.status.running'),
+      paused: t('batch.status.paused'),
+      completed: t('batch.status.completed'),
+      'completed-with-errors': t('batch.status.completedWithErrors'),
+      cancelled: t('batch.status.cancelled')
+    };
+    return labels[status] ?? status;
+  };
+  const taskStatusLabel = (status: BatchGenerationQueue['tasks'][number]['status']) => {
+    const labels: Record<BatchGenerationQueue['tasks'][number]['status'], string> = {
+      pending: t('batch.taskStatus.pending'),
+      running: t('batch.taskStatus.running'),
+      succeeded: t('batch.taskStatus.succeeded'),
+      failed: t('batch.taskStatus.failed'),
+      cancelled: t('batch.taskStatus.cancelled')
+    };
+    return labels[status] ?? status;
+  };
+
   const activeQueue = (props.activeQueueId ? props.queues.find((queue) => queue.id === props.activeQueueId) : null)
     ?? props.queues[0]
     ?? null;
@@ -6465,75 +6486,75 @@ function BatchQueuePage(props: {
   const activeQueueProgressText = activeQueue
     ? isActiveQueueRunning
       ? activeRunProgress?.pauseRequested
-        ? `暂停请求中，本轮已结束 ${activeRunCompletedCount} / ${activeRunTotalCount}，当前任务完成后暂停`
-        : `本轮 ${activeRunCompletedCount} / ${activeRunTotalCount} 已结束，剩余 ${activeSummary.pending} 个待执行`
+        ? t('batch.progress.pauseRequested', { completed: activeRunCompletedCount, total: activeRunTotalCount })
+        : t('batch.progress.running', { completed: activeRunCompletedCount, total: activeRunTotalCount, pending: activeSummary.pending })
       : activeSummary.pending > 0
         ? activeQueue.status === 'paused'
-          ? `${activeSummary.pending} 个待执行，继续后会从下一个待执行任务恢复`
-          : `${activeSummary.pending} 个待执行，一次确认后会自动依次执行`
-        : `${activeQueueFinishedCount} / ${activeSummary.total} 已完成或结束`
-    : '暂无队列';
+          ? t('batch.progress.paused', { pending: activeSummary.pending })
+          : t('batch.progress.ready', { pending: activeSummary.pending })
+        : t('batch.progress.finished', { finished: activeQueueFinishedCount, total: activeSummary.total })
+    : t('batch.progress.noQueue');
   const activeQueuePrimaryActionLabel = isActiveQueueRunning
-    ? activeRunProgress?.pauseRequested ? '暂停中…' : '暂停队列'
+    ? activeRunProgress?.pauseRequested ? t('batch.action.pausing') : t('batch.action.pauseQueue')
     : activeQueue?.status === 'paused'
-      ? '继续执行'
-      : '执行全部待处理';
+      ? t('batch.action.resumeQueue')
+      : t('batch.action.runPending');
   const visibleTemplates = props.templates.slice(0, 4);
   const canSaveActiveQueueTemplate = Boolean(activeQueue && activeSummary.total > 0 && !isActiveQueueRunning && activeSummary.running === 0);
 
   return (
-    <section className="batchQueuePage" aria-label="批量队列">
+    <section className="batchQueuePage" aria-label={t('batch.aria')}>
       <header className="batchQueueHero">
         <div className="workspaceCommandTitle">
           <span>Batch Queue</span>
-          <h1>批量队列</h1>
+          <h1>{t('batch.title')}</h1>
         </div>
-        <p>当前支持单任务、批量变体和多模型对比组入队；点击“执行全部待处理”只确认一次，随后按稳妥串行自动跑完整个队列。</p>
+        <p>{t('batch.subtitle')}</p>
         <div className="batchQueueActions">
           <button
             type="button"
             className="workspaceCommandButton primary"
             onClick={() => props.onNavigate('generate')}
-            title="回到 AI 创作台添加新的批量任务"
-            aria-label="回到 AI 创作台添加新的批量任务"
+            title={t('batch.action.goCreateTitle')}
+            aria-label={t('batch.action.goCreateTitle')}
           >
-            <Wand2 size={15} /> 去 AI 创作台
+            <Wand2 size={15} /> {t('batch.action.goCreate')}
           </button>
           <button
             type="button"
             className="workspaceCommandButton"
             onClick={props.onRefresh}
-            title="从本地存储重新读取批量队列"
-            aria-label="刷新批量队列"
+            title={t('batch.action.refreshTitle')}
+            aria-label={t('batch.action.refresh')}
           >
-            <RefreshCcw size={15} /> 刷新队列
+            <RefreshCcw size={15} /> {t('batch.action.refresh')}
           </button>
           <button
             type="button"
             className="workspaceCommandButton"
             onClick={props.onCreateQueue}
-            title="新建一个自定义批量队列，可用于不同项目、模型或比例测试"
-            aria-label="新建自定义批量队列"
+            title={t('batch.action.newQueueLongTitle')}
+            aria-label={t('batch.action.newQueue')}
           >
-            <Plus size={15} /> 新建队列
+            <Plus size={15} /> {t('batch.action.newQueue')}
           </button>
           <button
             type="button"
             className="workspaceCommandButton"
             disabled={!activeQueue || !canSaveActiveQueueTemplate}
             onClick={() => activeQueue ? props.onSaveTemplate(activeQueue.id) : undefined}
-            title="把当前队列的任务快照保存为可复用模板；不会保存执行结果"
-            aria-label="保存当前队列为批量模板"
+            title={t('batch.action.saveTemplateTitle')}
+            aria-label={t('batch.action.saveTemplate')}
           >
-            <Bookmark size={15} /> 保存模板
+            <Bookmark size={15} /> {t('batch.action.saveTemplate')}
           </button>
           <button
             type="button"
             className={`workspaceCommandButton ${isActiveQueueRunning ? 'dangerAction' : 'primary'}`}
             disabled={!activeQueue || (!isActiveQueueRunning && !canStartActiveQueue)}
             onClick={() => activeQueue ? (isActiveQueueRunning ? props.onStopQueue(activeQueue.id) : props.onStartQueue(activeQueue.id)) : undefined}
-            title={isActiveQueueRunning ? '当前任务完成后暂停，不会继续执行下一个任务' : '一次确认后按顺序执行当前队列里的所有待处理任务'}
-            aria-label={isActiveQueueRunning ? '暂停连续执行队列' : '执行全部待处理队列任务'}
+            title={isActiveQueueRunning ? t('batch.action.pauseTitle') : t('batch.action.runTitle')}
+            aria-label={isActiveQueueRunning ? t('batch.action.pauseAria') : t('batch.action.runAria')}
           >
             {isActiveQueueRunning ? <Pause size={15} /> : <Play size={15} />} {activeQueuePrimaryActionLabel}
           </button>
@@ -6542,10 +6563,10 @@ function BatchQueuePage(props: {
             className="workspaceCommandButton"
             disabled={!activeQueue || activeSummary.failed === 0 || Boolean(props.runningQueueId) || Boolean(props.executingTaskId)}
             onClick={() => activeQueue ? props.onRequeueFailedTasks(activeQueue.id) : undefined}
-            title="把当前队列里的失败任务批量复制为新的待执行任务；原失败记录会保留"
-            aria-label="批量重新入队当前队列的失败任务"
+            title={t('batch.action.retryFailedTitle')}
+            aria-label={t('batch.action.retryFailedAria')}
           >
-            <RefreshCcw size={15} /> 失败重试
+            <RefreshCcw size={15} /> {t('batch.action.retryFailed')}
           </button>
         </div>
       </header>
@@ -6553,44 +6574,44 @@ function BatchQueuePage(props: {
       {activeQueue ? (
         <div className={`batchQueueRunBanner ${isActiveQueueRunning ? 'running' : ''} ${activeQueue.status === 'paused' ? 'paused' : ''}`} aria-live="polite">
           <div>
-            <strong>{isActiveQueueRunning ? activeRunProgress?.pauseRequested ? '队列暂停请求中' : '队列正在自动执行' : activeQueue.status === 'paused' ? '队列已暂停' : '队列执行方式'}</strong>
+            <strong>{isActiveQueueRunning ? activeRunProgress?.pauseRequested ? t('batch.banner.pauseRequested') : t('batch.banner.running') : activeQueue.status === 'paused' ? t('batch.banner.paused') : t('batch.banner.mode')}</strong>
             <span>{activeQueueProgressText}</span>
-            {activeExecutingTask ? <em>当前：{activeExecutingTask.title}</em> : null}
-            {activeRunProgress?.currentTaskTitle && !activeExecutingTask ? <em>当前：{activeRunProgress.currentTaskTitle}</em> : null}
+            {activeExecutingTask ? <em>{t('batch.currentTask', { title: activeExecutingTask.title })}</em> : null}
+            {activeRunProgress?.currentTaskTitle && !activeExecutingTask ? <em>{t('batch.currentTask', { title: activeRunProgress.currentTaskTitle })}</em> : null}
           </div>
           {isActiveQueueRunning ? (
-            <div className="batchQueueProgressTrack" aria-label={`本轮执行进度 ${activeRunPercent}%`}>
+            <div className="batchQueueProgressTrack" aria-label={t('batch.progressAria', { percent: activeRunPercent })}>
               <span style={{ width: `${activeRunPercent}%` }} />
             </div>
           ) : null}
-          <small>默认并发数 1，避免中转站 / 聚合 API 被限流；后续可扩展为可控并发。</small>
+          <small>{t('batch.banner.serialHint')}</small>
         </div>
       ) : null}
 
-      <div className="batchQueueStats" aria-label="队列统计">
-        <BatchQueueStat label="队列数" value={props.queues.length} hint={activeQueue?.name ?? '暂无队列'} />
-        <BatchQueueStat label="任务数" value={aggregate.total} hint={`${aggregate.pending} 个待执行`} />
-        <BatchQueueStat label="预计图片" value={aggregate.requestedImages} hint="按任务 count 汇总" />
-        <BatchQueueStat label="对比组" value={aggregate.compareGroups} hint={`${activeQueue?.compareGroups?.length ?? 0} 个在当前队列`} />
-        <BatchQueueStat label="失败 / 成功" value={`${aggregate.failed} / ${aggregate.succeeded}`} hint="执行后回写" />
+      <div className="batchQueueStats" aria-label={t('batch.statsAria')}>
+        <BatchQueueStat label={t('batch.stats.queues')} value={props.queues.length} hint={activeQueue?.name ?? t('batch.progress.noQueue')} />
+        <BatchQueueStat label={t('batch.stats.tasks')} value={aggregate.total} hint={t('batch.stats.pendingHint', { count: aggregate.pending })} />
+        <BatchQueueStat label={t('batch.stats.images')} value={aggregate.requestedImages} hint={t('batch.stats.imagesHint')} />
+        <BatchQueueStat label={t('batch.stats.compareGroups')} value={aggregate.compareGroups} hint={t('batch.stats.compareGroupsHint', { count: activeQueue?.compareGroups?.length ?? 0 })} />
+        <BatchQueueStat label={t('batch.stats.failedSucceeded')} value={`${aggregate.failed} / ${aggregate.succeeded}`} hint={t('batch.stats.writebackHint')} />
       </div>
 
       {activeQueue ? (
         <div className="batchQueueLayout">
-          <aside className="batchQueueListPanel" aria-label="队列列表">
+          <aside className="batchQueueListPanel" aria-label={t('batch.queueListAria')}>
             <div className="workspaceSectionHeading compact">
               <div>
                 <p className="eyebrow">Queues</p>
-                <h2>自定义队列</h2>
+                <h2>{t('batch.queueListTitle')}</h2>
               </div>
               <button
                 type="button"
                 className="workspaceCommandButton batchQueueCreateButton"
                 onClick={props.onCreateQueue}
-                title="新建一个自定义批量队列"
-                aria-label="新建自定义批量队列"
+                title={t('batch.action.newQueueShortTitle')}
+                aria-label={t('batch.action.newQueue')}
               >
-                <Plus size={14} /> 新建
+                <Plus size={14} /> {t('batch.action.new')}
               </button>
             </div>
             {props.queues.map((queue) => {
@@ -6617,11 +6638,11 @@ function BatchQueuePage(props: {
                 >
                   <div className="batchQueueCardHeader">
                     <strong>{queue.name}</strong>
-                    {isSelected ? <em>当前</em> : null}
+                    {isSelected ? <em>{t('batch.queue.current')}</em> : null}
                   </div>
-                  <span>{summary.total} 个任务 · {summary.pending} 个待执行 · {summary.requestedImages} 张预计输出</span>
-                  <small>{batchQueueStatusLabel(queue.status)} · {queue.compareGroups?.length ?? 0} 个对比组 · {formatWorkspaceHomeTime(queue.updatedAt)}</small>
-                  <div className="batchQueueCardActions" aria-label={`${queue.name} 队列操作`}>
+                  <span>{t('batch.queue.summary', { total: summary.total, pending: summary.pending, images: summary.requestedImages })}</span>
+                  <small>{queueStatusLabel(queue.status)} - {t('batch.queue.compareGroupCount', { count: queue.compareGroups?.length ?? 0 })} - {formatWorkspaceHomeTime(queue.updatedAt)}</small>
+                  <div className="batchQueueCardActions" aria-label={t('batch.queue.actionsAria', { name: queue.name })}>
                     <button
                       type="button"
                       className="workspaceCommandButton"
@@ -6630,10 +6651,10 @@ function BatchQueuePage(props: {
                         props.onRenameQueue(queue.id);
                       }}
                       disabled={!canRenameQueue}
-                      title="重命名这个队列"
-                      aria-label={`重命名队列 ${queue.name}`}
+                      title={t('batch.queue.renameTitle')}
+                      aria-label={t('batch.queue.renameAria', { name: queue.name })}
                     >
-                      <Pencil size={13} /> 重命名
+                      <Pencil size={13} /> {t('batch.queue.rename')}
                     </button>
                     <button
                       type="button"
@@ -6643,10 +6664,10 @@ function BatchQueuePage(props: {
                         props.onDeleteQueue(queue.id);
                       }}
                       disabled={!canDeleteQueue}
-                      title={canDeleteQueue ? '删除这个队列；不会删除作品画廊和磁盘图片' : '至少保留一个队列，且执行中的队列不能删除'}
-                      aria-label={`删除队列 ${queue.name}`}
+                      title={canDeleteQueue ? t('batch.queue.deleteTitle') : t('batch.queue.deleteDisabledTitle')}
+                      aria-label={t('batch.queue.deleteAria', { name: queue.name })}
                     >
-                      <Trash2 size={13} /> 删除
+                      <Trash2 size={13} /> {t('batch.queue.delete')}
                     </button>
                   </div>
                 </article>
@@ -6654,27 +6675,27 @@ function BatchQueuePage(props: {
             })}
           </aside>
 
-          <section className="batchTaskPanel" aria-label="任务列表">
+          <section className="batchTaskPanel" aria-label={t('batch.taskListAria')}>
             <div className="workspaceSectionHeading compact">
               <div>
                 <p className="eyebrow">Tasks</p>
-                <h2>任务快照</h2>
+                <h2>{t('batch.taskListTitle')}</h2>
               </div>
               {omittedReferenceCount > 0 ? (
-                <span className="workspaceSoftCounter warning">{omittedReferenceCount} 张参考图需执行前确认</span>
+                <span className="workspaceSoftCounter warning">{t('batch.task.omittedReferences', { count: omittedReferenceCount })}</span>
               ) : (
-                <span className="workspaceSoftCounter">{activeSummary.pending} 个待执行</span>
+                <span className="workspaceSoftCounter">{t('batch.stats.pendingHint', { count: activeSummary.pending })}</span>
               )}
             </div>
             {visibleTemplates.length ? (
-              <div className="batchTemplateList" aria-label="批量任务模板">
+              <div className="batchTemplateList" aria-label={t('batch.templatesAria')}>
                 {visibleTemplates.map((template) => (
                   <article className="batchTemplateCard" key={template.id}>
                     <div>
                       <strong>{template.name}</strong>
-                      <span>{template.taskTemplates.length} 个任务 · {template.compareGroups.length} 个对比组</span>
+                      <span>{t('batch.template.summary', { tasks: template.taskTemplates.length, groups: template.compareGroups.length })}</span>
                       <small>
-                        {template.usedCount ? `使用 ${template.usedCount} 次` : '尚未使用'}
+                        {template.usedCount ? t('batch.template.usedCount', { count: template.usedCount }) : t('batch.template.notUsed')}
                         {template.lastUsedAt ? ` · ${formatWorkspaceHomeTime(template.lastUsedAt)}` : ` · ${formatWorkspaceHomeTime(template.updatedAt)}`}
                       </small>
                     </div>
@@ -6684,20 +6705,20 @@ function BatchQueuePage(props: {
                         className="workspaceCommandButton primary"
                         onClick={() => props.onApplyTemplate(template.id)}
                         disabled={Boolean(props.runningQueueId) || Boolean(props.executingTaskId)}
-                        title="把这个模板的任务追加到当前队列末尾"
-                        aria-label={`套用批量模板 ${template.name}`}
+                        title={t('batch.template.applyTitle')}
+                        aria-label={t('batch.template.applyAria', { name: template.name })}
                       >
-                        套用
+                        {t('batch.template.apply')}
                       </button>
                       <button
                         type="button"
                         className="workspaceCommandButton dangerAction"
                         onClick={() => props.onDeleteTemplate(template.id)}
                         disabled={Boolean(props.runningQueueId) || Boolean(props.executingTaskId)}
-                        title="删除这个批量模板，不影响队列和作品记录"
-                        aria-label={`删除批量模板 ${template.name}`}
+                        title={t('batch.template.deleteTitle')}
+                        aria-label={t('batch.template.deleteAria', { name: template.name })}
                       >
-                        删除
+                        {t('batch.template.delete')}
                       </button>
                     </div>
                   </article>
@@ -6705,13 +6726,13 @@ function BatchQueuePage(props: {
               </div>
             ) : null}
             {compareResultGroups.length ? (
-              <div className="batchCompareResultList" aria-label="多模型对比结果">
+              <div className="batchCompareResultList" aria-label={t('batch.compare.aria')}>
                 {compareResultGroups.map(({ group, tasks, completedCount, resultCount }) => (
                   <article className="batchCompareResultGroup" key={group.id}>
                     <div className="batchCompareResultHeader">
                       <div>
-                        <strong>多模型对比结果</strong>
-                        <span>{completedCount} / {tasks.length} 个任务已结束 · {resultCount > 0 ? `${resultCount} 条结果记录` : '展示任务状态'}</span>
+                        <strong>{t('batch.compare.title')}</strong>
+                        <span>{t('batch.compare.summary', { completed: completedCount, total: tasks.length, result: resultCount > 0 ? t('batch.compare.resultCount', { count: resultCount }) : t('batch.compare.statusOnly') })}</span>
                       </div>
                       <small>{formatWorkspaceHomeTime(group.createdAt)}</small>
                     </div>
@@ -6732,21 +6753,21 @@ function BatchQueuePage(props: {
                                 type="button"
                                 className="batchCompareThumb"
                                 onClick={() => props.onPreview(previewUrl)}
-                                title="预览这条对比结果"
-                                aria-label={`预览对比结果 ${task.snapshot.profileName ?? task.snapshot.modelId}`}
+                                title={t('batch.compare.previewTitle')}
+                                aria-label={t('batch.compare.previewAria', { name: task.snapshot.profileName ?? task.snapshot.modelId })}
                               >
                                 <img src={previewUrl} alt={task.title} loading="lazy" decoding="async" />
                               </button>
                             ) : (
                               <div className="batchCompareThumb empty">
                                 <Image size={18} />
-                                <span>{batchQueueTaskStatusLabel(task.status)}</span>
+                                <span>{taskStatusLabel(task.status)}</span>
                               </div>
                             )}
                             <div className="batchCompareResultMeta">
                               <strong>{task.snapshot.profileName ?? task.snapshot.providerName ?? task.snapshot.providerId}</strong>
                               <span>{task.snapshot.modelId}</span>
-                              <small>{task.snapshot.size} · {task.snapshot.count} 张 · {task.durationMs ? `${Math.round(task.durationMs / 1000)}s` : '待回写耗时'}</small>
+                              <small>{task.snapshot.size} ? {t('batch.countImages', { count: task.snapshot.count })} ? {task.durationMs ? `${Math.round(task.durationMs / 1000)}s` : t('batch.durationPending')}</small>
                               {task.error || firstRecord?.error ? <em>{task.error ?? firstRecord?.error}</em> : null}
                             </div>
                           </article>
@@ -6758,15 +6779,15 @@ function BatchQueuePage(props: {
               </div>
             ) : null}
             {batchVariantGroups.length ? (
-              <div className="batchVariantGroupList" aria-label="批量变体批次">
+              <div className="batchVariantGroupList" aria-label={t('batch.variant.aria')}>
                 {batchVariantGroups.slice(0, 4).map((group) => (
                   <div className="batchVariantGroupCard" key={group.key}>
                     <div>
-                      <strong>批量变体批次</strong>
-                      <span>{group.promptCount} Prompt × {group.sizeCount} 比例 · {group.total} 个任务</span>
+                      <strong>{t('batch.variant.title')}</strong>
+                      <span>{t('batch.variant.summary', { prompts: group.promptCount, sizes: group.sizeCount, total: group.total })}</span>
                     </div>
                     <small>{group.sizes.join(' / ')}</small>
-                    <em>{group.succeeded} 成功 · {group.running} 执行中 · {group.pending} 待执行 · {group.failed} 失败</em>
+                    <em>{t('batch.variant.statusSummary', { succeeded: group.succeeded, running: group.running, pending: group.pending, failed: group.failed })}</em>
                   </div>
                 ))}
               </div>
@@ -6788,33 +6809,33 @@ function BatchQueuePage(props: {
                       <div className="batchTaskTitleRow">
                         <strong>{task.title}</strong>
                         {isBatchVariantTask ? (
-                          <span className="batchVariantBadge" title="多 Prompt / 多画面比例批量变体任务">
-                            批量变体
+                          <span className="batchVariantBadge" title={t('batch.variant.badgeTitle')}>
+                            {t('batch.variant.badge')}
                           </span>
                         ) : null}
                         {compareGroup ? (
-                          <span className="batchCompareBadge" title={`对比组 ${compareGroup.id}`}>
-                            对比组 {compareTaskIndex > 0 ? `${compareTaskIndex}/${compareGroup.taskIds.length}` : compareGroup.taskIds.length}
+                          <span className="batchCompareBadge" title={t('batch.compare.badgeTitle', { id: compareGroup.id })}>
+                            {t('batch.compare.badge', { index: compareTaskIndex > 0 ? `${compareTaskIndex}/${compareGroup.taskIds.length}` : compareGroup.taskIds.length })}
                           </span>
                         ) : null}
-                        <span className={`batchTaskStatus ${task.status}`}>{batchQueueTaskStatusLabel(task.status)}</span>
+                        <span className={`batchTaskStatus ${task.status}`}>{taskStatusLabel(task.status)}</span>
                       </div>
                       <p>{task.snapshot.prompt}</p>
                       <div className="batchTaskMeta">
-                        <span>{task.snapshot.generationMode === 'image-to-image' ? '图生图' : '文生图'}</span>
+                        <span>{task.snapshot.generationMode === 'image-to-image' ? t('batch.mode.imageToImage') : t('batch.mode.textToImage')}</span>
                         <span>{task.snapshot.providerName ?? task.snapshot.providerId}</span>
-                        <span>{task.snapshot.profileName ?? '未绑定配置实例'}</span>
+                        <span>{task.snapshot.profileName ?? t('batch.profileUnbound')}</span>
                         <span>{task.snapshot.modelId}</span>
                         <span>{task.snapshot.size}</span>
-                        <span>{task.snapshot.count} 张</span>
+                        <span>{t('batch.countImages', { count: task.snapshot.count })}</span>
                       </div>
                       {task.error ? <small className="batchTaskError">{task.error}</small> : null}
                     </div>
                     <div className="batchTaskSide">
                       <span>{formatWorkspaceHomeTime(task.createdAt)}</span>
                       <small>
-                        {task.attempt > 0 ? `已尝试 ${task.attempt} 次 · ` : ''}
-                        {task.snapshot.referencePolicy?.omittedReferenceIds.length ? '参考图需确认' : `${task.snapshot.references?.length ?? 0} 张参考图`}
+                        {task.attempt > 0 ? t('batch.task.attemptPrefix', { count: task.attempt }) : ''}
+                        {task.snapshot.referencePolicy?.omittedReferenceIds.length ? t('batch.task.referencesNeedConfirm') : t('batch.task.referenceCount', { count: task.snapshot.references?.length ?? 0 })}
                       </small>
                       <div className="batchTaskActions">
                         {task.status === 'failed' ? (
@@ -6823,10 +6844,10 @@ function BatchQueuePage(props: {
                             className="workspaceCommandButton primary"
                             onClick={() => props.onRequeueTask(task.queueId, task.id)}
                             disabled={!canRequeue}
-                            title="复制原失败任务并创建一个新的待执行重试任务，不覆盖原失败记录"
-                            aria-label="重新入队此失败任务"
+                            title={t('batch.task.requeueTitle')}
+                            aria-label={t('batch.task.requeueAria')}
                           >
-                            重新入队
+                            {t('batch.task.requeue')}
                           </button>
                         ) : (
                           <button
@@ -6834,10 +6855,10 @@ function BatchQueuePage(props: {
                             className="workspaceCommandButton primary"
                             onClick={() => props.onExecuteTask(task.queueId, task.id)}
                             disabled={!canExecute}
-                            title="执行这个任务；会弹出确认并真实调用接口"
-                            aria-label="执行此队列任务"
+                            title={t('batch.task.executeTitle')}
+                            aria-label={t('batch.task.executeAria')}
                           >
-                            {isExecuting ? '执行中…' : '执行此任务'}
+                            {isExecuting ? t('batch.task.executing') : t('batch.task.execute')}
                           </button>
                         )}
                         <button
@@ -6845,10 +6866,10 @@ function BatchQueuePage(props: {
                           className="workspaceCommandButton"
                           onClick={() => props.onCancelTask(task.queueId, task.id)}
                           disabled={!canCancel}
-                          title="只把本地队列任务标记为已取消，不删除作品记录"
-                          aria-label="取消此队列任务"
+                          title={t('batch.task.cancelTitle')}
+                          aria-label={t('batch.task.cancelAria')}
                         >
-                          取消
+                          {t('batch.task.cancel')}
                         </button>
                         {(task.status === 'failed' || task.status === 'cancelled') ? (
                           <button
@@ -6856,10 +6877,10 @@ function BatchQueuePage(props: {
                             className="workspaceCommandButton dangerAction"
                             onClick={() => props.onDeleteTask(task.queueId, task.id)}
                             disabled={!canDelete}
-                            title="只删除本地队列任务，不删除作品画廊记录和磁盘图片"
-                            aria-label="删除此队列任务"
+                            title={t('batch.task.deleteTitle')}
+                            aria-label={t('batch.task.deleteAria')}
                           >
-                            删除
+                            {t('batch.task.delete')}
                           </button>
                         ) : null}
                       </div>
@@ -6870,10 +6891,10 @@ function BatchQueuePage(props: {
               </div>
             ) : (
               <div className="workspaceHomeEmpty">
-                <strong>这个队列还没有任务</strong>
-                <small>回到 AI 创作台，填写 Prompt 后点击“加入队列”。</small>
+                <strong>{t('batch.emptyQueueTitle')}</strong>
+                <small>{t('batch.emptyQueueHint')}</small>
                 <button type="button" className="workspaceCommandButton primary" onClick={() => props.onNavigate('generate')}>
-                  <Wand2 size={15} /> 添加任务
+                  <Wand2 size={15} /> {t('batch.action.addTask')}
                 </button>
               </div>
             )}
@@ -6882,14 +6903,14 @@ function BatchQueuePage(props: {
       ) : (
         <div className="workspaceHomeEmpty batchQueueEmpty">
           <ListChecks size={28} />
-          <strong>还没有批量任务</strong>
-          <small>可以先新建一个自定义队列，也可以回到 AI 创作台直接把当前参数加入默认队列。</small>
+          <strong>{t('batch.emptyTitle')}</strong>
+          <small>{t('batch.emptyHint')}</small>
           <div className="batchQueueEmptyActions">
             <button type="button" className="workspaceCommandButton primary" onClick={() => props.onNavigate('generate')}>
-              <Wand2 size={15} /> 去 AI 创作台
+              <Wand2 size={15} /> {t('batch.action.goCreate')}
             </button>
             <button type="button" className="workspaceCommandButton" onClick={props.onCreateQueue}>
-              <Plus size={15} /> 新建队列
+              <Plus size={15} /> {t('batch.action.newQueue')}
             </button>
           </div>
         </div>
@@ -6989,31 +7010,9 @@ function BatchQueueStat(props: { label: string; value: number | string; hint: st
   );
 }
 
-function batchQueueStatusLabel(status: BatchGenerationQueue['status']) {
-  const labels: Record<BatchGenerationQueue['status'], string> = {
-    draft: '草稿',
-    ready: '就绪',
-    running: '运行中',
-    paused: '已暂停',
-    completed: '已完成',
-    'completed-with-errors': '完成但有失败',
-    cancelled: '已取消'
-  };
-  return labels[status] ?? status;
-}
-
-function batchQueueTaskStatusLabel(status: BatchGenerationQueue['tasks'][number]['status']) {
-  const labels: Record<BatchGenerationQueue['tasks'][number]['status'], string> = {
-    pending: '待执行',
-    running: '运行中',
-    succeeded: '成功',
-    failed: '失败',
-    cancelled: '已取消'
-  };
-  return labels[status] ?? status;
-}
 
 function WorkspaceHomePage(props: {
+  t: Translator;
   providerName: string;
   providerProfileName: string;
   providerModelId: string;
@@ -7038,14 +7037,14 @@ function WorkspaceHomePage(props: {
   const runnableWorkflowCount = props.localComfyUIWorkflowStore.presets.filter((preset) => Boolean(preset.rawWorkflow)).length;
   const comfyStatusLabel =
     props.localComfyUIDiagnostic.status === 'online'
-      ? 'ComfyUI 在线'
+      ? props.t('home.status.comfyOnline')
       : props.localComfyUIDiagnostic.status === 'offline'
-        ? 'ComfyUI 离线'
+        ? props.t('home.status.comfyOffline')
         : props.localComfyUIDiagnostic.status === 'failed'
-          ? '连接失败'
+          ? props.t('home.status.connectionFailed')
           : props.localComfyUIDiagnostic.status === 'checking'
-            ? '检查中'
-            : '本地服务待检查';
+            ? props.t('home.status.checking')
+            : props.t('home.status.localPending');
   const comfyStatusTone =
     props.localComfyUIDiagnostic.status === 'online'
       ? 'ready'
@@ -7054,10 +7053,10 @@ function WorkspaceHomePage(props: {
         : 'idle';
   const providerStatusTone = props.isRealProviderReady ? 'ready' : props.selectedProviderId === 'comfyui-local' || props.secretAvailable ? 'warning' : 'idle';
   const providerStatusLabel = props.isRealProviderReady
-    ? '生成通道可用'
+    ? props.t('home.status.providerReady')
     : props.selectedProviderId === 'comfyui-local'
-      ? '本地工作流待就绪'
-      : '等待密钥或配置';
+      ? props.t('home.status.localWorkflowPending')
+      : props.t('home.status.waitingSecret');
   const activeWorkflow = props.activeComfyUIWorkflowPreset;
   const activeWorkflowStatus = activeWorkflow ? comfyUIWorkflowRunStatus(activeWorkflow) : null;
   const continueRecord = props.recentSuccessRecords[0] ?? props.referenceRecords[0] ?? props.favoriteRecords[0] ?? null;
@@ -7068,16 +7067,16 @@ function WorkspaceHomePage(props: {
   ]).slice(0, 8);
   const pendingTaskCount = props.recentFailureRecords.length + props.resultSummary.pending;
   const quickActions: Array<{ page: Page; label: string; detail: string; icon: ReactNode }> = [
-    { page: 'generate', label: 'AI 创作', detail: '继续生成', icon: <Wand2 size={16} /> },
-    { page: 'library', label: '作品画廊', detail: '管理结果', icon: <Image size={16} /> },
-    { page: 'inspiration', label: '灵感中心', detail: '收集素材', icon: <Bookmark size={16} /> },
-    { page: 'templates', label: '提示词库', detail: '复用模板', icon: <Layers size={16} /> },
-    { page: 'providers', label: '平台接入', detail: '检查配置', icon: <Database size={16} /> }
+    { page: 'generate', label: props.t('nav.generate'), detail: props.t('home.quick.generateDetail'), icon: <Wand2 size={16} /> },
+    { page: 'library', label: props.t('nav.library'), detail: props.t('home.quick.libraryDetail'), icon: <Image size={16} /> },
+    { page: 'inspiration', label: props.t('nav.inspiration'), detail: props.t('home.quick.inspirationDetail'), icon: <Bookmark size={16} /> },
+    { page: 'templates', label: props.t('nav.templates'), detail: props.t('home.quick.templatesDetail'), icon: <Layers size={16} /> },
+    { page: 'providers', label: props.t('nav.providers'), detail: props.t('home.quick.providersDetail'), icon: <Database size={16} /> }
   ];
   const roadmapItems = [
-    { title: '画廊整理', state: '下一步', page: 'library' as Page },
-    { title: '批量队列', state: '可创建任务', page: 'batch' as Page },
-    { title: '多模型对比', state: '规划中', page: 'providers' as Page }
+    { title: props.t('home.route.gallery'), state: props.t('home.route.next'), page: 'library' as Page },
+    { title: props.t('home.route.batch'), state: props.t('home.route.canCreate'), page: 'batch' as Page },
+    { title: props.t('home.route.compare'), state: props.t('home.route.planned'), page: 'providers' as Page }
   ];
 
   function useRecordAsReferenceAndCreate(record: GenerationRecord) {
@@ -7086,43 +7085,43 @@ function WorkspaceHomePage(props: {
   }
 
   return (
-    <section className="workspaceHome workspaceHomeV21" aria-label="工作台首页">
+    <section className="workspaceHome workspaceHomeV21" aria-label={props.t('home.aria')}>
       <header className="workspaceCommandBar">
         <div className="workspaceCommandTitle">
-          <span>Workspace Control</span>
-          <h1>工作台首页</h1>
+          <span>{props.t('home.command.eyebrow')}</span>
+          <h1>{props.t('home.title')}</h1>
         </div>
-        <div className="workspaceCommandStatus" aria-label="当前状态">
+        <div className="workspaceCommandStatus" aria-label={props.t('home.status.current')}>
           <span className={`workspaceStatusPill ${providerStatusTone}`}>
             <ShieldCheck size={14} /> {providerStatusLabel}
           </span>
           <span className={`workspaceStatusPill ${comfyStatusTone}`}>
             <HardDrive size={14} /> {comfyStatusLabel}
           </span>
-          <span className="workspaceStatusPill neutral">本地优先 · Key 不导出</span>
+          <span className="workspaceStatusPill neutral">{props.t('home.status.localFirst')}</span>
         </div>
         <div className="workspaceCommandActions">
           <button type="button" className="workspaceCommandButton primary" onClick={() => props.onNavigate('generate')}>
-            <Wand2 size={15} /> 开始创作
+            <Wand2 size={15} /> {props.t('home.action.start')}
           </button>
           <button type="button" className="workspaceCommandButton" onClick={() => props.onNavigate('library')}>
-            <Image size={15} /> 打开画廊
+            <Image size={15} /> {props.t('home.action.openGallery')}
           </button>
           <button type="button" className="workspaceCommandButton" onClick={() => props.onNavigate('providers')}>
-            <Gauge size={15} /> 检查配置
+            <Gauge size={15} /> {props.t('home.action.checkConfig')}
           </button>
         </div>
       </header>
 
       {props.homeModules.resume || props.homeModules.attention ? (
-      <section className={`workspaceFlowGrid ${!props.homeModules.resume || !props.homeModules.attention ? 'singleModule' : ''}`} aria-label="继续工作与待处理">
+      <section className={`workspaceFlowGrid ${!props.homeModules.resume || !props.homeModules.attention ? 'singleModule' : ''}`} aria-label={props.t('home.resume.aria')}>
         {props.homeModules.resume ? <article className={`workspaceContinuePanel ${continueRecord ? '' : 'isEmpty'}`}>
           <div className="workspaceSectionHeading">
             <div>
-              <p className="eyebrow">Resume</p>
-              <h2>继续上次创作</h2>
+              <p className="eyebrow">{props.t('home.resume.eyebrow')}</p>
+              <h2>{props.t('home.resume.title')}</h2>
             </div>
-            <span className="workspaceSoftCounter">{props.resultSummary.succeeded} 张成功作品</span>
+            <span className="workspaceSoftCounter">{props.t('home.resume.successCount', { count: props.resultSummary.succeeded })}</span>
           </div>
           {continueRecord ? (
             <div className="workspaceContinueBody">
@@ -7130,13 +7129,13 @@ function WorkspaceHomePage(props: {
                 type="button"
                 className="workspaceContinuePreview"
                 onClick={() => props.onNavigate('library')}
-                aria-label="打开作品画廊查看最近作品"
+                aria-label={props.t('home.resume.openRecent')}
               >
-                <img src={continueRecord.imageUrls[0]} alt={continueRecord.prompt || getRecordFileName(continueRecord) || '最近生成作品'} loading="lazy" decoding="async" />
+                <img src={continueRecord.imageUrls[0]} alt={continueRecord.prompt || getRecordFileName(continueRecord) || props.t('home.resume.recentAlt')} loading="lazy" decoding="async" />
               </button>
               <div className="workspaceContinueInfo">
-                <strong>{getRecordFileName(continueRecord) || continueRecord.prompt || '未命名作品'}</strong>
-                <p>{continueRecord.prompt || '这条记录没有保存 Prompt，可以从画廊查看详情。'}</p>
+                <strong>{getRecordFileName(continueRecord) || continueRecord.prompt || props.t('home.resume.untitled')}</strong>
+                <p>{continueRecord.prompt || props.t('home.resume.noPrompt')}</p>
                 <div className="workspaceContinueMeta">
                   <span>{props.providerNameMap.get(continueRecord.providerId) ?? continueRecord.providerName ?? props.providerName}</span>
                   <span>{continueRecord.modelId || props.providerModelId}</span>
@@ -7144,42 +7143,42 @@ function WorkspaceHomePage(props: {
                 </div>
                 <div className="workspaceContinueActions">
                   <button type="button" className="workspaceCommandButton primary" onClick={() => useRecordAsReferenceAndCreate(continueRecord)}>
-                    <ImagePlus size={15} /> 设为参考并创作
+                    <ImagePlus size={15} /> {props.t('home.action.setReference')}
                   </button>
                   <button type="button" className="workspaceCommandButton" onClick={() => props.onNavigate('library')}>
-                    <ExternalLink size={15} /> 打开详情
+                    <ExternalLink size={15} /> {props.t('home.action.openDetail')}
                   </button>
                   <button type="button" className="workspaceCommandButton" onClick={() => props.onNavigate('generate')}>
-                    <Wand2 size={15} /> 继续创作台
+                    <Wand2 size={15} /> {props.t('home.action.continueDesk')}
                   </button>
                 </div>
               </div>
             </div>
           ) : (
-            <WorkspaceHomeEmpty title="还没有可继续的作品" hint="进入 AI 创作生成第一张图后，这里会显示最近任务。" actionLabel="开始创作" onAction={() => props.onNavigate('generate')} />
+            <WorkspaceHomeEmpty title={props.t('home.resume.emptyTitle')} hint={props.t('home.resume.emptyHint')} actionLabel={props.t('home.action.start')} onAction={() => props.onNavigate('generate')} />
           )}
         </article> : null}
 
-        {props.homeModules.attention ? <aside className="workspaceTaskRail" aria-label="待处理与运行状态">
+        {props.homeModules.attention ? <aside className="workspaceTaskRail" aria-label={props.t('home.attention.aria')}>
           <div className="workspaceMiniStats">
-            <span><strong>{props.resultSummary.total}</strong>生成记录</span>
-            <span><strong>{props.favoriteRecords.length}</strong>最近收藏</span>
-            <span><strong>{props.referenceRecords.length}</strong>最近参考</span>
+            <span><strong>{props.resultSummary.total}</strong>{props.t('home.attention.totalRecords')}</span>
+            <span><strong>{props.favoriteRecords.length}</strong>{props.t('home.attention.favorites')}</span>
+            <span><strong>{props.referenceRecords.length}</strong>{props.t('home.attention.references')}</span>
           </div>
           <div className="workspaceTodoPanel">
             <div className="workspaceSectionHeading compact">
               <div>
-                <p className="eyebrow">Attention</p>
-                <h2>待处理</h2>
+                <p className="eyebrow">{props.t('home.attention.eyebrow')}</p>
+                <h2>{props.t('home.attention.title')}</h2>
               </div>
-              <span className={pendingTaskCount ? 'workspaceSoftCounter warning' : 'workspaceSoftCounter'}>{pendingTaskCount} 项</span>
+              <span className={pendingTaskCount ? 'workspaceSoftCounter warning' : 'workspaceSoftCounter'}>{props.t('home.attention.itemCount', { count: pendingTaskCount })}</span>
             </div>
             {props.recentFailureRecords.length || props.resultSummary.pending ? (
               <div className="workspaceTodoList">
                 {props.resultSummary.pending ? (
                   <button type="button" className="workspaceTodoItem" onClick={() => props.onNavigate('library')}>
                     <span className="workspaceTodoDot pending" />
-                    <span><strong>{props.resultSummary.pending} 条后台待核查</strong><small>可能需要重新检查生成状态</small></span>
+                    <span><strong>{props.t('home.attention.pendingTitle', { count: props.resultSummary.pending })}</strong><small>{props.t('home.attention.pendingHint')}</small></span>
                   </button>
                 ) : null}
                 {props.recentFailureRecords.map((record) => {
@@ -7196,16 +7195,16 @@ function WorkspaceHomePage(props: {
                 })}
               </div>
             ) : (
-              <WorkspaceHomeEmpty title="暂无异常" hint="失败、待核查和需要配置的任务会集中出现在这里。" />
+              <WorkspaceHomeEmpty title={props.t('home.attention.emptyTitle')} hint={props.t('home.attention.emptyHint')} />
             )}
           </div>
           <div className="workspaceLocalSummary">
             <div>
-              <strong>本地模型</strong>
-              <span>{props.localComfyUIWorkflowStore.presets.length} 个 workflow / {runnableWorkflowCount} 个可生成</span>
-              <small>{activeWorkflow ? `${activeWorkflow.name} · ${workflowFormatLabel(activeWorkflow.summary.format)} · ${activeWorkflowStatus ?? '待检查'}` : '未选择 workflow'}</small>
+              <strong>{props.t('home.local.title')}</strong>
+              <span>{props.t('home.local.workflowSummary', { total: props.localComfyUIWorkflowStore.presets.length, runnable: runnableWorkflowCount })}</span>
+              <small>{activeWorkflow ? `${activeWorkflow.name} · ${workflowFormatLabel(activeWorkflow.summary.format)} · ${activeWorkflowStatus ?? props.t('home.status.checking')}` : props.t('home.local.noWorkflow')}</small>
             </div>
-            <button type="button" className="workspaceIconAction" onClick={props.onOpenComfyUIWorkflowManager} aria-label="打开 workflow 管理" title="打开 workflow 管理">
+            <button type="button" className="workspaceIconAction" onClick={props.onOpenComfyUIWorkflowManager} aria-label={props.t('home.local.openManager')} title={props.t('home.local.openManager')}>
               <SlidersHorizontal size={15} />
             </button>
           </div>
@@ -7213,43 +7212,43 @@ function WorkspaceHomePage(props: {
       </section>
       ) : null}
 
-      {props.homeModules.materials ? <section className="workspaceAssetStripPanel" aria-label="最近素材">
+      {props.homeModules.materials ? <section className="workspaceAssetStripPanel" aria-label={props.t('home.materials.aria')}>
         <div className="workspaceSectionHeading">
           <div>
-            <p className="eyebrow">Material Strip</p>
-            <h2>最近素材</h2>
+            <p className="eyebrow">{props.t('home.materials.eyebrow')}</p>
+            <h2>{props.t('home.materials.title')}</h2>
           </div>
-          <div className="workspaceStripFilters" aria-label="素材来源">
-            <span>最近生成</span>
-            <span>参考图</span>
-            <span>收藏</span>
+          <div className="workspaceStripFilters" aria-label={props.t('home.materials.sourceAria')}>
+            <span>{props.t('home.materials.recent')}</span>
+            <span>{props.t('home.materials.reference')}</span>
+            <span>{props.t('home.materials.favorite')}</span>
           </div>
         </div>
         {materialRecords.length ? (
           <div className="workspaceAssetStrip">
             {materialRecords.map((record) => (
               <article className="workspaceAssetTile" key={record.id}>
-                <button type="button" className="workspaceAssetThumb" onClick={() => props.onNavigate('library')} aria-label="打开作品画廊查看素材">
-                  <img src={record.imageUrls[0]} alt={record.prompt || getRecordFileName(record) || '素材缩略图'} loading="lazy" decoding="async" />
+                <button type="button" className="workspaceAssetThumb" onClick={() => props.onNavigate('library')} aria-label={props.t('home.materials.enterGallery')}>
+                  <img src={record.imageUrls[0]} alt={record.prompt || getRecordFileName(record) || props.t('home.materials.thumbAlt')} loading="lazy" decoding="async" />
                 </button>
                 <div className="workspaceAssetMeta">
-                  <strong>{getRecordFileName(record) || record.prompt || '未命名素材'}</strong>
+                  <strong>{getRecordFileName(record) || record.prompt || props.t('home.materials.untitled')}</strong>
                   <span>{formatWorkspaceHomeTime(record.createdAt)}</span>
                 </div>
                 <div className="workspaceAssetActions">
-                  <button type="button" onClick={() => useRecordAsReferenceAndCreate(record)}>参考</button>
-                  <button type="button" onClick={() => props.onNavigate('library')}>详情</button>
+                  <button type="button" onClick={() => useRecordAsReferenceAndCreate(record)}>{props.t('home.action.reference')}</button>
+                  <button type="button" onClick={() => props.onNavigate('library')}>{props.t('home.action.detail')}</button>
                 </div>
               </article>
             ))}
           </div>
         ) : (
-          <WorkspaceHomeEmpty title="暂无素材" hint="生成、收藏或设为参考后，素材会以横向条带展示。" actionLabel="进入画廊" onAction={() => props.onNavigate('library')} />
+          <WorkspaceHomeEmpty title={props.t('home.materials.emptyTitle')} hint={props.t('home.materials.emptyHint')} actionLabel={props.t('home.materials.enterGallery')} onAction={() => props.onNavigate('library')} />
         )}
       </section> : null}
 
-      {props.homeModules.quickActions ? <section className="workspaceCommandDock" aria-label="常用入口">
-        <span className="workspaceDockLabel">常用入口</span>
+      {props.homeModules.quickActions ? <section className="workspaceCommandDock" aria-label={props.t('home.quick.aria')}>
+        <span className="workspaceDockLabel">{props.t('home.quick.label')}</span>
         {quickActions.map((item) => (
           <button type="button" key={item.page} className="workspaceDockButton" onClick={() => props.onNavigate(item.page)}>
             {item.icon}
@@ -7258,8 +7257,8 @@ function WorkspaceHomePage(props: {
         ))}
       </section> : null}
 
-      {props.homeModules.roadmap ? <section className="workspaceRouteStrip" aria-label="后续路线">
-        <span className="workspaceDockLabel">后续路线</span>
+      {props.homeModules.roadmap ? <section className="workspaceRouteStrip" aria-label={props.t('home.route.aria')}>
+        <span className="workspaceDockLabel">{props.t('home.route.label')}</span>
         {roadmapItems.map((item) => (
           <button type="button" key={item.title} className="workspaceRouteItem" onClick={() => props.onNavigate(item.page)}>
             <strong>{item.title}</strong>
@@ -7438,6 +7437,7 @@ function GeneratePage(props: {
 }
 
 function FreeGenerationPage(props: {
+  t: Translator;
   prompt: string;
   onCopyPrompt: (platform: FreePlatform) => void;
   onOpenPlatform: (platform: FreePlatform) => void;
@@ -7449,23 +7449,34 @@ function FreeGenerationPage(props: {
 
   const FREE_PLATFORM_PREFS_KEY = 'visionhub.freePlatformPrefs.v1';
   const FREE_PLATFORM_LOGO_CACHE_KEY = 'visionhub.freePlatformLogoCache.v2';
+  const t = props.t;
   const statusOptions: Array<{ value: FreePlatformUsageStatus; label: string }> = [
-    { value: 'unused', label: '未使用' },
-    { value: 'registered', label: '已注册' },
-    { value: 'favorite', label: '常用' },
-    { value: 'unavailable', label: '暂不可用' }
+    { value: 'unused', label: t('free.status.unused') },
+    { value: 'registered', label: t('free.status.registered') },
+    { value: 'favorite', label: t('free.status.favorite') },
+    { value: 'unavailable', label: t('free.status.unavailable') }
   ];
   const commercialLabelMap: Record<FreePlatform['commercialUse'], string> = {
-    unknown: '商用待确认',
-    personal: '仅个人使用',
-    limited: '商用需复核',
-    allowed: '可商用'
+    unknown: t('free.platform.commercial.unknown'),
+    personal: t('free.platform.commercial.personal'),
+    limited: t('free.platform.commercial.limited'),
+    allowed: t('free.platform.commercial.allowed')
   };
   const loginLabelMap: Record<FreePlatform['loginRequirement'], string> = {
-    required: '需要登录',
-    optional: '可免登录',
-    unknown: '登录规则待确认'
+    required: t('free.platform.login.required'),
+    optional: t('free.platform.login.optional'),
+    unknown: t('free.platform.login.unknown')
   };
+  const regionLabelMap: Record<FreePlatform['region'], string> = {
+    china: t('free.platform.region.china'),
+    global: t('free.platform.region.global')
+  };
+  const kindLabelMap: Record<FreePlatform['kind'], string> = {
+    'chat-image': t('free.platform.kind.chat-image'),
+    image: t('free.platform.kind.image'),
+    'image-video': t('free.platform.kind.image-video')
+  };
+
   function loadFreePlatformPrefs(): FreePlatformPrefs {
     const raw = readStorageValue(FREE_PLATFORM_PREFS_KEY);
     if (!raw) return {};
@@ -7589,34 +7600,34 @@ function FreeGenerationPage(props: {
       <header className="topbar freeTopbar">
         <div className="pageTitleBlock">
           <p className="eyebrow">Web Platform Helper</p>
-          <h1>免费平台助手</h1>
-          <p>整理常用网页平台，复制适配 Prompt；网页生成后把下载图片导入图片收藏管理。</p>
+          <h1>{t('free.title')}</h1>
+          <p>{t('free.subtitle')}</p>
         </div>
         <div className="statusPills">
           <span>
-            <Gift size={15} /> {FREE_PLATFORMS.length} 个平台
+            <Gift size={15} /> {t('free.stats.platforms', { count: FREE_PLATFORMS.length })}
           </span>
           <span>
-            <Star size={15} /> {favoriteCount} 个常用
+            <Star size={15} /> {t('free.stats.favorites', { count: favoriteCount })}
           </span>
           <span>
-            <Copy size={15} /> {promptReady ? '可复制适配 Prompt' : '先写 Prompt'}
+            <Copy size={15} /> {promptReady ? t('free.stats.promptReady') : t('free.stats.promptMissing')}
           </span>
         </div>
       </header>
 
-      <section className="freeWorkflowStrip" aria-label="免费平台使用流程">
+      <section className="freeWorkflowStrip" aria-label={t('free.workflowAria')}>
         <div>
-          <strong>1. 复制并打开</strong>
-          <span>把当前 Prompt 转成平台适配版并打开网页。</span>
+          <strong>{t('free.workflow.copyTitle')}</strong>
+          <span>{t('free.workflow.copyHint')}</span>
         </div>
         <div>
-          <strong>2. 网页生成下载</strong>
-          <span>在平台网页里手动生成并下载图片。</span>
+          <strong>{t('free.workflow.generateTitle')}</strong>
+          <span>{t('free.workflow.generateHint')}</span>
         </div>
         <div>
-          <strong>3. 导入成品</strong>
-          <span>选择下载图，存入灵感中心图片收藏。</span>
+          <strong>{t('free.workflow.importTitle')}</strong>
+          <span>{t('free.workflow.importHint')}</span>
         </div>
       </section>
 
@@ -7631,40 +7642,40 @@ function FreeGenerationPage(props: {
         <div className="freeFilterGroup">
           <div className="segmentedControl compactSegment">
             <button className={regionFilter === 'all' ? 'active' : ''} onClick={() => setRegionFilter('all')}>
-              全部
+              {t('free.region.all')}
             </button>
             <button className={regionFilter === 'china' ? 'active' : ''} onClick={() => setRegionFilter('china')}>
-              国内
+              {t('free.region.china')}
             </button>
             <button className={regionFilter === 'global' ? 'active' : ''} onClick={() => setRegionFilter('global')}>
-              国外
+              {t('free.region.global')}
             </button>
           </div>
         </div>
         <div className="freeActionGroup">
           <label className="freeSearchBox">
-            <span>搜索平台 / 标签 / 备注</span>
+            <span>{t('free.searchLabel')}</span>
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="例如：图生图、商用、中文、海报"
+              placeholder={t('free.searchPlaceholder')}
             />
           </label>
           <StudioSelect
             value={kindFilter}
             onChange={(value) => setKindFilter(value as 'all' | FreePlatform['kind'])}
             options={[
-              { value: 'all', label: '全部能力' },
-              { value: 'chat-image', label: '聊天生图' },
-              { value: 'image', label: '图片生成' },
-              { value: 'image-video', label: '图像 / 视频' }
+              { value: 'all', label: t('free.kind.all') },
+              { value: 'chat-image', label: t('free.kind.chat-image') },
+              { value: 'image', label: t('free.kind.image') },
+              { value: 'image-video', label: t('free.kind.image-video') }
             ]}
           />
           <StudioSelect
             value={statusFilter}
             onChange={(value) => setStatusFilter(value as 'all' | FreePlatformUsageStatus)}
             options={[
-              { value: 'all', label: '全部状态' },
+              { value: 'all', label: t('free.status.all') },
               ...statusOptions
             ]}
           />
@@ -7672,17 +7683,17 @@ function FreeGenerationPage(props: {
             className={`miniButton favoriteFilterButton ${statusFilter === 'favorite' ? 'active' : ''}`}
             type="button"
             onClick={() => setStatusFilter(statusFilter === 'favorite' ? 'all' : 'favorite')}
-            title={statusFilter === 'favorite' ? '显示全部平台' : '只看收藏平台'}
-            aria-label={statusFilter === 'favorite' ? '显示全部平台' : '只看收藏平台'}
+            title={statusFilter === 'favorite' ? t('free.favorite.showAll') : t('free.favorite.only')}
+            aria-label={statusFilter === 'favorite' ? t('free.favorite.showAll') : t('free.favorite.only')}
           >
-            <Star size={13} fill={statusFilter === 'favorite' ? 'currentColor' : 'none'} /> 收藏
+            <Star size={13} fill={statusFilter === 'favorite' ? 'currentColor' : 'none'} /> {t('free.favorite.button')}
           </button>
-          <div className="segmentedControl compactSegment freeViewSwitch" aria-label="免费平台视图切换">
+          <div className="segmentedControl compactSegment freeViewSwitch" aria-label={t('free.viewAria')}>
             <button className={viewMode === 'card' ? 'active' : ''} onClick={() => setViewMode('card')}>
-              <Grid2X2 size={13} /> 卡片
+              <Grid2X2 size={13} /> {t('free.view.card')}
             </button>
             <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')}>
-              <Layers size={13} /> 列表
+              <Layers size={13} /> {t('free.view.list')}
             </button>
           </div>
         </div>
@@ -7731,18 +7742,20 @@ function FreeGenerationPage(props: {
               <button
                 className={`iconButton favoritePlatformButton ${platformPrefs.status === 'favorite' ? 'active' : ''}`}
                 onClick={() => toggleFavorite(platform.id)}
-                title={platformPrefs.status === 'favorite' ? '取消常用' : '标记常用'}
-                aria-label={platformPrefs.status === 'favorite' ? `取消常用 ${platform.name}` : `标记常用 ${platform.name}`}
+                title={platformPrefs.status === 'favorite' ? t('free.platform.favoriteRemove') : t('free.platform.favoriteAdd')}
+                aria-label={platformPrefs.status === 'favorite'
+                  ? t('free.platform.favoriteRemoveNamed', { name: platform.name })
+                  : t('free.platform.favoriteAddNamed', { name: platform.name })}
               >
                 <Star size={15} fill={platformPrefs.status === 'favorite' ? 'currentColor' : 'none'} />
               </button>
             </div>
 
             <div className="freePlatformMeta">
-              <span>{platform.region === 'china' ? '国内平台' : '海外平台'}</span>
-              <span>{platform.kind === 'image-video' ? '图像 / 视频' : platform.kind === 'chat-image' ? '聊天生图' : '图片生成'}</span>
+              <span>{regionLabelMap[platform.region]}</span>
+              <span>{kindLabelMap[platform.kind]}</span>
               <span>{loginLabelMap[platform.loginRequirement]}</span>
-              <span>{platform.supportsImageToImage ? '支持图生图' : '偏文生图'}</span>
+              <span>{platform.supportsImageToImage ? t('free.platform.supportsImageToImage') : t('free.platform.textToImageFirst')}</span>
             </div>
 
             <p>{platform.bestFor}</p>
@@ -7755,18 +7768,18 @@ function FreeGenerationPage(props: {
               <button
                 className="miniButton primaryMini"
                 onClick={() => props.onCopyPromptAndOpen(platform)}
-                title={promptReady ? `复制 ${platform.name} 专用 Prompt 并打开网页` : `打开 ${platform.name} 网页`}
-                aria-label={promptReady ? `复制 ${platform.name} 专用 Prompt 并打开网页` : `打开 ${platform.name} 网页`}
+                title={promptReady ? t('free.action.copyOpenTitleReady', { name: platform.name }) : t('free.action.openTitle', { name: platform.name })}
+                aria-label={promptReady ? t('free.action.copyOpenTitleReady', { name: platform.name }) : t('free.action.openTitle', { name: platform.name })}
               >
-                <ExternalLink size={13} /> 复制并打开
+                <ExternalLink size={13} /> {t('free.action.copyAndOpen')}
               </button>
               <button
                 className="miniButton"
                 onClick={() => startImportWebResult(platform)}
-                title={`导入从 ${platform.name} 网页下载的图片`}
-                aria-label={`导入从 ${platform.name} 网页下载的图片`}
+                title={t('free.action.importTitle', { name: platform.name })}
+                aria-label={t('free.action.importTitle', { name: platform.name })}
               >
-                <FolderOpen size={13} /> 导入成品
+                <FolderOpen size={13} /> {t('free.action.importResult')}
               </button>
               <button
                 className="miniButton subtleMini freePlatformDetailButton"
@@ -7777,23 +7790,23 @@ function FreeGenerationPage(props: {
                   }
                   setExpandedListPlatformId((current) => current === platform.id ? null : platform.id);
                 }}
-                title={`查看 ${platform.name} 详情`}
-                aria-label={`查看 ${platform.name} 详情`}
+                title={t('free.action.detailsTitle', { name: platform.name })}
+                aria-label={t('free.action.detailsTitle', { name: platform.name })}
               >
-                <Info size={13} /> 详情
+                <Info size={13} /> {t('free.action.details')}
               </button>
             </div>
             {isListExpanded ? (
               <div className="freePlatformExpandedPanel">
                 <div className="freePlatformDetails">
-                  <small><strong>额度：</strong>{platform.freeQuota}</small>
-                  <small><strong>限制：</strong>{platform.watermarkLimit}</small>
-                  <small><strong>商用：</strong>{platform.commercialNote}</small>
-                  <small><strong>Prompt：</strong>{platform.promptHint}</small>
+                  <small><strong>{t('free.detail.quota')}</strong>{platform.freeQuota}</small>
+                  <small><strong>{t('free.detail.limit')}</strong>{platform.watermarkLimit}</small>
+                  <small><strong>{t('free.detail.commercial')}</strong>{platform.commercialNote}</small>
+                  <small><strong>{t('free.detail.prompt')}</strong>{platform.promptHint}</small>
                 </div>
                 <div className="freePlatformDetailControls">
                   <label>
-                    使用状态
+                    {t('free.statusLabel')}
                     <StudioSelect
                       value={platformPrefs.status}
                       onChange={(value) => updatePlatformPrefs(platform.id, { status: value as FreePlatformUsageStatus })}
@@ -7802,11 +7815,11 @@ function FreeGenerationPage(props: {
                   </label>
                 </div>
                 <label>
-                  我的备注
+                  {t('free.noteLabel')}
                   <textarea
                     value={platformPrefs.note}
                     onChange={(event) => updatePlatformPrefs(platform.id, { note: event.target.value.slice(0, 500) })}
-                    placeholder={`记录 ${platform.name} 的账号、额度、试用结果或商用注意`}
+                    placeholder={t('free.notePlaceholder', { name: platform.name })}
                     rows={3}
                   />
                 </label>
@@ -7822,7 +7835,7 @@ function FreeGenerationPage(props: {
         const platformPrefs = prefs[platform.id] ?? { status: 'unused', note: '' };
         return (
           <div className="freePlatformDrawerBackdrop" onClick={() => setDetailPlatformId(null)}>
-            <aside className="freePlatformDrawer" role="dialog" aria-modal="true" aria-label={`${platform.name} 详情`} onClick={(event) => event.stopPropagation()}>
+            <aside className="freePlatformDrawer" role="dialog" aria-modal="true" aria-label={t('free.detailAria', { name: platform.name })} onClick={(event) => event.stopPropagation()}>
               <div className="freePlatformDrawerHeader">
                 <div className="freePlatformLogo" style={{ background: platform.brandColor }} aria-label={`${platform.name} Logo`}>
                   {resolveInitialLogoUrl(platform) ? (
@@ -7854,25 +7867,25 @@ function FreeGenerationPage(props: {
                   <h2>{platform.name}</h2>
                   <small>{platform.vendor}</small>
                 </div>
-                <button className="iconButton" onClick={() => setDetailPlatformId(null)} aria-label="关闭详情">
+                <button className="iconButton" onClick={() => setDetailPlatformId(null)} aria-label={t('free.closeDetails')} title={t('free.closeDetails')}>
                   <X size={16} />
                 </button>
               </div>
               <div className="freePlatformMeta">
-                <span>{platform.region === 'china' ? '国内平台' : '海外平台'}</span>
-                <span>{platform.kind === 'image-video' ? '图像 / 视频' : platform.kind === 'chat-image' ? '聊天生图' : '图片生成'}</span>
+                <span>{regionLabelMap[platform.region]}</span>
+                <span>{kindLabelMap[platform.kind]}</span>
                 <span>{loginLabelMap[platform.loginRequirement]}</span>
-                <span>{platform.supportsImageToImage ? '支持图生图' : '偏文生图'}</span>
+                <span>{platform.supportsImageToImage ? t('free.platform.supportsImageToImage') : t('free.platform.textToImageFirst')}</span>
               </div>
               <p className="freePlatformDrawerSummary">{platform.bestFor}</p>
               <div className="freePlatformDetails">
-                <small><strong>额度：</strong>{platform.freeQuota}</small>
-                <small><strong>限制：</strong>{platform.watermarkLimit}</small>
-                <small><strong>商用：</strong>{platform.commercialNote}</small>
-                <small><strong>Prompt：</strong>{platform.promptHint}</small>
+                <small><strong>{t('free.detail.quota')}</strong>{platform.freeQuota}</small>
+                <small><strong>{t('free.detail.limit')}</strong>{platform.watermarkLimit}</small>
+                <small><strong>{t('free.detail.commercial')}</strong>{platform.commercialNote}</small>
+                <small><strong>{t('free.detail.prompt')}</strong>{platform.promptHint}</small>
               </div>
               <label className="freePlatformDrawerField">
-                <span>使用状态</span>
+                <span>{t('free.statusLabel')}</span>
                 <StudioSelect
                   value={platformPrefs.status}
                   onChange={(value) => updatePlatformPrefs(platform.id, { status: value as FreePlatformUsageStatus })}
@@ -7881,24 +7894,24 @@ function FreeGenerationPage(props: {
               </label>
               <div className="freePlatformDrawerActions">
                 <button className="miniButton primaryMini" onClick={() => props.onCopyPromptAndOpen(platform)}>
-                  <ExternalLink size={13} /> 复制并打开
+                  <ExternalLink size={13} /> {t('free.action.copyAndOpen')}
                 </button>
                 <button className="miniButton" disabled={!promptReady} onClick={() => props.onCopyPrompt(platform)}>
-                  <Copy size={13} /> 只复制 Prompt
+                  <Copy size={13} /> {t('free.action.copyOnly')}
                 </button>
                 <button className="miniButton" onClick={() => props.onOpenPlatform(platform)}>
-                  <Globe2 size={13} /> 只打开网页
+                  <Globe2 size={13} /> {t('free.action.openOnly')}
                 </button>
                 <button className="miniButton" onClick={() => startImportWebResult(platform)}>
-                  <FolderOpen size={13} /> 导入成品
+                  <FolderOpen size={13} /> {t('free.action.importResult')}
                 </button>
               </div>
               <label className="freePlatformDrawerField">
-                <span>我的备注</span>
+                <span>{t('free.noteLabel')}</span>
                 <textarea
                   value={platformPrefs.note}
                   onChange={(event) => updatePlatformPrefs(platform.id, { note: event.target.value.slice(0, 500) })}
-                  placeholder={`记录 ${platform.name} 的账号、额度、试用结果或商用注意`}
+                  placeholder={t('free.notePlaceholder', { name: platform.name })}
                   rows={4}
                 />
               </label>
@@ -7909,6 +7922,7 @@ function FreeGenerationPage(props: {
     </>
   );
 }
+
 
 function ProviderSettingsPage(props: {
   providers: ReturnType<typeof listProviders>;
@@ -8903,6 +8917,7 @@ function ComfyUIWorkflowManagerModal(props: {
 
 function SettingsPage(props: {
   appSettings: AppSettings;
+  t: Translator;
   providers: ReturnType<typeof listProviders>;
   desktopRuntime: boolean;
   storageSettings: StorageSettings | null;
@@ -8957,6 +8972,80 @@ function SettingsPage(props: {
     ? generationDefaults.defaultModelId
     : defaultModelOptions[0]?.value ?? generationDefaults.defaultModelId;
   const [developerMode, setDeveloperMode] = useState(false);
+  const translatedStartupPageOptions = STARTUP_PAGE_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(`settings.startup.${option.value}` as Parameters<Translator>[0])
+  }));
+  const translatedReferenceRoleOptions = DEFAULT_REFERENCE_ROLE_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(`settings.role.${option.value}` as Parameters<Translator>[0])
+  }));
+  const translatedSizeOptions = DEFAULT_SIZE_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(
+      ({
+        '1024x1024': 'settings.size.square',
+        '1280x720': 'settings.size.landscape',
+        '720x1280': 'settings.size.portrait',
+        '1024x1536': 'settings.size.poster',
+        '1536x1024': 'settings.size.banner'
+      } as Record<string, Parameters<Translator>[0]>)[option.value] ?? 'settings.size.square'
+    )
+  }));
+  const translatedCountOptions = DEFAULT_COUNT_OPTIONS.map((option) => ({
+    value: String(option.value),
+    label: props.t('settings.countImages', { count: option.value })
+  }));
+  const translatedQualityOptions = DEFAULT_QUALITY_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(`settings.quality.${option.value}` as Parameters<Translator>[0])
+  }));
+  const translatedPromptHistoryLimitOptions = PROMPT_HISTORY_LIMIT_OPTIONS.map((option) => ({
+    value: String(option.value),
+    label: props.t('settings.historyLimitItems', { count: option.value })
+  }));
+  const translatedPromptPolishModeOptions = promptPolishModeOptions.map((mode) => ({
+    value: mode.id,
+    label: props.t(`settings.polishMode.${mode.scope}.${mode.id}` as Parameters<Translator>[0])
+  }));
+  const translatedPromptPolishEngineOptions = PROMPT_POLISH_ENGINE_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(`settings.polishEngine.${option.value}` as Parameters<Translator>[0])
+  }));
+  const translatedPromptPolishLanguageOptions = PROMPT_POLISH_LANGUAGE_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(`settings.polishLanguage.${option.value}` as Parameters<Translator>[0])
+  }));
+  const translatedPromptPolishStrengthOptions = PROMPT_POLISH_STRENGTH_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(`settings.polishStrength.${option.value}` as Parameters<Translator>[0])
+  }));
+  const translatedPromptPolishProtocolOptions = PROMPT_POLISH_PROTOCOL_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(`settings.polishProtocol.${option.value}` as Parameters<Translator>[0])
+  }));
+  const translatedFileNamingRuleOptions = FILE_NAMING_RULE_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(`settings.fileNaming.${option.value}` as Parameters<Translator>[0])
+  }));
+  const translatedRefreshIntervalOptions = REFRESH_INTERVAL_OPTIONS.map((option) => ({
+    value: option.value,
+    label: option.value < 60
+      ? props.t('settings.refreshSeconds', { count: option.value })
+      : props.t('settings.refreshMinutes', { count: option.value / 60 })
+  }));
+  const translatedImageReverseProtocolOptions = IMAGE_PROMPT_REVERSE_PROTOCOL_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(`settings.imageReverseProtocol.${option.value}` as Parameters<Translator>[0])
+  }));
+  const translatedImageReverseDetailOptions = IMAGE_PROMPT_REVERSE_DETAIL_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(`settings.imageReverseDetail.${option.value}` as Parameters<Translator>[0])
+  }));
+  const translatedImageReverseLanguageOptions = IMAGE_PROMPT_REVERSE_LANGUAGE_OPTIONS.map((option) => ({
+    value: option.value,
+    label: props.t(`settings.imageReverseLanguage.${option.value}` as Parameters<Translator>[0])
+  }));
 
   function updateGenerationDefaults(patch: Partial<GenerationDefaults>) {
     props.onSettingsChange({ generationDefaults: { ...generationDefaults, ...patch } });
@@ -9035,45 +9124,45 @@ function SettingsPage(props: {
       <header className="systemSettingsHeader">
         <div>
           <p className="eyebrow">Preferences</p>
-          <h1>偏好设置</h1>
-          <span>把默认工作流、语言、首页模块和数据管理集中到一个配置中心。</span>
+          <h1>{props.t('settings.title')}</h1>
+          <span>{props.t('settings.subtitle')}</span>
         </div>
         <div className="settingsHeaderActions">
-          <button type="button" data-tooltip="系统信息" aria-label="系统信息" onClick={props.onOpenSystemInfo}>
+          <button type="button" data-tooltip={props.t('settings.systemInfo')} aria-label={props.t('settings.systemInfo')} onClick={props.onOpenSystemInfo}>
             <Info size={16} />
           </button>
-          <button type="button" data-tooltip="快捷键" aria-label="快捷键" onClick={props.onOpenShortcuts}>
+          <button type="button" data-tooltip={props.t('settings.shortcuts')} aria-label={props.t('settings.shortcuts')} onClick={props.onOpenShortcuts}>
             <Keyboard size={16} />
           </button>
-          <button type="button" data-tooltip="检查更新" aria-label="检查更新" onClick={props.onCheckUpdates}>
+          <button type="button" data-tooltip={props.t('settings.checkUpdates')} aria-label={props.t('settings.checkUpdates')} onClick={props.onCheckUpdates}>
             <RefreshCcw size={16} />
           </button>
         </div>
       </header>
 
-      <div className="settingsSectionLabel">外观设置</div>
+      <div className="settingsSectionLabel">{props.t('settings.appearance')}</div>
       <article className="settingsGroupCard">
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>主题</strong>
+            <strong>{props.t('settings.theme')}</strong>
           </div>
           <div className="segmentedControl themeSegment">
             <button className={settings.themeMode === 'light' ? 'active' : ''} onClick={() => props.onSettingsChange({ themeMode: 'light' })}>
-              <Sun size={14} /> 浅色
+              <Sun size={14} /> {props.t('settings.themeLight')}
             </button>
             <button className={settings.themeMode === 'dark' ? 'active' : ''} onClick={() => props.onSettingsChange({ themeMode: 'dark' })}>
-              <Moon size={14} /> 深色
+              <Moon size={14} /> {props.t('settings.themeDark')}
             </button>
             <button className={settings.themeMode === 'system' ? 'active' : ''} onClick={() => props.onSettingsChange({ themeMode: 'system' })}>
-              <Monitor size={14} /> 跟随系统
+              <Monitor size={14} /> {props.t('settings.themeSystem')}
             </button>
           </div>
         </div>
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>语言</strong>
-            <small>只提供中文和英文手动切换，本轮不做跟随系统，避免启动判断分支和闪烁。</small>
+            <strong>{props.t('settings.language')}</strong>
+            <small>{props.t('settings.languageHint')}</small>
           </div>
           <div className="segmentedControl compactSegment">
             {LANGUAGE_OPTIONS.map((option) => (
@@ -9091,8 +9180,8 @@ function SettingsPage(props: {
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>主颜色</strong>
-            <small>控制品牌标识、主按钮和主要选中态；切换后会同步一套匹配的全局强调色。</small>
+            <strong>{props.t('settings.primaryColor')}</strong>
+            <small>{props.t('settings.primaryColorHint')}</small>
           </div>
           <div className="colorDotRow">
             {PRIMARY_ACCENT_OPTIONS.map((option) => (
@@ -9101,7 +9190,7 @@ function SettingsPage(props: {
                 className={`colorDot ${settings.primaryAccent === option.value ? 'active' : ''}`}
                 style={{ background: option.value }}
                 title={option.label}
-                aria-label={`主颜色：${option.label}`}
+                aria-label={`${props.t('settings.primaryColor')}: ${option.label}`}
                 onClick={() => props.onSettingsChange({
                   primaryAccent: option.value,
                   generatorAccent: getRecommendedGlobalAccent(option.value)
@@ -9113,8 +9202,8 @@ function SettingsPage(props: {
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>全局强调色</strong>
-            <small>控制胶囊、描边、焦点、提示词弹窗和 AI 创作参数等辅助高亮。</small>
+            <strong>{props.t('settings.globalAccent')}</strong>
+            <small>{props.t('settings.globalAccentHint')}</small>
           </div>
           <div className="colorDotRow">
             {GENERATOR_ACCENT_OPTIONS.map((option) => (
@@ -9123,7 +9212,7 @@ function SettingsPage(props: {
                 className={`colorDot ${settings.generatorAccent === option.value ? 'active' : ''}`}
                 style={{ background: option.value }}
                 title={option.label}
-                aria-label={`全局强调色：${option.label}`}
+                aria-label={`${props.t('settings.globalAccent')}: ${option.label}`}
                 onClick={() => props.onSettingsChange({ generatorAccent: option.value })}
               />
             ))}
@@ -9131,101 +9220,101 @@ function SettingsPage(props: {
         </div>
       </article>
 
-      <div className="settingsSectionLabel">界面与首页</div>
+      <div className="settingsSectionLabel">{props.t('settings.interfaceHome')}</div>
       <article className="settingsGroupCard">
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>启动页面</strong>
-            <small>打开软件后默认进入哪个工作区。</small>
+            <strong>{props.t('settings.startupPage')}</strong>
+            <small>{props.t('settings.startupPageHint')}</small>
           </div>
           <div className="settingsControlSlim">
             <StudioSelect
               value={settings.startupPage}
               onChange={(value) => props.onSettingsChange({ startupPage: value as AppPage })}
-              options={STARTUP_PAGE_OPTIONS}
+              options={translatedStartupPageOptions}
             />
           </div>
         </div>
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>侧边栏默认状态</strong>
-            <small>记住你上一次选择的展开或收缩状态。</small>
+            <strong>{props.t('settings.sidebarDefault')}</strong>
+            <small>{props.t('settings.sidebarDefaultHint')}</small>
           </div>
           <div className="segmentedControl compactSegment">
             <button className={!settings.sidebarCollapsed ? 'active' : ''} onClick={() => props.onSettingsChange({ sidebarCollapsed: false })}>
-              展开
+              {props.t('settings.sidebarExpanded')}
             </button>
             <button className={settings.sidebarCollapsed ? 'active' : ''} onClick={() => props.onSettingsChange({ sidebarCollapsed: true })}>
-              收缩
+              {props.t('settings.sidebarCollapsed')}
             </button>
           </div>
         </div>
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>界面密度</strong>
-            <small>紧凑模式会压缩首页和设置页间距，适合小屏或多窗口工作。</small>
+            <strong>{props.t('settings.interfaceDensity')}</strong>
+            <small>{props.t('settings.interfaceDensityHint')}</small>
           </div>
           <button
             className={settings.compactMode ? 'settingsTogglePill active' : 'settingsTogglePill'}
             type="button"
             onClick={() => props.onSettingsChange({ compactMode: !settings.compactMode })}
           >
-            {settings.compactMode ? '紧凑模式' : '标准模式'}
+            {settings.compactMode ? props.t('settings.compactMode') : props.t('settings.standardMode')}
           </button>
         </div>
 
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
-            <strong>首页模块</strong>
-            <small>控制工作台首页显示哪些区域；隐藏后不影响对应功能页。</small>
+            <strong>{props.t('settings.homeModules')}</strong>
+            <small>{props.t('settings.homeModulesHint')}</small>
           </div>
           <div className="settingsBooleanGrid homeModuleGrid">
-            <button className={homeModules.resume ? 'active' : ''} onClick={() => updateHomeModules({ resume: !homeModules.resume })}>继续创作</button>
-            <button className={homeModules.attention ? 'active' : ''} onClick={() => updateHomeModules({ attention: !homeModules.attention })}>待处理</button>
-            <button className={homeModules.materials ? 'active' : ''} onClick={() => updateHomeModules({ materials: !homeModules.materials })}>最近素材</button>
-            <button className={homeModules.quickActions ? 'active' : ''} onClick={() => updateHomeModules({ quickActions: !homeModules.quickActions })}>常用入口</button>
-            <button className={homeModules.roadmap ? 'active' : ''} onClick={() => updateHomeModules({ roadmap: !homeModules.roadmap })}>后续路线</button>
+            <button className={homeModules.resume ? 'active' : ''} onClick={() => updateHomeModules({ resume: !homeModules.resume })}>{props.t('settings.home.resume')}</button>
+            <button className={homeModules.attention ? 'active' : ''} onClick={() => updateHomeModules({ attention: !homeModules.attention })}>{props.t('settings.home.attention')}</button>
+            <button className={homeModules.materials ? 'active' : ''} onClick={() => updateHomeModules({ materials: !homeModules.materials })}>{props.t('settings.home.materials')}</button>
+            <button className={homeModules.quickActions ? 'active' : ''} onClick={() => updateHomeModules({ quickActions: !homeModules.quickActions })}>{props.t('settings.home.quickActions')}</button>
+            <button className={homeModules.roadmap ? 'active' : ''} onClick={() => updateHomeModules({ roadmap: !homeModules.roadmap })}>{props.t('settings.home.roadmap')}</button>
           </div>
         </div>
       </article>
 
-      <div className="settingsSectionLabel">生成默认值</div>
+      <div className="settingsSectionLabel">{props.t('settings.generationDefaults')}</div>
       <article className="settingsGroupCard">
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>默认生成模式</strong>
-            <small>打开 AI 创作时默认使用文生图或图生图工作流。</small>
+            <strong>{props.t('settings.defaultMode')}</strong>
+            <small>{props.t('settings.defaultModeHint')}</small>
           </div>
           <div className="segmentedControl compactSegment">
             <button className={generationDefaults.defaultMode === 'text' ? 'active' : ''} onClick={() => updateGenerationDefaults({ defaultMode: 'text' })}>
-              文生图
+              {props.t('settings.modeTextToImage')}
             </button>
             <button className={generationDefaults.defaultMode === 'image' ? 'active' : ''} onClick={() => updateGenerationDefaults({ defaultMode: 'image' })}>
-              图生图
+              {props.t('settings.modeImageToImage')}
             </button>
           </div>
         </div>
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>默认参考图角色</strong>
-            <small>新加入参考图时优先使用的角色标记；仍可在创作台单张调整。</small>
+            <strong>{props.t('settings.defaultReferenceRole')}</strong>
+            <small>{props.t('settings.defaultReferenceRoleHint')}</small>
           </div>
           <div className="settingsControlSlim">
             <StudioSelect
               value={generationDefaults.defaultReferenceRole}
               onChange={(value) => updateGenerationDefaults({ defaultReferenceRole: value as GenerationDefaults['defaultReferenceRole'] })}
-              options={DEFAULT_REFERENCE_ROLE_OPTIONS}
+              options={translatedReferenceRoleOptions}
             />
           </div>
         </div>
 
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
-            <strong>默认平台与模型</strong>
-            <small>作为新会话初始化参数；真实 API 的模型列表仍以平台接入页保存的配置为准。</small>
+            <strong>{props.t('settings.defaultProviderModel')}</strong>
+            <small>{props.t('settings.defaultProviderModelHint')}</small>
           </div>
           <div className="settingsInlineGrid">
             <StudioSelect
@@ -9243,32 +9332,32 @@ function SettingsPage(props: {
 
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
-            <strong>默认图片参数</strong>
-            <small>尺寸、数量、质量会作为 AI 创作页的默认生成参数。</small>
+            <strong>{props.t('settings.defaultImageParams')}</strong>
+            <small>{props.t('settings.defaultImageParamsHint')}</small>
           </div>
           <div className="settingsInlineGrid triple">
             <StudioSelect
               value={generationDefaults.defaultSize}
               onChange={(value) => updateGenerationDefaults({ defaultSize: value })}
-              options={DEFAULT_SIZE_OPTIONS}
+              options={translatedSizeOptions}
             />
             <StudioSelect
               value={String(generationDefaults.defaultCount)}
               onChange={(value) => updateGenerationDefaults({ defaultCount: Number(value) })}
-              options={DEFAULT_COUNT_OPTIONS.map((option) => ({ value: String(option.value), label: option.label }))}
+              options={translatedCountOptions}
             />
             <StudioSelect
               value={generationDefaults.defaultQuality}
               onChange={(value) => updateGenerationDefaults({ defaultQuality: value })}
-              options={DEFAULT_QUALITY_OPTIONS}
+              options={translatedQualityOptions}
             />
           </div>
         </div>
 
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
-            <strong>输出格式偏好</strong>
-            <small>控制创作页底部的默认输出格式。</small>
+            <strong>{props.t('settings.outputFormat')}</strong>
+            <small>{props.t('settings.outputFormatHint')}</small>
           </div>
           <div className="settingsInlineGrid">
             <StudioSelect
@@ -9280,60 +9369,60 @@ function SettingsPage(props: {
         </div>
       </article>
 
-      <div className="settingsSectionLabel">提示词与历史</div>
+      <div className="settingsSectionLabel">{props.t('settings.promptHistory')}</div>
       <article className="settingsGroupCard">
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
-            <strong>复用记录策略</strong>
-            <small>控制 AI 创作页「复用记录」弹窗如何展示历史 Prompt。</small>
+            <strong>{props.t('settings.reuseHistoryPolicy')}</strong>
+            <small>{props.t('settings.reuseHistoryPolicyHint')}</small>
           </div>
           <div className="settingsBooleanGrid">
-            <button className={promptHistory.enabled ? 'active' : ''} onClick={() => updatePromptHistory({ enabled: !promptHistory.enabled })}>保存历史</button>
-            <button className={promptHistory.dedupe ? 'active' : ''} onClick={() => updatePromptHistory({ dedupe: !promptHistory.dedupe })}>去重</button>
-            <button className={promptHistory.includeFailed ? 'active' : ''} onClick={() => updatePromptHistory({ includeFailed: !promptHistory.includeFailed })}>包含失败</button>
-            <button className={promptHistory.showThumbnails ? 'active' : ''} onClick={() => updatePromptHistory({ showThumbnails: !promptHistory.showThumbnails })}>缩略图</button>
+            <button className={promptHistory.enabled ? 'active' : ''} onClick={() => updatePromptHistory({ enabled: !promptHistory.enabled })}>{props.t('settings.history.save')}</button>
+            <button className={promptHistory.dedupe ? 'active' : ''} onClick={() => updatePromptHistory({ dedupe: !promptHistory.dedupe })}>{props.t('settings.history.dedupe')}</button>
+            <button className={promptHistory.includeFailed ? 'active' : ''} onClick={() => updatePromptHistory({ includeFailed: !promptHistory.includeFailed })}>{props.t('settings.history.includeFailed')}</button>
+            <button className={promptHistory.showThumbnails ? 'active' : ''} onClick={() => updatePromptHistory({ showThumbnails: !promptHistory.showThumbnails })}>{props.t('settings.history.thumbnails')}</button>
           </div>
         </div>
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>历史上限</strong>
-            <small>复用记录最多展示多少条 Prompt，避免列表过长。</small>
+            <strong>{props.t('settings.historyLimit')}</strong>
+            <small>{props.t('settings.historyLimitHint')}</small>
           </div>
           <div className="settingsControlSlim">
             <StudioSelect
               value={String(promptHistory.maxItems)}
               onChange={(value) => updatePromptHistory({ maxItems: Number(value) })}
-              options={PROMPT_HISTORY_LIMIT_OPTIONS.map((option) => ({ value: String(option.value), label: option.label }))}
+              options={translatedPromptHistoryLimitOptions}
             />
           </div>
         </div>
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>默认润色模式</strong>
-            <small>跟随当前润色引擎切换，本地规则和模型扩写方向分开保存。</small>
+            <strong>{props.t('settings.defaultPolishMode')}</strong>
+            <small>{props.t('settings.defaultPolishModeHint')}</small>
           </div>
           <div className="settingsControlSlim">
             <StudioSelect
               value={promptPolishDefaultMode.id}
               onChange={(value) => updatePromptHistory({ defaultPolishMode: value })}
-              options={promptPolishModeOptions.map((mode) => ({ value: mode.id, label: mode.label }))}
+              options={translatedPromptPolishModeOptions}
             />
           </div>
         </div>
 
-        <p className="settingsNotice compact">提示词润色引擎、专用接口和图片反推 Prompt 配置已收束到下方「提示词工具区」，这里仅保留普通历史策略。</p>
+        <p className="settingsNotice compact">{props.t('settings.promptHistoryNotice')}</p>
       </article>
 
-      <div className="settingsSectionLabel">提示词工具区</div>
+      <div className="settingsSectionLabel">{props.t('settings.promptTools')}</div>
       <article className="settingsGroupCard promptToolsGroup">
         <div className="promptToolsHero">
           <div>
-            <strong>AI 提示词工具区</strong>
-            <small>把提示词润色和图片反推 Prompt 从普通偏好里拆出来，继续使用独立凭据通道，不挤占 AI 创作台主界面。</small>
+            <strong>{props.t('settings.promptToolsTitle')}</strong>
+            <small>{props.t('settings.promptToolsHint')}</small>
           </div>
-          <div className="promptToolBadges" aria-label="提示词工具凭据通道">
+          <div className="promptToolBadges" aria-label={props.t('settings.promptToolsCredentialsAria')}>
             <span>prompt-polish:default</span>
             <span>image-reverse:default</span>
           </div>
@@ -9342,28 +9431,28 @@ function SettingsPage(props: {
         <section className="promptToolCard" aria-labelledby="prompt-polish-tool-title">
           <div className="promptToolCardHeader">
             <div>
-              <strong id="prompt-polish-tool-title">提示词润色</strong>
-              <small>本地规则与模型润色分开管理；模型润色只使用下方文本模型配置，不复用生图平台 Key。</small>
+              <strong id="prompt-polish-tool-title">{props.t('settings.promptPolishTitle')}</strong>
+              <small>{props.t('settings.promptPolishHint')}</small>
             </div>
-            <span>文本润色通道</span>
+            <span>{props.t('settings.promptPolishChannel')}</span>
           </div>
 
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
-            <strong>提示词润色引擎</strong>
-            <small>本地规则不消耗额度；模型润色使用下方独立配置，不复用生图平台 Key。</small>
+            <strong>{props.t('settings.promptPolishEngine')}</strong>
+            <small>{props.t('settings.promptPolishEngineHint')}</small>
           </div>
           <div className="settingsInlineGrid promptPolishEngineControls">
             <button
               className={promptPolish.fallbackToLocal ? 'settingsTogglePill active' : 'settingsTogglePill'}
               onClick={() => updatePromptPolish({ fallbackToLocal: !promptPolish.fallbackToLocal }, { commit: true })}
             >
-              失败时本地兜底
+              {props.t('settings.promptPolishFallback')}
             </button>
             <StudioSelect
               value={promptPolish.engine}
               onChange={(value) => updatePromptPolish({ engine: value as PromptPolishSettings['engine'] }, { commit: true })}
-              options={PROMPT_POLISH_ENGINE_OPTIONS}
+              options={translatedPromptPolishEngineOptions}
             />
           </div>
         </div>
@@ -9371,8 +9460,8 @@ function SettingsPage(props: {
         <div className="settingsConfigBlock">
           <div className="promptPolishConfigHeader">
             <div className="settingsRowMain promptPolishIntro">
-              <strong>提示词润色专用配置</strong>
-              <small>这里单独保存润色用的接口信息和 API Key，可接入 DeepSeek、聚合站或其他 OpenAI-compatible 文本模型。</small>
+              <strong>{props.t('settings.promptPolishProviderProfile')}</strong>
+              <small>{props.t('settings.promptPolishProviderProfileHint')}</small>
             </div>
             <div className="promptPolishHeaderTools">
               <div className="settingsPresetRow">
@@ -9400,7 +9489,7 @@ function SettingsPage(props: {
                     protocol: 'chat-completions'
                   })}
                 >
-                  聚合站通用
+                  {props.t('settings.presetAggregator')}
                 </button>
                 <button
                   type="button"
@@ -9413,22 +9502,22 @@ function SettingsPage(props: {
                     protocol: 'chat-completions'
                   })}
                 >
-                  OpenAI 官方
+                  OpenAI {props.t('settings.official')}
                 </button>
               </div>
               <div className="settingsStatusPills compact">
                 <span className={promptPolish.baseUrl.trim() ? 'ready' : ''}>Base URL</span>
-                <span className={promptPolish.modelId.trim() ? 'ready' : ''}>模型 ID</span>
+                <span className={promptPolish.modelId.trim() ? 'ready' : ''}>{props.t('settings.modelId')}</span>
                 <span className={props.promptPolishSecretAvailable ? 'ready' : ''}>API Key</span>
               </div>
             </div>
           </div>
           <div className="settingsConfigGrid">
             <label>
-              配置名称
+              {props.t('settings.configName')}
               <input
                 value={promptPolish.displayName}
-                placeholder="提示词润色专用配置"
+                placeholder={props.t('settings.promptPolishConfigPlaceholder')}
                 onChange={(event) => updatePromptPolish({ displayName: event.target.value })}
               />
             </label>
@@ -9436,27 +9525,27 @@ function SettingsPage(props: {
               Base URL
               <input
                 value={promptPolish.baseUrl}
-                placeholder="例如 https://api.example.com"
+                placeholder={props.t('settings.exampleBaseUrl')}
                 onChange={(event) => updatePromptPolish({ baseUrl: event.target.value })}
               />
             </label>
             <label>
-              模型选择 / 手动填写
+              {props.t('settings.modelSelectManual')}
               <div className="settingsModelSelectRow">
                 <input
                   value={promptPolish.modelId}
                   list="prompt-polish-model-options"
-                  placeholder={promptPolish.modelOptions.length > 0 ? '选择刷新出的模型，或手动输入模型 ID' : '先刷新模型列表；刷不出来就手动填写模型 ID'}
+                  placeholder={promptPolish.modelOptions.length > 0 ? props.t('settings.promptPolishModelPlaceholderWithOptions') : props.t('settings.promptPolishModelPlaceholderEmpty')}
                   onChange={(event) => updatePromptPolish({ modelId: event.target.value })}
                 />
                 <datalist id="prompt-polish-model-options">
                   {promptPolish.modelOptions.map((modelId) => <option key={modelId} value={modelId} />)}
                 </datalist>
                 <button type="button" onClick={props.onRefreshPromptPolishModels} disabled={props.isRefreshingPromptPolishModels}>
-                  {props.isRefreshingPromptPolishModels ? '刷新中…' : '刷新'}
+                  {props.isRefreshingPromptPolishModels ? props.t('settings.refreshing') : props.t('settings.refresh')}
                 </button>
               </div>
-              <small>刷新读取 /v1/models；列表没有目标模型时直接在同一个输入框填写。</small>
+              <small>{props.t('settings.refreshModelsHint')}</small>
             </label>
             <label>
               API Key
@@ -9464,21 +9553,21 @@ function SettingsPage(props: {
                 <input
                   type="password"
                   value={props.promptPolishSecretDraft}
-                  placeholder={props.promptPolishSecretAvailable ? '已保存，输入新 Key 可替换' : '粘贴润色专用 API Key'}
+                  placeholder={props.promptPolishSecretAvailable ? props.t('settings.secretSavedReplace') : props.t('settings.promptPolishSecretPlaceholder')}
                   onChange={(event) => props.onPromptPolishSecretDraftChange(event.target.value)}
                 />
                 <button type="button" onClick={props.onSavePromptPolishSecret} disabled={props.isSavingPromptPolishSecret}>
-                  {props.isSavingPromptPolishSecret ? '保存中…' : '保存'}
+                  {props.isSavingPromptPolishSecret ? props.t('settings.saving') : props.t('settings.save')}
                 </button>
               </div>
-              <small>{props.promptPolishSecretAvailable ? '润色专用 Key 已配置。' : '尚未保存润色专用 Key。'}</small>
+              <small>{props.promptPolishSecretAvailable ? props.t('settings.promptPolishSecretReady') : props.t('settings.promptPolishSecretMissing')}</small>
             </label>
             <details className="settingsAdvancedBox settingsWideField">
               <summary>
-                <span>高级设置：Headers JSON</span>
-                <small>默认保持 {'{}'}</small>
+                <span>{props.t('settings.advancedHeaders')}</span>
+                <small>{props.t('settings.keepDefaultObject')}</small>
               </summary>
-              <p>用于给少数中转站或企业 API 额外传请求头，例如 <code>{'{"X-Provider":"visionhub"}'}</code>。一般服务商不需要，保持空对象即可。</p>
+              <p>{props.t('settings.promptPolishHeadersHint')} <code>{'{"X-Provider":"visionhub"}'}</code></p>
               <textarea
                 rows={3}
                 value={promptPolish.extraHeadersJson}
@@ -9488,14 +9577,14 @@ function SettingsPage(props: {
             </details>
             <div className="settingsConfigActions settingsWideField">
               <button type="button" className="rowActionButton" onClick={props.onSavePromptPolishConfig}>
-                <ShieldCheck size={14} /> 保存润色配置
+                <ShieldCheck size={14} /> {props.t('settings.savePolishConfig')}
               </button>
-              <small>保存配置不会保存 API Key；API Key 仍需单独点击上方“保存”。</small>
+              <small>{props.t('settings.saveConfigNoKeyHint')}</small>
             </div>
             <div className="promptPolishConfigInstances settingsWideField">
-              <strong>已保存配置实例</strong>
+              <strong>{props.t('settings.savedConfigInstances')}</strong>
               {promptPolish.savedConfigs.length === 0 ? (
-                <p>保存当前配置后会显示在这里。</p>
+                <p>{props.t('settings.savedConfigInstancesEmpty')}</p>
               ) : (
                 <div>
                   {promptPolish.savedConfigs.map((config) => (
@@ -9512,9 +9601,9 @@ function SettingsPage(props: {
                         })}
                       >
                         <span>{config.displayName}</span>
-                        <small>{config.modelId || '未设置模型'} · {config.baseUrl || '未设置 Base URL'}</small>
+                        <small>{config.modelId || props.t('settings.unsetModel')} · {config.baseUrl || props.t('settings.unsetBaseUrl')}</small>
                       </button>
-                      <button type="button" className="promptPolishConfigDelete" data-tooltip="删除配置实例" aria-label={`删除配置实例：${config.displayName}`} onClick={() => deletePromptPolishConfig(config.id)}>
+                      <button type="button" className="promptPolishConfigDelete" data-tooltip={props.t('settings.deleteConfigInstance')} aria-label={props.t('settings.deleteConfigInstanceNamed', { name: config.displayName })} onClick={() => deletePromptPolishConfig(config.id)}>
                         <Trash2 size={13} />
                       </button>
                     </article>
@@ -9527,147 +9616,147 @@ function SettingsPage(props: {
 
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
-            <strong>语言、强度与协议</strong>
-            <small>控制模型润色输出语言、扩写力度，以及 OpenAI-compatible 文本调用协议。</small>
+            <strong>{props.t('settings.languageStrengthProtocol')}</strong>
+            <small>{props.t('settings.languageStrengthProtocolHint')}</small>
           </div>
           <div className="settingsInlineGrid triple">
             <StudioSelect
               value={promptPolish.language}
               onChange={(value) => updatePromptPolish({ language: value as PromptPolishSettings['language'] })}
-              options={PROMPT_POLISH_LANGUAGE_OPTIONS}
+              options={translatedPromptPolishLanguageOptions}
             />
             <StudioSelect
               value={promptPolish.strength}
               onChange={(value) => updatePromptPolish({ strength: value as PromptPolishSettings['strength'] })}
-              options={PROMPT_POLISH_STRENGTH_OPTIONS}
+              options={translatedPromptPolishStrengthOptions}
             />
             <StudioSelect
               value={promptPolish.protocol}
               onChange={(value) => updatePromptPolish({ protocol: value as PromptPolishSettings['protocol'] })}
-              options={PROMPT_POLISH_PROTOCOL_OPTIONS}
+              options={translatedPromptPolishProtocolOptions}
             />
           </div>
         </div>
 
-        <p className="settingsNotice">模型润色不会读取或导出你的 API Key；密钥由桌面端安全凭据存储在独立的润色通道。未配置或请求失败时，会按设置自动回退到本地规则润色。</p>
+        <p className="settingsNotice">{props.t('settings.promptPolishNotice')}</p>
         </section>
 
         <section className="promptToolCard" aria-labelledby="image-reverse-tool-title">
           <div className="promptToolCardHeader">
             <div>
-              <strong id="image-reverse-tool-title">图片反推 Prompt</strong>
-              <small>视觉理解模型只服务灵感图片反推，不进入生图模型列表，也不影响当前中转站生图工作流。</small>
+              <strong id="image-reverse-tool-title">{props.t('settings.imageReverseTitle')}</strong>
+              <small>{props.t('settings.imageReverseHint')}</small>
             </div>
-            <span>图片反推通道</span>
+            <span>{props.t('settings.imageReverseChannel')}</span>
           </div>
 
         <div className="settingsConfigBlock imageReverseConfigBlock">
           <div className="promptPolishConfigHeader">
             <div className="settingsRowMain promptPolishIntro">
-              <strong>{'\u56fe\u7247\u53cd\u63a8 Prompt \u4e13\u7528\u914d\u7f6e'}</strong>
-              <small>{'\u7528\u4e8e\u7075\u611f\u56fe\u7247\u53cd\u63a8 Prompt \u7684\u89c6\u89c9\u7406\u89e3\u6a21\u578b\u3002\u5b83\u4e0d\u53c2\u4e0e AI \u751f\u56fe\u5de5\u4f5c\u53f0\uff0c\u4e0d\u4f1a\u51fa\u73b0\u5728\u751f\u56fe\u6a21\u578b\u5217\u8868\u3002'}</small>
+              <strong>{props.t('settings.imageReverseProviderProfile')}</strong>
+              <small>{props.t('settings.imageReverseProviderProfileHint')}</small>
             </div>
             <div className="promptPolishHeaderTools">
               <div className="settingsPresetRow">
-                <button type="button" className={imageReverse.displayName === '\u805a\u5408\u7ad9\u56fe\u7247\u53cd\u63a8' ? 'active' : ''} onClick={() => updateImageReverse({ displayName: '\u805a\u5408\u7ad9\u56fe\u7247\u53cd\u63a8', baseUrl: '', modelId: '', modelOptions: [], protocol: 'chat-completions' })}>{'\u805a\u5408\u7ad9\u901a\u7528'}</button>
-                <button type="button" className={imageReverse.displayName === 'OpenAI \u5b98\u65b9\u56fe\u7247\u53cd\u63a8' ? 'active' : ''} onClick={() => updateImageReverse({ displayName: 'OpenAI \u5b98\u65b9\u56fe\u7247\u53cd\u63a8', baseUrl: OFFICIAL_OPENAI_BASE_URL, modelId: '', modelOptions: [], protocol: 'responses' })}>OpenAI {'\u5b98\u65b9'}</button>
+                <button type="button" className={imageReverse.displayName === '\u805a\u5408\u7ad9\u56fe\u7247\u53cd\u63a8' ? 'active' : ''} onClick={() => updateImageReverse({ displayName: '\u805a\u5408\u7ad9\u56fe\u7247\u53cd\u63a8', baseUrl: '', modelId: '', modelOptions: [], protocol: 'chat-completions' })}>{props.t('settings.presetAggregator')}</button>
+                <button type="button" className={imageReverse.displayName === 'OpenAI \u5b98\u65b9\u56fe\u7247\u53cd\u63a8' ? 'active' : ''} onClick={() => updateImageReverse({ displayName: 'OpenAI \u5b98\u65b9\u56fe\u7247\u53cd\u63a8', baseUrl: OFFICIAL_OPENAI_BASE_URL, modelId: '', modelOptions: [], protocol: 'responses' })}>OpenAI {props.t('settings.official')}</button>
                 <button type="button" className={imageReverse.displayName === 'Gemini \u56fe\u7247\u53cd\u63a8' ? 'active' : ''} onClick={() => updateImageReverse({ displayName: 'Gemini \u56fe\u7247\u53cd\u63a8', baseUrl: 'https://generativelanguage.googleapis.com', modelId: '', modelOptions: [], protocol: 'gemini-generate-content' })}>Gemini</button>
               </div>
               <div className="settingsStatusPills compact">
                 <span className={imageReverse.baseUrl.trim() ? 'ready' : ''}>Base URL</span>
-                <span className={imageReverse.modelId.trim() ? 'ready' : ''}>{'\u6a21\u578b ID'}</span>
+                <span className={imageReverse.modelId.trim() ? 'ready' : ''}>{props.t('settings.modelId')}</span>
                 <span className={props.imageReverseSecretAvailable ? 'ready' : ''}>API Key</span>
               </div>
             </div>
           </div>
           <div className="settingsConfigGrid">
             <label>
-              {'\u914d\u7f6e\u540d\u79f0'}
-              <input value={imageReverse.displayName} placeholder={'\u56fe\u7247\u53cd\u63a8 Prompt \u4e13\u7528\u914d\u7f6e'} onChange={(event) => updateImageReverse({ displayName: event.target.value })} />
+              {props.t('settings.configName')}
+              <input value={imageReverse.displayName} placeholder={props.t('settings.imageReverseConfigPlaceholder')} onChange={(event) => updateImageReverse({ displayName: event.target.value })} />
             </label>
             <label>
               Base URL
-              <input value={imageReverse.baseUrl} placeholder={'\u4f8b\u5982 https://api.example.com'} onChange={(event) => updateImageReverse({ baseUrl: event.target.value })} />
+              <input value={imageReverse.baseUrl} placeholder={props.t('settings.exampleBaseUrl')} onChange={(event) => updateImageReverse({ baseUrl: event.target.value })} />
             </label>
             <label>
-              {'\u6a21\u578b\u9009\u62e9 / \u624b\u52a8\u586b\u5199'}
+              {props.t('settings.modelSelectManual')}
               <div className="settingsModelSelectRow">
-                <input value={imageReverse.modelId} list="image-reverse-model-options" placeholder={imageReverse.modelOptions.length > 0 ? '\u9009\u62e9\u5237\u65b0\u51fa\u7684\u6a21\u578b\uff0c\u6216\u624b\u52a8\u8f93\u5165\u6a21\u578b ID' : '\u586b\u5199\u652f\u6301\u56fe\u7247\u8f93\u5165\u548c\u6587\u672c\u8f93\u51fa\u7684\u6a21\u578b ID'} onChange={(event) => updateImageReverse({ modelId: event.target.value })} />
+                <input value={imageReverse.modelId} list="image-reverse-model-options" placeholder={imageReverse.modelOptions.length > 0 ? props.t('settings.imageReverseModelPlaceholderWithOptions') : props.t('settings.imageReverseModelPlaceholderEmpty')} onChange={(event) => updateImageReverse({ modelId: event.target.value })} />
                 <datalist id="image-reverse-model-options">
                   {imageReverse.modelOptions.map((modelId) => <option key={modelId} value={modelId} />)}
                 </datalist>
-                <button type="button" onClick={props.onRefreshImageReverseModels} disabled={props.isRefreshingImageReverseModels}>{props.isRefreshingImageReverseModels ? '\u5237\u65b0\u4e2d\u2026' : '\u5237\u65b0'}</button>
+                <button type="button" onClick={props.onRefreshImageReverseModels} disabled={props.isRefreshingImageReverseModels}>{props.isRefreshingImageReverseModels ? props.t('settings.refreshing') : props.t('settings.refresh')}</button>
               </div>
-              <small>{'\u4ec5\u7528\u4e8e\u89c6\u89c9\u7406\u89e3\u53cd\u63a8\uff1bGemini generateContent \u8bf7\u76f4\u63a5\u586b\u5199\u6a21\u578b ID\u3002'}</small>
+              <small>{props.t('settings.imageReverseModelHint')}</small>
             </label>
             <label>
               API Key
               <div className="settingsSecretInputRow">
-                <input type="password" value={props.imageReverseSecretDraft} placeholder={props.imageReverseSecretAvailable ? '\u5df2\u4fdd\u5b58\uff0c\u8f93\u5165\u65b0 Key \u53ef\u66ff\u6362' : '\u7c98\u8d34\u56fe\u7247\u53cd\u63a8\u4e13\u7528 API Key'} onChange={(event) => props.onImageReverseSecretDraftChange(event.target.value)} />
-                <button type="button" onClick={props.onSaveImageReverseSecret} disabled={props.isSavingImageReverseSecret}>{props.isSavingImageReverseSecret ? '\u4fdd\u5b58\u4e2d\u2026' : '\u4fdd\u5b58'}</button>
+                <input type="password" value={props.imageReverseSecretDraft} placeholder={props.imageReverseSecretAvailable ? props.t('settings.secretSavedReplace') : props.t('settings.imageReverseSecretPlaceholder')} onChange={(event) => props.onImageReverseSecretDraftChange(event.target.value)} />
+                <button type="button" onClick={props.onSaveImageReverseSecret} disabled={props.isSavingImageReverseSecret}>{props.isSavingImageReverseSecret ? props.t('settings.saving') : props.t('settings.save')}</button>
               </div>
-              <small>{props.imageReverseSecretAvailable ? '\u56fe\u7247\u53cd\u63a8\u4e13\u7528 Key \u5df2\u914d\u7f6e\u3002' : '\u5c1a\u672a\u4fdd\u5b58\u56fe\u7247\u53cd\u63a8\u4e13\u7528 Key\u3002'}</small>
+              <small>{props.imageReverseSecretAvailable ? props.t('settings.imageReverseSecretReady') : props.t('settings.imageReverseSecretMissing')}</small>
             </label>
             <div className="settingsListRow settingsTallRow settingsWideField embeddedSettingsRow">
               <div className="settingsRowMain">
-                <strong>{'\u534f\u8bae\u3001\u8bed\u8a00\u4e0e\u7ec6\u8282'}</strong>
-                <small>{'\u6839\u636e\u4e2d\u8f6c\u7ad9\u6216\u5b98\u65b9 API \u7684\u89c6\u89c9\u8f93\u5165\u534f\u8bae\u9009\u62e9\uff1b\u666e\u901a\u7eaf\u6587\u672c\u6a21\u578b\u4e0d\u80fd\u53cd\u63a8\u56fe\u7247\u3002'}</small>
+                <strong>{props.t('settings.imageReverseProtocolLanguageDetail')}</strong>
+                <small>{props.t('settings.imageReverseProtocolLanguageDetailHint')}</small>
               </div>
               <div className="settingsInlineGrid triple">
-                <StudioSelect value={imageReverse.protocol} onChange={(value) => updateImageReverse({ protocol: value as ImagePromptReverseSettings['protocol'] })} options={IMAGE_PROMPT_REVERSE_PROTOCOL_OPTIONS} />
-                <StudioSelect value={imageReverse.detail} onChange={(value) => updateImageReverse({ detail: value as ImagePromptReverseSettings['detail'] })} options={IMAGE_PROMPT_REVERSE_DETAIL_OPTIONS} />
-                <StudioSelect value={imageReverse.language} onChange={(value) => updateImageReverse({ language: value as ImagePromptReverseSettings['language'] })} options={IMAGE_PROMPT_REVERSE_LANGUAGE_OPTIONS} />
+                <StudioSelect value={imageReverse.protocol} onChange={(value) => updateImageReverse({ protocol: value as ImagePromptReverseSettings['protocol'] })} options={translatedImageReverseProtocolOptions} />
+                <StudioSelect value={imageReverse.detail} onChange={(value) => updateImageReverse({ detail: value as ImagePromptReverseSettings['detail'] })} options={translatedImageReverseDetailOptions} />
+                <StudioSelect value={imageReverse.language} onChange={(value) => updateImageReverse({ language: value as ImagePromptReverseSettings['language'] })} options={translatedImageReverseLanguageOptions} />
               </div>
             </div>
             <details className="settingsAdvancedBox settingsWideField">
-              <summary><span>{'\u9ad8\u7ea7\u8bbe\u7f6e\uff1aHeaders JSON'}</span><small>{'\u9ed8\u8ba4\u4fdd\u6301 {}'}</small></summary>
-              <p>{'\u7528\u4e8e\u7ed9\u5c11\u6570\u4e2d\u8f6c\u7ad9\u6216\u4f01\u4e1a API \u989d\u5916\u4f20\u8bf7\u6c42\u5934\u3002Authorization\u3001Content-Type \u4e0e x-goog-api-key \u4f1a\u7531\u7a0b\u5e8f\u6309\u534f\u8bae\u5904\u7406\u3002'}</p>
+              <summary><span>{props.t('settings.advancedHeaders')}</span><small>{props.t('settings.keepDefaultObject')}</small></summary>
+              <p>{props.t('settings.imageReverseHeadersHint')}</p>
               <textarea rows={3} value={imageReverse.extraHeadersJson} placeholder='{"X-Provider": "visionhub"}' onChange={(event) => updateImageReverse({ extraHeadersJson: event.target.value })} />
             </details>
             <div className="settingsConfigActions settingsWideField">
-              <button type="button" className="rowActionButton" onClick={props.onSaveImageReverseConfig}><ShieldCheck size={14} /> {'\u4fdd\u5b58\u56fe\u7247\u53cd\u63a8\u914d\u7f6e'}</button>
-              <small>{'\u4fdd\u5b58\u914d\u7f6e\u4e0d\u4f1a\u4fdd\u5b58 API Key\uff1bAPI Key \u4ecd\u9700\u5355\u72ec\u70b9\u51fb\u4e0a\u65b9\u201c\u4fdd\u5b58\u201d\u3002'}</small>
+              <button type="button" className="rowActionButton" onClick={props.onSaveImageReverseConfig}><ShieldCheck size={14} /> {props.t('settings.saveImageReverseConfig')}</button>
+              <small>{props.t('settings.saveConfigNoKeyHint')}</small>
             </div>
           </div>
         </div>
 
-        <p className="settingsNotice">{'\u56fe\u7247\u53cd\u63a8 Prompt \u4f7f\u7528\u72ec\u7acb\u51ed\u636e\u901a\u9053 image-reverse:default\uff0c\u4e0d\u590d\u7528\u751f\u56fe\u5e73\u53f0 Key\uff0c\u4e5f\u4e0d\u4f1a\u628a\u89c6\u89c9\u7406\u89e3\u6a21\u578b\u52a0\u5165 AI \u751f\u56fe\u5de5\u4f5c\u53f0\u3002'}</p>
+        <p className="settingsNotice">{props.t('settings.imageReverseNotice')}</p>
         </section>
       </article>
 
-      <div className="settingsSectionLabel">作品保存偏好</div>
+      <div className="settingsSectionLabel">{props.t('settings.savePreferences')}</div>
       <article className="settingsGroupCard">
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>文件命名规则</strong>
-            <small>记录为默认保存策略；当前桌面落盘仍会保留安全的唯一文件名，后续批量导出优先读取这里。</small>
+            <strong>{props.t('settings.fileNamingRule')}</strong>
+            <small>{props.t('settings.fileNamingRuleHint')}</small>
           </div>
           <div className="settingsControlSlim">
             <StudioSelect
               value={savePreferences.fileNamingRule}
               onChange={(value) => updateSavePreferences({ fileNamingRule: value as AppSettings['savePreferences']['fileNamingRule'] })}
-              options={FILE_NAMING_RULE_OPTIONS}
+              options={translatedFileNamingRuleOptions}
             />
           </div>
         </div>
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
-            <strong>分组策略</strong>
-            <small>用于后续导出和批量整理；不会移动现有图库文件。</small>
+            <strong>{props.t('settings.groupingPolicy')}</strong>
+            <small>{props.t('settings.groupingPolicyHint')}</small>
           </div>
           <div className="settingsBooleanGrid compactTwo">
-            <button className={savePreferences.groupByDate ? 'active' : ''} onClick={() => updateSavePreferences({ groupByDate: !savePreferences.groupByDate })}>按日期分组</button>
-            <button className={savePreferences.groupByProject ? 'active' : ''} onClick={() => updateSavePreferences({ groupByProject: !savePreferences.groupByProject })}>按项目分组</button>
+            <button className={savePreferences.groupByDate ? 'active' : ''} onClick={() => updateSavePreferences({ groupByDate: !savePreferences.groupByDate })}>{props.t('settings.groupByDate')}</button>
+            <button className={savePreferences.groupByProject ? 'active' : ''} onClick={() => updateSavePreferences({ groupByProject: !savePreferences.groupByProject })}>{props.t('settings.groupByProject')}</button>
           </div>
         </div>
       </article>
 
-      <div className="settingsSectionLabel">数据与缓存</div>
+      <div className="settingsSectionLabel">{props.t('settings.dataCache')}</div>
       <article className="settingsGroupCard">
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>数据刷新频率</strong>
-            <small>控制历史记录、作品画廊与任务状态的刷新节奏。</small>
+            <strong>{props.t('settings.refreshRate')}</strong>
+            <small>{props.t('settings.refreshRateHint')}</small>
           </div>
           <div className="segmentedControl compactSegment">
             {REFRESH_INTERVAL_OPTIONS.map((option) => (
@@ -9676,7 +9765,7 @@ function SettingsPage(props: {
                 className={settings.refreshIntervalSeconds === option.value ? 'active' : ''}
                 onClick={() => props.onSettingsChange({ refreshIntervalSeconds: option.value })}
               >
-                {option.label}
+                {translatedRefreshIntervalOptions.find((item) => item.value === option.value)?.label ?? option.label}
               </button>
             ))}
           </div>
@@ -9684,127 +9773,127 @@ function SettingsPage(props: {
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>作品画廊目录</strong>
+            <strong>{props.t('settings.libraryDirectory')}</strong>
             <small>
               {props.storageSettings
-                ? `当前：${props.storageSettings.resolved_library_dir}`
+                ? props.t('settings.currentPath', { path: props.storageSettings.resolved_library_dir })
                 : props.desktopRuntime
-                  ? '正在读取当前图库路径…'
-                  : '桌面端可自定义图库路径。'}
+                  ? props.t('settings.loadingLibraryPath')
+                  : props.t('settings.desktopCustomLibraryPath')}
             </small>
             {props.storageSettings ? (
               <small className="settingsPathMeta">
-                默认：{props.storageSettings.default_library_dir}
+                {props.t('settings.defaultPath', { path: props.storageSettings.default_library_dir })}
               </small>
             ) : null}
           </div>
           <div className="settingsPathActions">
             <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onSelectLibraryPath}>
-              <FolderOpen size={15} /> 选择路径
+              <FolderOpen size={15} /> {props.t('settings.selectPath')}
             </button>
             <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onOpenLibraryDirectory}>
-              <HardDrive size={15} /> 打开
+              <HardDrive size={15} /> {props.t('settings.open')}
             </button>
             <button className="rowActionButton subtle" disabled={!props.desktopRuntime} onClick={props.onResetLibraryPath}>
-              <RefreshCcw size={15} /> 默认目录
+              <RefreshCcw size={15} /> {props.t('settings.defaultDirectory')}
             </button>
           </div>
         </div>
 
         <div className="settingsListRow settingsTallRow">
           <div className="settingsRowMain">
-            <strong>图片收藏目录</strong>
+            <strong>{props.t('settings.inspirationDirectory')}</strong>
             <small>
               {props.storageSettings
-                ? `当前：${props.storageSettings.resolved_inspiration_dir}`
+                ? props.t('settings.currentPath', { path: props.storageSettings.resolved_inspiration_dir })
                 : props.desktopRuntime
-                  ? '正在读取图片收藏路径…'
-                  : '桌面端可自定义图片收藏路径。'}
+                  ? props.t('settings.loadingInspirationPath')
+                  : props.t('settings.desktopCustomInspirationPath')}
             </small>
             {props.storageSettings ? (
               <small className="settingsPathMeta">
-                默认：{props.storageSettings.default_inspiration_dir}
+                {props.t('settings.defaultPath', { path: props.storageSettings.default_inspiration_dir })}
               </small>
             ) : null}
           </div>
           <div className="settingsPathActions">
             <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onSelectInspirationPath}>
-              <FolderOpen size={15} /> 选择路径
+              <FolderOpen size={15} /> {props.t('settings.selectPath')}
             </button>
             <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onOpenInspirationDirectory}>
-              <HardDrive size={15} /> 打开
+              <HardDrive size={15} /> {props.t('settings.open')}
             </button>
             <button className="rowActionButton subtle" disabled={!props.desktopRuntime} onClick={props.onResetInspirationPath}>
-              <RefreshCcw size={15} /> 默认目录
+              <RefreshCcw size={15} /> {props.t('settings.defaultDirectory')}
             </button>
           </div>
         </div>
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>应用数据目录</strong>
-            <small>包含生成历史、画廊元数据、备份文件和应用本地数据；不会显示或导出系统凭据。</small>
+            <strong>{props.t('settings.appDataDirectory')}</strong>
+            <small>{props.t('settings.appDataDirectoryHint')}</small>
           </div>
           <div className="settingsPathActions">
             <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onOpenAppDataDirectory}>
-              <FolderOpen size={15} /> 打开数据目录
+              <FolderOpen size={15} /> {props.t('settings.openDataDirectory')}
             </button>
             <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onOpenBackupsDirectory}>
-              <HardDrive size={15} /> 打开备份目录
+              <HardDrive size={15} /> {props.t('settings.openBackupsDirectory')}
             </button>
           </div>
         </div>
 
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>备份与迁移</strong>
-            <small>导出设置备份或迁移说明；API Key、系统凭据、生成图片二进制和 raw 大字段不会写入迁移说明。</small>
+            <strong>{props.t('settings.backupMigration')}</strong>
+            <small>{props.t('settings.backupMigrationHint')}</small>
           </div>
           <div className="settingsPathActions">
             <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onExportSettingsBackup}>
-              <Download size={15} /> 导出设置
+              <Download size={15} /> {props.t('settings.exportSettings')}
             </button>
             <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onExportMigrationGuide}>
-              <ClipboardPaste size={15} /> 导出迁移说明
+              <ClipboardPaste size={15} /> {props.t('settings.exportMigrationGuide')}
             </button>
           </div>
         </div>
       </article>
 
-      <div className="settingsSectionLabel">软件升级</div>
+      <div className="settingsSectionLabel">{props.t('settings.softwareUpdate')}</div>
       <article className="settingsGroupCard">
         <div className="settingsListRow versionSettingsRow">
           <div className="settingsRowMain">
-            <strong>版本</strong>
+            <strong>{props.t('settings.version')}</strong>
           </div>
           <span className="settingsValue">{APP_VERSION}</span>
         </div>
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>软件升级</strong>
-            <small>后续可接入 Tauri updater、GitHub Release 或自定义更新源。</small>
+            <strong>{props.t('settings.softwareUpdate')}</strong>
+            <small>{props.t('settings.softwareUpdateHint')}</small>
           </div>
           <button className="rowActionButton" type="button" onClick={props.onCheckUpdates}>
-            <RefreshCcw size={15} /> 检查更新
+            <RefreshCcw size={15} /> {props.t('settings.checkUpdates')}
           </button>
         </div>
         <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>开发者模式</strong>
-            <small>打开后显示运行时和技术栈信息。</small>
+            <strong>{props.t('settings.developerMode')}</strong>
+            <small>{props.t('settings.developerModeHint')}</small>
           </div>
           <button
             className={developerMode ? 'settingsTogglePill active' : 'settingsTogglePill'}
             type="button"
             onClick={() => setDeveloperMode((current) => !current)}
           >
-            {developerMode ? '已开启' : '关闭'}
+            {developerMode ? props.t('settings.enabled') : props.t('settings.disabled')}
           </button>
         </div>
         {developerMode ? <div className="settingsListRow">
           <div className="settingsRowMain">
-            <strong>技术栈</strong>
-            <small>Tauri v2 + React + TypeScript，本地历史保存，密钥由系统凭据管理。</small>
+            <strong>{props.t('settings.techStack')}</strong>
+            <small>{props.t('settings.techStackHint')}</small>
           </div>
           <span className="settingsValue">Desktop MVP</span>
         </div> : null}
@@ -9940,6 +10029,7 @@ const CachedLibraryPage = memo(function CachedLibraryPage(props: {
 });
 
 const CachedInspirationPage = memo(function CachedInspirationPage(props: {
+  t: Translator;
   isActive: boolean;
   preview: ImagePreviewState | null;
   onPreview: (imageUrl: string, navigation?: ImagePreviewNavigation) => void;
@@ -9960,6 +10050,7 @@ const CachedInspirationPage = memo(function CachedInspirationPage(props: {
       aria-hidden={!props.isActive}
     >
       <InspirationPage
+        t={props.t}
         onPreview={props.onPreview}
         onUseAsReference={props.onUseAsReference}
         onUsePrompt={props.onUsePrompt}
@@ -12273,7 +12364,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   );
 });
 
-function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void }) {
+function PromptTemplatesPage(props: { t: Translator; onUseTemplate: (prompt: string) => void }) {
   type TemplateSourceFilter = 'all' | 'default' | 'custom' | 'favorite' | 'recent';
   type TemplateViewMode = 'card' | 'list';
   type TemplateDraft = {
@@ -12285,6 +12376,8 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
     prompt: string;
     tags: string;
   };
+
+  const t = props.t;
 
   const emptyDraft: TemplateDraft = {
     id: '',
@@ -12315,6 +12408,25 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
   const [variableValues, setVariableValues] = useState<Record<string, string>>({});
   const [copyMessage, setCopyMessage] = useState('');
   useToastMessage(copyMessage, setCopyMessage);
+
+  const translatedTemplateSourceOptions = useMemo(() => templateSourceOptions.map((option) => ({
+    ...option,
+    label: translateTemplateLabel('templates.sourceFilter', option.value, option.label)
+  })), [t]);
+  const translatedTemplateCategoryOptions = useMemo(() => PROMPT_TEMPLATE_CATEGORIES.map((option) => ({
+    ...option,
+    label: translateTemplateLabel('templates.category', option.value, option.label)
+  })), [t]);
+  const templateViewOptions = useMemo(() => [
+    { value: 'card' as TemplateViewMode, label: t('templates.view.card') },
+    { value: 'list' as TemplateViewMode, label: t('templates.view.list') }
+  ], [t]);
+
+  function translateTemplateLabel(prefix: string, value: string, fallback: string) {
+    const key = `${prefix}.${value}` as Parameters<Translator>[0];
+    const translated = t(key);
+    return translated === key ? fallback : translated;
+  }
 
   function persistTemplates(nextTemplates: PromptTemplate[]) {
     setTemplates(nextTemplates);
@@ -12383,7 +12495,8 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
   }, [selectedTemplate?.id]);
 
   function categoryLabel(value: PromptTemplateCategory) {
-    return PROMPT_TEMPLATE_CATEGORIES.find((item) => item.value === value)?.label ?? value;
+    const fallback = PROMPT_TEMPLATE_CATEGORIES.find((item) => item.value === value)?.label ?? value;
+    return translateTemplateLabel('templates.category', value, fallback);
   }
 
   function tagsToText(tags: string[]) {
@@ -12423,7 +12536,7 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
     const title = draft.title.trim();
     const prompt = draft.prompt.trim();
     if (!title || !prompt) {
-      setCopyMessage('请填写模板标题和 Prompt。');
+      setCopyMessage(t('templates.needTitlePrompt'));
       return;
     }
     const previous = draft.id ? templates.find((template) => template.id === draft.id) : undefined;
@@ -12432,7 +12545,7 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
       id: shouldUpdateExisting ? previous?.id : undefined,
       title,
       category: draft.category,
-      tone: draft.tone.trim() || '自定义模板',
+      tone: draft.tone.trim() || t('templates.customTone'),
       description: draft.description.trim() || undefined,
       prompt,
       tags: parseTemplateTags(draft.tags),
@@ -12447,21 +12560,21 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
     setSelectedTemplateId(nextTemplate.id);
     setDetailOpen(true);
     cancelEditTemplate();
-    setCopyMessage(shouldUpdateExisting ? '模板已更新。' : '已另存为我的模板。');
+    setCopyMessage(shouldUpdateExisting ? t('templates.updated') : t('templates.savedAsMine'));
   }
 
   function deleteTemplate(template: PromptTemplate) {
     if (!template.custom) {
-      setCopyMessage('系统模板不可删除；可以编辑后另存为我的模板。');
+      setCopyMessage(t('templates.systemDeleteBlocked'));
       return;
     }
-    if (!window.confirm(`确定删除“${template.title}”吗？这只会删除提示词库里的模板，不影响作品和灵感收藏。`)) return;
+    if (!window.confirm(t('templates.deleteConfirmMessage', { title: template.title }))) return;
     const next = templates.filter((item) => item.id !== template.id);
     persistTemplates(next);
     setSelectedTemplateId(next[0]?.id ?? null);
     setDetailOpen(false);
     if (editingTemplateId === template.id) cancelEditTemplate();
-    setCopyMessage('模板已删除。');
+    setCopyMessage(t('templates.deleted'));
   }
 
   function toggleTemplateFavorite(template: PromptTemplate) {
@@ -12488,7 +12601,7 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
       const promptToCopy = template.id === selectedTemplate?.id ? renderedPrompt : template.prompt;
       await navigator.clipboard?.writeText(promptToCopy);
       markTemplateUsed(template);
-      setCopyMessage(`已复制：${template.title}`);
+      setCopyMessage(t('templates.copied', { title: template.title }));
     } catch (error) {
       setCopyMessage(error instanceof Error ? error.message : String(error));
     }
@@ -12505,50 +12618,50 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
       <header className="topbar templateTopbar">
         <div className="pageTitleBlock">
           <p className="eyebrow">Prompt Library</p>
-          <h1>提示词库</h1>
-          <p>管理可复用 Prompt 模板，支持分类、收藏、最近使用、自定义模板和变量预填。</p>
+          <h1>{t('templates.title')}</h1>
+          <p>{t('templates.subtitle')}</p>
         </div>
         <div className="statusPills">
-          <span><Layers size={15} /> {templates.length} 个模板</span>
-          <span><Star size={15} /> {favoriteCount} 个收藏</span>
-          <span><Clock3 size={15} /> {recentCount} 个最近使用</span>
+          <span><Layers size={15} /> {t('templates.stats.total', { count: templates.length })}</span>
+          <span><Star size={15} /> {t('templates.stats.favorite', { count: favoriteCount })}</span>
+          <span><Clock3 size={15} /> {t('templates.stats.recent', { count: recentCount })}</span>
         </div>
       </header>
 
       <section className="templateToolbar promptLibraryToolbar">
         <label className="templateSearchBox">
-          <span>搜索标题 / 标签 / Prompt</span>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="例如：电商、角色、图生图、免费平台" />
+          <span>{t('templates.searchLabel')}</span>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('templates.searchPlaceholder')} />
         </label>
         <label>
           <span>分类</span>
-          <StudioSelect value={category} onChange={(value) => setCategory(value as 'all' | PromptTemplateCategory)} options={PROMPT_TEMPLATE_CATEGORIES} />
+          <StudioSelect value={category} onChange={(value) => setCategory(value as 'all' | PromptTemplateCategory)} options={translatedTemplateCategoryOptions} />
         </label>
         <label>
           <span>来源</span>
-          <StudioSelect value={sourceFilter} onChange={(value) => setSourceFilter(value as TemplateSourceFilter)} options={templateSourceOptions} />
+          <StudioSelect value={sourceFilter} onChange={(value) => setSourceFilter(value as TemplateSourceFilter)} options={translatedTemplateSourceOptions} />
         </label>
         <div className="promptLibraryToolbarActions">
           <button
             className={`miniButton favoriteFilterButton ${sourceFilter === 'favorite' ? 'active' : ''}`}
             type="button"
             onClick={() => setSourceFilter(sourceFilter === 'favorite' ? 'all' : 'favorite')}
-            title={sourceFilter === 'favorite' ? '显示全部模板' : '只看收藏模板'}
-            aria-label={sourceFilter === 'favorite' ? '显示全部模板' : '只看收藏模板'}
+            title={sourceFilter === 'favorite' ? t('templates.showAll') : t('templates.onlyFavorites')}
+            aria-label={sourceFilter === 'favorite' ? t('templates.showAll') : t('templates.onlyFavorites')}
           >
-            <Star size={13} fill={sourceFilter === 'favorite' ? 'currentColor' : 'none'} /> 收藏
+            <Star size={13} fill={sourceFilter === 'favorite' ? 'currentColor' : 'none'} /> {t('templates.favoriteFilter')}
           </button>
-          <div className="segmentedControl compactSegment" aria-label="提示词库视图">
-            <button className={viewMode === 'card' ? 'active' : ''} onClick={() => setViewMode('card')} type="button"><Grid2X2 size={13} /> 卡片</button>
-            <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')} type="button"><Layers size={13} /> 列表</button>
+          <div className="segmentedControl compactSegment" aria-label={t('templates.viewAria')}>
+            <button className={viewMode === 'card' ? 'active' : ''} onClick={() => setViewMode('card')} type="button"><Grid2X2 size={13} /> {templateViewOptions[0].label}</button>
+            <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')} type="button"><Layers size={13} /> {templateViewOptions[1].label}</button>
           </div>
-          <button className="miniButton" type="button" onClick={clearTemplateFilters}><X size={13} /> 清空</button>
-          <button className="miniButton primaryMini" type="button" onClick={startCreateTemplate}><Plus size={13} /> 新建模板</button>
+          <button className="miniButton" type="button" onClick={clearTemplateFilters}><X size={13} /> {t('templates.clear')}</button>
+          <button className="miniButton primaryMini" type="button" onClick={startCreateTemplate}><Plus size={13} /> {t('templates.new')}</button>
         </div>
       </section>
 
-      <section className="promptCategoryStrip" aria-label="提示词库分类">
-          {PROMPT_TEMPLATE_CATEGORIES.map((item) => {
+      <section className="promptCategoryStrip" aria-label={t('templates.categoryStripAria')}>
+          {translatedTemplateCategoryOptions.map((item) => {
             const count = item.value === 'all' ? templates.length : templates.filter((template) => template.category === item.value).length;
             return (
               <button className={category === item.value ? 'active' : ''} key={item.value} type="button" onClick={() => setCategory(item.value)}>
@@ -12562,14 +12675,14 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
       <section className="promptLibraryLayout">
         <section className="promptLibraryListPanel">
           <div className="promptLibraryListHeader">
-            <strong>{filteredTemplates.length} 个结果</strong>
-            <span>{sourceFilter === 'all' ? '全部来源' : templateSourceOptions.find((item) => item.value === sourceFilter)?.label}</span>
+            <strong>{t('templates.resultCount', { count: filteredTemplates.length })}</strong>
+            <span>{sourceFilter === 'all' ? t('templates.sourceFilter.all') : translatedTemplateSourceOptions.find((item) => item.value === sourceFilter)?.label}</span>
           </div>
           {filteredTemplates.length === 0 ? (
             <div className="emptyState templateEmpty">
               <Sparkles size={42} />
               <h3>没有符合条件的模板</h3>
-              <p>可以清空筛选，或新建一个自定义模板。</p>
+          <p>{t('templates.subtitle')}</p>
             </div>
           ) : (
             <div className={viewMode === 'list' ? 'promptTemplateList' : 'promptTemplateCards'}>
@@ -12584,22 +12697,22 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
                     <button
                       className={`iconMiniButton promptFavoriteButton ${template.favorite ? 'active' : ''}`}
                       type="button"
-                      title={template.favorite ? '取消收藏' : '收藏模板'}
-                      aria-label={template.favorite ? `取消收藏 ${template.title}` : `收藏 ${template.title}`}
+                      title={template.favorite ? t('templates.favoriteRemove') : t('templates.favoriteAdd')}
+                      aria-label={template.favorite ? t('templates.favoriteRemoveNamed', { title: template.title }) : t('templates.favoriteAddNamed', { title: template.title })}
                       onClick={(event) => { event.stopPropagation(); toggleTemplateFavorite(template); }}
                     >
                       <Star size={13} fill={template.favorite ? 'currentColor' : 'none'} />
                     </button>
                   </div>
                   <strong title={template.title}>{template.title}</strong>
-                  <small>{template.tone || '未填写调性'}</small>
+                  <small>{template.tone || t('templates.noTone')}</small>
                   <p>{template.description || template.prompt}</p>
                   <div className="templateTags">
                     {template.tags.slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}
                   </div>
                   <div className="promptTemplateMetaLine">
-                    <span>{template.custom ? '我的模板' : '系统模板'}</span>
-                    <span>{template.usedCount ? `使用 ${template.usedCount} 次` : '尚未使用'}</span>
+                    <span>{template.custom ? t('templates.kind.custom') : t('templates.kind.system')}</span>
+                    <span>{template.usedCount ? t('templates.usedCount', { count: template.usedCount }) : t('templates.notUsed')}</span>
                   </div>
                 </article>
               ))}
@@ -12610,27 +12723,27 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
 
       {detailOpen ? (
         <div className="templateDrawerBackdrop" onClick={() => { setDetailOpen(false); setEditingTemplateId(null); }}>
-        <aside className="promptTemplateDetail templateDetailDrawer" aria-label="提示词模板详情" onClick={(event) => event.stopPropagation()}>
+        <aside className="promptTemplateDetail templateDetailDrawer" aria-label={t('templates.detailAria')} onClick={(event) => event.stopPropagation()}>
           {editingTemplateId ? (
             <>
               <div className="panelTitleRow">
                 <div>
-                  <strong>{editingTemplateId === 'new' ? '新建模板' : '编辑模板'}</strong>
-                  <p>先做基础管理；导入 / 导出后续再接。</p>
+                  <strong>{editingTemplateId === 'new' ? t('templates.editorNew') : t('templates.editorEdit')}</strong>
+              <p>{t('templates.emptyHint')}</p>
                 </div>
-                <button className="iconMiniButton" type="button" onClick={() => { setDetailOpen(false); cancelEditTemplate(); }} title="关闭编辑" aria-label="关闭编辑"><X size={13} /></button>
+                <button className="iconMiniButton" type="button" onClick={() => { setDetailOpen(false); cancelEditTemplate(); }} title={t('templates.closeEditor')} aria-label={t('templates.closeEditor')}><X size={13} /></button>
               </div>
               <div className="promptTemplateEditor">
-                <label><span>标题</span><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="例如：赛博角色海报" /></label>
-                <label><span>分类</span><StudioSelect value={draft.category} onChange={(value) => setDraft({ ...draft, category: value as PromptTemplateCategory })} options={PROMPT_TEMPLATE_CATEGORIES.filter((item) => item.value !== 'all') as Array<{ value: PromptTemplateCategory; label: string }>} /></label>
-                <label><span>调性</span><input value={draft.tone} onChange={(event) => setDraft({ ...draft, tone: event.target.value })} placeholder="例如：电影感、高级、适合角色展示" /></label>
-                <label><span>说明</span><textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} rows={2} placeholder="这个模板最适合什么场景" /></label>
-                <label><span>标签</span><input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} placeholder="角色，海报，游戏" /></label>
-                <label><span>Prompt</span><textarea value={draft.prompt} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} rows={8} placeholder="支持自定义变量，例如：{产品}、{材质}、{背景}。详情页会自动生成变量预填。" /></label>
+                <label><span>{t('templates.fieldTitle')}</span><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder={t('templates.fieldTitlePlaceholder')} /></label>
+                <label><span>{t('templates.categoryLabel')}</span><StudioSelect value={draft.category} onChange={(value) => setDraft({ ...draft, category: value as PromptTemplateCategory })} options={translatedTemplateCategoryOptions.filter((item) => item.value !== 'all') as Array<{ value: PromptTemplateCategory; label: string }>} /></label>
+                <label><span>{t('templates.fieldTone')}</span><input value={draft.tone} onChange={(event) => setDraft({ ...draft, tone: event.target.value })} placeholder={t('templates.fieldTonePlaceholder')} /></label>
+                <label><span>{t('templates.fieldDescription')}</span><textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} rows={2} placeholder={t('templates.fieldDescriptionPlaceholder')} /></label>
+                <label><span>{t('templates.fieldTags')}</span><input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} placeholder={t('templates.fieldTagsPlaceholder')} /></label>
+                <label><span>Prompt</span><textarea value={draft.prompt} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} rows={8} placeholder={t('templates.fieldPromptPlaceholder')} /></label>
               </div>
               <div className="sourceEditorActions">
                 <button className="miniButton" type="button" onClick={() => { setDetailOpen(false); cancelEditTemplate(); }}><X size={13} /> 取消</button>
-                <button className="miniButton primaryMini" type="button" onClick={saveDraftTemplate}><Pencil size={13} /> 保存模板</button>
+                <button className="miniButton primaryMini" type="button" onClick={saveDraftTemplate}><Pencil size={13} /> {t('templates.save')}</button>
               </div>
             </>
           ) : selectedTemplate ? (
@@ -12645,20 +12758,20 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
                   <button
                     className={`iconMiniButton promptFavoriteButton ${selectedTemplate.favorite ? 'active' : ''}`}
                     type="button"
-                    title={selectedTemplate.favorite ? '取消收藏' : '收藏模板'}
-                    aria-label={selectedTemplate.favorite ? '取消收藏模板' : '收藏模板'}
+                    title={selectedTemplate.favorite ? t('templates.favoriteRemove') : t('templates.favoriteAdd')}
+                    aria-label={selectedTemplate.favorite ? t('templates.favoriteRemoveTemplate') : t('templates.favoriteAddTemplate')}
                     onClick={() => toggleTemplateFavorite(selectedTemplate)}
                   >
                     <Star size={14} fill={selectedTemplate.favorite ? 'currentColor' : 'none'} />
                   </button>
-                  <button className="iconMiniButton" type="button" onClick={() => setDetailOpen(false)} title="关闭详情" aria-label="关闭详情"><X size={13} /></button>
+                  <button className="iconMiniButton" type="button" onClick={() => setDetailOpen(false)} title={t('templates.closeDetails')} aria-label={t('templates.closeDetails')}><X size={13} /></button>
                 </div>
               </div>
 
               <div className="promptTemplateDetailMeta">
-                <span>{selectedTemplate.custom ? '我的模板' : '系统模板'}</span>
-                <span>{selectedTemplate.usedCount ? `使用 ${selectedTemplate.usedCount} 次` : '尚未使用'}</span>
-                <span>{selectedTemplate.lastUsedAt ? '最近已用' : '未进入最近使用'}</span>
+                <span>{selectedTemplate.custom ? t('templates.kind.custom') : t('templates.kind.system')}</span>
+                <span>{selectedTemplate.usedCount ? t('templates.usedCount', { count: selectedTemplate.usedCount }) : t('templates.notUsed')}</span>
+                <span>{selectedTemplate.lastUsedAt ? t('templates.recentUsed') : t('templates.notRecent')}</span>
               </div>
 
               <div className="promptTemplateVariables">
@@ -12688,17 +12801,17 @@ function PromptTemplatesPage(props: { onUseTemplate: (prompt: string) => void })
               </div>
 
               <div className="promptTemplateDetailActions">
-                <button className="miniButton primaryMini" type="button" onClick={() => useTemplate(selectedTemplate)}><Wand2 size={13} /> 套用到创作台</button>
-                <button className="miniButton" type="button" onClick={() => void copyTemplate(selectedTemplate)}><Copy size={13} /> 复制</button>
-                <button className="miniButton" type="button" onClick={() => startEditTemplate(selectedTemplate)}><Pencil size={13} /> {selectedTemplate.custom ? '编辑' : '另存'}</button>
+                <button className="miniButton primaryMini" type="button" onClick={() => useTemplate(selectedTemplate)}><Wand2 size={13} /> {t('templates.apply')}</button>
+                <button className="miniButton" type="button" onClick={() => void copyTemplate(selectedTemplate)}><Copy size={13} /> {t('templates.copy')}</button>
+                <button className="miniButton" type="button" onClick={() => startEditTemplate(selectedTemplate)}><Pencil size={13} /> {selectedTemplate.custom ? t('templates.edit') : t('templates.saveAs')}</button>
                 <button
                   className="miniButton dangerText"
                   type="button"
                   disabled={!selectedTemplate.custom}
-                  title={selectedTemplate.custom ? '删除模板' : '系统模板不可删除'}
+                  title={selectedTemplate.custom ? t('templates.deleteTitle') : t('templates.systemDeleteTitle')}
                   onClick={() => deleteTemplate(selectedTemplate)}
                 >
-                  <Trash2 size={13} /> 删除
+                  <Trash2 size={13} /> {t('templates.delete')}
                 </button>
               </div>
             </>
@@ -14106,9 +14219,4 @@ function PlaceholderPage(props: { title: string }) {
     </div>
   );
 }
-
-
-
-
-
 

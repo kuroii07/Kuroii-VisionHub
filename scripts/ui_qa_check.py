@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import re
 from pathlib import Path
@@ -9,6 +9,7 @@ CORE_FILES = [
     ROOT / "src/ui/GeneratePage.tsx",
     ROOT / "src/ui/InspirationPage.tsx",
     ROOT / "src/ui/styles.css",
+    ROOT / "src/i18n/index.ts",
 ]
 BUTTON_FILES = [
     ROOT / "src/ui/App.tsx",
@@ -31,7 +32,7 @@ def line_number(text: str, index: int) -> int:
 
 
 def assert_no_mojibake_or_placeholders() -> None:
-    suspicious = ["?" * 4, "\ufffd", "\u6d93", "\u9365", "\u675e", "\u9422", "?" * 5]
+    suspicious = ["?" * 3, "?" * 4, "\ufffd", "\u6d93", "\u9365", "\u675e", "\u9422", "?" * 5]
     for path in CORE_FILES:
         text = path.read_text(encoding="utf-8")
         for term in suspicious:
@@ -115,7 +116,7 @@ def assert_large_data_surface_guards() -> None:
 
 def assert_prompt_tool_settings_are_separated() -> None:
     app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
-    history_idx = app.find("提示词与历史")
+    history_idx = app.find("settings.promptHistory")
     tool_group_idx = app.find('className="settingsGroupCard promptToolsGroup"')
     polish_idx = app.find('prompt-polish-tool-title')
     reverse_idx = app.find('image-reverse-tool-title')
@@ -133,16 +134,75 @@ def assert_prompt_tool_settings_are_separated() -> None:
         fail("Prompt tool settings are not separated cleanly: " + ", ".join(missing))
 
 
+def assert_i18n_baseline() -> None:
+    app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
+    i18n = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8").lower()
+    checks = {
+        "i18n dictionary exists": "export const messages" in i18n and "zh-CN" in i18n and "en-US" in i18n,
+        "typed translator exists": "export type Translator" in i18n and "createTranslator" in i18n,
+        "app shell uses translator": "createTranslator(appSettings.language)" in app,
+        "navigation uses i18n keys": "t('nav.home')" in app and "t('nav.settings')" in app,
+        "workspace home uses translator prop": "function WorkspaceHomePage(props" in app and "t: Translator" in app and "props.t('home.title')" in app,
+        "settings entry uses translator prop": "function SettingsPage(props" in app and "props.t('settings.title')" in app,
+        "inspiration page receives translator": "<InspirationPage" in app and "t={props.t}" in app,
+        "inspiration source i18n migrated": "inspiration.source.searchLabel" in i18n and "inspiration.source.editorEditTitle" in i18n,
+        "inspiration asset i18n migrated": "inspiration.asset.searchLabel" in i18n and "inspiration.asset.reverseConfigNote" in i18n,
+        "user content translation boundary documented": "user prompts" in readme or "?? prompt" in readme,
+    }
+    missing = [name for name, ok in checks.items() if not ok]
+    if missing:
+        fail("Missing i18n baseline checks: " + ", ".join(missing))
+
+
+
+def assert_english_i18n_layout_guards() -> None:
+    css = (ROOT / "src/ui/styles.css").read_text(encoding="utf-8")
+    app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
+    i18n = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
+    required_css = [
+        '.appShell[data-language="en-US"] .workspaceGenerate',
+        '.appShell[data-language="en-US"] .workspaceGenerate .quickToolbar',
+        '.appShell[data-language="en-US"] .workspaceGenerate .promptActions',
+        '.appShell[data-language="en-US"] .workspaceGenerate .promptControlRow',
+        '.appShell[data-language="en-US"] .workspaceGenerate .promptActions .chipButton',
+        '.appShell[data-language="en-US"] .workspaceGenerate .studioSelectValue',
+        '[data-language="en-US"] .promptExcerptShell',
+        '[data-language="en-US"] .promptExcerptActions .miniButton',
+        'overflow-wrap: anywhere',
+        'text-overflow: ellipsis',
+        'word-break: break-word',
+    ]
+    missing_css = [token for token in required_css if token not in css]
+    if missing_css:
+        fail("Missing English i18n layout CSS guards: " + ", ".join(missing_css))
+    if 'data-language={appSettings.language}' not in app:
+        fail("App shell does not expose data-language for language-specific layout guards")
+    long_english_terms = [
+        "Redraw from reference",
+        "Multi-model compare",
+        "Open detailed polish window",
+        "Relay / aggregate API",
+        "Current model",
+        "Prompt excerpts",
+        "From clipboard",
+        "No prompt excerpts yet",
+    ]
+    missing_terms = [term for term in long_english_terms if term not in i18n]
+    if missing_terms:
+        fail("Missing long English i18n fixture terms: " + ", ".join(missing_terms))
+
+
 def assert_empty_and_error_states_exist() -> None:
     app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
     generate = (ROOT / "src/ui/GeneratePage.tsx").read_text(encoding="utf-8")
     inspiration = (ROOT / "src/ui/InspirationPage.tsx").read_text(encoding="utf-8")
     checks = {
         "library empty state": "libraryEmpty" in app and ("\\u8fd8\\u6ca1\\u6709\\u672c\\u5730\\u56fe\\u7247" in app or "\\u6ca1\\u6709\\u7b26\\u5408\\u6761\\u4ef6\\u7684\\u8bb0\\u5f55" in app),
-        "batch queue empty state": "\u8fd9\u4e2a\u961f\u5217\u8fd8\u6ca1\u6709\u4efb\u52a1" in app,
+        "batch queue empty state": "batch.emptyQueueTitle" in app and "batch.emptyTitle" in app,
         "provider profile empty state": "\u8fd8\u6ca1\u6709\u914d\u7f6e" in app,
         "generation failure diagnostics": "diagnoseGenerationFailure" in generate,
-        "inspiration empty state": "empty" in inspiration.lower() and ("\u6ca1\u6709" in inspiration or "\u6682\u65e0" in inspiration),
+        "inspiration empty state": "empty" in inspiration.lower() and ("inspiration.source.emptyTitle" in inspiration or "inspiration.asset.emptyTitle" in inspiration or "inspiration.excerpt.emptyTitle" in inspiration),
     }
     missing = [name for name, ok in checks.items() if not ok]
     if missing:
@@ -155,8 +215,10 @@ def main() -> None:
     assert_incremental_rendering_guards()
     assert_large_data_surface_guards()
     assert_prompt_tool_settings_are_separated()
+    assert_i18n_baseline()
+    assert_english_i18n_layout_guards()
     assert_empty_and_error_states_exist()
-    print("UI QA check passed: accessibility names, prompt-tool separation, long-text/large-data performance guards, empty/error states, and mojibake scan are OK.")
+    print("UI QA check passed: accessibility names, prompt-tool separation, i18n baseline, English layout guards, long-text/large-data performance guards, empty/error states, and mojibake scan are OK.")
 
 
 if __name__ == "__main__":

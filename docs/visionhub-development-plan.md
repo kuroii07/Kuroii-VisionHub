@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.4.5`
+- Current app version: `0.4.6`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.4.5` global experience and performance QA: UI QA baseline, accessibility names, long-text guards, empty/error states, and large-list performance guards without redesigning AI Create Desk.
+- Current focus: `0.4.6` Chinese / English internationalization V1: shared i18n dictionary, real language switching for the app shell, workspace home, and preference entry points; continue migrating major pages without changing AI Create Desk layout.
 
 ## 2. 后续开发前必读
 
@@ -902,4 +902,4 @@ Status 2026-07-02: first QA baseline plus prompt-tool settings consolidation imp
 
 ## 9. 下一步推荐
 
-Next formal development after the `0.4.5` first QA pass should either finish screenshot-based visual QA or move to `0.5.0` release-candidate preparation.
+Next formal development should continue `0.4.6` page-by-page i18n migration before moving to `0.5.0` release-candidate preparation.

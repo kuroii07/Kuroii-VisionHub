@@ -54,6 +54,7 @@ import { openExternalUrl } from '../services/desktopApi';
 import { defaultEndpointForProtocol, parseExtraHeaders } from '../services/providerConfig';
 import { IMAGE_PROMPT_REVERSE_SECRET_ID, type ImagePromptReverseSettings } from '../services/appSettings';
 import { StudioSelect } from './StudioSelect';
+import type { Translator } from '../i18n';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { useToastMessage } from './toast';
 
@@ -950,36 +951,60 @@ const assetViewOptions: Array<{ value: 'adaptive' | 'square' | 'contain' | 'list
   { value: 'list', label: '列表' }
 ];
 
-function excerptCategoryLabel(value: PromptExcerptCategory) {
-  return excerptCategoryOptions.find((option) => option.value === value)?.label ?? value;
+function i18nKey(key: string) {
+  return key as Parameters<Translator>[0];
 }
 
-function excerptLanguageLabel(value: PromptExcerptLanguage) {
-  return excerptLanguageOptions.find((option) => option.value === value)?.label ?? value;
+function optionLabel(prefix: string, value: string, fallback: string, t?: Translator) {
+  if (!t) return fallback;
+  const key = i18nKey(`${prefix}.${value}`);
+  const translated = t(key);
+  return translated === key ? fallback : translated;
 }
 
-function categoryLabel(value: InspirationSourceCategory) {
-  return sourceCategoryOptions.find((option) => option.value === value)?.label ?? value;
+function translateOptions<T extends string>(options: Array<{ value: T; label: string }>, prefix: string, t: Translator) {
+  return options.map((option) => ({ ...option, label: optionLabel(prefix, option.value, option.label, t) }));
 }
 
-function regionLabel(value: InspirationRegion) {
-  return regionOptions.find((option) => option.value === value)?.label ?? value;
+function excerptCategoryLabel(value: PromptExcerptCategory, t?: Translator) {
+  const fallback = excerptCategoryOptions.find((option) => option.value === value)?.label ?? value;
+  return optionLabel('inspiration.excerpt.category', value, fallback, t);
 }
 
-function sourceKindLabel(value?: InspirationSource['sourceKind']) {
-  return value === 'preset' ? '系统预设' : '我的自定义';
+function excerptLanguageLabel(value: PromptExcerptLanguage, t?: Translator) {
+  const fallback = excerptLanguageOptions.find((option) => option.value === value)?.label ?? value;
+  return optionLabel('inspiration.excerpt.language', value, fallback, t);
 }
 
-function commercialReferenceLabel(value: InspirationCommercialReference) {
-  return commercialReferenceOptions.find((option) => option.value === value)?.label ?? value;
+function categoryLabel(value: InspirationSourceCategory, t?: Translator) {
+  const fallback = sourceCategoryOptions.find((option) => option.value === value)?.label ?? value;
+  return optionLabel('inspiration.source.category', value, fallback, t);
 }
 
-function licenseLabel(value: InspirationLicenseStatus) {
-  return licenseOptions.find((option) => option.value === value)?.label ?? value;
+function regionLabel(value: InspirationRegion, t?: Translator) {
+  const fallback = regionOptions.find((option) => option.value === value)?.label ?? value;
+  return optionLabel('inspiration.source.region', value, fallback, t);
 }
 
-function getAssetColorLabel(color?: AssetColorFilter) {
-  return assetColorOptions.find((option) => option.value === color)?.label ?? '';
+function sourceKindLabel(value?: InspirationSource['sourceKind'], t?: Translator) {
+  const kind = value ?? 'custom';
+  const fallback = kind === 'preset' ? '系统预设' : '我的自定义';
+  return optionLabel('inspiration.source.kind', kind, fallback, t);
+}
+
+function commercialReferenceLabel(value: InspirationCommercialReference, t?: Translator) {
+  const fallback = commercialReferenceOptions.find((option) => option.value === value)?.label ?? value;
+  return optionLabel('inspiration.source.commercial', value, fallback, t);
+}
+
+function licenseLabel(value: InspirationLicenseStatus, t?: Translator) {
+  const fallback = licenseOptions.find((option) => option.value === value)?.label ?? value;
+  return optionLabel('inspiration.asset.license', value, fallback, t);
+}
+
+function getAssetColorLabel(color?: AssetColorFilter, t?: Translator) {
+  const fallback = assetColorOptions.find((option) => option.value === color)?.label ?? '';
+  return color ? optionLabel('inspiration.asset.color', color, fallback, t) : fallback;
 }
 
 function parseTags(value: string) {
@@ -994,10 +1019,10 @@ function tagsToText(tags?: string[]) {
   return (tags ?? []).join('，');
 }
 
-function formatSourceTime(value?: string) {
-  if (!value || value === SOURCE_PRESET_TIMESTAMP) return '未打开';
+function formatSourceTime(value?: string, t?: Translator) {
+  if (!value || value === SOURCE_PRESET_TIMESTAMP) return t ? t('inspiration.source.notOpened') : '未打开';
   const date = new Date(Number(value));
-  if (Number.isNaN(date.getTime())) return '未打开';
+  if (Number.isNaN(date.getTime())) return t ? t('inspiration.source.notOpened') : '未打开';
   return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 }
 
@@ -1290,6 +1315,7 @@ function reverseSettingLabel(value: string, fallback: string) {
 }
 
 export const InspirationPage = memo(function InspirationPage(props: {
+  t: Translator;
   onPreview: (imageUrl: string, navigation?: ImagePreviewNavigation) => void;
   onUseAsReference: (asset: InspirationAsset) => void;
   onUsePrompt: (prompt: string) => void;
@@ -1300,6 +1326,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
   onOpenSettings: () => void;
   importVersion?: number;
 }) {
+  const t = props.t;
   const [activeTab, setActiveTab] = useState<InspirationTab>('sources');
   const [isAssetTabMounted, setIsAssetTabMounted] = useState(false);
   const [sources, setSources] = useState<InspirationSource[]>([]);
@@ -1730,18 +1757,18 @@ export const InspirationPage = memo(function InspirationPage(props: {
   const sourceNavItems = useMemo(() => {
     const count = (predicate: (source: InspirationSource) => boolean) => allSources.filter(predicate).length;
     return [
-      { value: 'all' as SourceNavFilter, label: '全部网站', count: allSources.length },
-      { value: 'preset' as SourceNavFilter, label: '系统预设', count: count((source) => source.sourceKind === 'preset') },
-      { value: 'custom' as SourceNavFilter, label: '我的自定义', count: count((source) => (source.sourceKind ?? 'custom') === 'custom') },
-      { value: 'prompt-template' as SourceNavFilter, label: '提示词', count: count((source) => source.category === 'prompt-template') },
-      { value: 'model-community' as SourceNavFilter, label: '模型社区', count: count((source) => source.category === 'model-community') },
-      { value: 'image-gallery' as SourceNavFilter, label: '图片灵感', count: count((source) => source.category === 'image-gallery') },
-      { value: 'commercial-design' as SourceNavFilter, label: '商业设计', count: count((source) => source.category === 'commercial-design') },
-      { value: 'style-reference' as SourceNavFilter, label: '风格/素材', count: count((source) => source.category === 'style-reference') },
-      { value: 'china' as SourceNavFilter, label: '国内', count: count((source) => source.region === 'china') },
-      { value: 'global' as SourceNavFilter, label: '海外', count: count((source) => source.region === 'global') }
+      { value: 'all' as SourceNavFilter, label: t('inspiration.source.nav.all'), count: allSources.length },
+      { value: 'preset' as SourceNavFilter, label: t('inspiration.source.nav.preset'), count: count((source) => source.sourceKind === 'preset') },
+      { value: 'custom' as SourceNavFilter, label: t('inspiration.source.nav.custom'), count: count((source) => (source.sourceKind ?? 'custom') === 'custom') },
+      { value: 'prompt-template' as SourceNavFilter, label: t('inspiration.source.nav.prompt-template'), count: count((source) => source.category === 'prompt-template') },
+      { value: 'model-community' as SourceNavFilter, label: t('inspiration.source.nav.model-community'), count: count((source) => source.category === 'model-community') },
+      { value: 'image-gallery' as SourceNavFilter, label: t('inspiration.source.nav.image-gallery'), count: count((source) => source.category === 'image-gallery') },
+      { value: 'commercial-design' as SourceNavFilter, label: t('inspiration.source.nav.commercial-design'), count: count((source) => source.category === 'commercial-design') },
+      { value: 'style-reference' as SourceNavFilter, label: t('inspiration.source.nav.style-reference'), count: count((source) => source.category === 'style-reference') },
+      { value: 'china' as SourceNavFilter, label: t('inspiration.source.nav.china'), count: count((source) => source.region === 'china') },
+      { value: 'global' as SourceNavFilter, label: t('inspiration.source.nav.global'), count: count((source) => source.region === 'global') }
     ];
-  }, [allSources]);
+  }, [allSources, t]);
   const activeSourceFilterCount = [
     sourceCategory !== 'all',
     sourceRegion !== 'all',
@@ -1756,6 +1783,25 @@ export const InspirationPage = memo(function InspirationPage(props: {
     excerptSourceFilter !== 'all',
     excerptFavoriteFilter !== 'all'
   ].filter(Boolean).length;
+  const translatedExcerptCategoryOptions = useMemo(() => translateOptions(excerptCategoryOptions, 'inspiration.excerpt.category', t), [t]);
+  const translatedExcerptLanguageOptions = useMemo(() => translateOptions(excerptLanguageOptions, 'inspiration.excerpt.language', t), [t]);
+  const translatedExcerptSourceOptions = useMemo(() => translateOptions(excerptSourceOptions, 'inspiration.excerpt.sourceFilter', t), [t]);
+  const translatedExcerptFavoriteOptions = useMemo(() => translateOptions(excerptFavoriteOptions, 'inspiration.excerpt.favoriteFilter', t), [t]);
+  const translatedSourceCategoryOptions = useMemo(() => translateOptions(sourceCategoryOptions, 'inspiration.source.category', t), [t]);
+  const translatedRegionOptions = useMemo(() => translateOptions(regionOptions, 'inspiration.source.region', t), [t]);
+  const translatedSourceKindOptions = useMemo(() => translateOptions(sourceKindOptions, 'inspiration.source.kind', t), [t]);
+  const translatedSourceLoginOptions = useMemo(() => translateOptions(sourceLoginOptions, 'inspiration.source.loginFilter', t), [t]);
+  const translatedSourceCommercialOptions = useMemo(() => translateOptions(sourceCommercialOptions, 'inspiration.source.commercial', t), [t]);
+  const translatedCommercialReferenceOptions = useMemo(() => translateOptions(commercialReferenceOptions, 'inspiration.source.commercial', t), [t]);
+  const translatedLicenseOptions = useMemo(() => translateOptions(licenseOptions, 'inspiration.asset.license', t), [t]);
+  const translatedAssetSourceOptions = useMemo(() => translateOptions(assetSourceOptions, 'inspiration.asset.sourceFilter', t), [t]);
+  const translatedAssetPromptOptions = useMemo(() => translateOptions(assetPromptOptions, 'inspiration.asset.promptFilter', t), [t]);
+  const translatedAssetShapeOptions = useMemo(() => translateOptions(assetShapeOptions, 'inspiration.asset.shape', t), [t]);
+  const translatedAssetFormatOptions = useMemo(() => translateOptions(assetFormatOptions, 'inspiration.asset.format', t), [t]);
+  const translatedAssetRatingOptions = useMemo(() => translateOptions(assetRatingOptions, 'inspiration.asset.rating', t), [t]);
+  const translatedAssetRatingEditOptions = useMemo(() => translateOptions(assetRatingEditOptions, 'inspiration.asset.rating', t), [t]);
+  const translatedAssetColorOptions = useMemo(() => assetColorOptions.map((option) => ({ ...option, label: optionLabel('inspiration.asset.color', option.value, option.label, t) })), [t]);
+  const translatedAssetViewOptions = useMemo(() => translateOptions(assetViewOptions, 'inspiration.asset.view', t), [t]);
   const activeAssetFilterCount = [
     assetSourceFilter !== 'all',
     assetLicense !== 'all',
@@ -1829,7 +1875,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
 
   function buildExcerptTitle(prompt: string) {
     const compact = prompt.replace(/\s+/g, ' ').trim();
-    return compact.slice(0, 32) || '未命名摘录';
+    return compact.slice(0, 32) || t('inspiration.excerpt.untitled');
   }
 
   function openExcerptEditor(excerpt?: PromptExcerpt, seed?: Partial<typeof emptyExcerptDraft>) {
@@ -1872,7 +1918,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
     try {
       const prompt = (await navigator.clipboard?.readText())?.trim() ?? '';
       if (!prompt) {
-        setMessage('剪贴板里没有可保存的文本 Prompt。');
+        setMessage(t('inspiration.excerpt.clipboardEmpty'));
         return;
       }
       openExcerptEditor(undefined, {
@@ -1882,7 +1928,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
         sourceUrl: recentPromptSource?.url ?? '',
         tags: recentPromptSource ? tagsToText(recentPromptSource.tags.slice(0, 4)) : ''
       });
-      setMessage('已从剪贴板读取 Prompt，可确认后保存为摘录。');
+      setMessage(t('inspiration.excerpt.clipboardLoaded'));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
@@ -1891,7 +1937,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
   async function submitExcerpt() {
     const prompt = excerptDraft.prompt.trim();
     if (!prompt) {
-      setMessage('请填写要保存的 Prompt 摘录。');
+      setMessage(t('inspiration.excerpt.needPrompt'));
       return;
     }
     try {
@@ -1916,7 +1962,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
       setExcerpts((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
       setExcerptsLoaded(true);
       resetExcerptDraft();
-      setMessage('Prompt 摘录已保存。');
+      setMessage(t('inspiration.excerpt.saved'));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
@@ -1924,16 +1970,16 @@ export const InspirationPage = memo(function InspirationPage(props: {
 
   async function removeExcerpt(excerptId: string) {
     props.onRequestConfirm({
-      title: '删除 Prompt 摘录',
-      message: '确定删除这条 Prompt 摘录吗？这只会删除摘录记录，不影响模板、作品和图片收藏。',
-      confirmLabel: '删除',
+      title: t('inspiration.excerpt.deleteTitle'),
+      message: t('inspiration.excerpt.deleteMessage'),
+      confirmLabel: t('inspiration.excerpt.deleteConfirm'),
       tone: 'danger',
       onConfirm: async () => {
         try {
           await deletePromptExcerpt(excerptId);
           setExcerpts((current) => current.filter((item) => item.id !== excerptId));
           if (excerptDraft.id === excerptId) resetExcerptDraft();
-          setMessage('Prompt 摘录已删除。');
+          setMessage(t('inspiration.excerpt.deleted'));
         } catch (error) {
           setMessage(error instanceof Error ? error.message : String(error));
           throw error;
@@ -1959,7 +2005,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
   }
 
   async function copyExcerpt(excerpt: PromptExcerpt) {
-    await copyText('Prompt 摘录', excerpt.prompt);
+    await copyText(t('inspiration.excerpt.copyName'), excerpt.prompt);
     void markExcerptUsed(excerpt);
   }
 
@@ -2053,7 +2099,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
     const name = sourceDraft.name.trim();
     const url = sourceDraft.url.trim();
     if (!name || !url) {
-      setMessage('请填写网站名称和 URL。');
+      setMessage(t('inspiration.source.needNameUrl'));
       return;
     }
     try {
@@ -2082,7 +2128,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
       });
       setSources((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
       resetSourceDraft();
-      setMessage('灵感网站已保存。');
+      setMessage(t('inspiration.source.saved'));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
@@ -2120,7 +2166,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
     if (!value) return;
     try {
       await navigator.clipboard?.writeText(value);
-      setMessage(`${label} 已复制。`);
+      setMessage(t('inspiration.common.copied', { label }));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
@@ -2133,15 +2179,15 @@ export const InspirationPage = memo(function InspirationPage(props: {
 
   async function removeSource(sourceId: string) {
     props.onRequestConfirm({
-      title: '删除灵感网站',
-      message: '确定删除这个灵感网站吗？删除后它会从灵感中心的网站列表中移除。',
-      confirmLabel: '删除',
+      title: t('inspiration.source.deleteTitle'),
+      message: t('inspiration.source.deleteMessage'),
+      confirmLabel: t('inspiration.source.deleteConfirm'),
       tone: 'danger',
       onConfirm: async () => {
         try {
           await deleteInspirationSource(sourceId);
           setSources((current) => current.filter((source) => source.id !== sourceId));
-          setMessage('灵感网站已删除。');
+          setMessage(t('inspiration.source.deleted'));
         } catch (error) {
           setMessage(error instanceof Error ? error.message : String(error));
           throw error;
@@ -2174,7 +2220,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
       setAssetDraft(emptyAssetDraft);
       setAssetFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
-      setMessage('灵感图片已导入。');
+      setMessage(t('inspiration.asset.imported'));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2184,7 +2230,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
 
   async function importAsset() {
     if (!assetFile) {
-      setMessage('请先选择、拖入或粘贴一张图片。');
+      setMessage(t('inspiration.asset.needImage'));
       return;
     }
     await importAssetFile(assetFile, assetDraft);
@@ -2202,7 +2248,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
     event.preventDefault();
     const file = firstImageFile(event.dataTransfer.files);
     if (!file) {
-      setMessage('只支持拖入图片文件。');
+      setMessage(t('inspiration.asset.onlyImageDrop'));
       return;
     }
     void importAssetFile(file);
@@ -2254,7 +2300,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
       });
       setAssets((current) => current.map((asset) => (asset.id === saved.id ? saved : asset)));
       cancelAssetEdit();
-      setMessage('灵感图片信息已更新。');
+      setMessage(t('inspiration.asset.updated'));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
@@ -2262,9 +2308,9 @@ export const InspirationPage = memo(function InspirationPage(props: {
 
   async function removeAsset(assetId: string) {
     props.onRequestConfirm({
-      title: '删除灵感收藏',
-      message: '确定删除这条灵感收藏吗？这只会删除 VisionHub 记录，不会删除已导入的图片文件。',
-      confirmLabel: '删除',
+      title: t('inspiration.asset.deleteTitle'),
+      message: t('inspiration.asset.deleteMessage'),
+      confirmLabel: t('inspiration.asset.deleteConfirm'),
       tone: 'danger',
       onConfirm: async () => {
         try {
@@ -2272,7 +2318,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
           setAssets((current) => current.filter((asset) => asset.id !== assetId));
           if (editingAssetId === assetId) cancelAssetEdit();
           if (selectedAssetId === assetId) setSelectedAssetId(null);
-          setMessage('灵感收藏已删除。');
+          setMessage(t('inspiration.asset.deleted'));
         } catch (error) {
           setMessage(error instanceof Error ? error.message : String(error));
           throw error;
@@ -2287,7 +2333,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
       .map((asset) => assetPrompt(asset))
       .filter(Boolean);
     if (prompts.length === 0) {
-      setMessage('所选图片没有可复制的 Prompt。');
+      setMessage(t('inspiration.asset.noPromptToCopy'));
       return;
     }
     await copyText('所选 Prompt', prompts.join('\n\n---\n\n'));
@@ -2297,9 +2343,9 @@ export const InspirationPage = memo(function InspirationPage(props: {
     if (selectedAssetIds.length === 0) return;
     const selectedCount = selectedAssetIds.length;
     props.onRequestConfirm({
-      title: '批量删除灵感收藏',
-      message: `确定删除 ${selectedCount} 条灵感收藏记录吗？这只会删除 VisionHub 记录，不会删除已导入的图片文件。`,
-      confirmLabel: '删除记录',
+      title: t('inspiration.asset.bulkDeleteTitle'),
+      message: t('inspiration.asset.bulkDeleteMessage', { count: selectedCount }),
+      confirmLabel: t('inspiration.asset.deleteRecordsConfirm'),
       tone: 'danger',
       onConfirm: async () => {
         try {
@@ -2309,7 +2355,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
           setAssets((current) => current.filter((asset) => !selectedAssetIds.includes(asset.id)));
           if (selectedAssetId && selectedAssetIds.includes(selectedAssetId)) setSelectedAssetId(null);
           clearAssetSelection();
-          setMessage(`已删除 ${selectedCount} 条灵感收藏记录。`);
+          setMessage(t('inspiration.asset.bulkDeleted', { count: selectedCount }));
         } catch (error) {
           setMessage(error instanceof Error ? error.message : String(error));
           throw error;
@@ -2325,7 +2371,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
   function createTemplate(asset: InspirationAsset) {
     const prompt = assetPrompt(asset);
     if (!prompt) {
-      setMessage('这张灵感图还没有 Prompt，先补充 Prompt 后再转模板。');
+      setMessage(t('inspiration.asset.noPromptForTemplate'));
       return;
     }
     const result = props.onCreateTemplate(asset.title, prompt, asset.tags);
@@ -2338,7 +2384,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
   function createExcerptFromAsset(asset: InspirationAsset) {
     const prompt = assetPrompt(asset);
     if (!prompt) {
-      setMessage('这张灵感图还没有 Prompt，先补充或反推 Prompt 后再保存摘录。');
+      setMessage(t('inspiration.asset.noPromptForExcerpt'));
       return;
     }
     openExcerptEditor(undefined, {
@@ -2347,7 +2393,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
       sourceName: asset.sourcePlatform || asset.author || '',
       sourceUrl: asset.sourceUrl || '',
       tags: tagsToText(asset.tags),
-      note: asset.inferredPrompt ? '来自灵感图片反推 Prompt。' : '来自灵感图片原始 Prompt。'
+      note: asset.inferredPrompt ? t('inspiration.excerpt.noteFromInferred') : t('inspiration.excerpt.noteFromOriginal')
     });
   }
 
@@ -2409,7 +2455,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
     const fromName = source.name.trim().replace(/[^\p{L}\p{N}]/gu, '').slice(0, 1);
     if (fromName) return fromName.toUpperCase();
     const fromDomain = sourceDomain(source.url).replace(/^www\./, '').split(/[.-]/).find(Boolean)?.slice(0, 1);
-    return (fromDomain || '站').toUpperCase();
+    return (fromDomain || t('inspiration.asset.siteFallback')).toUpperCase();
   }
 
   function renderSourceLogo(source: InspirationSource) {
@@ -2458,11 +2504,11 @@ export const InspirationPage = memo(function InspirationPage(props: {
     const files = event.target.files;
     if (!files || files.length === 0) return;
     const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'));
-    if (imageFiles.length === 0) { setMessage('所选文件夹中没有支持的图片文件。'); return; }
+    if (imageFiles.length === 0) { setMessage(t('inspiration.asset.noSupportedImages')); return; }
     setIsImporting(true);
     let count = 0;
     const importNext = async (index: number) => {
-      if (index >= imageFiles.length) { setIsImporting(false); setMessage(`已导入 ${count} 张图片。`); return; }
+      if (index >= imageFiles.length) { setIsImporting(false); setMessage(t('inspiration.asset.folderImported', { count })); return; }
       const file = imageFiles[index];
       try {
         const dataUrl = await fileToDataUrl(file);
@@ -2479,26 +2525,26 @@ export const InspirationPage = memo(function InspirationPage(props: {
   }
 
   async function reversePromptForAsset(asset: InspirationAsset) {
-    if (!asset.imageUrl && !asset.imagePath) { setMessage('该图片暂不支持反推 Prompt。'); return; }
+    if (!asset.imageUrl && !asset.imagePath) { setMessage(t('inspiration.asset.reverseUnsupported')); return; }
     const settings = props.imagePromptReverse;
     if (!settings.baseUrl.trim() || !settings.modelId.trim()) {
-      setMessage('请先到「偏好设置」配置图片反推 Prompt 的 Base URL 和模型 ID。');
+      setMessage(t('inspiration.asset.reverseNeedConfig'));
       return;
     }
     if (!props.imagePromptReverseSecretAvailable) {
-      setMessage('请先到「偏好设置」保存图片反推专用 API Key。');
+      setMessage(t('inspiration.asset.reverseNeedKey'));
       return;
     }
     let extraHeaders: Record<string, string> = {};
     try {
       extraHeaders = parseExtraHeaders(settings.extraHeadersJson || '{}');
     } catch (error) {
-      setMessage(`图片反推配置的额外 Headers JSON 无法解析：${error instanceof Error ? error.message : String(error)}`);
+      setMessage(t('inspiration.asset.reverseHeadersInvalid', { message: error instanceof Error ? error.message : String(error) }));
       return;
     }
     const protocol = settings.protocol;
     const endpointPath = endpointForImageReverseProtocol(protocol);
-    setReversePromptStatus({ assetId: asset.id, message: '正在调用视觉模型反推 Prompt…' });
+    setReversePromptStatus({ assetId: asset.id, message: t('inspiration.asset.reversingStatus') });
     setReversePromptError('');
     try {
       const result = await reverseImagePrompt({
@@ -2531,11 +2577,11 @@ export const InspirationPage = memo(function InspirationPage(props: {
       });
       setAssets((current) => current.map((item) => (item.id === saved.id ? saved : item)));
       setSelectedAssetId(saved.id);
-      setMessage('图片反推 Prompt 已完成并保存。');
+      setMessage(t('inspiration.asset.reverseDone'));
     } catch (error) {
       const errorText = error instanceof Error ? error.message : String(error);
       setReversePromptError(errorText);
-      setMessage(errorText);
+      setMessage(t('inspiration.asset.reverseDone'));
     } finally {
       setReversePromptStatus(null);
     }
@@ -2561,7 +2607,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
   async function copyContextAssetPrompts(targetAssets: InspirationAsset[]) {
     const prompts = targetAssets.map(assetPrompt).filter(Boolean);
     if (prompts.length === 0) {
-      setMessage('所选图片没有可复制的 Prompt。');
+      setMessage(t('inspiration.asset.noPromptToCopy'));
       setAssetMenuTarget(null);
       return;
     }
@@ -2572,7 +2618,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
   async function copyContextAssetPaths(targetAssets: InspirationAsset[]) {
     const paths = targetAssets.map((asset) => asset.imagePath || asset.imageUrl || '').filter(Boolean);
     if (paths.length === 0) {
-      setMessage('所选图片没有可复制的路径。');
+      setMessage(t('inspiration.asset.noPathToCopy'));
       setAssetMenuTarget(null);
       return;
     }
@@ -2589,9 +2635,9 @@ export const InspirationPage = memo(function InspirationPage(props: {
       return;
     }
     props.onRequestConfirm({
-      title: '批量删除灵感收藏',
-      message: `确定删除 ${targetIds.length} 条灵感收藏记录吗？这只会删除 VisionHub 记录，不会删除已导入的图片文件。`,
-      confirmLabel: '删除记录',
+      title: t('inspiration.asset.bulkDeleteTitle'),
+      message: t('inspiration.asset.bulkDeleteMessage', { count: targetIds.length }),
+      confirmLabel: t('inspiration.asset.deleteRecordsConfirm'),
       tone: 'danger',
       onConfirm: async () => {
         try {
@@ -2601,7 +2647,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
           setAssets((current) => current.filter((asset) => !targetIds.includes(asset.id)));
           if (selectedAssetId && targetIds.includes(selectedAssetId)) setSelectedAssetId(null);
           setSelectedAssetIds((current) => current.filter((assetId) => !targetIds.includes(assetId)));
-          setMessage(`已删除 ${targetIds.length} 条灵感收藏记录。`);
+          setMessage(t('inspiration.asset.bulkDeleted', { count: targetIds.length }));
         } catch (error) {
           setMessage(error instanceof Error ? error.message : String(error));
           throw error;
@@ -2617,7 +2663,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
   }
 
   function assetSourceText(asset: InspirationAsset) {
-    return extractAssetDomain(asset) || asset.author || '未记录来源';
+    return extractAssetDomain(asset) || asset.author || t('inspiration.common.noSource');
   }
 
   return (
@@ -2625,25 +2671,25 @@ export const InspirationPage = memo(function InspirationPage(props: {
       <header className="topbar inspirationTopbar">
         <div className="pageTitleBlock">
           <p className="eyebrow">Inspiration Center</p>
-          <h1>灵感中心</h1>
-          <p>管理提示词网站、参考来源和优秀 AI 图片收藏。</p>
+          <h1>{t('inspiration.title')}</h1>
+          <p>{t('inspiration.subtitle')}</p>
         </div>
         <div className="statusPills">
-          <span><Link2 size={15} /> {allSources.length} 个网站</span>
-          <span><Bookmark size={15} /> {assets.length} 张收藏</span>
-          <span><Sparkles size={15} /> 本地持久化</span>
+          <span><Link2 size={15} /> {t('inspiration.stats.sources', { count: allSources.length })}</span>
+          <span><Bookmark size={15} /> {t('inspiration.stats.assets', { count: assets.length })}</span>
+          <span><Sparkles size={15} /> {t('inspiration.stats.local')}</span>
         </div>
       </header>
 
-      <section className="inspirationTabs" aria-label="灵感中心分类">
+      <section className="inspirationTabs" aria-label={t('inspiration.tabsAria')}>
         <button className={activeTab === 'sources' ? 'active' : ''} onClick={() => { setAssetMenuTarget(null); setActiveTab('sources'); }}>
-          <Link2 size={15} /> 提示词网站
+          <Link2 size={15} /> {t('inspiration.tabs.sources')}
         </button>
         <button className={activeTab === 'assets' ? 'active' : ''} onClick={() => { resetSourceDraft(); setAssetMenuTarget(null); setActiveTab('assets'); }}>
-          <Bookmark size={15} /> 图片收藏
+          <Bookmark size={15} /> {t('inspiration.tabs.assets')}
         </button>
         <button className={activeTab === 'excerpts' ? 'active' : ''} onClick={() => { resetSourceDraft(); setAssetMenuTarget(null); setActiveTab('excerpts'); }}>
-          <Sparkles size={15} /> Prompt 摘录
+          <Sparkles size={15} /> {t('inspiration.tabs.excerpts')}
         </button>
       </section>
 
@@ -2651,72 +2697,72 @@ export const InspirationPage = memo(function InspirationPage(props: {
       <section className={`promptExcerptShell ${activeTab === 'excerpts' ? 'active' : 'inactive'}`} aria-hidden={activeTab !== 'excerpts'}>
         <div className="inspirationGallerySearchPanel sourceSearchPanel promptExcerptToolbar">
           <label className="librarySearchBox">
-            <span>搜索摘录</span>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="标题 / Prompt / 来源 / 标签 / 备注" />
+            <span>{t('inspiration.excerpt.searchLabel')}</span>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('inspiration.excerpt.searchPlaceholder')} />
           </label>
           <div className="sourceSearchActions">
             <div className="sourceSearchCountLine">
-              <span className="assetCount">{filteredExcerpts.length} / {excerpts.length} 条摘录</span>
-              {activeExcerptFilterCount > 0 ? <span className="selectionCount">筛选 {activeExcerptFilterCount} 项</span> : null}
+              <span className="assetCount">{t('inspiration.excerpt.count', { shown: filteredExcerpts.length, total: excerpts.length })}</span>
+              {activeExcerptFilterCount > 0 ? <span className="selectionCount">{t('inspiration.excerpt.activeFilters', { count: activeExcerptFilterCount })}</span> : null}
             </div>
             <div className="sourceSearchActionRow">
-              <button className="miniButton" type="button" onClick={() => openExcerptEditor()} title="手动新建 Prompt 摘录"><Plus size={13} /> 手动摘录</button>
-              <button className="miniButton primaryMini" type="button" onClick={() => void createExcerptFromClipboard()} title="从剪贴板读取文本并保存摘录"><Copy size={13} /> 从剪贴板摘录</button>
+              <button className="miniButton" type="button" onClick={() => openExcerptEditor()} title={t('inspiration.excerpt.manualTitle')}><Plus size={13} /> {t('inspiration.excerpt.manual')}</button>
+              <button className="miniButton primaryMini" type="button" onClick={() => void createExcerptFromClipboard()} title={t('inspiration.excerpt.clipboardTitle')}><Copy size={13} /> {t('inspiration.excerpt.clipboard')}</button>
             </div>
           </div>
         </div>
         <div className="inspirationGalleryFilterPanel sourceFilterPanel libraryStructuredFilters promptExcerptFilters">
-          <label><span>类型</span><StudioSelect className="libraryFilterSelect filterIconType" leadingIcon={<Database size={15} />} value={excerptCategory} onChange={(value) => setExcerptCategory(value as typeof excerptCategory)} options={excerptCategoryOptions} /></label>
-          <label><span>语言</span><StudioSelect className="libraryFilterSelect filterIconPlatform" leadingIcon={<Sparkles size={15} />} value={excerptLanguage} onChange={(value) => setExcerptLanguage(value as typeof excerptLanguage)} options={excerptLanguageOptions} /></label>
-          <label><span>来源</span><StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Link2 size={15} />} value={excerptSourceFilter} onChange={(value) => setExcerptSourceFilter(value as ExcerptSourceFilter)} options={excerptSourceOptions} /></label>
-          <label><span>常用</span><StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Star size={15} />} value={excerptFavoriteFilter} onChange={(value) => setExcerptFavoriteFilter(value as ExcerptFavoriteFilter)} options={excerptFavoriteOptions} /></label>
-          <button className="miniButton" type="button" title="清空 Prompt 摘录筛选" onClick={clearExcerptFilters}><X size={13} /> 清空</button>
+          <label><span>{t('inspiration.excerpt.categoryLabel')}</span><StudioSelect className="libraryFilterSelect filterIconType" leadingIcon={<Database size={15} />} value={excerptCategory} onChange={(value) => setExcerptCategory(value as typeof excerptCategory)} options={translatedExcerptCategoryOptions} /></label>
+          <label><span>{t('inspiration.excerpt.languageLabel')}</span><StudioSelect className="libraryFilterSelect filterIconPlatform" leadingIcon={<Sparkles size={15} />} value={excerptLanguage} onChange={(value) => setExcerptLanguage(value as typeof excerptLanguage)} options={translatedExcerptLanguageOptions} /></label>
+          <label><span>{t('inspiration.excerpt.sourceLabel')}</span><StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Link2 size={15} />} value={excerptSourceFilter} onChange={(value) => setExcerptSourceFilter(value as ExcerptSourceFilter)} options={translatedExcerptSourceOptions} /></label>
+          <label><span>{t('inspiration.excerpt.favoriteLabel')}</span><StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Star size={15} />} value={excerptFavoriteFilter} onChange={(value) => setExcerptFavoriteFilter(value as ExcerptFavoriteFilter)} options={translatedExcerptFavoriteOptions} /></label>
+          <button className="miniButton" type="button" title={t('inspiration.excerpt.clearFiltersTitle')} onClick={clearExcerptFilters}><X size={13} /> {t('inspiration.excerpt.clear')}</button>
         </div>
         <section className={`promptExcerptLayout ${excerptEditorOpen ? 'withEditor' : ''}`}>
           <div className="promptExcerptList">
             {excerptsLoading ? (
-              <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>正在加载 Prompt 摘录</h3></div>
+              <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>{t('inspiration.excerpt.loading')}</h3></div>
             ) : filteredExcerpts.length === 0 ? (
-              <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>还没有 Prompt 摘录</h3><p>先在浏览器复制好的 Prompt，再点“从剪贴板摘录”；也可以手动新建。</p></div>
+              <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>{t('inspiration.excerpt.emptyTitle')}</h3><p>{t('inspiration.excerpt.emptyHint')}</p></div>
             ) : visibleExcerpts.map((excerpt) => (
               <article className="promptExcerptCard" key={excerpt.id}>
                 <div className="promptExcerptCardHeader">
-                  <div><span className="badge">{excerptCategoryLabel(excerpt.category)}</span><strong title={excerpt.title}>{excerpt.title}</strong></div>
-                  <button className={`iconMiniButton promptFavoriteButton ${excerpt.favorite ? 'active' : ''}`} type="button" onClick={() => void toggleExcerptFavorite(excerpt)} title={excerpt.favorite ? '取消常用' : '标记常用'} aria-label={excerpt.favorite ? '取消常用' : '标记常用'}><Star size={13} fill={excerpt.favorite ? 'currentColor' : 'none'} /></button>
+                  <div><span className="badge">{excerptCategoryLabel(excerpt.category, t)}</span><strong title={excerpt.title}>{excerpt.title}</strong></div>
+                  <button className={`iconMiniButton promptFavoriteButton ${excerpt.favorite ? 'active' : ''}`} type="button" onClick={() => void toggleExcerptFavorite(excerpt)} title={excerpt.favorite ? t('inspiration.excerpt.favoriteRemove') : t('inspiration.excerpt.favoriteAdd')} aria-label={excerpt.favorite ? t('inspiration.excerpt.favoriteRemove') : t('inspiration.excerpt.favoriteAdd')}><Star size={13} fill={excerpt.favorite ? 'currentColor' : 'none'} /></button>
                 </div>
                 <p className="promptExcerptText">{excerpt.prompt}</p>
                 <div className="templateTags promptExcerptTags">
                   {excerpt.tags.slice(0, 5).map((tag) => <span key={tag}>{tag}</span>)}
-                  <span>{excerptLanguageLabel(excerpt.language)}</span>
+                  <span>{excerptLanguageLabel(excerpt.language, t)}</span>
                 </div>
                 <div className="promptExcerptMeta">
-                  <span>{excerpt.sourceName || sourceDomain(excerpt.sourceUrl) || '未记录来源'}</span>
-                  <span>{excerpt.usedCount ? `使用 ${excerpt.usedCount} 次` : '尚未使用'}</span>
+                  <span>{excerpt.sourceName || sourceDomain(excerpt.sourceUrl) || t('inspiration.common.noSource')}</span>
+                  <span>{excerpt.usedCount ? t('inspiration.excerpt.usedCount', { count: excerpt.usedCount }) : t('inspiration.excerpt.notUsed')}</span>
                 </div>
                 <div className="promptExcerptActions">
-                  <button className="miniButton primaryMini" type="button" onClick={() => useExcerpt(excerpt)}><Sparkles size={13} /> 套用</button>
-                  <button className="miniButton" type="button" onClick={() => void copyExcerpt(excerpt)}><Copy size={13} /> 复制</button>
-                  <button className="miniButton" type="button" onClick={() => createTemplateFromExcerpt(excerpt)}><Bookmark size={13} /> 转模板</button>
-                  <button className="miniButton" type="button" onClick={() => openExcerptEditor(excerpt)}><Edit3 size={13} /> 编辑</button>
-                  <button className="miniButton dangerText" type="button" onClick={() => void removeExcerpt(excerpt.id)}><Trash2 size={13} /> 删除</button>
+                  <button className="miniButton primaryMini" type="button" onClick={() => useExcerpt(excerpt)}><Sparkles size={13} /> {t('inspiration.excerpt.apply')}</button>
+                  <button className="miniButton" type="button" onClick={() => void copyExcerpt(excerpt)}><Copy size={13} /> {t('inspiration.excerpt.copy')}</button>
+                  <button className="miniButton" type="button" onClick={() => createTemplateFromExcerpt(excerpt)}><Bookmark size={13} /> {t('inspiration.excerpt.toTemplate')}</button>
+                  <button className="miniButton" type="button" onClick={() => openExcerptEditor(excerpt)}><Edit3 size={13} /> {t('inspiration.excerpt.edit')}</button>
+                  <button className="miniButton dangerText" type="button" onClick={() => void removeExcerpt(excerpt.id)}><Trash2 size={13} /> {t('inspiration.excerpt.delete')}</button>
                 </div>
               </article>
             ))}
           </div>
           {excerptEditorOpen ? (
-            <aside className="sourceEditorDrawer promptExcerptEditor" aria-label={excerptDraft.id ? '编辑 Prompt 摘录' : '新增 Prompt 摘录'}>
-              <div className="panelTitleRow"><div><strong>{excerptDraft.id ? '编辑 Prompt 摘录' : '新增 Prompt 摘录'}</strong><p>默认不抓取浏览器内容，只保存你复制或手动整理的 Prompt。</p></div><button className="iconMiniButton" title="关闭摘录编辑" aria-label="关闭摘录编辑" onClick={resetExcerptDraft} type="button"><X size={13} /></button></div>
+            <aside className="sourceEditorDrawer promptExcerptEditor" aria-label={excerptDraft.id ? t('inspiration.excerpt.editorEdit') : t('inspiration.excerpt.editorNew')}>
+              <div className="panelTitleRow"><div><strong>{excerptDraft.id ? t('inspiration.excerpt.editorEdit') : t('inspiration.excerpt.editorNew')}</strong><p>{t('inspiration.excerpt.editorHint')}</p></div><button className="iconMiniButton" title={t('inspiration.excerpt.closeEditor')} aria-label={t('inspiration.excerpt.closeEditor')} onClick={resetExcerptDraft} type="button"><X size={13} /></button></div>
               <div className="sourceEditorForm">
-                <label><span>标题</span><input value={excerptDraft.title} onChange={(event) => setExcerptDraft({ ...excerptDraft, title: event.target.value })} placeholder="例如：赛博角色人像构图" /></label>
-                <label><span>Prompt</span><textarea value={excerptDraft.prompt} onChange={(event) => setExcerptDraft({ ...excerptDraft, prompt: event.target.value })} rows={8} placeholder="粘贴或整理你在外部网站看到的 Prompt" /></label>
-                <div className="inspirationFormGrid"><label><span>类型</span><StudioSelect value={excerptDraft.category} onChange={(value) => setExcerptDraft({ ...excerptDraft, category: value as PromptExcerptCategory })} options={excerptCategoryOptions.filter((option) => option.value !== 'all') as Array<{ value: PromptExcerptCategory; label: string }>} /></label><label><span>语言</span><StudioSelect value={excerptDraft.language} onChange={(value) => setExcerptDraft({ ...excerptDraft, language: value as PromptExcerptLanguage })} options={excerptLanguageOptions.filter((option) => option.value !== 'all') as Array<{ value: PromptExcerptLanguage; label: string }>} /></label></div>
-                <label><span>来源名称</span><input value={excerptDraft.sourceName} onChange={(event) => setExcerptDraft({ ...excerptDraft, sourceName: event.target.value })} placeholder="例如：PromptHero" /></label>
-                <label><span>来源 URL</span><input value={excerptDraft.sourceUrl} onChange={(event) => setExcerptDraft({ ...excerptDraft, sourceUrl: event.target.value })} placeholder="https://..." /></label>
-                <label><span>标签</span><input value={excerptDraft.tags} onChange={(event) => setExcerptDraft({ ...excerptDraft, tags: event.target.value })} placeholder="人像，赛博，镜头" /></label>
-                <label><span>备注</span><textarea value={excerptDraft.note} onChange={(event) => setExcerptDraft({ ...excerptDraft, note: event.target.value })} rows={3} placeholder="这条 Prompt 适合怎么用、需要改哪里" /></label>
-                <label className="inspirationCheck inspirationSwitchCheck"><input type="checkbox" checked={excerptDraft.favorite} onChange={(event) => setExcerptDraft({ ...excerptDraft, favorite: event.target.checked })} /><span>标记为常用</span></label>
+                <label><span>{t('inspiration.excerpt.fieldTitle')}</span><input value={excerptDraft.title} onChange={(event) => setExcerptDraft({ ...excerptDraft, title: event.target.value })} placeholder={t('inspiration.excerpt.fieldTitlePlaceholder')} /></label>
+                <label><span>Prompt</span><textarea value={excerptDraft.prompt} onChange={(event) => setExcerptDraft({ ...excerptDraft, prompt: event.target.value })} rows={8} placeholder={t('inspiration.excerpt.fieldPromptPlaceholder')} /></label>
+                <div className="inspirationFormGrid"><label><span>{t('inspiration.excerpt.categoryLabel')}</span><StudioSelect value={excerptDraft.category} onChange={(value) => setExcerptDraft({ ...excerptDraft, category: value as PromptExcerptCategory })} options={translatedExcerptCategoryOptions.filter((option) => option.value !== 'all') as Array<{ value: PromptExcerptCategory; label: string }>} /></label><label><span>{t('inspiration.excerpt.languageLabel')}</span><StudioSelect value={excerptDraft.language} onChange={(value) => setExcerptDraft({ ...excerptDraft, language: value as PromptExcerptLanguage })} options={translatedExcerptLanguageOptions.filter((option) => option.value !== 'all') as Array<{ value: PromptExcerptLanguage; label: string }>} /></label></div>
+                <label><span>{t('inspiration.excerpt.fieldSourceName')}</span><input value={excerptDraft.sourceName} onChange={(event) => setExcerptDraft({ ...excerptDraft, sourceName: event.target.value })} placeholder="PromptHero" /></label>
+                <label><span>{t('inspiration.excerpt.fieldSourceUrl')}</span><input value={excerptDraft.sourceUrl} onChange={(event) => setExcerptDraft({ ...excerptDraft, sourceUrl: event.target.value })} placeholder="https://..." /></label>
+                <label><span>{t('inspiration.excerpt.fieldTags')}</span><input value={excerptDraft.tags} onChange={(event) => setExcerptDraft({ ...excerptDraft, tags: event.target.value })} placeholder={t('inspiration.excerpt.fieldTagsPlaceholder')} /></label>
+                <label><span>{t('inspiration.excerpt.fieldNote')}</span><textarea value={excerptDraft.note} onChange={(event) => setExcerptDraft({ ...excerptDraft, note: event.target.value })} rows={3} placeholder={t('inspiration.excerpt.fieldNotePlaceholder')} /></label>
+                <label className="inspirationCheck inspirationSwitchCheck"><input type="checkbox" checked={excerptDraft.favorite} onChange={(event) => setExcerptDraft({ ...excerptDraft, favorite: event.target.checked })} /><span>{t('inspiration.excerpt.markFavorite')}</span></label>
               </div>
-              <div className="sourceEditorActions"><button className="miniButton" onClick={resetExcerptDraft} title="取消摘录" type="button"><X size={13} /> 取消</button><button className="miniButton primaryMini" onClick={() => void submitExcerpt()} title="保存摘录" type="button"><Save size={14} /> 保存摘录</button></div>
+              <div className="sourceEditorActions"><button className="miniButton" onClick={resetExcerptDraft} title={t('inspiration.excerpt.cancelTitle')} type="button"><X size={13} /> {t('inspiration.excerpt.cancel')}</button><button className="miniButton primaryMini" onClick={() => void submitExcerpt()} title={t('inspiration.excerpt.saveTitle')} type="button"><Save size={14} /> {t('inspiration.excerpt.save')}</button></div>
             </aside>
           ) : null}
         </section>
@@ -2725,25 +2771,25 @@ export const InspirationPage = memo(function InspirationPage(props: {
       <section className={`sourceLibraryShell ${activeTab === 'sources' ? 'active' : 'inactive'}`} aria-hidden={activeTab !== 'sources'}>
           <div className="inspirationGallerySearchPanel sourceSearchPanel">
             <label className="librarySearchBox">
-              <span>搜索网站</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名称 / 域名 / 标签 / 场景 / 关键词" />
+              <span>{t('inspiration.source.searchLabel')}</span>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('inspiration.source.searchPlaceholder')} />
             </label>
             <div className="sourceSearchActions">
               <div className="sourceSearchCountLine">
-                <span className="assetCount">{filteredSources.length} / {allSources.length} 个网站</span>
-                {activeSourceFilterCount > 0 ? <span className="selectionCount">筛选 {activeSourceFilterCount} 项</span> : null}
+                <span className="assetCount">{t('inspiration.source.count', { shown: filteredSources.length, total: allSources.length })}</span>
+                {activeSourceFilterCount > 0 ? <span className="selectionCount">{t('inspiration.source.activeFilters', { count: activeSourceFilterCount })}</span> : null}
               </div>
               <div className="sourceSearchActionRow">
-                <div className="segmentedControl compactSegment sourceViewSwitch" aria-label="提示词网站视图切换">
+                <div className="segmentedControl compactSegment sourceViewSwitch" aria-label={t('inspiration.source.viewSwitchAria')}>
                   <button className={sourceViewMode === 'card' ? 'active' : ''} onClick={() => setSourceViewMode('card')} type="button">
-                    <Grid2X2 size={13} /> 卡片
+                    <Grid2X2 size={13} /> {t('inspiration.source.viewCard')}
                   </button>
                   <button className={sourceViewMode === 'list' ? 'active' : ''} onClick={() => setSourceViewMode('list')} type="button">
-                    <List size={13} /> 列表
+                    <List size={13} /> {t('inspiration.source.viewList')}
                   </button>
                 </div>
-                <button className="miniButton primaryMini" onClick={() => openSourceEditor()} title="添加自定义网站" type="button">
-                  <Plus size={14} /> 添加网站
+                <button className="miniButton primaryMini" onClick={() => openSourceEditor()} title={t('inspiration.source.addTitle')} type="button">
+                  <Plus size={14} /> {t('inspiration.source.add')}
                 </button>
               </div>
             </div>
@@ -2751,38 +2797,38 @@ export const InspirationPage = memo(function InspirationPage(props: {
 
           <div className="inspirationGalleryFilterPanel sourceFilterPanel libraryStructuredFilters">
             <label>
-              <span>类型</span>
-              <StudioSelect className="libraryFilterSelect filterIconType" leadingIcon={<Database size={15} />} value={sourceCategory} onChange={(value) => setSourceCategory(value as typeof sourceCategory)} options={sourceCategoryOptions} />
+              <span>{t('inspiration.source.categoryLabel')}</span>
+              <StudioSelect className="libraryFilterSelect filterIconType" leadingIcon={<Database size={15} />} value={sourceCategory} onChange={(value) => setSourceCategory(value as typeof sourceCategory)} options={translatedSourceCategoryOptions} />
             </label>
             <label>
-              <span>地区</span>
-              <StudioSelect className="libraryFilterSelect filterIconPlatform" leadingIcon={<Link2 size={15} />} value={sourceRegion} onChange={(value) => setSourceRegion(value as typeof sourceRegion)} options={regionOptions} />
+              <span>{t('inspiration.source.regionLabel')}</span>
+              <StudioSelect className="libraryFilterSelect filterIconPlatform" leadingIcon={<Link2 size={15} />} value={sourceRegion} onChange={(value) => setSourceRegion(value as typeof sourceRegion)} options={translatedRegionOptions} />
             </label>
             <label>
-              <span>来源</span>
-              <StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Bookmark size={15} />} value={sourceKindFilter} onChange={(value) => setSourceKindFilter(value as SourceKindFilter)} options={sourceKindOptions} />
+              <span>{t('inspiration.source.kindLabel')}</span>
+              <StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Bookmark size={15} />} value={sourceKindFilter} onChange={(value) => setSourceKindFilter(value as SourceKindFilter)} options={translatedSourceKindOptions} />
             </label>
             <label>
-              <span>登录</span>
-              <StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<CheckSquare size={15} />} value={sourceLoginFilter} onChange={(value) => setSourceLoginFilter(value as SourceLoginFilter)} options={sourceLoginOptions} />
+              <span>{t('inspiration.source.loginLabel')}</span>
+              <StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<CheckSquare size={15} />} value={sourceLoginFilter} onChange={(value) => setSourceLoginFilter(value as SourceLoginFilter)} options={translatedSourceLoginOptions} />
             </label>
             <label>
-              <span>商用</span>
-              <StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Star size={15} />} value={sourceCommercialFilter} onChange={(value) => setSourceCommercialFilter(value as typeof sourceCommercialFilter)} options={sourceCommercialOptions} />
+              <span>{t('inspiration.source.commercialLabel')}</span>
+              <StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Star size={15} />} value={sourceCommercialFilter} onChange={(value) => setSourceCommercialFilter(value as typeof sourceCommercialFilter)} options={translatedSourceCommercialOptions} />
             </label>
-            <button className="miniButton" type="button" title="清空提示词网站筛选" onClick={clearSourceFilters}>
-              <X size={13} /> 清空
+            <button className="miniButton" type="button" title={t('inspiration.source.clearFiltersTitle')} onClick={clearSourceFilters}>
+              <X size={13} /> {t('inspiration.source.clear')}
             </button>
           </div>
 
           <section className="sourceLibraryLayout">
-            <aside className="sourceCategoryRail" aria-label="提示词网站分类">
+            <aside className="sourceCategoryRail" aria-label={t('inspiration.source.navAria')}>
               {sourceNavItems.map((item) => (
                 <button
                   className={sourceNavFilter === item.value ? 'active' : ''}
                   key={item.value}
                   onClick={() => setSourceNavFilter(item.value)}
-                  title={`查看${item.label}`}
+                  title={t('inspiration.source.navTitle', { label: item.label })}
                   type="button"
                 >
                   <span>{item.label}</span>
@@ -2794,19 +2840,19 @@ export const InspirationPage = memo(function InspirationPage(props: {
             <section className={`sourceTablePanel ${sourceViewMode === 'card' ? 'sourceCardPanel' : ''}`}>
               {sourceViewMode === 'list' ? (
                 <div className="sourceTableHeader">
-                  <span>网站</span>
-                  <span>分类</span>
-                  <span>说明</span>
-                  <span>状态</span>
-                  <span>最近</span>
-                  <span>操作</span>
+                  <span>{t('inspiration.source.table.site')}</span>
+                  <span>{t('inspiration.source.table.category')}</span>
+                  <span>{t('inspiration.source.table.notes')}</span>
+                  <span>{t('inspiration.source.table.status')}</span>
+                  <span>{t('inspiration.source.table.recent')}</span>
+                  <span>{t('inspiration.source.table.actions')}</span>
                 </div>
               ) : null}
 
               {!sourcesLoaded ? (
-                <div className="emptyState libraryEmpty sourceTableEmpty"><Sparkles size={42} /><h3>正在加载提示词网站</h3></div>
+                <div className="emptyState libraryEmpty sourceTableEmpty"><Sparkles size={42} /><h3>{t('inspiration.source.loading')}</h3></div>
               ) : filteredSources.length === 0 ? (
-                <div className="emptyState libraryEmpty sourceTableEmpty"><Link2 size={42} /><h3>没有匹配的网站</h3><p>可以清空筛选，或添加你自己的高价值网站。</p></div>
+                <div className="emptyState libraryEmpty sourceTableEmpty"><Link2 size={42} /><h3>{t('inspiration.source.emptyTitle')}</h3><p>{t('inspiration.source.emptyHint')}</p></div>
               ) : sourceViewMode === 'card' ? (
                 <div className="sourceCardGrid">
                   {filteredSources.map((source) => (
@@ -2819,25 +2865,25 @@ export const InspirationPage = memo(function InspirationPage(props: {
                         </div>
                       </div>
                       <div className="sourceCardMeta">
-                        <span>{categoryLabel(source.category)}</span>
-                        <span>{regionLabel(source.region)}</span>
-                        <span>{sourceKindLabel(source.sourceKind)}</span>
+                        <span>{categoryLabel(source.category, t)}</span>
+                        <span>{regionLabel(source.region, t)}</span>
+                        <span>{sourceKindLabel(source.sourceKind, t)}</span>
                       </div>
-                      <p title={source.note || source.sceneNotes}>{source.note || source.sceneNotes || '暂无说明'}</p>
+                      <p title={source.note || source.sceneNotes}>{source.note || source.sceneNotes || t('inspiration.source.noNotes')}</p>
                       <div className="sourceInlineTags">
                         {source.tags.slice(0, 4).map((tag) => <span key={tag}>{tag}</span>)}
                       </div>
                       <div className="sourceCardStatus">
-                        <span className={source.requiresLogin ? 'sourceBadge warning' : 'sourceBadge'}>{source.requiresLogin ? '需登录' : '免登录优先'}</span>
-                        <span className="sourceBadge">{commercialReferenceLabel(source.commercialReference)}</span>
-                        <span className="sourceBadge">打开 {source.openCount ?? 0}</span>
+                        <span className={source.requiresLogin ? 'sourceBadge warning' : 'sourceBadge'}>{source.requiresLogin ? t('inspiration.source.requiresLogin') : t('inspiration.source.noLoginPreferred')}</span>
+                        <span className="sourceBadge">{commercialReferenceLabel(source.commercialReference, t)}</span>
+                        <span className="sourceBadge">{t('inspiration.source.openCount', { count: source.openCount ?? 0 })}</span>
                       </div>
                       <div className="sourceRowActions">
-                        <button className="miniButton primaryMini" onClick={() => void openSource(source)} title={`打开 ${source.name}`} type="button"><ExternalLink size={13} /> 打开</button>
-                        <button className="miniButton" onClick={() => void copyText('URL', source.url)} title="复制网站链接" type="button"><Copy size={13} /> 复制</button>
-                        <button className="miniButton" onClick={() => editSource(source)} title={source.sourceKind === 'preset' ? '存为自定义网站' : '编辑网站'} type="button"><Edit3 size={13} /> {source.sourceKind === 'preset' ? '保存' : '编辑'}</button>
+                        <button className="miniButton primaryMini" onClick={() => void openSource(source)} title={t('inspiration.source.openTitle', { name: source.name })} type="button"><ExternalLink size={13} /> {t('inspiration.source.open')}</button>
+                        <button className="miniButton" onClick={() => void copyText('URL', source.url)} title={t('inspiration.source.copyUrlTitle')} type="button"><Copy size={13} /> {t('inspiration.source.copy')}</button>
+                        <button className="miniButton" onClick={() => editSource(source)} title={source.sourceKind === 'preset' ? t('inspiration.source.saveAsCustomTitle') : t('inspiration.source.editTitle')} type="button"><Edit3 size={13} /> {source.sourceKind === 'preset' ? t('inspiration.source.save') : t('inspiration.source.edit')}</button>
                         {source.sourceKind !== 'preset' ? (
-                          <button className="miniButton dangerText" onClick={() => void removeSource(source.id)} title="删除自定义网站" type="button"><Trash2 size={13} /> 删除</button>
+                          <button className="miniButton dangerText" onClick={() => void removeSource(source.id)} title={t('inspiration.source.deleteCustomTitle')} type="button"><Trash2 size={13} /> {t('inspiration.source.delete')}</button>
                         ) : null}
                       </div>
                     </article>
@@ -2853,30 +2899,30 @@ export const InspirationPage = memo(function InspirationPage(props: {
                     </div>
                   </div>
                   <div className="sourceMetaCell">
-                    <span>{categoryLabel(source.category)}</span>
-                    <small>{regionLabel(source.region)} · {sourceKindLabel(source.sourceKind)}</small>
+                    <span>{categoryLabel(source.category, t)}</span>
+                    <small>{regionLabel(source.region, t)} · {sourceKindLabel(source.sourceKind, t)}</small>
                   </div>
                   <div className="sourceNoteCell">
-                    <p title={source.note || source.sceneNotes}>{source.note || source.sceneNotes || '暂无说明'}</p>
+                    <p title={source.note || source.sceneNotes}>{source.note || source.sceneNotes || t('inspiration.source.noNotes')}</p>
                     <div className="sourceInlineTags">
                       {source.tags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
                       {(source.tags.length > 3 || (source.keywords?.length ?? 0) > 0) ? <span>+{Math.max(0, source.tags.length - 3) + (source.keywords?.length ?? 0)}</span> : null}
                     </div>
                   </div>
                   <div className="sourceStatusCell">
-                    <span className={source.requiresLogin ? 'sourceBadge warning' : 'sourceBadge'}>{source.requiresLogin ? '需登录' : '免登录优先'}</span>
-                    <span className="sourceBadge">{commercialReferenceLabel(source.commercialReference)}</span>
+                    <span className={source.requiresLogin ? 'sourceBadge warning' : 'sourceBadge'}>{source.requiresLogin ? t('inspiration.source.requiresLogin') : t('inspiration.source.noLoginPreferred')}</span>
+                    <span className="sourceBadge">{commercialReferenceLabel(source.commercialReference, t)}</span>
                   </div>
                   <div className="sourceRecentCell">
                     <strong>{source.openCount ?? 0}</strong>
-                    <small>{formatSourceTime(source.lastOpenedAt)}</small>
+                    <small>{formatSourceTime(source.lastOpenedAt, t)}</small>
                   </div>
                   <div className="sourceRowActions">
-                    <button className="miniButton primaryMini" onClick={() => void openSource(source)} title={`打开 ${source.name}`} type="button"><ExternalLink size={13} /> 打开</button>
-                    <button className="miniButton" onClick={() => void copyText('URL', source.url)} title="复制网站链接" type="button"><Copy size={13} /> 复制</button>
-                    <button className="miniButton" onClick={() => editSource(source)} title={source.sourceKind === 'preset' ? '存为自定义网站' : '编辑网站'} type="button"><Edit3 size={13} /> {source.sourceKind === 'preset' ? '保存' : '编辑'}</button>
+                    <button className="miniButton primaryMini" onClick={() => void openSource(source)} title={t('inspiration.source.openTitle', { name: source.name })} type="button"><ExternalLink size={13} /> {t('inspiration.source.open')}</button>
+                    <button className="miniButton" onClick={() => void copyText('URL', source.url)} title={t('inspiration.source.copyUrlTitle')} type="button"><Copy size={13} /> {t('inspiration.source.copy')}</button>
+                    <button className="miniButton" onClick={() => editSource(source)} title={source.sourceKind === 'preset' ? t('inspiration.source.saveAsCustomTitle') : t('inspiration.source.editTitle')} type="button"><Edit3 size={13} /> {source.sourceKind === 'preset' ? t('inspiration.source.save') : t('inspiration.source.edit')}</button>
                     {source.sourceKind !== 'preset' ? (
-                      <button className="miniButton dangerText" onClick={() => void removeSource(source.id)} title="删除自定义网站" type="button"><Trash2 size={13} /> 删除</button>
+                      <button className="miniButton dangerText" onClick={() => void removeSource(source.id)} title={t('inspiration.source.deleteCustomTitle')} type="button"><Trash2 size={13} /> {t('inspiration.source.delete')}</button>
                     ) : null}
                   </div>
                 </article>
@@ -2885,34 +2931,34 @@ export const InspirationPage = memo(function InspirationPage(props: {
           </section>
 
           {sourceEditorOpen ? (
-            <aside className="sourceEditorDrawer" aria-label={sourceDraft.id ? '编辑提示词网站' : '添加提示词网站'}>
+            <aside className="sourceEditorDrawer" aria-label={sourceDraft.id ? t('inspiration.source.editorEditAria') : t('inspiration.source.editorAddAria')}>
               <div className="panelTitleRow">
                 <div>
-                  <strong>{sourceDraft.id ? '编辑自定义网站' : '添加自定义网站'}</strong>
-                  <p>{sourceDraft.id ? '更新你自己的站点信息。' : '预设库之外的好网站，可以在这里补充。'}</p>
+                  <strong>{sourceDraft.id ? t('inspiration.source.editorEditTitle') : t('inspiration.source.editorAddTitle')}</strong>
+                  <p>{sourceDraft.id ? t('inspiration.source.editorEditHint') : t('inspiration.source.editorAddHint')}</p>
                 </div>
-                <button className="iconMiniButton" title="关闭添加网站面板" aria-label="关闭添加网站面板" onClick={resetSourceDraft} type="button"><X size={13} /></button>
+                <button className="iconMiniButton" title={t('inspiration.source.closeEditor')} aria-label={t('inspiration.source.closeEditor')} onClick={resetSourceDraft} type="button"><X size={13} /></button>
               </div>
               <div className="sourceEditorForm">
-                <label><span>名称</span><input value={sourceDraft.name} onChange={(event) => setSourceDraft({ ...sourceDraft, name: event.target.value })} placeholder="例如：自用提示词收藏站" /></label>
+                <label><span>{t('inspiration.source.fieldName')}</span><input value={sourceDraft.name} onChange={(event) => setSourceDraft({ ...sourceDraft, name: event.target.value })} placeholder={t('inspiration.source.fieldNamePlaceholder')} /></label>
                 <label><span>URL</span><input value={sourceDraft.url} onChange={(event) => setSourceDraft({ ...sourceDraft, url: event.target.value })} placeholder="https://..." /></label>
                 <div className="inspirationFormGrid">
-                  <label><span>类型</span><StudioSelect value={sourceDraft.category} onChange={(value) => setSourceDraft({ ...sourceDraft, category: value as InspirationSourceCategory })} options={sourceCategoryOptions.filter((option) => option.value !== 'all') as Array<{ value: InspirationSourceCategory; label: string }>} /></label>
-                  <label><span>地区</span><StudioSelect value={sourceDraft.region} onChange={(value) => setSourceDraft({ ...sourceDraft, region: value as InspirationRegion })} options={regionOptions.filter((option) => option.value !== 'all') as Array<{ value: InspirationRegion; label: string }>} /></label>
+                  <label><span>{t('inspiration.source.categoryLabel')}</span><StudioSelect value={sourceDraft.category} onChange={(value) => setSourceDraft({ ...sourceDraft, category: value as InspirationSourceCategory })} options={translatedSourceCategoryOptions.filter((option) => option.value !== 'all') as Array<{ value: InspirationSourceCategory; label: string }>} /></label>
+                  <label><span>{t('inspiration.source.regionLabel')}</span><StudioSelect value={sourceDraft.region} onChange={(value) => setSourceDraft({ ...sourceDraft, region: value as InspirationRegion })} options={translatedRegionOptions.filter((option) => option.value !== 'all') as Array<{ value: InspirationRegion; label: string }>} /></label>
                 </div>
-                <label><span>标签</span><input value={sourceDraft.tags} onChange={(event) => setSourceDraft({ ...sourceDraft, tags: event.target.value })} placeholder="商业，角色，构图" /></label>
-                <label><span>常用关键词</span><input value={sourceDraft.keywords} onChange={(event) => setSourceDraft({ ...sourceDraft, keywords: event.target.value })} placeholder="portrait，logo，电商主图" /></label>
-                <label><span>备注</span><textarea value={sourceDraft.note} onChange={(event) => setSourceDraft({ ...sourceDraft, note: event.target.value })} rows={2} placeholder="这个网站最值得记录的点" /></label>
-                <label><span>适合场景</span><textarea value={sourceDraft.sceneNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, sceneNotes: event.target.value })} rows={2} placeholder="适合找什么类型的参考" /></label>
-                <label><span>登录 / 会员说明</span><textarea value={sourceDraft.membershipNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, membershipNotes: event.target.value })} rows={2} placeholder="是否需要登录、会员或额度" /></label>
-                <label><span>版权 / 商用备注</span><textarea value={sourceDraft.copyrightNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, copyrightNotes: event.target.value })} rows={2} placeholder="商用前要注意什么" /></label>
-                <label><span>Favicon URL</span><input value={sourceDraft.faviconUrl} onChange={(event) => setSourceDraft({ ...sourceDraft, faviconUrl: event.target.value })} placeholder="可选，https://..." /></label>
-                <label className="inspirationCheck"><input type="checkbox" checked={sourceDraft.requiresLogin} onChange={(event) => setSourceDraft({ ...sourceDraft, requiresLogin: event.target.checked })} /><span>需要登录</span></label>
-                <label><span>商用备注</span><StudioSelect value={sourceDraft.commercialReference} onChange={(value) => setSourceDraft({ ...sourceDraft, commercialReference: value as InspirationCommercialReference })} options={commercialReferenceOptions} /></label>
+                <label><span>{t('inspiration.source.fieldTags')}</span><input value={sourceDraft.tags} onChange={(event) => setSourceDraft({ ...sourceDraft, tags: event.target.value })} placeholder={t('inspiration.source.fieldTagsPlaceholder')} /></label>
+                <label><span>{t('inspiration.source.fieldKeywords')}</span><input value={sourceDraft.keywords} onChange={(event) => setSourceDraft({ ...sourceDraft, keywords: event.target.value })} placeholder={t('inspiration.source.fieldKeywordsPlaceholder')} /></label>
+                <label><span>{t('inspiration.source.fieldNote')}</span><textarea value={sourceDraft.note} onChange={(event) => setSourceDraft({ ...sourceDraft, note: event.target.value })} rows={2} placeholder={t('inspiration.source.fieldNotePlaceholder')} /></label>
+                <label><span>{t('inspiration.source.fieldScene')}</span><textarea value={sourceDraft.sceneNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, sceneNotes: event.target.value })} rows={2} placeholder={t('inspiration.source.fieldScenePlaceholder')} /></label>
+                <label><span>{t('inspiration.source.fieldMembership')}</span><textarea value={sourceDraft.membershipNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, membershipNotes: event.target.value })} rows={2} placeholder={t('inspiration.source.fieldMembershipPlaceholder')} /></label>
+                <label><span>{t('inspiration.source.fieldCopyright')}</span><textarea value={sourceDraft.copyrightNotes} onChange={(event) => setSourceDraft({ ...sourceDraft, copyrightNotes: event.target.value })} rows={2} placeholder={t('inspiration.source.fieldCopyrightPlaceholder')} /></label>
+                <label><span>Favicon URL</span><input value={sourceDraft.faviconUrl} onChange={(event) => setSourceDraft({ ...sourceDraft, faviconUrl: event.target.value })} placeholder={t('inspiration.source.fieldFaviconPlaceholder')} /></label>
+                <label className="inspirationCheck"><input type="checkbox" checked={sourceDraft.requiresLogin} onChange={(event) => setSourceDraft({ ...sourceDraft, requiresLogin: event.target.checked })} /><span>{t('inspiration.source.requiresLogin')}</span></label>
+                <label><span>{t('inspiration.source.commercialLabel')}</span><StudioSelect value={sourceDraft.commercialReference} onChange={(value) => setSourceDraft({ ...sourceDraft, commercialReference: value as InspirationCommercialReference })} options={translatedCommercialReferenceOptions} /></label>
               </div>
               <div className="sourceEditorActions">
-                <button className="miniButton" onClick={resetSourceDraft} title="取消添加或编辑" type="button"><X size={13} /> 取消</button>
-                <button className="miniButton primaryMini" onClick={() => void submitSource()} title="保存网站" type="button"><Save size={14} /> 保存</button>
+                <button className="miniButton" onClick={resetSourceDraft} title={t('inspiration.source.cancelTitle')} type="button"><X size={13} /> {t('inspiration.source.cancel')}</button>
+                <button className="miniButton primaryMini" onClick={() => void submitSource()} title={t('inspiration.source.saveTitle')} type="button"><Save size={14} /> {t('inspiration.source.save')}</button>
               </div>
             </aside>
           ) : null}
@@ -2929,65 +2975,65 @@ export const InspirationPage = memo(function InspirationPage(props: {
             <div className="galleryToolbar">
               <div className="galleryToolbarLeft">
                 <button
-                  aria-label={assetSearchVisible ? '隐藏图片收藏搜索' : '显示图片收藏搜索'}
+                  aria-label={assetSearchVisible ? t('inspiration.asset.hideSearchAria') : t('inspiration.asset.showSearchAria')}
                   className={assetSearchVisible ? 'miniButton active' : 'miniButton'}
                   onClick={() => setAssetSearchVisible((value) => !value)}
-                  title={assetSearchVisible ? '隐藏搜索' : '显示搜索'}
+                  title={assetSearchVisible ? t('inspiration.asset.hideSearch') : t('inspiration.asset.showSearch')}
                   type="button"
                 >
-                  <Search size={13} /> 搜索
+                  <Search size={13} /> {t('inspiration.asset.searchToggle')}
                 </button>
                 <button
-                  aria-label={assetFiltersVisible ? '隐藏图片收藏筛选' : '显示图片收藏筛选'}
+                  aria-label={assetFiltersVisible ? t('inspiration.asset.hideFiltersAria') : t('inspiration.asset.showFiltersAria')}
                   className={assetFiltersVisible ? 'miniButton active' : 'miniButton'}
                   onClick={() => setAssetFiltersVisible((value) => !value)}
-                  title={assetFiltersVisible ? '隐藏筛选' : '显示筛选'}
+                  title={assetFiltersVisible ? t('inspiration.asset.hideFilters') : t('inspiration.asset.showFilters')}
                   type="button"
                 >
-                  <SlidersHorizontal size={13} /> 筛选{activeAssetFilterCount ? ` (${activeAssetFilterCount})` : ''}
+                  <SlidersHorizontal size={13} /> {t('inspiration.asset.filterToggle')}{activeAssetFilterCount ? ` (${activeAssetFilterCount})` : ''}
                 </button>
-                {assetViewOptions.map((option) => (
+                {translatedAssetViewOptions.map((option) => (
                   <button
-                    aria-label={`切换图片收藏视图：${option.label}`}
+                    aria-label={t('inspiration.asset.switchViewAria', { label: option.label })}
                     className={assetViewMode === option.value ? 'miniButton active' : 'miniButton'}
                     key={option.value}
                     onClick={() => setAssetViewMode(option.value)}
-                    title={`切换到${option.label}视图`}
+                    title={t('inspiration.asset.switchViewTitle', { label: option.label })}
                     type="button"
                   >
                     {option.value === 'list' ? <List size={13} /> : <Grid3x3 size={13} />} {option.label}
                   </button>
                 ))}
                 {selectedAssetIds.length > 0 ? (
-                  <span className="selectionCount">已选 {selectedAssetIds.length} 张</span>
+                  <span className="selectionCount">{t('inspiration.asset.selectedCount', { count: selectedAssetIds.length })}</span>
                 ) : (
-                  <span className="assetCount">{filteredAssets.length} 张收藏</span>
+                  <span className="assetCount">{t('inspiration.asset.count', { count: filteredAssets.length })}</span>
                 )}
               </div>
               <div className="galleryToolbarRight">
-                <button className="miniButton" onClick={() => setSelectedAssetIds(filteredAssets.map((a) => a.id))} title="全选" type="button">
-                  <CheckSquare size={14} /> 全选
+                <button className="miniButton" onClick={() => setSelectedAssetIds(filteredAssets.map((a) => a.id))} title={t('inspiration.asset.selectAllTitle')} type="button">
+                  <CheckSquare size={14} /> {t('inspiration.asset.selectAll')}
                 </button>
                 {selectedAssetIds.length > 0 && (
-                  <button className="miniButton" onClick={clearAssetSelection} title="取消选择" type="button">
-                    <X size={14} /> 取消
+                  <button className="miniButton" onClick={clearAssetSelection} title={t('inspiration.asset.cancelSelectionTitle')} type="button">
+                    <X size={14} /> {t('inspiration.asset.cancel')}
                   </button>
                 )}
                 {selectedAssetIds.length > 0 && (
                   <>
-                    <button className="miniButton" onClick={() => void copySelectedPrompts()} title="批量复制 Prompt" type="button">
-                      <Copy size={14} /> 复制 Prompt
+                    <button className="miniButton" onClick={() => void copySelectedPrompts()} title={t('inspiration.asset.bulkCopyPromptTitle')} type="button">
+                      <Copy size={14} /> {t('inspiration.asset.copyPrompt')}
                     </button>
-                    <button className="miniButton danger" onClick={removeSelectedAssets} title="批量删除记录" type="button">
-                      <Trash2 size={14} /> 删除记录
+                    <button className="miniButton danger" onClick={removeSelectedAssets} title={t('inspiration.asset.bulkDeleteRecordsTitle')} type="button">
+                      <Trash2 size={14} /> {t('inspiration.asset.deleteRecord')}
                     </button>
                   </>
                 )}
-                <button className="miniButton" onClick={() => folderInputRef.current?.click()} title="导入文件夹" type="button">
-                  <FolderOpen size={14} /> 批量导入
+                <button className="miniButton" onClick={() => folderInputRef.current?.click()} title={t('inspiration.asset.importFolderTitle')} type="button">
+                  <FolderOpen size={14} /> {t('inspiration.asset.importFolder')}
                 </button>
-                <button className="miniButton primaryMini" onClick={() => fileInputRef.current?.click()} title="导入图片" type="button">
-                  <Upload size={14} /> 导入图片
+                <button className="miniButton primaryMini" onClick={() => fileInputRef.current?.click()} title={t('inspiration.asset.importImageTitle')} type="button">
+                  <Upload size={14} /> {t('inspiration.asset.importImage')}
                 </button>
                 <input ref={folderInputRef} type="file" multiple accept="image/*" hidden onChange={handleFolderImport} />
               </div>
@@ -2996,11 +3042,11 @@ export const InspirationPage = memo(function InspirationPage(props: {
             {assetSearchVisible ? (
               <div className="inspirationGallerySearchPanel">
                 <label className="librarySearchBox">
-                  <span>搜索图片收藏</span>
-                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="名称 / 来源 URL / Prompt / 标签" autoFocus />
+                  <span>{t('inspiration.asset.searchLabel')}</span>
+                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('inspiration.asset.searchPlaceholder')} autoFocus />
                 </label>
                 {query.trim() ? (
-                  <button className="iconMiniButton" type="button" title="清空搜索" aria-label="清空搜索" onClick={() => setQuery('')}><X size={13} /></button>
+                  <button className="iconMiniButton" type="button" title={t('inspiration.asset.clearSearch')} aria-label={t('inspiration.asset.clearSearch')} onClick={() => setQuery('')}><X size={13} /></button>
                 ) : null}
               </div>
             ) : null}
@@ -3008,19 +3054,19 @@ export const InspirationPage = memo(function InspirationPage(props: {
             {assetFiltersVisible ? (
               <div className="inspirationGalleryFilterPanel libraryStructuredFilters">
                 <label>
-                  <span>来源</span>
-                  <StudioSelect className="libraryFilterSelect filterIconPlatform" leadingIcon={<Link2 size={15} />} value={assetSourceFilter} onChange={(value) => setAssetSourceFilter(value as AssetSourceFilter)} options={assetSourceOptions} />
+                  <span>{t('inspiration.asset.sourceLabel')}</span>
+                  <StudioSelect className="libraryFilterSelect filterIconPlatform" leadingIcon={<Link2 size={15} />} value={assetSourceFilter} onChange={(value) => setAssetSourceFilter(value as AssetSourceFilter)} options={translatedAssetSourceOptions} />
                 </label>
                 <label>
-                  <span>授权</span>
-                  <StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Bookmark size={15} />} value={assetLicense} onChange={(value) => setAssetLicense(value as typeof assetLicense)} options={licenseOptions} />
+                  <span>{t('inspiration.asset.licenseLabel')}</span>
+                  <StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Bookmark size={15} />} value={assetLicense} onChange={(value) => setAssetLicense(value as typeof assetLicense)} options={translatedLicenseOptions} />
                 </label>
                 <label>
-                  <span>反推 Prompt</span>
-                  <StudioSelect className="libraryFilterSelect filterIconType" leadingIcon={<Sparkles size={15} />} value={assetPromptFilter} onChange={(value) => setAssetPromptFilter(value as AssetPromptFilter)} options={assetPromptOptions} />
+                  <span>{t('inspiration.asset.reversePromptLabel')}</span>
+                  <StudioSelect className="libraryFilterSelect filterIconType" leadingIcon={<Sparkles size={15} />} value={assetPromptFilter} onChange={(value) => setAssetPromptFilter(value as AssetPromptFilter)} options={translatedAssetPromptOptions} />
                 </label>
                 <label className="libraryColorFilter inspirationColorFilter" ref={assetColorFilterRef}>
-                  <span>颜色</span>
+                  <span>{t('inspiration.asset.colorLabel')}</span>
                   <button
                     aria-expanded={assetColorMenuOpen}
                     aria-haspopup="listbox"
@@ -3029,11 +3075,11 @@ export const InspirationPage = memo(function InspirationPage(props: {
                     type="button"
                   >
                     <span className="libraryColorWheel" />
-                    <span>{getAssetColorLabel(assetColorFilter) || '颜色'}</span>
+                    <span>{getAssetColorLabel(assetColorFilter, t) || t('inspiration.asset.colorLabel')}</span>
                   </button>
                   {assetColorMenuOpen ? (
-                    <div className="libraryColorFilterMenu" role="listbox" aria-label="灵感收藏颜色筛选">
-                      {assetColorOptions.map((option) => (
+                    <div className="libraryColorFilterMenu" role="listbox" aria-label={t('inspiration.asset.colorFilterAria')}>
+                      {translatedAssetColorOptions.map((option) => (
                         <button
                           aria-selected={assetColorFilter === option.value}
                           className={assetColorFilter === option.value ? 'active' : ''}
@@ -3053,19 +3099,19 @@ export const InspirationPage = memo(function InspirationPage(props: {
                   ) : null}
                 </label>
                 <label>
-                  <span>形状</span>
-                  <StudioSelect className="libraryFilterSelect filterIconShape" leadingIcon={<Grid2X2 size={15} />} value={assetShapeFilter} onChange={(value) => setAssetShapeFilter(value as AssetShapeFilter)} options={assetShapeOptions} />
+                  <span>{t('inspiration.asset.shapeLabel')}</span>
+                  <StudioSelect className="libraryFilterSelect filterIconShape" leadingIcon={<Grid2X2 size={15} />} value={assetShapeFilter} onChange={(value) => setAssetShapeFilter(value as AssetShapeFilter)} options={translatedAssetShapeOptions} />
                 </label>
                 <label>
-                  <span>格式</span>
-                  <StudioSelect className="libraryFilterSelect filterIconFormat" leadingIcon={<Database size={15} />} value={assetFormatFilter} onChange={(value) => setAssetFormatFilter(value as AssetFormatFilter)} options={assetFormatOptions} />
+                  <span>{t('inspiration.asset.formatLabel')}</span>
+                  <StudioSelect className="libraryFilterSelect filterIconFormat" leadingIcon={<Database size={15} />} value={assetFormatFilter} onChange={(value) => setAssetFormatFilter(value as AssetFormatFilter)} options={translatedAssetFormatOptions} />
                 </label>
                 <label>
-                  <span>评分</span>
-                  <StudioSelect className="libraryFilterSelect filterIconRating" leadingIcon={<Star size={15} />} value={assetRatingFilter} onChange={(value) => setAssetRatingFilter(value as AssetRatingFilter)} options={assetRatingOptions} />
+                  <span>{t('inspiration.asset.ratingLabel')}</span>
+                  <StudioSelect className="libraryFilterSelect filterIconRating" leadingIcon={<Star size={15} />} value={assetRatingFilter} onChange={(value) => setAssetRatingFilter(value as AssetRatingFilter)} options={translatedAssetRatingOptions} />
                 </label>
                 <button className="miniButton libraryClearFiltersButton" disabled={!activeAssetFilterCount && !query.trim()} type="button" onClick={clearAssetFilters}>
-                  <X size={13} /> {activeAssetFilterCount || query.trim() ? `清空 ${activeAssetFilterCount + (query.trim() ? 1 : 0)}` : '清空'}
+                  <X size={13} /> {activeAssetFilterCount || query.trim() ? t('inspiration.asset.clearWithCount', { count: activeAssetFilterCount + (query.trim() ? 1 : 0) }) : t('inspiration.asset.clear')}
                 </button>
               </div>
             ) : null}
@@ -3073,15 +3119,15 @@ export const InspirationPage = memo(function InspirationPage(props: {
             <div className={selectedAsset ? 'assetGalleryContent withDetail' : 'assetGalleryContent'}>
               <div className="assetGalleryResults">
                 {!assetsLoaded || assetsLoading ? (
-                  <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>正在加载图片收藏</h3></div>
+                  <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>{t('inspiration.asset.loading')}</h3></div>
                 ) : filteredAssets.length === 0 ? (
                   <div className="assetGalleryEmpty">
                     <div className="assetGalleryEmptyIcon"><Bookmark size={42} /></div>
-                    <h3>还没有图片收藏</h3>
-                    <p>这里会像作品画廊一样管理你从外部收藏的参考图。先导入一张图，后续可以用作图生图参考、复制 Prompt 或转为模板。</p>
+                    <h3>{t('inspiration.asset.emptyTitle')}</h3>
+                    <p>{t('inspiration.asset.emptyHint')}</p>
                     <div className="assetGalleryEmptyActions">
-                      <button className="rowActionButton primaryAction" onClick={() => fileInputRef.current?.click()}><Upload size={15} /> 导入图片</button>
-                      <button className="ghostButton" onClick={() => folderInputRef.current?.click()}><FolderOpen size={14} /> 批量导入</button>
+                      <button className="rowActionButton primaryAction" onClick={() => fileInputRef.current?.click()}><Upload size={15} /> {t('inspiration.asset.importImage')}</button>
+                      <button className="ghostButton" onClick={() => folderInputRef.current?.click()}><FolderOpen size={14} /> {t('inspiration.asset.importFolder')}</button>
                     </div>
                   </div>
                 ) : (
@@ -3110,7 +3156,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
                           <button
                             className={`librarySelectMark ${isSelected ? 'active' : ''}`}
                             type="button"
-                            aria-label={isSelected ? '取消选择' : '选择图片'}
+                            aria-label={isSelected ? t('inspiration.asset.unselectImage') : t('inspiration.asset.selectImage')}
                             onClick={(event) => {
                               event.stopPropagation();
                               toggleAssetSelection(asset.id);
@@ -3121,29 +3167,29 @@ export const InspirationPage = memo(function InspirationPage(props: {
                           {asset.imageUrl ? (
                             <button className="libraryThumb" onClick={(event) => { event.stopPropagation(); previewAssetFromGallery(asset); }}>
                               <img src={asset.imageUrl} alt={asset.title} loading="lazy" decoding="async" onLoad={(event) => rememberAssetImageMeta(asset.id, event.currentTarget)} />
-                              <span><Maximize2 size={15} /> 预览</span>
+                              <span><Maximize2 size={15} /> {t('inspiration.asset.preview')}</span>
                             </button>
                           ) : (
-                            <div className="libraryFailedThumb">图片不可用</div>
+                            <div className="libraryFailedThumb">{t('inspiration.asset.imageUnavailable')}</div>
                           )}
                           <div className="libraryImageOverlay">
-                            <button className="iconMiniButton" type="button" data-tooltip="详情" aria-label="详情" onClick={() => setSelectedAssetId(asset.id)}>
+                            <button className="iconMiniButton" type="button" data-tooltip={t('inspiration.asset.details')} aria-label={t('inspiration.asset.details')} onClick={() => setSelectedAssetId(asset.id)}>
                               <ImageIcon size={14} />
                             </button>
                             <div className="libraryMoreMenuWrap">
-                              <button className="iconMiniButton" type="button" data-tooltip="更多操作" aria-label="更多操作">
+                              <button className="iconMiniButton" type="button" data-tooltip={t('inspiration.asset.moreActions')} aria-label={t('inspiration.asset.moreActions')}>
                                 <MoreHorizontal size={15} />
                               </button>
-                              <div className="libraryQuickMenu" aria-label="图片操作">
-                                <button type="button" onClick={() => setSelectedAssetId(asset.id)}><ImageIcon size={13} /> 图片详情</button>
-                                <button type="button" disabled={!asset.imageUrl} onClick={() => props.onUseAsReference(asset)}><ImagePlus size={13} /> 设为参考图</button>
-                                <button type="button" disabled={!prompt} onClick={() => void copyText('Prompt', prompt)}><Copy size={13} /> 复制 Prompt</button>
-                                <button type="button" disabled={!prompt} onClick={() => props.onUsePrompt(prompt)}><Sparkles size={13} /> 套用 Prompt</button>
-                                <button type="button" disabled={!asset.imageUrl || reversePromptStatus?.assetId === asset.id} onClick={() => void reversePromptForAsset(asset)}><Search size={13} /> {reversePromptStatus?.assetId === asset.id ? '反推中' : '反推提示词'}</button>
-                                {asset.sourceUrl ? <button type="button" onClick={() => void openExternalUrl(asset.sourceUrl!)}><ExternalLink size={13} /> 打开原链接</button> : null}
+                              <div className="libraryQuickMenu" aria-label={t('inspiration.asset.imageActions')}>
+                                <button type="button" onClick={() => setSelectedAssetId(asset.id)}><ImageIcon size={13} /> {t('inspiration.asset.imageDetails')}</button>
+                                <button type="button" disabled={!asset.imageUrl} onClick={() => props.onUseAsReference(asset)}><ImagePlus size={13} /> {t('inspiration.asset.setReference')}</button>
+                                <button type="button" disabled={!prompt} onClick={() => void copyText('Prompt', prompt)}><Copy size={13} /> {t('inspiration.asset.copyPrompt')}</button>
+                                <button type="button" disabled={!prompt} onClick={() => props.onUsePrompt(prompt)}><Sparkles size={13} /> {t('inspiration.asset.applyPrompt')}</button>
+                                <button type="button" disabled={!asset.imageUrl || reversePromptStatus?.assetId === asset.id} onClick={() => void reversePromptForAsset(asset)}><Search size={13} /> {reversePromptStatus?.assetId === asset.id ? t('inspiration.asset.reversing') : t('inspiration.asset.reversePromptAction')}</button>
+                                {asset.sourceUrl ? <button type="button" onClick={() => void openExternalUrl(asset.sourceUrl!)}><ExternalLink size={13} /> {t('inspiration.asset.openSourceUrl')}</button> : null}
                                 <span className="libraryMenuDivider" />
-                                <button type="button" onClick={() => startEditAsset(asset)}><Edit3 size={13} /> 编辑信息</button>
-                                <button className="dangerAction" type="button" onClick={() => void removeAsset(asset.id)}><Trash2 size={13} /> 删除记录</button>
+                                <button type="button" onClick={() => startEditAsset(asset)}><Edit3 size={13} /> {t('inspiration.asset.editInfo')}</button>
+                                <button className="dangerAction" type="button" onClick={() => void removeAsset(asset.id)}><Trash2 size={13} /> {t('inspiration.asset.deleteRecord')}</button>
                               </div>
                             </div>
                           </div>
@@ -3151,20 +3197,20 @@ export const InspirationPage = memo(function InspirationPage(props: {
                             <div className="resultTitleRow">
                               <strong title={asset.title}>{asset.title}</strong>
                               <div className="cardTopActions">
-                                <span className="statusBadge modeBadge">{domain || '无来源'}</span>
+                                <span className="statusBadge modeBadge">{domain || t('inspiration.common.noSource')}</span>
                                 <span className={asset.licenseStatus === 'commercial-confirmed' ? 'statusBadge succeeded' : 'statusBadge'}>
-                                  {licenseLabel(asset.licenseStatus)}
+                                  {licenseLabel(asset.licenseStatus, t)}
                                 </span>
                                 <span className={asset.inferredPrompt ? 'statusBadge succeeded' : 'statusBadge failed'}>
-                                  {asset.inferredPrompt ? '已反推' : '未反推'}
+                                  {asset.inferredPrompt ? t('inspiration.asset.reverseReady') : t('inspiration.asset.reverseMissing')}
                                 </span>
                               </div>
                             </div>
-                            {assetViewMode === 'list' ? <p title={prompt || asset.note || ''}>{prompt || asset.note || '未记录 Prompt，可先作为视觉参考。'}</p> : null}
+                            {assetViewMode === 'list' ? <p title={prompt || asset.note || ''}>{prompt || asset.note || t('inspiration.asset.noPromptHint')}</p> : null}
                             <div className="metadataRow">
                               <span>{assetSourceText(asset)}</span>
                               <span>
-                                {licenseLabel(asset.licenseStatus)}
+                                {licenseLabel(asset.licenseStatus, t)}
                               </span>
                             </div>
                           </div>
@@ -3177,20 +3223,20 @@ export const InspirationPage = memo(function InspirationPage(props: {
 
               {selectedAsset ? (
                 <>
-                <button className="libraryDetailBackdrop" type="button" aria-label="关闭详情" onClick={() => { setSelectedAssetId(null); cancelAssetEdit(); }} />
-                <aside className="libraryDetailDrawer inspirationDetailDrawer" aria-label="灵感图片详情">
+                <button className="libraryDetailBackdrop" type="button" aria-label={t('inspiration.asset.closeDetails')} onClick={() => { setSelectedAssetId(null); cancelAssetEdit(); }} />
+                <aside className="libraryDetailDrawer inspirationDetailDrawer" aria-label={t('inspiration.asset.detailAria')}>
                   <div className="libraryDetailHeader">
                     <div className="libraryDetailTitle">
-                      <span>灵感详情</span>
+                      <span>{t('inspiration.asset.detailTitle')}</span>
                       <strong title={selectedAsset.title}>{selectedAsset.title}</strong>
                     </div>
                     <div className="libraryDetailHeaderActions">
                       {editingAssetId === selectedAsset.id ? (
-                        <button className="iconMiniButton" title="取消编辑" aria-label="取消编辑" onClick={cancelAssetEdit}><X size={13} /></button>
+                        <button className="iconMiniButton" title={t('inspiration.asset.cancelEdit')} aria-label={t('inspiration.asset.cancelEdit')} onClick={cancelAssetEdit}><X size={13} /></button>
                       ) : (
-                        <button className="iconMiniButton" title="编辑信息" aria-label="编辑信息" onClick={() => startEditAsset(selectedAsset)}><Edit3 size={13} /></button>
+                        <button className="iconMiniButton" title={t('inspiration.asset.editInfo')} aria-label={t('inspiration.asset.editInfo')} onClick={() => startEditAsset(selectedAsset)}><Edit3 size={13} /></button>
                       )}
-                      <button className="iconMiniButton" title="关闭详情" aria-label="关闭详情" onClick={() => { setSelectedAssetId(null); cancelAssetEdit(); }}><X size={13} /></button>
+                      <button className="iconMiniButton" title={t('inspiration.asset.closeDetails')} aria-label={t('inspiration.asset.closeDetails')} onClick={() => { setSelectedAssetId(null); cancelAssetEdit(); }}><X size={13} /></button>
                     </div>
                   </div>
                   {selectedAsset.imageUrl ? (
@@ -3200,81 +3246,81 @@ export const InspirationPage = memo(function InspirationPage(props: {
                     </button>
                     </div>
                   ) : (
-                    <div className="libraryDetailMissing"><ImageIcon size={24} /> 图片不可用</div>
+                    <div className="libraryDetailMissing"><ImageIcon size={24} /> {t('inspiration.asset.imageUnavailable')}</div>
                   )}
                   <div className="libraryDetailActions">
-                    <button className="miniButton primaryMini" disabled={!selectedAsset.imageUrl} onClick={() => props.onUseAsReference(selectedAsset)}><ImagePlus size={13} /> 参考</button>
+                    <button className="miniButton primaryMini" disabled={!selectedAsset.imageUrl} onClick={() => props.onUseAsReference(selectedAsset)}><ImagePlus size={13} /> {t('inspiration.asset.reference')}</button>
                     <button className="miniButton" disabled={!assetPrompt(selectedAsset)} onClick={() => void copyText('Prompt', assetPrompt(selectedAsset))}><Copy size={13} /> Prompt</button>
-                    <button className="miniButton" disabled={!selectedAsset.imageUrl || reversePromptStatus?.assetId === selectedAsset.id} onClick={() => void reversePromptForAsset(selectedAsset)}><Search size={13} /> {reversePromptStatus?.assetId === selectedAsset.id ? '反推中' : '反推'}</button>
-                    <button className="miniButton" disabled={!assetPrompt(selectedAsset)} onClick={() => createTemplate(selectedAsset)}><Bookmark size={13} /> 模板</button>
+                    <button className="miniButton" disabled={!selectedAsset.imageUrl || reversePromptStatus?.assetId === selectedAsset.id} onClick={() => void reversePromptForAsset(selectedAsset)}><Search size={13} /> {reversePromptStatus?.assetId === selectedAsset.id ? t('inspiration.asset.reversing') : t('inspiration.asset.reverse')}</button>
+                    <button className="miniButton" disabled={!assetPrompt(selectedAsset)} onClick={() => createTemplate(selectedAsset)}><Bookmark size={13} /> {t('inspiration.asset.template')}</button>
                     {editingAssetId === selectedAsset.id ? (
-                      <button className="miniButton primaryMini" onClick={() => void updateAssetMetadata()}><Save size={13} /> 保存</button>
+                      <button className="miniButton primaryMini" onClick={() => void updateAssetMetadata()}><Save size={13} /> {t('inspiration.asset.save')}</button>
                     ) : (
-                      <button className="miniButton" onClick={() => startEditAsset(selectedAsset)}><Edit3 size={13} /> 编辑</button>
+                      <button className="miniButton" onClick={() => startEditAsset(selectedAsset)}><Edit3 size={13} /> {t('inspiration.asset.editInfo')}</button>
                     )}
                   </div>
                   {editingAssetId === selectedAsset.id ? (
                     <div className="inspirationDrawerEditForm">
-                      <label><span>标题</span><input value={assetEditDraft.title} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, title: event.target.value })} /></label>
-                      <label><span>来源 URL</span><input value={assetEditDraft.sourceUrl} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, sourceUrl: event.target.value })} placeholder="https://..." /></label>
+                      <label><span>{t('inspiration.asset.fieldTitle')}</span><input value={assetEditDraft.title} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, title: event.target.value })} /></label>
+                      <label><span>{t('inspiration.asset.fieldSourceUrl')}</span><input value={assetEditDraft.sourceUrl} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, sourceUrl: event.target.value })} placeholder="https://..." /></label>
                       <div className="inspirationDrawerEditGrid">
-                        <label><span>来源平台</span><input value={assetEditDraft.sourcePlatform} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, sourcePlatform: event.target.value })} /></label>
-                        <label><span>作者</span><input value={assetEditDraft.author} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, author: event.target.value })} /></label>
+                        <label><span>{t('inspiration.asset.fieldSourcePlatform')}</span><input value={assetEditDraft.sourcePlatform} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, sourcePlatform: event.target.value })} /></label>
+                        <label><span>{t('inspiration.asset.fieldAuthor')}</span><input value={assetEditDraft.author} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, author: event.target.value })} /></label>
                       </div>
-                      <label><span>标签</span><input value={assetEditDraft.tags} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, tags: event.target.value })} /></label>
+                      <label><span>{t('inspiration.asset.fieldTags')}</span><input value={assetEditDraft.tags} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, tags: event.target.value })} /></label>
                       <div className="inspirationDrawerEditGrid">
-                        <label><span>授权</span><StudioSelect value={assetEditDraft.licenseStatus} onChange={(value) => setAssetEditDraft({ ...assetEditDraft, licenseStatus: value as InspirationLicenseStatus })} options={licenseOptions.filter((option) => option.value !== 'all') as Array<{ value: InspirationLicenseStatus; label: string }>} /></label>
-                        <label><span>评分</span><StudioSelect value={assetEditDraft.rating} onChange={(value) => setAssetEditDraft({ ...assetEditDraft, rating: value as AssetRatingValue })} options={assetRatingEditOptions} /></label>
+                        <label><span>{t('inspiration.asset.licenseLabel')}</span><StudioSelect value={assetEditDraft.licenseStatus} onChange={(value) => setAssetEditDraft({ ...assetEditDraft, licenseStatus: value as InspirationLicenseStatus })} options={translatedLicenseOptions.filter((option) => option.value !== 'all') as Array<{ value: InspirationLicenseStatus; label: string }>} /></label>
+                        <label><span>{t('inspiration.asset.ratingLabel')}</span><StudioSelect value={assetEditDraft.rating} onChange={(value) => setAssetEditDraft({ ...assetEditDraft, rating: value as AssetRatingValue })} options={translatedAssetRatingEditOptions} /></label>
                       </div>
-                      <label><span>原始 Prompt</span><textarea value={assetEditDraft.originalPrompt} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, originalPrompt: event.target.value })} rows={5} /></label>
-                      <label><span>备注</span><textarea value={assetEditDraft.note} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, note: event.target.value })} rows={3} /></label>
+                      <label><span>{t('inspiration.asset.originalPrompt')}</span><textarea value={assetEditDraft.originalPrompt} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, originalPrompt: event.target.value })} rows={5} /></label>
+                      <label><span>{t('inspiration.asset.note')}</span><textarea value={assetEditDraft.note} onChange={(event) => setAssetEditDraft({ ...assetEditDraft, note: event.target.value })} rows={3} /></label>
                     </div>
                   ) : (
                     <>
                   <dl className="assetDetailMeta">
-                    <div><dt>来源</dt><dd>{assetSourceText(selectedAsset)}</dd></div>
-                    <div><dt>作者</dt><dd>{selectedAsset.author || '未记录'}</dd></div>
-                    <div><dt>授权</dt><dd>{licenseLabel(selectedAsset.licenseStatus)}</dd></div>
-                    <div><dt>评分</dt><dd>{getAssetRating(selectedAsset) ? '★'.repeat(getAssetRating(selectedAsset)!) : '尚未评分'}</dd></div>
-                    <div><dt>标签</dt><dd>{selectedAsset.tags.length ? selectedAsset.tags.join('，') : '未设置'}</dd></div>
+                    <div><dt>{t('inspiration.asset.sourceLabel')}</dt><dd>{assetSourceText(selectedAsset)}</dd></div>
+                    <div><dt>{t('inspiration.asset.fieldAuthor')}</dt><dd>{selectedAsset.author || t('inspiration.asset.notRecorded')}</dd></div>
+                    <div><dt>{t('inspiration.asset.licenseLabel')}</dt><dd>{licenseLabel(selectedAsset.licenseStatus, t)}</dd></div>
+                    <div><dt>{t('inspiration.asset.ratingLabel')}</dt><dd>{getAssetRating(selectedAsset) ? '?'.repeat(getAssetRating(selectedAsset)!) : t('inspiration.asset.rating.unrated')}</dd></div>
+                    <div><dt>{t('inspiration.asset.fieldTags')}</dt><dd>{selectedAsset.tags.length ? selectedAsset.tags.join('?') : t('inspiration.asset.notSet')}</dd></div>
                   </dl>
                   {selectedAsset.sourceUrl ? (
                     <button className="assetDetailLink" onClick={() => void openExternalUrl(selectedAsset.sourceUrl!)}>
-                      <ExternalLink size={13} /> 打开原始链接
+                      <ExternalLink size={13} /> {t('inspiration.asset.openOriginal')}
                     </button>
                   ) : null}
                   <section className="assetDetailTextBlock">
-                    <span>原始 Prompt</span>
-                    <p>{selectedAsset.originalPrompt || '未记录原始 Prompt。'}</p>
+                    <span>{t('inspiration.asset.originalPrompt')}</span>
+                    <p>{selectedAsset.originalPrompt || t('inspiration.asset.noOriginalPrompt')}</p>
                   </section>
                   <section className="assetDetailTextBlock reversePromptBlock">
                     <div className="assetDetailBlockHeader">
-                      <span>反推 Prompt</span>
-                      {selectedAsset.reversePrompt?.generatedAt ? <small>{selectedAsset.reversePrompt.modelId || '视觉模型'} / {new Date(selectedAsset.reversePrompt.generatedAt).toLocaleString()}</small> : null}
+                      <span>{t('inspiration.asset.reversePromptTitle')}</span>
+                      {selectedAsset.reversePrompt?.generatedAt ? <small>{selectedAsset.reversePrompt.modelId || t('inspiration.asset.visionModel')} / {new Date(selectedAsset.reversePrompt.generatedAt).toLocaleString()}</small> : null}
                     </div>
                     <div className="reversePromptConfigNote">
-                      图片反推配置已移到「偏好设置」的提示词辅助区域，使用独立 API Key，不再复用平台接入的生图配置实例。
+                      {t('inspiration.asset.reverseConfigNote')}
                     </div>
-                    <div className="reversePromptSummary" aria-label="当前图片反推配置">
-                      <span>{reverseSettingLabel(props.imagePromptReverse.displayName, '图片反推 Prompt')}</span>
-                      <small>{reverseSettingLabel(props.imagePromptReverse.modelId, '未设置模型')} · {props.imagePromptReverse.protocol} · {props.imagePromptReverse.detail} · {props.imagePromptReverse.language}</small>
-                      <em className={props.imagePromptReverseSecretAvailable ? 'ready' : ''}>{props.imagePromptReverseSecretAvailable ? 'API Key 已配置' : 'API Key 未配置'}</em>
-                      <button type="button" className="miniButton" onClick={props.onOpenSettings}><SlidersHorizontal size={13} /> 去偏好设置配置</button>
+                    <div className="reversePromptSummary" aria-label={t('inspiration.asset.reverseConfigAria')}>
+                      <span>{reverseSettingLabel(props.imagePromptReverse.displayName, t('inspiration.asset.reversePromptTitle'))}</span>
+                      <small>{reverseSettingLabel(props.imagePromptReverse.modelId, t('inspiration.asset.modelNotSet'))} ? {props.imagePromptReverse.protocol} ? {props.imagePromptReverse.detail} ? {props.imagePromptReverse.language}</small>
+                      <em className={props.imagePromptReverseSecretAvailable ? 'ready' : ''}>{props.imagePromptReverseSecretAvailable ? t('inspiration.asset.apiKeyReady') : t('inspiration.asset.apiKeyMissing')}</em>
+                      <button type="button" className="miniButton" onClick={props.onOpenSettings}><SlidersHorizontal size={13} /> {t('inspiration.asset.openSettings')}</button>
                     </div>
-                    <p>{selectedAsset.inferredPrompt || '还没有反推结果。确认上方配置后，点击顶部“反推”即可写入这里。'}</p>
+                    <p>{selectedAsset.inferredPrompt || t('inspiration.asset.noReverseResult')}</p>
                     {reversePromptStatus?.assetId === selectedAsset.id ? <em className="reversePromptHint">{reversePromptStatus.message}</em> : null}
                     {reversePromptError ? <em className="reversePromptError">{reversePromptError}</em> : null}
                     {selectedAsset.inferredPrompt ? (
                       <div className="assetDetailActions">
-                        <button className="miniButton" type="button" onClick={() => void copyText('反推 Prompt', selectedAsset.inferredPrompt)}><Copy size={13} /> 复制反推</button>
-                        <button className="miniButton" type="button" onClick={() => props.onUsePrompt(selectedAsset.inferredPrompt!)}><Sparkles size={13} /> 套用反推</button>
-                        <button className="miniButton" type="button" onClick={() => createTemplate({ ...selectedAsset, originalPrompt: selectedAsset.inferredPrompt })}><Bookmark size={13} /> 存为模板</button>
+                        <button className="miniButton" type="button" onClick={() => void copyText(t('inspiration.asset.reversePromptTitle'), selectedAsset.inferredPrompt)}><Copy size={13} /> {t('inspiration.asset.copyReverse')}</button>
+                        <button className="miniButton" type="button" onClick={() => props.onUsePrompt(selectedAsset.inferredPrompt!)}><Sparkles size={13} /> {t('inspiration.asset.applyReverse')}</button>
+                        <button className="miniButton" type="button" onClick={() => createTemplate({ ...selectedAsset, originalPrompt: selectedAsset.inferredPrompt })}><Bookmark size={13} /> {t('inspiration.asset.saveAsTemplate')}</button>
                       </div>
                     ) : null}
                   </section>
                   <section className="assetDetailTextBlock">
-                    <span>备注</span>
-                    <p>{selectedAsset.note || '未记录备注。'}</p>
+                    <span>{t('inspiration.asset.note')}</span>
+                    <p>{selectedAsset.note || t('inspiration.asset.noNote')}</p>
                   </section>
                     </>
                   )}
@@ -3291,50 +3337,50 @@ export const InspirationPage = memo(function InspirationPage(props: {
                   onContextMenu={(event) => event.preventDefault()}
                 >
                   <div className="libraryContextMenuHeader">
-                    <strong>{contextAssets.length > 1 ? `${contextAssets.length} 张已选` : '图片操作'}</strong>
-                    <button className="iconMiniButton" type="button" data-tooltip="关闭" aria-label="关闭" onClick={() => setAssetMenuTarget(null)}><X size={13} /></button>
+                    <strong>{contextAssets.length > 1 ? t('inspiration.asset.selectedCount', { count: contextAssets.length }) : t('inspiration.asset.imageActions')}</strong>
+                    <button className="iconMiniButton" type="button" data-tooltip={t('inspiration.asset.close')} aria-label={t('inspiration.asset.close')} onClick={() => setAssetMenuTarget(null)}><X size={13} /></button>
                   </div>
                   {contextAssets.length === 1 ? (
                     <>
                       <button type="button" role="menuitem" onClick={() => { setSelectedAssetId(contextAssets[0].id); setAssetMenuTarget(null); }}>
-                        <ImageIcon size={13} /> 打开详情
+                        <ImageIcon size={13} /> {t('inspiration.asset.openDetails')}
                       </button>
                       <button type="button" role="menuitem" disabled={!contextAssets[0].imageUrl} onClick={() => { props.onUseAsReference(contextAssets[0]); setAssetMenuTarget(null); }}>
-                        <ImagePlus size={13} /> 设为参考图
+                        <ImagePlus size={13} /> {t('inspiration.asset.setReference')}
                       </button>
                       <button type="button" role="menuitem" disabled={!contextAssets[0].imageUrl} onClick={() => { previewAssetFromGallery(contextAssets[0]); setAssetMenuTarget(null); }}>
-                        <Maximize2 size={13} /> 预览图片
+                        <Maximize2 size={13} /> {t('inspiration.asset.previewImage')}
                       </button>
                     </>
                   ) : null}
                   <button type="button" role="menuitem" onClick={() => void copyContextAssetPrompts(contextAssets)}>
-                    <Copy size={13} /> 复制 Prompt
+                    <Copy size={13} /> {t('inspiration.asset.copyPrompt')}
                   </button>
                   <button type="button" role="menuitem" onClick={() => void copyContextAssetPaths(contextAssets)}>
-                    <Copy size={13} /> 复制图片路径
+                    <Copy size={13} /> {t('inspiration.asset.copyImagePath')}
                   </button>
                   {contextAssets.length === 1 && contextAssets[0].sourceUrl ? (
                     <button type="button" role="menuitem" onClick={() => { void openExternalUrl(contextAssets[0].sourceUrl!); setAssetMenuTarget(null); }}>
-                      <ExternalLink size={13} /> 打开原始链接
+                      <ExternalLink size={13} /> {t('inspiration.asset.openOriginal')}
                     </button>
                   ) : null}
                   <span className="libraryMenuDivider" />
                   {contextAssets.length === 1 ? (
                     <>
                       <button type="button" role="menuitem" disabled={!assetPrompt(contextAssets[0])} onClick={() => { props.onUsePrompt(assetPrompt(contextAssets[0])); setAssetMenuTarget(null); }}>
-                        <Sparkles size={13} /> 套用 Prompt
+                        <Sparkles size={13} /> {t('inspiration.asset.applyPrompt')}
                       </button>
                       <button type="button" role="menuitem" disabled={!contextAssets[0].imageUrl || reversePromptStatus?.assetId === contextAssets[0].id} onClick={() => { void reversePromptForAsset(contextAssets[0]); setAssetMenuTarget(null); }}>
-                        <Search size={13} /> 反推提示词
+                        <Search size={13} /> {t('inspiration.asset.reversePromptAction')}
                       </button>
                       <button type="button" role="menuitem" onClick={() => { startEditAsset(contextAssets[0]); setAssetMenuTarget(null); }}>
-                        <Edit3 size={13} /> 编辑信息
+                        <Edit3 size={13} /> {t('inspiration.asset.editInfo')}
                       </button>
                     </>
                   ) : null}
                   <span className="libraryMenuDivider" />
                   <button className="dangerAction" type="button" role="menuitem" onClick={() => removeContextAssets(contextAssets)}>
-                    <Trash2 size={13} /> {contextAssets.length > 1 ? '删除所选记录' : '删除记录'}
+                    <Trash2 size={13} /> {contextAssets.length > 1 ? t('inspiration.asset.deleteSelectedRecords') : t('inspiration.asset.deleteRecord')}
                   </button>
                 </div>
               ) : null}

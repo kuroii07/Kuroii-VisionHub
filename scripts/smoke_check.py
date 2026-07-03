@@ -59,9 +59,12 @@ for term in ["promptPolish", "textModels", "gpt-4o-mini", "中转站文本模型
     assert term in manifest_src, f"Provider prompt polish capability missing: {term}"
 
 app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
-for term in ["平台接入", "AI 创作", "Base URL", "API Key"]:
-    assert term in app_src, f"UI term missing: {term}"
-assert "AI 生图工作台" in app_src and "AI image workspace" in app_src, "Brand subtitle should support zh/en shell labels"
+i18n_src = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
+ui_terms = ["\u5e73\u53f0\u63a5\u5165", "AI \u521b\u4f5c", "Base URL", "API Key"]
+for term in ui_terms:
+    assert term in app_src or term in i18n_src, f"UI term missing: {term}"
+assert "AI \u751f\u56fe\u5de5\u4f5c\u53f0" in i18n_src and "AI image workspace" in i18n_src, "Brand subtitle should support zh/en i18n labels"
+assert "createTranslator(appSettings.language)" in app_src, "App shell should use the shared i18n translator"
 for term in [
     "loadAppSettings",
     "saveAppSettings",
@@ -92,20 +95,20 @@ for term in [
     "updatePromptHistory",
     "updateSavePreferences",
     "updateHomeModules",
-    "默认生成模式",
-    "默认参考图角色",
-    "默认平台与模型",
-    "首页模块",
-    "作品保存偏好",
-    "复用记录策略",
-    "默认润色模式",
-    "提示词润色引擎",
-    "提示词润色专用配置",
+    "settings.defaultMode",
+    "settings.defaultReferenceRole",
+    "settings.defaultProviderModel",
+    "settings.homeModules",
+    "settings.savePreferences",
+    "settings.reuseHistoryPolicy",
+    "settings.defaultPolishMode",
+    "settings.promptPolishEngine",
+    "settings.promptPolishProviderProfile",
     "DeepSeek",
-    "保存润色配置",
+    "settings.savePolishConfig",
     "refreshPromptPolishModels",
     "modelOptions",
-    "语言、强度与协议",
+    "settings.languageStrengthProtocol",
     "updatePromptPolish",
     "savePromptPolishSecret",
     "getPolishModesForEngine",
@@ -116,7 +119,7 @@ for term in [
     "onExportSettingsBackup",
     "settingsMessage",
     "BatchQueuePage",
-    "批量队列",
+    "batch.title",
     "handleAddCurrentGenerationToBatchQueue",
     "createQueuedGenerationSnapshot",
     "loadBatchQueueStore",
@@ -138,13 +141,13 @@ for term in [
     "batch-variants",
     "visionhub_model_compare",
     "visionhub_queue_retry",
-    "执行此任务",
-    "确认执行",
-    "重新入队",
-    "删除这个队列任务",
-    "停止连续执行",
+    "batch.task.execute",
+    "batch.task.execute",
+    "batch.task.requeue",
+    "batch.task.delete",
+    "batch.action.pauseTitle",
 ]:
-    assert term in app_src, f"Settings interaction missing: {term}"
+    assert term in app_src or term in i18n_src, f"Settings interaction missing: {term}"
 
 for term in [
     "libraryGridV2",
@@ -166,6 +169,7 @@ for term in [
     assert term in app_src, f"Library v2 interaction missing: {term}"
 
 generate_src = (ROOT / "src/ui/GeneratePage.tsx").read_text(encoding="utf-8")
+i18n_src = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
 for term in [
     "PromptAssistModal",
     "PromptAssistMode",
@@ -184,23 +188,26 @@ for term in [
     "quickPolishOptions",
     "onAddToBatchQueue",
     "batchQueueTaskCount",
-    "加入队列",
     "onAddBatchVariantsToBatchQueue",
-    "批量变体",
-    "批量 / 对比",
-    "画面比例",
-    "加入变体队列",
     "batchToolsDialog",
     "batchVariantBox",
     "batchVariantRatioOption",
     "onAddCompareGroupToBatchQueue",
-    "多模型对比",
-    "加入对比队列",
     "compareProfileBox",
     "quickQueueActions",
     "quickQueueButton",
+    "t('generate.queue.add')",
+    "t('generate.queue.tools')",
+    "t('generate.ratio.title')",
 ]:
     assert term in generate_src, f"Generate page prompt assist missing: {term}"
+
+for term in [
+    "'generate.queue.add'",
+    "'generate.queue.tools'",
+    "'generate.ratio.title'",
+]:
+    assert term in i18n_src, f"Generate i18n prompt assist missing: {term}"
 
 prompt_assist_src = (ROOT / "src/services/promptAssist.ts").read_text(encoding="utf-8")
 for term in [
@@ -224,17 +231,17 @@ for term in [
     "polishPromptWithProvider",
     "polishModelOptions",
     "onModelChange",
-    "本地规则润色",
-    "开始模型重写",
-    "模型润色失败",
-    "结构化重写",
+    "assist.polish.localTag",
+    "assist.polish.runModel",
+    "assist.polish.failed",
+    "assist.polish.providerOn",
     "includeFailed",
     "showThumbnails",
     "maxItems",
     "PromptPreview",
     "PROMPT_STYLE_PRESETS",
     "promptPolishConfigId",
-    "画风/风格",
+    "assist.polish.stylePlaceholder",
     "AssistActions",
     "reuseRecordList",
 ]:
@@ -319,8 +326,8 @@ for term in [
     "diagnoseSdWebUIConnection",
     "generateSdWebUIImage",
     "Stable Diffusion WebUI / Forge",
-    "导出迁移说明",
-    "备份与迁移",
+    "settings.exportMigrationGuide",
+    "settings.backupMigration",
     "sdWebUI",
     "samplerName",
     "cfgScale",

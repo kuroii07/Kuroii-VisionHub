@@ -50,6 +50,7 @@ import { useStudioStore } from '../store/useStudioStore';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { PromptAssistModal } from './PromptAssistModal';
 import { StudioSelect } from './StudioSelect';
+import type { Translator } from '../i18n';
 
 type GenerateSubmitOptions = {
   mode?: GenerationMode;
@@ -136,6 +137,8 @@ const BATCH_VARIANT_RATIO_OPTIONS = [
   { ratio: '21:9', label: '21:9 电影宽幅', size: '1792x768', hint: '宽景 / Banner' },
   { ratio: '4:5', label: '4:5 社媒竖图', size: '1280x1600', hint: '社媒 / 商业海报' }
 ];
+
+type BatchVariantRatioOption = typeof BATCH_VARIANT_RATIO_OPTIONS[number];
 
 const REFERENCE_ROLE_OPTIONS = [
   { value: 'auto', label: '自动' },
@@ -254,30 +257,30 @@ function canvasPreviewSortIndex(record: GenerationRecord, fallbackIndex: number)
   return readCanvasPreviewBatchMeta(record)?.imageIndex ?? fallbackIndex + 1;
 }
 
-function providerAccessLabel(provider: ReturnType<typeof listProviders>[number]) {
-  if (provider.id === 'custom-http-provider') return '中转站 / 聚合 API · OpenAI 兼容中转';
-  if (provider.id === 'openai-gpt-image') return '官方 API · OpenAI 官方';
-  if (provider.id === 'minimax-image') return '官方 API · MiniMax 官方';
-  if (provider.id === 'gemini-image') return '官方 API · Gemini / Nano Banana 官方';
-  if (provider.phase === 'local-lab') return `本地模型 · ${provider.name}`;
+function providerAccessLabel(provider: ReturnType<typeof listProviders>[number], t: Translator) {
+  if (provider.id === 'custom-http-provider') return t('generate.provider.customLabel');
+  if (provider.id === 'openai-gpt-image') return t('generate.provider.openaiLabel');
+  if (provider.id === 'minimax-image') return t('generate.provider.minimaxLabel');
+  if (provider.id === 'gemini-image') return t('generate.provider.geminiLabel');
+  if (provider.phase === 'local-lab') return `${t('generate.provider.localPrefix')} · ${provider.name}`;
   return provider.name;
 }
 
-function providerAccessDescription(provider: ReturnType<typeof listProviders>[number]) {
-  if (provider.id === 'custom-http-provider') return '默认主入口，使用平台接入页保存的中转站 / 聚合 API 配置。';
-  if (provider.id === 'openai-gpt-image') return '官方 OpenAI API，使用 https://api.openai.com。';
-  if (provider.id === 'minimax-image') return 'MiniMax 官方图片 API，支持文生图和单张人物主体参考图，使用平台接入页保存的 MiniMax API Key 和配置实例。';
-  if (provider.id === 'gemini-image') return 'Gemini 官方图片 API，支持文生图和参考图编辑，使用平台接入页保存的 Gemini API Key 和配置实例。';
-  if (provider.id === 'comfyui-local') return '本地 ComfyUI：使用平台接入页导入的 API workflow 提交本地生成。';
-  if (provider.phase === 'local-lab') return '本地模型路线暂为规划入口，不作为当前生图主通道。';
-  return provider.notes[0] ?? '平台能力以当前模板和服务商文档为准。';
+function providerAccessDescription(provider: ReturnType<typeof listProviders>[number], t: Translator) {
+  if (provider.id === 'custom-http-provider') return t('generate.provider.customDesc');
+  if (provider.id === 'openai-gpt-image') return t('generate.provider.openaiDesc');
+  if (provider.id === 'minimax-image') return t('generate.provider.minimaxDesc');
+  if (provider.id === 'gemini-image') return t('generate.provider.geminiDesc');
+  if (provider.id === 'comfyui-local') return t('generate.provider.comfyDesc');
+  if (provider.phase === 'local-lab') return t('generate.provider.localPlannedDesc');
+  return provider.notes[0] ?? t('generate.provider.defaultDesc');
 }
 
-function profileStatusLabel(status: ProviderConnectionProfile['lastTestStatus']) {
-  if (status === 'passed') return '已验证';
-  if (status === 'warning') return '注意';
-  if (status === 'failed') return '失败';
-  return '未测试';
+function profileStatusLabel(status: ProviderConnectionProfile['lastTestStatus'], t?: Translator) {
+  if (status === 'passed') return t ? t('common.status.passed') : '已验证';
+  if (status === 'warning') return t ? t('common.status.warning') : '注意';
+  if (status === 'failed') return t ? t('common.status.failed') : '失败';
+  return t ? t('common.status.untested') : '未测试';
 }
 
 function compactModelLabel(modelId: string) {
@@ -301,14 +304,61 @@ function formatDraftTime(value: string) {
   });
 }
 
-function promptDraftKindLabel(kind: PromptDraftKind) {
+function promptDraftKindLabel(kind: PromptDraftKind, t?: Translator) {
   const labels: Record<PromptDraftKind, string> = {
-    manual: '手动',
-    previous: '上一版',
-    polished: '润色',
-    retry: '重试'
+    manual: t ? t('draft.kind.manual') : '手动',
+    previous: t ? t('draft.kind.previous') : '上一版',
+    polished: t ? t('draft.kind.polished') : '润色',
+    retry: t ? t('draft.kind.retry') : '重试'
   };
   return labels[kind];
+}
+
+function referenceRoleOptions(t: Translator) {
+  return [
+    { value: 'auto', label: t('generate.reference.role.auto') },
+    { value: 'composition', label: t('generate.reference.role.composition') },
+    { value: 'style', label: t('generate.reference.role.style') },
+    { value: 'character', label: t('generate.reference.role.character') },
+    { value: 'color', label: t('generate.reference.role.color') }
+  ];
+}
+
+function qualityOptions(t: Translator) {
+  return [
+    { value: 'auto', label: t('generate.option.auto') },
+    { value: 'low', label: t('generate.option.low') },
+    { value: 'medium', label: t('generate.option.medium') },
+    { value: 'standard', label: t('generate.option.standard') },
+    { value: 'high', label: t('generate.option.high') }
+  ];
+}
+
+function referenceStrengthOptions(t: Translator) {
+  return [
+    { value: 'auto', label: t('generate.option.auto') },
+    { value: 'low', label: t('generate.imageTuning.strengthLow') },
+    { value: 'medium', label: t('generate.imageTuning.strengthMedium') },
+    { value: 'high', label: t('generate.imageTuning.strengthHigh') }
+  ];
+}
+
+function batchRatioLabel(option: BatchVariantRatioOption, t: Translator) {
+  const key = `generate.batch.ratioLabel.${option.ratio}` as Parameters<Translator>[0];
+  const translated = t(key);
+  return translated === key ? option.label : translated;
+}
+
+function batchRatioHint(option: BatchVariantRatioOption, t: Translator) {
+  const key = `generate.batch.ratioHint.${option.ratio}` as Parameters<Translator>[0];
+  const translated = t(key);
+  return translated === key ? option.hint : translated;
+}
+
+function sizeOptionDescription(option: SizeOption, t: Translator) {
+  const key = `generate.size.desc.${option.value}` as Parameters<Translator>[0];
+  const translated = t(key);
+  return translated === key ? option.desc : translated;
 }
 
 function normalizePromptDrafts(value: unknown): PromptDraft[] {
@@ -455,13 +505,13 @@ function resolveActivePromptPolishConfigId(settings: PromptPolishSettings) {
   return exactConfig?.id ?? settings.savedConfigs[0]?.id ?? '__current__';
 }
 
-function referenceSourceLabel(source: ReferenceImage['source']) {
+function referenceSourceLabel(source: ReferenceImage['source'], t: Translator) {
   const labels: Record<ReferenceImage['source'], string> = {
-    upload: '本地',
-    'generated-result': '作品',
-    clipboard: '剪贴板',
-    'drag-drop': '拖拽',
-    inspiration: '灵感'
+    upload: t('generate.reference.source.upload'),
+    'generated-result': t('generate.reference.source.generated'),
+    clipboard: t('generate.reference.source.clipboard'),
+    'drag-drop': t('generate.reference.source.dragDrop'),
+    inspiration: t('generate.reference.source.inspiration')
   };
   return labels[source] ?? source;
 }
@@ -476,6 +526,7 @@ function parseBatchPromptLines(batchPromptText: string, fallbackPrompt: string) 
 }
 
 export function ModernGeneratePage(props: {
+  t: Translator;
   providers: ReturnType<typeof listProviders>;
   selectedProvider: ReturnType<typeof listProviders>[number];
   selectedProviderId: string;
@@ -523,6 +574,7 @@ export function ModernGeneratePage(props: {
   referenceImages: ReferenceImage[];
   onReferenceImagesChange: (references: ReferenceImage[]) => void;
 }) {
+  const t = props.t;
   const [mode, setMode] = useState<DefaultGenerationMode>(props.defaultMode);
   const [outputFormat, setOutputFormat] = useState<OutputFormat>(props.defaultOutputFormat);
   const [compression, setCompression] = useState('');
@@ -595,7 +647,7 @@ export function ModernGeneratePage(props: {
         protocol: props.promptPolishSettings.protocol
       }];
   const quickPolishOptions = [
-    { value: '__local__', label: '本地规则', description: '不调用模型' },
+    { value: '__local__', label: t('generate.provider.localRule'), description: t('generate.provider.noModelCall') },
     ...promptPolishConfigOptions.slice(0, 6).map((config) => ({
       value: config.id,
       label: compactModelLabel(config.modelId || config.displayName) || config.displayName,
@@ -610,8 +662,8 @@ export function ModernGeneratePage(props: {
   const selectedQuickPolishConfig = promptPolishConfigOptions.find((config) => config.id === selectedQuickPolishValue);
   const providerProfileOptions = props.providerProfiles.map((profile) => ({
     value: profile.id,
-    label: profile.displayName || profile.modelId || '未命名配置',
-    description: `${profile.modelId || '未设置模型'} · ${profile.enabled ? '当前启用' : profileStatusLabel(profile.lastTestStatus)}`
+    label: profile.displayName || profile.modelId || t('generate.provider.unnamedProfile'),
+    description: `${profile.modelId || t('generate.provider.noModel')} · ${profile.enabled ? t('generate.provider.currentEnabled') : profileStatusLabel(profile.lastTestStatus, t)}`
   }));
   const compareProfileCandidates = useMemo(
     () => props.supportsOpenAICompatible
@@ -649,31 +701,25 @@ export function ModernGeneratePage(props: {
   const isLocalGenerationProvider = isComfyUILocalProvider || isSdWebUILocalProvider;
   const modelValue = props.supportsOpenAICompatible ? props.providerConfig.modelId : props.selectedModelId;
   const activeProfileName = isComfyUILocalProvider
-    ? 'ComfyUI 本地 workflow'
+    ? t('generate.provider.localComfyName')
     : isSdWebUILocalProvider
-      ? 'SD WebUI / Forge 本地端点'
-      : props.activeProfile?.displayName ?? (props.supportsOpenAICompatible ? '未保存配置实例' : props.selectedProvider.name);
+      ? t('generate.provider.localSdName')
+      : props.activeProfile?.displayName ?? (props.supportsOpenAICompatible ? t('generate.provider.noSavedProfile') : props.selectedProvider.name);
   const activeProfileStatus = isLocalGenerationProvider
-    ? '本地服务'
+    ? t('generate.provider.localService')
     : props.activeProfile
-    ? props.activeProfile.lastTestStatus === 'passed'
-      ? '已验证'
-      : props.activeProfile.lastTestStatus === 'warning'
-        ? '注意'
-        : props.activeProfile.lastTestStatus === 'failed'
-          ? '失败'
-          : '未测试'
-    : props.supportsOpenAICompatible ? '草稿 / 旧配置' : '内置平台';
+      ? profileStatusLabel(props.activeProfile.lastTestStatus, t)
+      : props.supportsOpenAICompatible ? t('generate.provider.draftLegacy') : t('generate.provider.builtIn');
   const activeProfileSecretText = isLocalGenerationProvider
-    ? '无需密钥'
-    : props.activeProfileSecretAvailable ? '密钥已绑定' : '密钥未绑定';
+    ? t('generate.provider.noSecret')
+    : props.activeProfileSecretAvailable ? t('generate.provider.secretBound') : t('generate.provider.secretMissing');
   const activeProfileModelProbeText = isComfyUILocalProvider
-    ? props.isRealProviderReady ? 'API workflow 可提交' : '需导入 API workflow'
+    ? props.isRealProviderReady ? t('generate.provider.comfyReady') : t('generate.provider.comfyMissing')
     : isSdWebUILocalProvider
-      ? props.isRealProviderReady ? 'txt2img 可提交' : '需本地端点'
+      ? props.isRealProviderReady ? t('generate.provider.sdReady') : t('generate.provider.sdMissing')
       : props.activeProfile?.lastModelProbe
-    ? props.activeProfile.lastModelProbe.available ? '当前模型已命中' : '当前模型未命中'
-    : '模型未探测';
+        ? props.activeProfile.lastModelProbe.available ? t('generate.provider.modelHit') : t('generate.provider.modelMiss')
+        : t('generate.provider.modelNotProbed');
   const selectedRatio = ratioFromSize(props.size);
   const selectedSize = SIZE_OPTIONS.find((item) => item.value === props.size);
   const currentRatioSizes = useMemo(() => SIZE_OPTIONS.filter((item) => item.ratio === selectedRatio), [selectedRatio]);
@@ -682,13 +728,13 @@ export function ModernGeneratePage(props: {
     if (!options.some((option) => option.ratio === selectedRatio)) {
       options.unshift({
         ratio: selectedRatio,
-        label: `${selectedRatio} 当前比例`,
+        label: t('generate.batch.ratioCurrentLabel', { ratio: selectedRatio }),
         size: props.size,
-        hint: '当前自定义画幅'
+        hint: t('generate.batch.ratioCurrentHint')
       });
     }
     return options;
-  }, [props.size, selectedRatio]);
+  }, [props.size, selectedRatio, t]);
   const batchRatioCandidateSet = useMemo(() => new Set(batchRatioOptions.map((option) => option.ratio)), [batchRatioOptions]);
   const selectedBatchRatioValues = batchRatioValues.filter((item) => batchRatioCandidateSet.has(item));
   const selectedBatchVariantSizes = selectedBatchRatioValues
@@ -750,12 +796,12 @@ export function ModernGeneratePage(props: {
   const latestCurrentModeResult = currentModeSessionResults[0];
   const isCurrentModeGenerating = props.isGenerating && activeGeneratingMode === currentGenerationMode;
   const generateButtonLabel = isCurrentModeGenerating
-    ? '画布渲染中…'
+    ? t('generate.action.rendering')
     : props.isGenerating
-      ? '另一模式处理中…'
+      ? t('generate.action.otherMode')
       : mode === 'image'
-        ? '参考重绘'
-        : '点亮画布';
+        ? t('generate.action.image')
+        : t('generate.action.text');
   const failedLatest = !isCurrentModeGenerating && latestCurrentModeResult?.status === 'failed'
     ? latestCurrentModeResult
     : undefined;
@@ -770,10 +816,10 @@ export function ModernGeneratePage(props: {
     promptLength === 0 ? 'promptEmpty' : promptLength < 24 ? 'promptShort' : promptLength < 60 ? 'promptMedium' : 'promptLong';
   const referenceStatusText = referenceNotice?.text
     ?? (props.referenceImages.length >= 4
-      ? '已满 4 张，可拖拽排序或清空后再加'
+      ? t('generate.reference.status.full')
       : props.referenceImages.length > 0
-        ? '拖拽缩略图可调整顺序'
-        : '拖拽到此处或 Ctrl+V 粘贴');
+        ? t('generate.reference.status.sortable')
+        : t('generate.reference.status.dropOrPaste'));
 
   useEffect(() => {
     setCanvasPreviewIndex((index) => {
@@ -968,25 +1014,25 @@ export function ModernGeneratePage(props: {
   function saveCurrentPromptDraft(kind: PromptDraftKind = 'manual', title?: string) {
     const draft = buildPromptDraft(props.prompt, kind, title);
     if (!draft) {
-      showDraftNotice('当前 Prompt 为空，未保存草稿。');
+      showDraftNotice(t('generate.prompt.noticeEmptyDraft'));
       return;
     }
     updatePromptDrafts(mergePromptDraft(promptDrafts, draft));
-    showDraftNotice('Prompt 草稿已保存。');
+    showDraftNotice(t('generate.prompt.noticeDraftSaved'));
   }
 
   function saveCurrentPromptAsTemplate() {
     const prompt = props.prompt.trim();
     if (!prompt) {
       setIsPromptSaveMenuOpen(false);
-      showDraftNotice('当前 Prompt 为空，未保存模板。');
+      showDraftNotice(t('generate.prompt.noticeEmptyTemplate'));
       return;
     }
     const template = createPromptTemplate({
-      title: buildSavedPromptTitle(prompt, '创作台 Prompt'),
+      title: buildSavedPromptTitle(prompt, t('generate.prompt.savedTitleFallback')),
       category: inferPromptTemplateCategory(prompt, mode),
-      tone: '从 AI 创作台保存',
-      description: '从 AI 创作台当前 Prompt 保存的自定义模板。',
+      tone: t('generate.prompt.templateTone'),
+      description: t('generate.prompt.templateDesc'),
       prompt,
       tags: buildSavedPromptTags(mode)
     });
@@ -994,7 +1040,7 @@ export function ModernGeneratePage(props: {
     const nextTemplates = [template, ...currentTemplates.filter((item) => item.prompt.trim() !== prompt)].slice(0, 300);
     savePromptTemplates(nextTemplates);
     setIsPromptSaveMenuOpen(false);
-    showDraftNotice('已保存为提示词模板，可在提示词库查看。');
+    showDraftNotice(t('generate.prompt.noticeTemplateSaved'));
   }
 
   async function saveCurrentPromptAsExcerpt() {
@@ -1002,7 +1048,7 @@ export function ModernGeneratePage(props: {
     if (!prompt || isSavingPromptAsset) {
       if (!prompt) {
         setIsPromptSaveMenuOpen(false);
-        showDraftNotice('当前 Prompt 为空，未保存摘录。');
+        showDraftNotice(t('generate.prompt.noticeEmptyExcerpt'));
       }
       return;
     }
@@ -1011,22 +1057,22 @@ export function ModernGeneratePage(props: {
     try {
       await savePromptExcerpt({
         id: `current-prompt-${now}`,
-        title: buildSavedPromptTitle(prompt, '创作台 Prompt'),
+        title: buildSavedPromptTitle(prompt, t('generate.prompt.savedTitleFallback')),
         prompt,
-        sourceName: 'AI 创作台',
+        sourceName: t('generate.prompt.excerptSource'),
         language: inferPromptExcerptLanguage(prompt),
         category: inferPromptExcerptCategory(prompt),
         tags: buildSavedPromptTags(mode),
-        note: '从 AI 创作台当前 Prompt 保存。',
+        note: t('generate.prompt.excerptNote'),
         favorite: false,
         createdAt: now,
         updatedAt: now
       });
       setIsPromptSaveMenuOpen(false);
-      showDraftNotice('已保存为 Prompt 摘录，可在灵感中心查看。');
+      showDraftNotice(t('generate.prompt.noticeExcerptSaved'));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      showDraftNotice(`Prompt 摘录保存失败：${message}`);
+      showDraftNotice(t('generate.prompt.noticeExcerptFailed', { message }));
     } finally {
       setIsSavingPromptAsset(false);
     }
@@ -1034,16 +1080,16 @@ export function ModernGeneratePage(props: {
 
   function applyPromptDraft(draft: PromptDraft) {
     if (props.prompt.trim() && props.prompt.trim() !== draft.prompt.trim()) {
-      updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'previous', '替换前')));
+      updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'previous', t('generate.draft.labelBeforeReplace'))));
     }
     props.onPromptChange(draft.prompt);
     promptInputRef.current?.focus();
-    showDraftNotice('已回填草稿到当前 Prompt。');
+    showDraftNotice(t('generate.prompt.noticeDraftApplied'));
   }
 
   function deletePromptDraft(draftId: string) {
     updatePromptDrafts(promptDrafts.filter((draft) => draft.id !== draftId));
-    showDraftNotice('已删除草稿。');
+    showDraftNotice(t('generate.prompt.noticeDraftDeleted'));
   }
 
   function applyCustomSize() {
@@ -1058,7 +1104,7 @@ export function ModernGeneratePage(props: {
     const trimmed = nextPrompt.trim();
     if (!trimmed) return;
     if (props.prompt.trim()) {
-      updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, placement === 'replace' ? 'previous' : 'manual', placement === 'replace' ? '替换前' : '追加前')));
+      updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, placement === 'replace' ? 'previous' : 'manual', placement === 'replace' ? t('generate.draft.labelBeforeReplace') : t('generate.draft.labelBeforeAppend'))));
     }
     props.onPromptChange(placement === 'append' && props.prompt.trim() ? `${props.prompt.trim()}\n\n${trimmed}` : trimmed);
     setAssistMode(null);
@@ -1073,13 +1119,13 @@ export function ModernGeneratePage(props: {
     ).id;
     if (selectedQuickPolishValue === '__local__' || effectivePromptPolishSettings.engine === 'local') {
       const polished = polishPrompt(sourcePrompt, modeId, promptStyleId);
-      updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', '润色前')), buildPromptDraft(polished, 'polished', '本地润色')));
+      updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', t('generate.draft.labelBeforePolish'))), buildPromptDraft(polished, 'polished', t('generate.draft.labelLocalPolish'))));
       props.onPromptChange(polished);
       return;
     }
     if (!effectivePromptPolishSettings.baseUrl.trim() || !effectivePromptPolishSettings.modelId.trim()) {
       const polished = polishPrompt(sourcePrompt, modeId, promptStyleId);
-      updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', '润色前')), buildPromptDraft(polished, 'polished', '本地兜底')));
+      updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', t('generate.draft.labelBeforePolish'))), buildPromptDraft(polished, 'polished', t('generate.draft.labelLocalFallback'))));
       props.onPromptChange(polished);
       return;
     }
@@ -1097,12 +1143,12 @@ export function ModernGeneratePage(props: {
         secretId: PROMPT_POLISH_SECRET_ID
       });
       const polished = result.polishedPrompt.trim() || sourcePrompt;
-      updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', '润色前')), buildPromptDraft(polished, 'polished', '模型润色')));
+      updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', t('generate.draft.labelBeforePolish'))), buildPromptDraft(polished, 'polished', t('generate.draft.labelModelPolish'))));
       props.onPromptChange(polished);
     } catch {
       if (props.promptPolishSettings.fallbackToLocal) {
         const polished = polishPrompt(sourcePrompt, modeId, promptStyleId);
-        updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', '润色前')), buildPromptDraft(polished, 'polished', '本地兜底')));
+        updatePromptDrafts(mergePromptDraft(mergePromptDraft(promptDrafts, buildPromptDraft(sourcePrompt, 'previous', t('generate.draft.labelBeforePolish'))), buildPromptDraft(polished, 'polished', t('generate.draft.labelLocalFallback'))));
         props.onPromptChange(polished);
       }
     } finally {
@@ -1118,7 +1164,7 @@ export function ModernGeneratePage(props: {
     if (!files?.length || props.isGenerating) return;
     const slots = Math.max(0, 4 - props.referenceImages.length);
     if (slots === 0) {
-      showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
+      showReferenceNotice(t('generate.reference.noticeFull'), 'warning');
       return;
     }
     const incomingFiles = Array.from(files);
@@ -1126,25 +1172,25 @@ export function ModernGeneratePage(props: {
     const selectedFiles = supportedFiles
       .slice(0, slots);
     if (selectedFiles.length === 0) {
-      showReferenceNotice('没有可用图片，仅支持 PNG/JPG/WebP。', 'warning');
+      showReferenceNotice(t('generate.reference.noticeNoUsableImage'), 'warning');
       return;
     }
     try {
-      const references = (await Promise.all(selectedFiles.map((file) => fileToReferenceImage(file, source))))
+      const references = (await Promise.all(selectedFiles.map((file) => fileToReferenceImage(file, source, t))))
         .map((reference) => ({ ...reference, role: props.defaultReferenceRole }));
       const nextReferences = normalizeReferences([...props.referenceImages, ...references]);
       props.onReferenceImagesChange(nextReferences);
       setMode('image');
       const addedCount = Math.max(0, nextReferences.length - props.referenceImages.length);
       if (supportedFiles.length > selectedFiles.length) {
-        showReferenceNotice(`已加入 ${addedCount} 张，最多保留 4 张参考图。`, 'warning');
+        showReferenceNotice(t('generate.reference.noticeAddedLimit', { count: addedCount }), 'warning');
       } else if (addedCount < selectedFiles.length) {
-        showReferenceNotice(addedCount > 0 ? `已加入 ${addedCount} 张，重复参考图已跳过。` : '重复参考图已跳过。', 'warning');
+        showReferenceNotice(addedCount > 0 ? t('generate.reference.noticeAddedDuplicate', { count: addedCount }) : t('generate.reference.noticeDuplicate'), 'warning');
       } else {
-        showReferenceNotice(`已加入 ${addedCount} 张参考图。`);
+        showReferenceNotice(t('generate.reference.noticeAdded', { count: addedCount }));
       }
     } catch {
-      showReferenceNotice('参考图读取失败，请换一张图片重试。', 'error');
+      showReferenceNotice(t('generate.reference.noticeReadFailed'), 'error');
       return;
     }
   }
@@ -1153,17 +1199,17 @@ export function ModernGeneratePage(props: {
     if (!paths.length || props.isGenerating) return;
     const slots = Math.max(0, 4 - props.referenceImages.length);
     if (slots === 0) {
-      showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
+      showReferenceNotice(t('generate.reference.noticeFull'), 'warning');
       return;
     }
     const supportedPaths = paths.filter(isSupportedReferencePath);
     if (!supportedPaths.length) {
-      showReferenceNotice('拖入文件不是支持的图片格式。', 'warning');
+      showReferenceNotice(t('generate.reference.noticeUnsupportedDrop'), 'warning');
       return;
     }
     const references = await referenceImagesFromPaths(supportedPaths, slots);
     if (!references.length) {
-      showReferenceNotice('未能读取拖入的参考图。', 'error');
+      showReferenceNotice(t('generate.reference.noticeDropReadFailed'), 'error');
       return;
     }
     const nextReferences = normalizeReferences([...props.referenceImages, ...references]);
@@ -1172,15 +1218,15 @@ export function ModernGeneratePage(props: {
     const addedCount = Math.max(0, nextReferences.length - props.referenceImages.length);
     showReferenceNotice(
       supportedPaths.length > slots
-        ? `已加入 ${addedCount} 张，最多保留 4 张参考图。`
-        : `已加入 ${addedCount} 张参考图。`,
+        ? t('generate.reference.noticeAddedLimit', { count: addedCount })
+        : t('generate.reference.noticeAdded', { count: addedCount }),
       supportedPaths.length > slots ? 'warning' : 'success'
     );
   }
 
   function removeReference(referenceId: string) {
     updateReferences(props.referenceImages.filter((reference) => reference.id !== referenceId));
-    showReferenceNotice('已移除 1 张参考图。');
+    showReferenceNotice(t('generate.reference.noticeRemoved'));
     setReferenceRoles((current) => {
       const next = { ...current };
       delete next[referenceId];
@@ -1191,7 +1237,7 @@ export function ModernGeneratePage(props: {
   function clearReferences() {
     updateReferences([]);
     setReferenceRoles({});
-    showReferenceNotice('已清空参考图。');
+    showReferenceNotice(t('generate.reference.noticeCleared'));
   }
 
   function reorderReference(activeId: string, overId: string) {
@@ -1203,7 +1249,7 @@ export function ModernGeneratePage(props: {
     const [item] = nextReferences.splice(index, 1);
     nextReferences.splice(nextIndex, 0, item);
     updateReferences(nextReferences);
-    showReferenceNotice('参考图顺序已调整。');
+    showReferenceNotice(t('generate.reference.noticeSorted'));
   }
 
   function handleReferenceSortDragStart(referenceId: string, event: DragEvent<HTMLElement>) {
@@ -1277,13 +1323,13 @@ export function ModernGeneratePage(props: {
     event.stopPropagation();
     if (props.referenceImages.length >= 4) {
       setReferenceDragState(null);
-      showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
+      showReferenceNotice(t('generate.reference.noticeFull'), 'warning');
       return;
     }
     const nextDragState = referenceTransferState(event.dataTransfer, referenceDragState);
     setReferenceDragState(null);
     if (nextDragState !== 'supported') {
-      showReferenceNotice('拖入文件不是支持的图片格式。', 'warning');
+      showReferenceNotice(t('generate.reference.noticeUnsupportedDrop'), 'warning');
       return;
     }
     const files = referenceFilesFromTransfer(event.dataTransfer);
@@ -1294,7 +1340,7 @@ export function ModernGeneratePage(props: {
     if (props.isGenerating) return;
     if (props.referenceImages.length >= 4) {
       const hasImage = Array.from(event.clipboardData.items).some((item) => item.kind === 'file' && item.type.startsWith('image/'));
-      if (hasImage) showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
+      if (hasImage) showReferenceNotice(t('generate.reference.noticeFull'), 'warning');
       return;
     }
     const files = Array.from(event.clipboardData.items)
@@ -1302,7 +1348,7 @@ export function ModernGeneratePage(props: {
       .filter((file): file is File => Boolean(file && isReferenceImageFile(file)));
     if (files.length === 0) {
       const hasFile = Array.from(event.clipboardData.items).some((item) => item.kind === 'file');
-      if (hasFile) showReferenceNotice('剪贴板图片格式不支持，仅支持 PNG/JPG/WebP。', 'warning');
+      if (hasFile) showReferenceNotice(t('generate.reference.noticeClipboardUnsupported'), 'warning');
       return;
     }
     event.preventDefault();
@@ -1318,13 +1364,13 @@ export function ModernGeneratePage(props: {
     const hasSameLatestReference = props.referenceImages.some((reference) => reference.sourceGenerationId === sourceReferenceId);
     if (props.referenceImages.length >= 4 && !hasSameLatestReference) {
       setMode('image');
-      showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
+      showReferenceNotice(t('generate.reference.noticeFull'), 'warning');
       return;
     }
     const imageUrl = activeCanvasPreviewItem.imageUrl;
     const nextReference: ReferenceImage = {
       id: `generated-${sourceRecord.id}-${activeCanvasPreviewItem.imageIndex}-${Date.now()}`,
-      name: canvasPreviewTotal > 1 ? `最近生成图 ${canvasPreviewPosition}/${canvasPreviewTotal}` : '最近生成图',
+      name: canvasPreviewTotal > 1 ? t('generate.reference.latestNameWithCount', { index: canvasPreviewPosition, total: canvasPreviewTotal }) : t('generate.reference.latestName'),
       mimeType: imageUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : imageUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/png',
       dataUrl: imageUrl.startsWith('data:image/') ? imageUrl : undefined,
       localPath: activeCanvasPreviewItem.localPath,
@@ -1335,7 +1381,7 @@ export function ModernGeneratePage(props: {
     };
     updateReferences([nextReference, ...props.referenceImages.filter((reference) => reference.sourceGenerationId !== sourceReferenceId)]);
     setMode('image');
-    showReferenceNotice('最近生成图已加入参考。');
+    showReferenceNotice(t('generate.reference.noticeLatestAdded'));
   }
 
   function clearCurrentCanvas() {
@@ -1408,12 +1454,12 @@ export function ModernGeneratePage(props: {
         setReferenceDragState(null);
         if (props.isGenerating) return;
         if (props.referenceImages.length >= 4) {
-          showReferenceNotice('参考图已满 4 张，请先移除或清空。', 'warning');
+          showReferenceNotice(t('generate.reference.noticeFull'), 'warning');
           return;
         }
         const supportedPaths = payload.paths.filter(isSupportedReferencePath);
         if (supportedPaths.length > 0) void addReferencePaths(supportedPaths);
-        else showReferenceNotice('拖入文件不是支持的图片格式。', 'warning');
+        else showReferenceNotice(t('generate.reference.noticeUnsupportedDrop'), 'warning');
       }
     }).then((cleanup) => {
       if (cancelled) cleanup();
@@ -1486,7 +1532,7 @@ export function ModernGeneratePage(props: {
   function isCurrentSizeSupportedByModel() {
     const selectedModelForGeneration = props.supportsOpenAICompatible ? props.providerConfig.modelId : props.selectedModelId;
     if (selectedSize?.badge === '4K' && isKnown4KUnsupportedModel(props.selectedProvider.id, selectedModelForGeneration)) {
-      window.alert(`当前模型 ${selectedModelForGeneration || '未配置模型'} 不支持 4K 图片。请换成 1K/2K 输出尺寸，或切换到支持 4K 的模型后再生成。`);
+      window.alert(t('generate.validation.unsupported4k', { model: selectedModelForGeneration || t('generate.validation.noModel') }));
       return false;
     }
     return true;
@@ -1498,19 +1544,19 @@ export function ModernGeneratePage(props: {
     if (mode === 'image') {
       setActiveGeneratingMode('image-to-image');
       props.onGenerate(generationOptions);
-      updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', '已提交图生图')));
+      updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', t('generate.draft.labelSubmittedImage'))));
       return;
     }
     setActiveGeneratingMode('text-to-image');
     props.onGenerate(generationOptions);
-    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', '已提交文生图')));
+    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', t('generate.draft.labelSubmittedText'))));
   }
 
   function addToBatchQueue() {
     if (!props.onAddToBatchQueue || !isCurrentSizeSupportedByModel()) return;
     setIsQueueMenuOpen(false);
     props.onAddToBatchQueue(buildCurrentGenerationOptions());
-    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入批量队列')));
+    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', t('generate.draft.labelAddedQueue'))));
   }
 
   function toggleBatchRatio(ratioValue: string, checked: boolean) {
@@ -1525,20 +1571,20 @@ export function ModernGeneratePage(props: {
   function addBatchVariantsToBatchQueue() {
     if (!props.onAddBatchVariantsToBatchQueue || !isCurrentSizeSupportedByModel()) return;
     if (batchPromptLines.length === 0) {
-      showDraftNotice('先输入当前 Prompt，或在批量变体里逐行填写 Prompt。');
+      showDraftNotice(t('generate.batch.noticeNeedPrompt'));
       return;
     }
     if (selectedBatchVariantSizes.length === 0) {
-      showDraftNotice('至少选择 1 个画面比例，才能创建批量变体。');
+      showDraftNotice(t('generate.batch.noticeNeedRatio'));
       return;
     }
     if (estimatedBatchVariantTasks > 40) {
-      showDraftNotice('单次最多创建 40 个批量变体任务，请减少 Prompt 或尺寸。');
+      showDraftNotice(t('generate.batch.noticeTooMany'));
       return;
     }
     props.onAddBatchVariantsToBatchQueue(batchPromptLines, selectedBatchVariantSizes, buildCurrentGenerationOptions());
     setIsQueueMenuOpen(false);
-    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入批量变体队列')));
+    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', t('generate.draft.labelAddedVariants'))));
   }
 
   function toggleCompareProfile(profileId: string, checked: boolean) {
@@ -1553,12 +1599,12 @@ export function ModernGeneratePage(props: {
   function addCompareGroupToBatchQueue() {
     if (!props.onAddCompareGroupToBatchQueue || !isCurrentSizeSupportedByModel()) return;
     if (selectedCompareProfileIds.length < 2) {
-      showDraftNotice('至少选择 2 个配置实例，才能创建多模型对比队列。');
+      showDraftNotice(t('generate.batch.noticeNeedProfiles'));
       return;
     }
     props.onAddCompareGroupToBatchQueue(selectedCompareProfileIds, buildCurrentGenerationOptions());
     setIsQueueMenuOpen(false);
-    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', '已加入多模型对比队列')));
+    updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'manual', t('generate.draft.labelAddedCompare'))));
   }
 
   const queueMenuPortalHost = typeof document === 'undefined'
@@ -1577,17 +1623,17 @@ export function ModernGeneratePage(props: {
       <section className={`canvasPane ${mode === 'image' ? 'withReferenceRow' : 'textOnlyRow'}`}>
         <header className="generatorTopbar">
           <div className="workspaceTitleBlock">
-            <span className="tealLabel">AI 创作工作台</span>
+            <span className="tealLabel">{t('generate.title')}</span>
             <div className="workspaceTitleLine">
-              <strong>{isCurrentModeGenerating ? '当前模式渲染中' : activeCanvasPreviewItem ? '当前模式最近画面' : '准备生成'}</strong>
+              <strong>{isCurrentModeGenerating ? t('generate.status.generating') : activeCanvasPreviewItem ? t('generate.status.recent') : t('generate.status.ready')}</strong>
             </div>
           </div>
           <div className="quickToolbar">
             <button className={`modeToggle ${mode === 'text' ? 'active' : ''}`} onClick={() => setMode('text')}>
-              <Sparkles size={15} /> 文生图
+              <Sparkles size={15} /> {t('generate.mode.text')}
             </button>
             <button className={`modeToggle ${mode === 'image' ? 'active' : ''}`} onClick={() => setMode('image')}>
-              <Upload size={15} /> 图生图
+              <Upload size={15} /> {t('generate.mode.image')}
             </button>
             <span>{selectedRatio}</span>
             <span>{props.size}</span>
@@ -1595,7 +1641,7 @@ export function ModernGeneratePage(props: {
             <span className="sessionCount">
               <Clock3 size={13} /> {currentModeSessionResults.length}
             </span>
-            <div className="quickQueueActions" ref={queueMenuRef} aria-label="队列与批量操作">
+            <div className="quickQueueActions" ref={queueMenuRef} aria-label={t('generate.queue.actionsAria')}>
               <button
                 className="quickQueueButton quickQueueMenuTrigger"
                 ref={queueMenuButtonRef}
@@ -1605,13 +1651,13 @@ export function ModernGeneratePage(props: {
                   setIsQueueMenuOpen((open) => !open);
                 }}
                 disabled={props.isGenerating || (!props.onAddToBatchQueue && !props.onAddBatchVariantsToBatchQueue && !props.onAddCompareGroupToBatchQueue && !props.onOpenBatchQueue)}
-                title={props.batchQueueCurrentName ? `打开队列相关操作；当前队列：${props.batchQueueCurrentName}` : '打开队列相关操作'}
-                aria-label="打开队列操作菜单"
+                title={props.batchQueueCurrentName ? t('generate.queue.openTitleWithName', { name: props.batchQueueCurrentName }) : t('generate.queue.openTitle')}
+                aria-label={t('generate.queue.openAria')}
                 aria-expanded={isQueueMenuOpen}
                 aria-haspopup="menu"
               >
                 <ListChecks size={14} />
-                <span>{props.batchQueueTaskCount ? `队列 · ${props.batchQueueTaskCount}` : '队列操作'}</span>
+                <span>{props.batchQueueTaskCount ? t('generate.queue.labelWithCount', { count: props.batchQueueTaskCount }) : t('generate.queue.label')}</span>
                 <ChevronDown size={13} />
               </button>
               {isQueueMenuOpen && queueMenuPosition && queueMenuPortalHost ? createPortal((
@@ -1619,16 +1665,16 @@ export function ModernGeneratePage(props: {
                   className="quickQueueMenu"
                   ref={queueMenuPanelRef}
                   role="menu"
-                  aria-label="队列操作菜单"
+                  aria-label={t('generate.queue.menuAria')}
                   style={{ top: queueMenuPosition.top, right: queueMenuPosition.right }}
                 >
                   <div className="quickQueueMenuInfo" role="presentation">
-                    <span>当前队列</span>
-                    <strong>{props.batchQueueCurrentName ?? '默认批量队列'}</strong>
+                    <span>{t('generate.queue.current')}</span>
+                    <strong>{props.batchQueueCurrentName ?? t('generate.queue.defaultName')}</strong>
                     <small>
                       {props.batchQueueCurrentName
-                        ? `${props.batchQueueCurrentTaskCount ?? 0} 个任务 · ${props.batchQueueCurrentPendingCount ?? 0} 个待执行`
-                        : '加入任务时会自动创建'}
+                        ? t('generate.queue.taskPending', { tasks: props.batchQueueCurrentTaskCount ?? 0, pending: props.batchQueueCurrentPendingCount ?? 0 })
+                        : t('generate.queue.autoCreate')}
                     </small>
                   </div>
                   <button
@@ -1638,8 +1684,8 @@ export function ModernGeneratePage(props: {
                     disabled={props.isGenerating || !props.onAddToBatchQueue}
                   >
                     <ListChecks size={14} />
-                    <span>加入队列</span>
-                    <small>当前参数快照，不立即消耗额度</small>
+                    <span>{t('generate.queue.add')}</span>
+                    <small>{t('generate.queue.addHint')}</small>
                   </button>
                   <button
                     type="button"
@@ -1651,8 +1697,8 @@ export function ModernGeneratePage(props: {
                     disabled={props.isGenerating || (!props.onAddBatchVariantsToBatchQueue && !props.onAddCompareGroupToBatchQueue)}
                   >
                     <GalleryHorizontal size={14} />
-                    <span>批量 / 对比…</span>
-                    <small>多比例或多模型入队</small>
+                    <span>{t('generate.queue.tools')}</span>
+                    <small>{t('generate.queue.toolsHint')}</small>
                   </button>
                   {props.onOpenBatchQueue ? (
                     <button
@@ -1664,8 +1710,8 @@ export function ModernGeneratePage(props: {
                       }}
                     >
                       <PanelRight size={14} />
-                      <span>查看批量队列</span>
-                      <small>{props.batchQueueTaskCount ? `${props.batchQueueTaskCount} 个任务` : '打开队列页'}</small>
+                      <span>{t('generate.queue.openPage')}</span>
+                      <small>{props.batchQueueTaskCount ? t('generate.queue.labelWithCount', { count: props.batchQueueTaskCount }) : t('generate.queue.openPageHint')}</small>
                     </button>
                   ) : null}
                 </div>
@@ -1702,20 +1748,20 @@ export function ModernGeneratePage(props: {
                 className="latestPreview"
                 type="button"
                 onClick={() => props.onPreview(activeCanvasPreviewItem.imageUrl)}
-                aria-label="预览当前生成结果"
+                aria-label={t('generate.canvas.previewAria')}
               >
                 <img src={activeCanvasPreviewItem.imageUrl} alt={activeCanvasPreviewItem.record.prompt} />
                 <span className="previewAction">
-                  <Maximize2 size={15} /> 预览
+                  <Maximize2 size={15} /> {t('generate.canvas.preview')}
                 </span>
               </button>
               {canvasPreviewTotal > 1 ? (
-                <div className="canvasPreviewSwitcher" aria-label="生成结果切换">
+                <div className="canvasPreviewSwitcher" aria-label={t('generate.canvas.switcherAria')}>
                   <button
                     type="button"
                     className="canvasPreviewNav previous"
                     onClick={() => setCanvasPreviewIndex((index) => (index - 1 + canvasPreviewTotal) % canvasPreviewTotal)}
-                    aria-label="上一张生成结果"
+                    aria-label={t('generate.canvas.previous')}
                   >
                     <ChevronLeft size={16} />
                   </button>
@@ -1724,7 +1770,7 @@ export function ModernGeneratePage(props: {
                     type="button"
                     className="canvasPreviewNav next"
                     onClick={() => setCanvasPreviewIndex((index) => (index + 1) % canvasPreviewTotal)}
-                    aria-label="下一张生成结果"
+                    aria-label={t('generate.canvas.next')}
                   >
                     <ChevronRight size={16} />
                   </button>
@@ -1733,21 +1779,21 @@ export function ModernGeneratePage(props: {
               <button
                 className="useAsReferenceButton"
                 type="button"
-                data-tooltip={props.referenceImages.length >= 4 ? '参考图已满 4 张，请先移除或清空' : '将当前预览图加入参考'}
+                data-tooltip={props.referenceImages.length >= 4 ? t('generate.canvas.fullTooltip') : t('generate.canvas.addReferenceTooltip')}
                 onClick={useLatestImageAsReference}
                 disabled={props.isGenerating || props.referenceImages.length >= 4}
               >
-                <ImagePlus size={15} /> 作为参考
+                <ImagePlus size={15} /> {t('generate.canvas.asReference')}
               </button>
               <button
                 className="clearCanvasButton"
                 type="button"
-                data-tooltip="只清空当前模式画布，不删除作品画廊记录"
-                aria-label="清空当前模式画布"
+                data-tooltip={t('generate.canvas.clearTooltip')}
+                aria-label={t('generate.canvas.clearAria')}
                 onClick={clearCurrentCanvas}
                 disabled={isCurrentModeGenerating}
               >
-                <XCircle size={15} /> 清空画布
+                <XCircle size={15} /> {t('generate.canvas.clear')}
               </button>
             </>
           ) : (
@@ -1755,14 +1801,14 @@ export function ModernGeneratePage(props: {
               <div className="emptyIcon">
                 <Sparkles size={25} />
               </div>
-              <h2>{mode === 'image' ? '等待参考图' : '画布待点亮'}</h2>
-              <p>{mode === 'image' ? '加入参考图后，说明要保留或改变的部分，再开始重绘。' : '写下主体、场景和氛围，选好比例与风格后开始生成。'}</p>
+              <h2>{mode === 'image' ? t('generate.canvas.emptyImageTitle') : t('generate.canvas.emptyTextTitle')}</h2>
+              <p>{mode === 'image' ? t('generate.canvas.emptyImageHint') : t('generate.canvas.emptyTextHint')}</p>
               {isCurrentModeGenerating ? (
                 <div className="generationOverlay inlineGenerationOverlay">
                   <span>
-                    <Sparkles size={16} /> 画布渲染中
+                    <Sparkles size={16} /> {t('generate.canvas.rendering')}
                   </span>
-                  <small>任务已发送到当前模型，请稍候…</small>
+                  <small>{t('generate.canvas.renderingHint')}</small>
                 </div>
               ) : null}
             </div>
@@ -1770,7 +1816,7 @@ export function ModernGeneratePage(props: {
           {failedLatest && !activeCanvasPreviewItem ? (
             <div className={`previewError ${failedLatestNeedsCheck ? 'pendingRecovery' : ''}`}>
               <div>
-                <strong>{failedLatestDiagnosis?.title ?? (failedLatestNeedsCheck ? '上一轮待核查' : '上一轮失败')}</strong>
+                <strong>{failedLatestDiagnosis?.title ?? (failedLatestNeedsCheck ? t('generate.canvas.failedPending') : t('generate.canvas.failed'))}</strong>
                 <span>{failedLatestDiagnosis?.summary ?? failedLatest.error}</span>
                 {failedLatestDiagnosis?.actions.length ? (
                   <ul className="generationErrorActionsList">
@@ -1781,10 +1827,10 @@ export function ModernGeneratePage(props: {
               </div>
               <div className="previewErrorActions">
                 <button type="button" onClick={() => void props.onReloadHistory()}>
-                  <RotateCcw size={13} /> 重载历史
+                  <RotateCcw size={13} /> {t('generate.canvas.reloadHistory')}
                 </button>
                 <button type="button" onClick={props.onOpenLibrary}>
-                  <GalleryHorizontal size={13} /> 作品画廊
+                  <GalleryHorizontal size={13} /> {t('generate.canvas.openGallery')}
                 </button>
               </div>
             </div>
@@ -1792,9 +1838,9 @@ export function ModernGeneratePage(props: {
           {isCurrentModeGenerating && activeCanvasPreviewItem?.imageUrl ? (
             <div className="generationOverlay centerGenerationOverlay">
               <span>
-                <Sparkles size={16} /> 画布渲染中
+                <Sparkles size={16} /> {t('generate.canvas.rendering')}
               </span>
-              <small>任务已发送到当前模型，请稍候…</small>
+              <small>{t('generate.canvas.renderingHint')}</small>
             </div>
           ) : null}
         </div>
@@ -1809,11 +1855,11 @@ export function ModernGeneratePage(props: {
           >
             <div className="referenceInfo">
               <div>
-                <strong>参考图</strong>
+                <strong>{t('generate.reference.title')}</strong>
                 <span>{props.referenceImages.length}/4</span>
               </div>
               <small>
-                <span>支持 PNG/JPG/WebP</span>
+                <span>{t('generate.reference.supportedTypes')}</span>
                 <span className={`referenceNotice ${referenceNotice?.tone ?? ''}`}>{referenceStatusText}</span>
               </small>
             </div>
@@ -1834,31 +1880,31 @@ export function ModernGeneratePage(props: {
               disabled={props.isGenerating || props.referenceImages.length >= 4}
               onClick={() => fileInputRef.current?.click()}
             >
-              <ImagePlus size={17} /> 加入参考
+              <ImagePlus size={17} /> {t('generate.reference.add')}
             </button>
             {props.referenceImages.length > 0 ? (
               <>
                 <button
                   className="referenceClear"
                   type="button"
-                  data-tooltip="清空全部参考图"
-                  aria-label="清空全部参考图"
+                  data-tooltip={t('generate.reference.clearTooltip')}
+                  aria-label={t('generate.reference.clearAria')}
                   disabled={props.isGenerating}
                   onClick={clearReferences}
                 >
-                  <XCircle size={15} /> 清空
+                  <XCircle size={15} /> {t('generate.reference.clear')}
                 </button>
                 <div className="referenceStrip">
                   {props.referenceImages.map((reference, index) => {
                     const roleValue = referenceRoles[reference.id] ?? reference.role ?? 'auto';
-                    const roleLabel = REFERENCE_ROLE_OPTIONS.find((option) => option.value === roleValue)?.label ?? '自动';
-                    const sourceLabel = referenceSourceLabel(reference.source);
-                    const referenceTitle = `第 ${index + 1} 张 · ${sourceLabel} · ${roleLabel}${reference.name ? ` · ${reference.name}` : ''}`;
+                    const roleLabel = referenceRoleOptions(t).find((option) => option.value === roleValue)?.label ?? t('generate.reference.role.auto');
+                    const sourceLabel = referenceSourceLabel(reference.source, t);
+                    const referenceTitle = t('generate.reference.tileTitle', { index: index + 1, source: sourceLabel, role: roleLabel, name: reference.name ? t('generate.reference.tileTitleName', { name: reference.name }) : '' });
                     return (
                       <article
                         className={`referenceTile ${draggingReferenceId === reference.id ? 'isDragging' : ''} ${referenceDropTargetId === reference.id ? 'isDropTarget' : ''}`}
                         key={reference.id}
-                        title={`${referenceTitle}。拖拽缩略图可调整顺序。`}
+                        title={t('generate.reference.tileSortHint', { title: referenceTitle })}
                         draggable={!props.isGenerating}
                         onDragStart={(event) => handleReferenceSortDragStart(reference.id, event)}
                         onDragOver={(event) => handleReferenceSortDragOver(reference.id, event)}
@@ -1869,10 +1915,10 @@ export function ModernGeneratePage(props: {
                         <button
                           type="button"
                           className="referenceThumb"
-                          aria-label={`预览${referenceTitle}`}
+                          aria-label={t('generate.reference.previewAria', { title: referenceTitle })}
                           onClick={() => reference.previewUrl && props.onPreview(reference.previewUrl)}
                         >
-                          {reference.previewUrl ? <img src={reference.previewUrl} alt={reference.name ?? `第 ${index + 1} 张参考图`} /> : <ImagePlus size={18} />}
+                          {reference.previewUrl ? <img src={reference.previewUrl} alt={reference.name ?? t('generate.reference.thumbAlt', { index: index + 1 })} /> : <ImagePlus size={18} />}
                         </button>
                         <span className="referenceSourceBadge" title={reference.name ?? sourceLabel}>
                           #{index + 1} {sourceLabel}
@@ -1880,11 +1926,11 @@ export function ModernGeneratePage(props: {
                         <StudioSelect
                           className="referenceRoleSelect"
                           value={roleValue}
-                          options={REFERENCE_ROLE_OPTIONS}
+                          options={referenceRoleOptions(t)}
                           disabled={props.isGenerating}
                           onChange={(value) => setReferenceRole(reference.id, value)}
                         />
-                        <button className="referenceRemove" type="button" data-tooltip="移除参考图" aria-label={`移除第 ${index + 1} 张参考图`} disabled={props.isGenerating} onClick={() => removeReference(reference.id)}>
+                        <button className="referenceRemove" type="button" data-tooltip={t('generate.reference.removeTooltip')} aria-label={t('generate.reference.removeAria', { index: index + 1 })} disabled={props.isGenerating} onClick={() => removeReference(reference.id)}>
                           <Trash2 size={13} />
                         </button>
                       </article>
@@ -1893,7 +1939,7 @@ export function ModernGeneratePage(props: {
                 </div>
               </>
             ) : (
-              <p className="referenceEmptyState">添加本地图片，或拖拽 / Ctrl+V 粘贴图片作为参考，最多 4 张。</p>
+              <p className="referenceEmptyState">{t('generate.reference.empty')}</p>
             )}
           </div>
         ) : null}
@@ -1901,19 +1947,19 @@ export function ModernGeneratePage(props: {
         <div className={`promptDock ${promptWidthState}`}>
           <div className="promptHeaderRow">
             <div>
-              <strong>提示词</strong>
-              <span>{promptLength} 字符</span>
+              <strong>{t('generate.prompt.title')}</strong>
+              <span>{t('generate.prompt.length', { count: promptLength })}</span>
             </div>
-            <div className="promptActions" aria-label="提示词辅助功能">
-              <button type="button" className="chipButton" data-tooltip="打开模板灵感" onClick={() => setAssistMode('inspiration')}>
-                <Sparkles size={13} /> Prompt 辅助
+            <div className="promptActions" aria-label={t('generate.prompt.actionsAria')}>
+              <button type="button" className="chipButton" data-tooltip={t('generate.prompt.assistTooltip')} onClick={() => setAssistMode('inspiration')}>
+                <Sparkles size={13} /> {t('generate.prompt.assist')}
               </button>
               <div className="promptSaveMenuWrap" ref={promptSaveMenuRef}>
                 <button
                   type="button"
                   className="chipButton promptSaveIconButton"
-                  data-tooltip="保存 / 沉淀当前 Prompt"
-                  aria-label="保存或沉淀当前 Prompt"
+                  data-tooltip={t('generate.prompt.saveTooltip')}
+                  aria-label={t('generate.prompt.saveAria')}
                   ref={promptSaveMenuButtonRef}
                   aria-haspopup="menu"
                   aria-expanded={isPromptSaveMenuOpen}
@@ -1929,30 +1975,30 @@ export function ModernGeneratePage(props: {
                     className={`promptSaveFloatingMenu is${promptSaveMenuPosition.placement === 'above' ? 'Above' : 'Below'}`}
                     ref={promptSaveMenuPanelRef}
                     role="menu"
-                    aria-label="保存当前 Prompt"
+                    aria-label={t('generate.prompt.saveMenuAria')}
                     style={{ top: promptSaveMenuPosition.top, bottom: promptSaveMenuPosition.bottom, right: promptSaveMenuPosition.right }}
                   >
                     <button type="button" role="menuitem" onClick={() => { saveCurrentPromptDraft(); setIsPromptSaveMenuOpen(false); }}>
-                      <strong>存为草稿</strong>
-                      <small>临时保存到创作台草稿库，方便稍后回填。</small>
+                      <strong>{t('generate.prompt.saveDraft')}</strong>
+                      <small>{t('generate.prompt.saveDraftHint')}</small>
                     </button>
                     <button type="button" role="menuitem" disabled={isSavingPromptAsset} onClick={() => void saveCurrentPromptAsExcerpt()}>
-                      <strong>保存为 Prompt 摘录</strong>
-                      <small>进入灵感中心摘录库，适合分类、筛选和复用。</small>
+                      <strong>{t('generate.prompt.saveExcerpt')}</strong>
+                      <small>{t('generate.prompt.saveExcerptHint')}</small>
                     </button>
                     <button type="button" role="menuitem" onClick={saveCurrentPromptAsTemplate}>
-                      <strong>另存为提示词模板</strong>
-                      <small>进入提示词库，作为可复用模板继续编辑。</small>
+                      <strong>{t('generate.prompt.saveTemplate')}</strong>
+                      <small>{t('generate.prompt.saveTemplateHint')}</small>
                     </button>
                   </div>
                 ), queueMenuPortalHost) : null}
               </div>
-              <button type="button" className="chipButton" data-tooltip="打开 Prompt 草稿库" onClick={() => setIsDraftLibraryOpen(true)}>
-                <Library size={13} /> 草稿 {promptDrafts.length}/12
+              <button type="button" className="chipButton" data-tooltip={t('generate.prompt.draftTooltip')} onClick={() => setIsDraftLibraryOpen(true)}>
+                <Library size={13} /> {t('generate.prompt.draft')} {promptDrafts.length}/12
               </button>
               <div className="promptPolishQuickGroup">
-                <button type="button" className="chipButton" data-tooltip="按右侧模型快速润色并替换当前提示词" disabled={isQuickPolishing || !props.prompt.trim()} onClick={runQuickPromptPolish}>
-                  <Wand2 size={13} /> {isQuickPolishing ? '润色中…' : '提示词润色'}
+                <button type="button" className="chipButton" data-tooltip={t('generate.prompt.polishTooltip')} disabled={isQuickPolishing || !props.prompt.trim()} onClick={runQuickPromptPolish}>
+                  <Wand2 size={13} /> {isQuickPolishing ? t('generate.prompt.polishing') : t('generate.prompt.polish')}
                 </button>
                 <StudioSelect
                   className="promptPolishQuickSelect noSelectCheck"
@@ -1960,12 +2006,12 @@ export function ModernGeneratePage(props: {
                   onChange={(value) => setQuickPolishConfigId(value)}
                   options={quickPolishOptions}
                 />
-                <button type="button" className="promptPolishDetailButton" data-tooltip="打开详细润色窗口" aria-label="打开详细润色窗口" onClick={() => setAssistMode('polish')}>
+                <button type="button" className="promptPolishDetailButton" data-tooltip={t('generate.prompt.polishDetailTooltip')} aria-label={t('generate.prompt.polishDetailAria')} onClick={() => setAssistMode('polish')}>
                   <SlidersHorizontal size={13} />
                 </button>
               </div>
-              <button type="button" className="chipButton" data-tooltip="复用历史提示词" onClick={() => setAssistMode('reuse')}>
-                <History size={13} /> 复用记录
+              <button type="button" className="chipButton" data-tooltip={t('generate.prompt.reuseTooltip')} onClick={() => setAssistMode('reuse')}>
+                <History size={13} /> {t('generate.prompt.reuse')}
               </button>
             </div>
           </div>
@@ -1976,26 +2022,20 @@ export function ModernGeneratePage(props: {
               className="bottomPromptInput"
               value={props.prompt}
               onChange={(event) => props.onPromptChange(event.target.value)}
-              placeholder={mode === 'image' ? '说明要保留什么、改变什么，例如：保留人物姿势，改成电影感夜景和蓝紫色灯光' : '写下主体、场景、镜头、光线与氛围，例如：雨夜霓虹街头，一位披风少女回头看向镜头'}
+              placeholder={mode === 'image' ? t('generate.prompt.placeholderImage') : t('generate.prompt.placeholderText')}
             />
           </div>
           <div className="promptControlRow">
             <label>
-              精度
+              {t('generate.prompt.quality')}
               <StudioSelect
                 value={props.quality}
                 onChange={props.onQualityChange}
-                options={[
-                  { value: 'auto', label: '自动' },
-                  { value: 'low', label: '低' },
-                  { value: 'medium', label: '中' },
-                  { value: 'standard', label: '标准' },
-                  { value: 'high', label: '高' }
-                ]}
+                options={qualityOptions(t)}
               />
             </label>
             <label>
-              格式
+              {t('generate.prompt.format')}
               <StudioSelect
                 value={outputFormat}
                 onChange={(value) => setOutputFormat(value as OutputFormat)}
@@ -2007,7 +2047,7 @@ export function ModernGeneratePage(props: {
               />
             </label>
             <label>
-              风格
+              {t('generate.prompt.style')}
               <StudioSelect
                 className="promptStyleQuickSelect noSelectCheck"
                 value={promptStyleId}
@@ -2016,11 +2056,11 @@ export function ModernGeneratePage(props: {
               />
             </label>
             <label>
-              压缩率
-              <input value={compression} placeholder="自动 / 75-100" onChange={(event) => setCompression(event.target.value)} />
+              {t('generate.prompt.compression')}
+              <input value={compression} placeholder={t('generate.prompt.compressionPlaceholder')} onChange={(event) => setCompression(event.target.value)} />
             </label>
             <label>
-              数量
+              {t('generate.prompt.count')}
               <input type="number" min={1} max={4} value={props.count} onChange={(event) => props.onCountChange(Number(event.target.value))} />
             </label>
             <div className="generateStack">
@@ -2042,20 +2082,20 @@ export function ModernGeneratePage(props: {
       <aside className="parameterRail">
         <section className="railCard providerRailCard">
           <label>
-            平台
+            {t('generate.provider.platform')}
             <StudioSelect
               value={props.selectedProviderId}
               onChange={props.onProviderChange}
               options={props.providers.map((provider) => ({
                 value: provider.id,
-                label: providerAccessLabel(provider),
-                description: providerAccessDescription(provider)
+                label: providerAccessLabel(provider, t),
+                description: providerAccessDescription(provider, t)
               }))}
             />
           </label>
           {props.supportsOpenAICompatible && providerProfileOptions.length > 0 ? (
             <label>
-              配置实例
+              {t('generate.provider.profile')}
               <StudioSelect
                 value={props.activeProfile?.id ?? providerProfileOptions[0]?.value ?? ''}
                 onChange={props.onProfileChange}
@@ -2064,7 +2104,7 @@ export function ModernGeneratePage(props: {
             </label>
           ) : null}
           <label>
-            模型
+            {t('generate.provider.model')}
             <StudioSelect
               value={modelValue}
               onChange={props.onModelChange}
@@ -2073,17 +2113,17 @@ export function ModernGeneratePage(props: {
           </label>
           <div className={`connectionState ${props.isRealProviderReady ? 'ready' : ''}`}>
             <ShieldCheck size={14} /> {isComfyUILocalProvider
-              ? props.isRealProviderReady ? 'ComfyUI API workflow 已就绪' : '需要 API workflow 才能提交'
+              ? props.isRealProviderReady ? t('generate.provider.comfyConnectionReady') : t('generate.provider.comfyConnectionMissing')
               : isSdWebUILocalProvider
-                ? props.isRealProviderReady ? 'SD WebUI / Forge txt2img 已就绪' : '需要本地 WebUI / Forge 端点'
-                : props.isRealProviderReady ? '真实通道已就绪' : '未配置密钥时使用演示模式'}
+                ? props.isRealProviderReady ? t('generate.provider.sdConnectionReady') : t('generate.provider.sdConnectionMissing')
+                : props.isRealProviderReady ? t('generate.provider.connectionReady') : t('generate.provider.demoMode')}
           </div>
           <div className="activeProfileSummary">
             <div className="activeProfileLine">
-              <span>配置实例</span>
+              <span>{t('generate.provider.profile')}</span>
               <strong>{activeProfileName}</strong>
             </div>
-            <div className="activeProfileChips" aria-label="当前配置实例状态">
+            <div className="activeProfileChips" aria-label={t('generate.provider.statusAria')}>
               <span>{activeProfileStatus}</span>
               <span>{activeProfileModelProbeText}</span>
               <span>{activeProfileSecretText}</span>
@@ -2093,7 +2133,7 @@ export function ModernGeneratePage(props: {
 
         <section className="railCard">
           <div className="railTitle">
-            <PanelRight size={15} /> 画面比例
+            <PanelRight size={15} /> {t('generate.ratio.title')}
           </div>
           <div className="ratioGrid">
             {RATIO_OPTIONS.map((ratio) => (
@@ -2107,19 +2147,19 @@ export function ModernGeneratePage(props: {
               </button>
             ))}
           </div>
-          <p className="railHint">先选画面比例，再在下方选择该比例对应的输出尺寸。</p>
+          <p className="railHint">{t('generate.ratio.hint')}</p>
         </section>
 
         <section className="railCard">
           <div className="railTitle">
-            <SlidersHorizontal size={15} /> 输出尺寸
+            <SlidersHorizontal size={15} /> {t('generate.size.title')}
           </div>
           <div className="resolutionList">
             {currentRatioSizes.map((item) => (
               <button key={item.value} className={props.size === item.value ? 'active' : ''} onClick={() => props.onSizeChange(item.value)}>
                 <div>
                   <strong>{item.value}</strong>
-                  <small>{item.desc}</small>
+                  <small>{sizeOptionDescription(item, t)}</small>
                 </div>
                 <span>{item.badge}</span>
               </button>
@@ -2128,44 +2168,39 @@ export function ModernGeneratePage(props: {
               <button className="active customSizeCurrent" onClick={() => undefined}>
                 <div>
                   <strong>{props.size}</strong>
-                  <small>当前自定义尺寸，将原样传给生成接口</small>
+                  <small>{t('generate.size.customDesc')}</small>
                 </div>
-                <span>自定义</span>
+                <span>{t('generate.size.customBadge')}</span>
               </button>
             )}
           </div>
           <div className="customSizeBox">
-            <strong>自定义尺寸</strong>
+            <strong>{t('generate.size.customTitle')}</strong>
             <div>
               <input value={customWidth} type="number" min={64} max={4096} onChange={(event) => setCustomWidth(Number(event.target.value))} />
               <span>×</span>
               <input value={customHeight} type="number" min={64} max={4096} onChange={(event) => setCustomHeight(Number(event.target.value))} />
-              <button onClick={applyCustomSize}>应用</button>
+              <button onClick={applyCustomSize}>{t('generate.size.apply')}</button>
             </div>
-            <small>建议 64–4096，具体是否支持取决于当前平台 / 中转模型。</small>
+            <small>{t('generate.size.hint')}</small>
           </div>
         </section>
 
         {mode === 'image' ? (
           <section className="railCard imageTuningCard">
             <div className="railTitle">
-              <SlidersHorizontal size={15} /> 图生图参数
+              <SlidersHorizontal size={15} /> {t('generate.imageTuning.title')}
             </div>
             <div className={`capabilityNotice ${advancedImageTuningEnabled ? 'ready' : 'blocked'}`}>
-              <strong>{advancedImageTuningEnabled ? '当前平台可尝试图生图参数' : '当前平台未声明图生图参数能力'}</strong>
-              <span>图生图：{statusLabel(imageToImageStatus)} ? 多参考：{statusLabel(multiReferenceStatus)}</span>
+              <strong>{advancedImageTuningEnabled ? t('generate.imageTuning.ready') : t('generate.imageTuning.blocked')}</strong>
+              <span>{t('generate.imageTuning.capabilities', { image: statusLabel(imageToImageStatus, t), multi: statusLabel(multiReferenceStatus, t) })}</span>
             </div>
             <label>
-              参考强度
+              {t('generate.imageTuning.strength')}
               <StudioSelect
                 value={referenceStrength}
                 onChange={setReferenceStrength}
-                options={[
-                  { value: 'auto', label: '自动' },
-                  { value: 'low', label: '低：只借鉴少量特征' },
-                  { value: 'medium', label: '中：平衡参考与改写' },
-                  { value: 'high', label: '高：更贴近参考图' }
-                ]}
+                options={referenceStrengthOptions(t)}
               />
             </label>
             <label className="tuningCheck">
@@ -2175,7 +2210,7 @@ export function ModernGeneratePage(props: {
                 disabled={!advancedImageTuningEnabled}
                 onChange={(event) => setPreserveComposition(event.target.checked)}
               />
-              <span>尽量保留构图</span>
+              <span>{t('generate.imageTuning.keepComposition')}</span>
             </label>
             <label className="tuningCheck">
               <input
@@ -2184,37 +2219,37 @@ export function ModernGeneratePage(props: {
                 disabled={!advancedImageTuningEnabled}
                 onChange={(event) => setStyleTransfer(event.target.checked)}
               />
-              <span>偏向风格迁移</span>
+              <span>{t('generate.imageTuning.styleTransfer')}</span>
             </label>
-            <small>{multiReferenceAllowed ? '会随生成请求记录为平台参数偏好；真实生效取决于当前接口协议。' : '该平台未声明多参考能力，建议只放 1 张参考图。'}</small>
+            <small>{multiReferenceAllowed ? t('generate.imageTuning.hintReady') : t('generate.imageTuning.hintBlocked')}</small>
           </section>
         ) : null}
 
         <section className="railCard advancedParamsCard">
           <div className="railTitle">
-            <ChevronDown size={16} /> 高级参数
+            <ChevronDown size={16} /> {t('generate.advanced.title')}
           </div>
           <label>
             Seed
             <input
               value={seedInput}
               inputMode="numeric"
-              placeholder="随机 / 固定种子"
+              placeholder={t('generate.advanced.seedPlaceholder')}
               onChange={(event) => setSeedInput(event.target.value.replace(/[^\d]/g, '').slice(0, 12))}
             />
           </label>
           {isSdWebUILocalProvider ? (
             <>
               <label>
-                采样器
+                {t('generate.advanced.sampler')}
                 <input
                   value={sdSamplerName}
-                  placeholder="留空使用 WebUI 默认，例如 Euler a"
+                  placeholder={t('generate.advanced.samplerPlaceholder')}
                   onChange={(event) => setSdSamplerName(event.target.value.slice(0, 80))}
                 />
               </label>
               <label>
-                步数
+                {t('generate.advanced.steps')}
                 <input
                   value={sdStepsInput}
                   inputMode="numeric"
@@ -2234,31 +2269,31 @@ export function ModernGeneratePage(props: {
             </>
           ) : null}
           <label>
-            负面提示词
+            {t('generate.advanced.negativePrompt')}
             <textarea
               value={negativePrompt}
-              placeholder="不想出现的元素，可留空"
+              placeholder={t('generate.advanced.negativePlaceholder')}
               rows={3}
               onChange={(event) => setNegativePrompt(event.target.value)}
             />
           </label>
-          <small>{isSdWebUILocalProvider ? 'SD WebUI / Forge 会接收 Seed、负面提示词、采样器、步数和 CFG；其余平台只记录并传递通用字段。' : '填写后会随请求记录，并传给支持 Seed / 负面提示词字段的兼容接口。'}</small>
+          <small>{isSdWebUILocalProvider ? t('generate.advanced.hintSd') : t('generate.advanced.hintGeneric')}</small>
         </section>
       </aside>
       {isBatchToolsOpen ? (
         <div className="batchToolsBackdrop" onClick={() => setIsBatchToolsOpen(false)}>
-          <section className="batchToolsDialog" role="dialog" aria-modal="true" aria-label="批量与多模型对比" onClick={(event) => event.stopPropagation()}>
+          <section className="batchToolsDialog" role="dialog" aria-modal="true" aria-label={t('generate.batch.dialogAria')} onClick={(event) => event.stopPropagation()}>
             <header className="batchToolsHeader">
               <div>
                 <span>Batch Tools</span>
-                <strong>批量 / 对比创建器</strong>
-                <small>只创建本地队列快照，进入批量队列确认后才会真实消耗额度。</small>
+                <strong>{t('generate.batch.title')}</strong>
+                <small>{t('generate.batch.hint')}</small>
               </div>
-              <button type="button" className="promptAssistClose" aria-label="关闭批量与对比创建器" onClick={() => setIsBatchToolsOpen(false)}>
+              <button type="button" className="promptAssistClose" aria-label={t('generate.batch.closeAria')} onClick={() => setIsBatchToolsOpen(false)}>
                 <XCircle size={18} />
               </button>
             </header>
-            <div className="batchToolsTabs" role="tablist" aria-label="批量工具类型">
+            <div className="batchToolsTabs" role="tablist" aria-label={t('generate.batch.tabsAria')}>
               <button
                 type="button"
                 role="tab"
@@ -2266,7 +2301,7 @@ export function ModernGeneratePage(props: {
                 aria-selected={batchToolTab === 'variants'}
                 onClick={() => setBatchToolTab('variants')}
               >
-                批量变体
+                {t('generate.batch.variantsTab')}
               </button>
               <button
                 type="button"
@@ -2275,27 +2310,27 @@ export function ModernGeneratePage(props: {
                 aria-selected={batchToolTab === 'compare'}
                 onClick={() => setBatchToolTab('compare')}
               >
-                多模型对比
+                {t('generate.batch.compareTab')}
               </button>
             </div>
             <div className="batchToolsBody">
               {batchToolTab === 'variants' ? (
-                <div className="batchVariantBox inDialog" aria-label="多 Prompt 多画面比例批量变体">
+                <div className="batchVariantBox inDialog" aria-label={t('generate.batch.variantsAria')}>
                   <div className="batchVariantHeader">
                     <div>
-                      <strong>批量变体</strong>
-                      <small>逐行 Prompt × 多画面比例；每个比例使用一个代表尺寸，便于比较构图适配性。</small>
+                      <strong>{t('generate.batch.variantsTitle')}</strong>
+                      <small>{t('generate.batch.variantsHint')}</small>
                     </div>
-                    <span>{estimatedBatchVariantTasks || 0} 任务</span>
+                    <span>{t('generate.batch.taskCount', { count: estimatedBatchVariantTasks || 0 })}</span>
                   </div>
                   <textarea
                     value={batchPromptText}
                     rows={6}
-                    placeholder="可选：一行一个 Prompt。留空则使用左侧当前 Prompt。"
+                    placeholder={t('generate.batch.promptPlaceholder')}
                     disabled={props.isGenerating}
                     onChange={(event) => setBatchPromptText(event.target.value)}
                   />
-                  <div className="batchVariantRatioList" aria-label="批量变体画面比例选择">
+                  <div className="batchVariantRatioList" aria-label={t('generate.batch.ratioAria')}>
                     {batchRatioOptions.map((option) => {
                       const checked = selectedBatchRatioValues.includes(option.ratio);
                       return (
@@ -2307,8 +2342,8 @@ export function ModernGeneratePage(props: {
                             onChange={(event) => toggleBatchRatio(option.ratio, event.target.checked)}
                           />
                           <span>
-                            <strong>{option.label}</strong>
-                            <small>{option.size} · {option.hint}</small>
+                            <strong>{batchRatioLabel(option, t)}</strong>
+                            <small>{option.size} · {batchRatioHint(option, t)}</small>
                           </span>
                         </label>
                       );
@@ -2320,39 +2355,39 @@ export function ModernGeneratePage(props: {
                       className="miniButton"
                       onClick={() => setBatchRatioValues(batchRatioOptions.map((option) => option.ratio))}
                       disabled={props.isGenerating}
-                      title="选择所有候选画面比例"
-                      aria-label="全选批量变体画面比例"
+                      title={t('generate.batch.selectAllRatiosTitle')}
+                      aria-label={t('generate.batch.selectAllRatiosTitle')}
                     >
-                      比例全选
+                      {t('generate.batch.selectAllRatios')}
                     </button>
                     <button
                       type="button"
                       className="miniButton"
                       onClick={() => setBatchRatioValues([selectedRatio])}
                       disabled={props.isGenerating}
-                      title="仅保留当前画面比例"
-                      aria-label="只保留当前画面比例"
+                      title={t('generate.batch.currentRatioTitle')}
+                      aria-label={t('generate.batch.currentRatioTitle')}
                     >
-                      当前比例
+                      {t('generate.batch.currentRatio')}
                     </button>
                     <button
                       type="button"
                       className="miniButton primary"
                       onClick={addBatchVariantsToBatchQueue}
                       disabled={!canCreateBatchVariants}
-                      title="按 Prompt 和画面比例组合创建批量队列任务；执行前仍需确认"
-                      aria-label="加入批量变体队列"
+                      title={t('generate.batch.addVariantsTitle')}
+                      aria-label={t('generate.batch.addVariants')}
                     >
-                      加入变体队列
+                      {t('generate.batch.addVariants')}
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="compareProfileBox inDialog" aria-label="多模型对比配置实例选择器">
+                <div className="compareProfileBox inDialog" aria-label={t('generate.batch.compareAria')}>
                   <div className="compareProfileHeader">
                     <div>
-                      <strong>多模型对比</strong>
-                      <small>同一 Prompt 和当前基础参数，分别按多个配置实例创建任务快照。</small>
+                      <strong>{t('generate.batch.compareTitle')}</strong>
+                      <small>{t('generate.batch.compareHint')}</small>
                     </div>
                     <span>{selectedCompareProfileCount}/{compareProfileCandidates.length}</span>
                   </div>
@@ -2371,17 +2406,17 @@ export function ModernGeneratePage(props: {
                               />
                               <span>
                                 <strong>{profile.displayName || profile.modelId}</strong>
-                                <small>{profile.modelId} · {profile.baseUrl || '未配置 Base URL'}</small>
+                                <small>{profile.modelId} · {profile.baseUrl || t('generate.batch.noBaseUrl')}</small>
                               </span>
-                              <em>{profile.enabled ? '当前' : profileStatusLabel(profile.lastTestStatus)}</em>
+                              <em>{profile.enabled ? t('generate.provider.currentEnabled') : profileStatusLabel(profile.lastTestStatus, t)}</em>
                             </label>
                           );
                         })}
                       </div>
                       <div className="batchToolsSummary">
-                        <span>当前尺寸：{props.size}</span>
-                        <span>数量：{props.count} 张 / 任务</span>
-                        <span>质量：{props.quality}</span>
+                        <span>{t('generate.batch.summarySize', { size: props.size })}</span>
+                        <span>{t('generate.batch.summaryCount', { count: props.count })}</span>
+                        <span>{t('generate.batch.summaryQuality', { quality: props.quality })}</span>
                       </div>
                       <div className="compareProfileActions">
                         <button
@@ -2389,37 +2424,37 @@ export function ModernGeneratePage(props: {
                           className="miniButton"
                           onClick={() => setCompareProfileIds(compareProfileCandidates.map((profile) => profile.id))}
                           disabled={props.isGenerating}
-                          title="选择当前平台下所有可用配置实例"
-                          aria-label="全选多模型对比配置实例"
+                          title={t('generate.batch.selectAllProfilesTitle')}
+                          aria-label={t('generate.batch.selectAllProfilesTitle')}
                         >
-                          全选
+                          {t('generate.batch.selectAllProfiles')}
                         </button>
                         <button
                           type="button"
                           className="miniButton"
                           onClick={() => setCompareProfileIds([])}
                           disabled={props.isGenerating}
-                          title="清空多模型对比配置实例选择"
-                          aria-label="清空多模型对比配置实例选择"
+                          title={t('generate.batch.clearProfilesTitle')}
+                          aria-label={t('generate.batch.clearProfilesTitle')}
                         >
-                          清空
+                          {t('generate.batch.clearProfiles')}
                         </button>
                         <button
                           type="button"
                           className="miniButton primary"
                           onClick={addCompareGroupToBatchQueue}
                           disabled={!canCreateCompareGroup}
-                          title="把同一 Prompt 和当前参数分别按所选配置实例创建任务快照；不会立即消耗额度"
-                          aria-label="加入多模型对比队列"
+                          title={t('generate.batch.addCompareTitle')}
+                          aria-label={t('generate.batch.addCompare')}
                         >
-                          加入对比队列
+                          {t('generate.batch.addCompare')}
                         </button>
                       </div>
                     </>
                   ) : (
                     <div className="batchToolsEmpty">
-                      <strong>当前平台不足 2 个可对比配置实例</strong>
-                      <small>多模型对比 V1 先支持中转站 / 聚合 API 与 OpenAI-compatible 配置实例；请先到平台接入里增加至少两个配置实例。</small>
+                      <strong>{t('generate.batch.emptyTitle')}</strong>
+                      <small>{t('generate.batch.emptyHint')}</small>
                     </div>
                   )}
                 </div>
@@ -2430,6 +2465,7 @@ export function ModernGeneratePage(props: {
       ) : null}
       {assistMode ? (
         <PromptAssistModal
+          t={t}
           mode={assistMode}
           prompt={props.prompt}
           results={props.results}
@@ -2445,19 +2481,19 @@ export function ModernGeneratePage(props: {
       ) : null}
       {isDraftLibraryOpen ? (
         <div className="promptDraftBackdrop" onClick={() => setIsDraftLibraryOpen(false)}>
-          <section className="promptDraftDialog" role="dialog" aria-modal="true" aria-label="Prompt 草稿" onClick={(event) => event.stopPropagation()}>
+          <section className="promptDraftDialog" role="dialog" aria-modal="true" aria-label={t('generate.draft.dialogAria')} onClick={(event) => event.stopPropagation()}>
             <header className="promptDraftDialogHeader">
               <div>
-                <span>Prompt 草稿</span>
-                <strong>已保存 {promptDrafts.length}/12</strong>
+                <span>{t('generate.draft.title')}</span>
+                <strong>{t('generate.draft.savedCount', { count: promptDrafts.length })}</strong>
               </div>
-              <button type="button" className="promptAssistClose" aria-label="关闭草稿窗口" onClick={() => setIsDraftLibraryOpen(false)}>
+              <button type="button" className="promptAssistClose" aria-label={t('generate.draft.closeAria')} onClick={() => setIsDraftLibraryOpen(false)}>
                 <XCircle size={18} />
               </button>
             </header>
             <div className="promptDraftDialogBody">
               <button type="button" className="promptDraftSaveButton" onClick={() => saveCurrentPromptDraft()}>
-                <Save size={13} /> 保存当前 Prompt
+                <Save size={13} /> {t('generate.draft.saveCurrent')}
               </button>
               {draftNotice ? <p className="promptDraftNotice">{draftNotice}</p> : null}
               {promptDrafts.length ? (
@@ -2471,11 +2507,11 @@ export function ModernGeneratePage(props: {
                           setIsDraftLibraryOpen(false);
                         }}
                       >
-                        <span>{promptDraftKindLabel(draft.kind)} · {formatDraftTime(draft.createdAt)}</span>
+                        <span>{promptDraftKindLabel(draft.kind, t)} · {formatDraftTime(draft.createdAt)}</span>
                         <strong>{draft.title}</strong>
                         <small>{draft.prompt}</small>
                       </button>
-                      <button type="button" className="promptDraftDelete" aria-label={`删除草稿：${draft.title}`} onClick={() => deletePromptDraft(draft.id)}>
+                      <button type="button" className="promptDraftDelete" aria-label={t('generate.draft.deleteAria', { title: draft.title })} onClick={() => deletePromptDraft(draft.id)}>
                         <XCircle size={14} />
                       </button>
                     </article>
@@ -2483,8 +2519,8 @@ export function ModernGeneratePage(props: {
                 </div>
               ) : (
                 <div className="promptDraftEmpty">
-                  <strong>暂无草稿</strong>
-                  <small>点击「存草稿」或在这里保存当前 Prompt 后，会出现在此窗口。</small>
+                  <strong>{t('generate.draft.emptyTitle')}</strong>
+                  <small>{t('generate.draft.emptyHint')}</small>
                 </div>
               )}
             </div>
@@ -2496,13 +2532,13 @@ export function ModernGeneratePage(props: {
 }
 
 
-function statusLabel(status: ReturnType<typeof listProviders>[number]['capabilities']['imageToImage']) {
+function statusLabel(status: ReturnType<typeof listProviders>[number]['capabilities']['imageToImage'], t?: Translator) {
   const labels: Record<string, string> = {
-    supported: '支持',
-    partial: '部分支持',
-    planned: '规划中',
-    unknown: '待确认',
-    unsupported: '不支持'
+    supported: t ? t('common.status.supported') : '支持',
+    partial: t ? t('common.status.partial') : '部分支持',
+    planned: t ? t('common.status.planned') : '规划中',
+    unknown: t ? t('common.status.unknown') : '待确认',
+    unsupported: t ? t('common.status.unsupported') : '不支持'
   };
   return labels[status] ?? status;
 }
@@ -2573,14 +2609,14 @@ function referenceDedupKey(reference: ReferenceImage) {
   return `id:${reference.id}`;
 }
 
-function fileToReferenceImage(file: File, source: Extract<ReferenceImage['source'], 'upload' | 'clipboard' | 'drag-drop'> = 'upload'): Promise<ReferenceImage> {
+function fileToReferenceImage(file: File, source: Extract<ReferenceImage['source'], 'upload' | 'clipboard' | 'drag-drop'> = 'upload', t?: Translator): Promise<ReferenceImage> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = typeof reader.result === 'string' ? reader.result : '';
       resolve({
         id: `${source}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        name: file.name || (source === 'clipboard' ? '剪贴板图片' : '参考图'),
+        name: file.name || (source === 'clipboard' ? (t ? t('generate.reference.fileNameClipboard') : 'Clipboard image') : (t ? t('generate.reference.fileNameDefault') : 'Reference image')),
         mimeType: file.type || 'image/png',
         dataUrl,
         previewUrl: dataUrl,
@@ -2589,7 +2625,7 @@ function fileToReferenceImage(file: File, source: Extract<ReferenceImage['source
         addedAt: new Date().toISOString()
       });
     };
-    reader.onerror = () => reject(reader.error ?? new Error('无法读取参考图。'));
+    reader.onerror = () => reject(reader.error ?? new Error(t ? t('generate.reference.readError') : 'Unable to read reference image.'));
     reader.readAsDataURL(file);
   });
 }
