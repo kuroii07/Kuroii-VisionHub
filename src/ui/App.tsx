@@ -5279,9 +5279,9 @@ export function App() {
         modelOptions: Array.from(new Set([...providerConfig.modelOptions, ...fixedModelOptions, providerConfig.modelId.trim()].filter(Boolean)))
       });
       const probe = isMiniMaxProvider(selectedProvider.id)
-        ? buildMiniMaxManualModelProbe(nextConfig.modelId, '未提交网络请求；请用“真实试生图”做最终联调。')
+        ? buildMiniMaxManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.minimaxManualProbeHint'))
         : isGeminiProvider(selectedProvider.id)
-          ? buildGeminiManualModelProbe(nextConfig.modelId, '未提交网络请求；请用“真实试生图”做最终联调。')
+          ? buildGeminiManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.geminiManualProbeHint'))
           : buildModelProbe(nextConfig.modelId, nextConfig.modelOptions, '当前 API 不提供 OpenAI-compatible 模型列表。');
       setProviderConfig(nextConfig);
       saveProviderConfig(selectedProvider.id, nextConfig);
@@ -5299,7 +5299,7 @@ export function App() {
         ...current.filter((item) => item.id !== 'model-probe'),
         {
           id: 'model-probe',
-          label: '当前模型探测',
+          label: t('provider.diagnostics.item.currentModelProbe'),
           level: probe.available ? 'info' : 'warn',
           detail: probe.message
         }
@@ -5373,7 +5373,7 @@ export function App() {
         ...current.filter((item) => item.id !== 'model-probe'),
         {
           id: 'model-probe',
-          label: '当前模型探测',
+          label: t('provider.diagnostics.item.currentModelProbe'),
           level: modelProbe.available ? 'pass' : 'warn',
           detail: modelProbe.message
         }
@@ -5669,9 +5669,9 @@ export function App() {
             })
           : ensureManualModelOption(targetConfig);
         const modelProbe = isMiniMaxProvider(targetProviderId)
-          ? buildMiniMaxManualModelProbe(nextConfig.modelId, '非消耗诊断不会调用 MiniMax；请用真实试生图做最终联调。')
+          ? buildMiniMaxManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.minimaxManualProbeHint'))
           : isGeminiProvider(targetProviderId)
-            ? buildGeminiManualModelProbe(nextConfig.modelId, '非消耗诊断不会调用 Gemini；请用真实试生图做最终联调。')
+            ? buildGeminiManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.geminiManualProbeHint'))
             : {
                 modelId: nextConfig.modelId.trim(),
                 available: false,
@@ -5688,7 +5688,7 @@ export function App() {
         profilePatch = { lastModelProbe: modelProbe };
         push({
           id: 'models',
-          label: isMiniMaxProvider(targetProviderId) ? 'MiniMax 模型确认' : isGeminiProvider(targetProviderId) ? 'Gemini 模型确认' : '模型列表连通性',
+          label: isMiniMaxProvider(targetProviderId) ? t('provider.diagnostics.item.minimaxModelConfirm') : isGeminiProvider(targetProviderId) ? t('provider.diagnostics.item.geminiModelConfirm') : t('provider.diagnostics.item.modelListConnectivity'),
           level: 'info',
           detail: profileMessage
         });
@@ -5697,12 +5697,12 @@ export function App() {
 
       if (!desktopRuntime || !currentSecretAvailable) {
         profileStatus = 'warning';
-        profileMessage = !desktopRuntime ? '需要 Tauri 桌面端运行时。' : '缺少 API Key，未执行在线延迟测试。';
+        profileMessage = !desktopRuntime ? t('provider.diagnostics.message.desktopRequired') : t('provider.diagnostics.message.apiKeyMissingSkipLatency');
         push({
           id: 'network',
-          label: '模型列表连通性',
+          label: t('provider.diagnostics.item.modelListConnectivity'),
           level: 'info',
-          detail: '需要桌面端和已保存密钥后才能执行在线模型列表诊断。'
+          detail: t('provider.diagnostics.detail.modelListPrerequisite')
         });
         return;
       }
@@ -5717,23 +5717,25 @@ export function App() {
         const latencyMs = Math.round(performance.now() - startedAt);
         const modelOptions = models.map((model) => model.id);
         const imageModelCount = countLikelyImageModels(modelOptions);
-        const modelProbe = buildModelProbe(targetConfig.modelId, modelOptions, '来自配置自检。');
+        const modelProbe = buildModelProbe(targetConfig.modelId, modelOptions, t('provider.diagnostics.detail.modelProbeFromDiagnostics'));
         profileStatus = models.length > 0 && modelProbe.available ? 'passed' : 'warning';
         profileMessage =
           models.length > 0 && modelProbe.available
-            ? `连接成功，延迟 ${latencyMs} ms，读取 ${models.length} 个模型，当前模型可见。`
+            ? t('provider.diagnostics.detail.modelListSuccessVisible', { latency: latencyMs, count: models.length })
             : models.length > 0
-              ? `连接成功，延迟 ${latencyMs} ms，读取 ${models.length} 个模型，但当前模型未出现在列表中。`
-            : `接口可调用，延迟 ${latencyMs} ms，但没有返回模型。`;
+              ? t('provider.diagnostics.detail.modelListSuccessMissing', { latency: latencyMs, count: models.length })
+            : t('provider.diagnostics.detail.modelListEmpty', { latency: latencyMs });
         push({
           id: 'models',
-          label: '模型列表连通性',
+          label: t('provider.diagnostics.item.modelListConnectivity'),
           level: models.length > 0 ? 'pass' : 'warn',
-          detail: models.length > 0 ? `成功读取 ${models.length} 个模型，其中 ${imageModelCount} 个 ID 包含 image；延迟 ${latencyMs} ms。` : `接口可调用但没有返回模型；延迟 ${latencyMs} ms，已保留当前手动模型 ID。`
+          detail: models.length > 0
+            ? t('provider.diagnostics.detail.modelListStats', { count: models.length, imageCount: imageModelCount, latency: latencyMs })
+            : t('provider.diagnostics.detail.modelListEmptyKeepManual', { latency: latencyMs })
         });
         push({
           id: 'model-probe',
-          label: '当前模型探测',
+          label: t('provider.diagnostics.item.currentModelProbe'),
           level: modelProbe.available ? 'pass' : 'warn',
           detail: modelProbe.message
         });
@@ -5763,7 +5765,7 @@ export function App() {
           };
           push({
             id: 'models',
-            label: '模型列表连通性',
+            label: t('provider.diagnostics.item.modelListConnectivity'),
             level: 'warn',
             detail: profileMessage
           });
