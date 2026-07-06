@@ -5607,7 +5607,7 @@ export function App() {
         id: 'image-to-image-adapter',
         label: t('provider.diagnostics.item.imageToImageAdapter'),
         level: targetConfig.imageToImageAdapter === 'auto' ? 'info' : 'pass',
-        detail: imageToImageAdapterDiagnosticDetail(targetConfig, targetProviderId)
+        detail: imageToImageAdapterDiagnosticDetail(targetConfig, targetProviderId, t)
       });
 
       if (storageSettings) {
@@ -8017,7 +8017,8 @@ function ProviderSettingsPage(props: {
     secretAvailable: props.secretAvailable,
     generationProfile,
     selectedProviderId: props.selectedProviderId,
-    generationProviderId: props.generationProviderId
+    generationProviderId: props.generationProviderId,
+    t: props.t
   });
   const protocolOptions = (['images', 'images-minimal', 'responses', 'chat-completions', 'custom-images'] as OpenAICompatibleConfig['protocol'][]).map((protocol) => ({
     value: protocol,
@@ -8030,7 +8031,12 @@ function ProviderSettingsPage(props: {
     description: pt(`provider.i2i.${adapter}.description`)
   }));
   const resolvedImageToImageAdapter = resolveImageToImageAdapterForDisplay(props.providerConfig, props.selectedProviderId);
-  const imageToImageAdapterDiagnosticText = `${props.providerConfig.imageToImageAdapter === 'auto' ? pt('provider.i2i.autoPrefix', { adapter: pt(`provider.i2i.${resolvedImageToImageAdapter}.label`) }) : pt('provider.i2i.fixedPrefix', { adapter: pt(`provider.i2i.${resolvedImageToImageAdapter}.label`) })}；${pt(`provider.i2i.${resolvedImageToImageAdapter}.field`)}`;
+  const imageToImageAdapterDiagnosticText = pt('provider.i2i.diagnosticText', {
+    prefix: props.providerConfig.imageToImageAdapter === 'auto'
+      ? pt('provider.i2i.autoPrefix', { adapter: pt(`provider.i2i.${resolvedImageToImageAdapter}.label`) })
+      : pt('provider.i2i.fixedPrefix', { adapter: pt(`provider.i2i.${resolvedImageToImageAdapter}.label`) }),
+    field: pt(`provider.i2i.${resolvedImageToImageAdapter}.field`)
+  });
   const workflowFileInputRef = useRef<HTMLInputElement | null>(null);
   const isComfyUITemplate = props.selectedServiceTemplate.id === 'local-comfyui';
   const isSdWebUITemplate = props.selectedServiceTemplate.id === 'local-sd-webui';
@@ -13726,18 +13732,16 @@ function resolveImageToImageAdapterForDisplay(
   return 'json-image-array';
 }
 
-function imageToImageAdapterDiagnosticDetail(config: OpenAICompatibleConfig, providerId: string) {
+function imageToImageAdapterDiagnosticDetail(config: OpenAICompatibleConfig, providerId: string, t: Translator) {
   const resolved = resolveImageToImageAdapterForDisplay(config, providerId);
+  const adapterLabel = t(`provider.i2i.${resolved}.label` as Parameters<Translator>[0]);
   const prefix = config.imageToImageAdapter === 'auto'
-    ? `自动：${imageToImageAdapterLabel(resolved)}`
-    : `固定：${imageToImageAdapterLabel(resolved)}`;
-  const fieldSummary: Record<Exclude<ImageToImageAdapter, 'auto'>, string> = {
-    'openai-images-edit': 'multipart 字段 image / image[]，官方 Images 图生图优先。',
-    'responses-input-image': 'JSON content[] 使用 input_text + input_image。',
-    'chat-image-url': 'JSON messages[] 使用 text + image_url。',
-    'json-image-array': 'JSON 使用 image 首图 + images 数组，适合自定义中转。'
-  };
-  return `${prefix}；${fieldSummary[resolved]}`;
+    ? t('provider.i2i.autoPrefix', { adapter: adapterLabel })
+    : t('provider.i2i.fixedPrefix', { adapter: adapterLabel });
+  return t('provider.i2i.diagnosticText', {
+    prefix,
+    field: t(`provider.i2i.${resolved}.field` as Parameters<Translator>[0])
+  });
 }
 
 function safeProviderConfigText(value: unknown) {
@@ -14196,7 +14200,9 @@ function buildOfflineDiagnosticSummary(input: {
   generationProfile: ProviderConnectionProfile | null;
   selectedProviderId: string;
   generationProviderId: string;
+  t: Translator;
 }) {
+  const t = input.t;
   const modelId = input.config.modelId.trim();
   const hasBaseUrl = Boolean(input.config.baseUrl.trim());
   const hasEndpointPath = input.config.endpointPath.trim().startsWith('/');
@@ -14205,28 +14211,35 @@ function buildOfflineDiagnosticSummary(input: {
     input.selectedProviderId === input.generationProviderId &&
     Boolean(input.profile && input.generationProfile?.id === input.profile.id);
   const missing: string[] = [];
-  if (!input.profile) missing.push('未保存实例');
-  if (!input.desktopRuntime) missing.push('非桌面端');
-  if (!input.secretAvailable) missing.push('密钥未保存');
-  if (!hasBaseUrl) missing.push('Base URL 为空');
-  if (!modelId) missing.push('模型为空');
-  if (!hasEndpointPath) missing.push('路径异常');
-  if (!generationMatches) missing.push('创作页未使用');
-  const modelState = modelProbe ? (modelProbe.available ? '模型已命中' : '模型未命中') : '模型未探测';
+  if (!input.profile) missing.push(t('provider.offlineSummary.missing.profile'));
+  if (!input.desktopRuntime) missing.push(t('provider.offlineSummary.missing.desktopRuntime'));
+  if (!input.secretAvailable) missing.push(t('provider.offlineSummary.missing.secret'));
+  if (!hasBaseUrl) missing.push(t('provider.offlineSummary.missing.baseUrl'));
+  if (!modelId) missing.push(t('provider.offlineSummary.missing.model'));
+  if (!hasEndpointPath) missing.push(t('provider.offlineSummary.missing.endpointPath'));
+  if (!generationMatches) missing.push(t('provider.offlineSummary.missing.generationUsage'));
+  const modelState = modelProbe
+    ? modelProbe.available
+      ? t('provider.offlineSummary.chip.modelMatched')
+      : t('provider.offlineSummary.chip.modelMissing')
+    : t('provider.offlineSummary.chip.modelUnchecked');
   const title = missing.length === 0
-    ? '配置完整，等待真实生成验证'
-    : `还有 ${missing.length} 项需要注意`;
+    ? t('provider.offlineSummary.title.ready')
+    : t('provider.offlineSummary.title.pending', { count: missing.length });
   const detail = missing.length === 0
-    ? '当前只完成非消耗检查；未执行真实生成，不代表模型一定可生图。'
-    : `${missing.slice(0, 3).join(' / ')}${missing.length > 3 ? ' 等' : ''}；未执行真实生成。`;
+    ? t('provider.offlineSummary.detail.ready')
+    : t('provider.offlineSummary.detail.pending', {
+        items: missing.slice(0, 3).join(' / '),
+        more: missing.length > 3 ? t('provider.offlineSummary.detail.more') : ''
+      });
   return {
     title,
     detail,
     chips: [
-      { label: input.profile ? '实例已保存' : '实例草稿', level: input.profile ? 'pass' : 'warn' },
-      { label: input.secretAvailable ? '密钥已保存' : '密钥未保存', level: input.secretAvailable ? 'pass' : 'warn' },
+      { label: input.profile ? t('provider.offlineSummary.chip.profileSaved') : t('provider.offlineSummary.chip.profileDraft'), level: input.profile ? 'pass' : 'warn' },
+      { label: input.secretAvailable ? t('provider.offlineSummary.chip.secretSaved') : t('provider.offlineSummary.chip.secretMissing'), level: input.secretAvailable ? 'pass' : 'warn' },
       { label: modelState, level: modelProbe?.available ? 'pass' : modelProbe ? 'warn' : 'info' },
-      { label: generationMatches ? '创作页使用中' : '创作页未使用', level: generationMatches ? 'pass' : 'info' }
+      { label: generationMatches ? t('provider.offlineSummary.chip.generationActive') : t('provider.offlineSummary.chip.generationInactive'), level: generationMatches ? 'pass' : 'info' }
     ] as Array<{ label: string; level: ProviderDiagnosticLevel }>
   };
 }
