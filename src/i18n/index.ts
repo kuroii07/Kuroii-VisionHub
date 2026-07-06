@@ -4,6 +4,7 @@ export const messages = {
   'zh-CN': {
     'app.subtitle': 'AI 生图工作台',
     'common.close': '关闭',
+    'common.closeNotification': '关闭通知',
     'common.cancel': '取消',
     'common.confirm': '确认',
     'common.save': '保存',
@@ -79,6 +80,8 @@ export const messages = {
     'theme.system': '跟随系统',
     'theme.dark': '暗色模式',
     'theme.light': '浅色模式',
+    'sidebar.expand': '展开侧边栏',
+    'sidebar.collapse': '收起侧边栏',
 
 
     'batch.aria': '批量队列',
@@ -1251,6 +1254,8 @@ export const messages = {
     'home.status.checking': '检查中',
     'home.status.localPending': '本地服务待检查',
     'home.status.localFirst': '本地优先 · Key 不导出',
+    'home.provider.noSavedProfile': '未保存配置',
+    'home.provider.noModel': '未选择模型',
     'home.action.start': '开始创作',
     'home.action.openGallery': '打开画廊',
     'home.action.checkConfig': '检查配置',
@@ -2311,6 +2316,7 @@ export const messages = {
   'en-US': {
     'app.subtitle': 'AI image workspace',
     'common.close': 'Close',
+    'common.closeNotification': 'Close notification',
     'common.cancel': 'Cancel',
     'common.confirm': 'Confirm',
     'common.save': 'Save',
@@ -2386,6 +2392,8 @@ export const messages = {
     'theme.system': 'System theme',
     'theme.dark': 'Dark mode',
     'theme.light': 'Light mode',
+    'sidebar.expand': 'Expand sidebar',
+    'sidebar.collapse': 'Collapse sidebar',
 
 
     'batch.aria': 'Batch queue',
@@ -3558,6 +3566,8 @@ export const messages = {
     'home.status.checking': 'Checking',
     'home.status.localPending': 'Local service pending',
     'home.status.localFirst': 'Local-first · Keys stay private',
+    'home.provider.noSavedProfile': 'Unsaved config',
+    'home.provider.noModel': 'No model selected',
     'home.action.start': 'Start creating',
     'home.action.openGallery': 'Open gallery',
     'home.action.checkConfig': 'Check config',

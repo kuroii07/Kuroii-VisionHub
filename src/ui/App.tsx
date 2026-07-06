@@ -5966,22 +5966,22 @@ export function App() {
           <button
             className="themeToggle"
             type="button"
-            data-tooltip={resolvedThemeMode === 'dark' ? '切换浅色模式' : '切换暗色模式'}
-            aria-label={resolvedThemeMode === 'dark' ? '切换浅色模式' : '切换暗色模式'}
+            data-tooltip={resolvedThemeMode === 'dark' ? t('theme.toLight') : t('theme.toDark')}
+            aria-label={resolvedThemeMode === 'dark' ? t('theme.toLight') : t('theme.toDark')}
             onClick={toggleThemeMode}
           >
             {resolvedThemeMode === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
-            <span>{themeMode === 'system' ? '跟随系统' : resolvedThemeMode === 'dark' ? '暗色模式' : '浅色模式'}</span>
+            <span>{themeMode === 'system' ? t('theme.system') : resolvedThemeMode === 'dark' ? t('theme.dark') : t('theme.light')}</span>
           </button>
           <button
             className="sidebarCollapseButton"
             type="button"
-            data-tooltip={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
-            aria-label={isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+            data-tooltip={isSidebarCollapsed ? t('sidebar.expand') : t('sidebar.collapse')}
+            aria-label={isSidebarCollapsed ? t('sidebar.expand') : t('sidebar.collapse')}
             onClick={() => updateSidebarCollapsed(!isSidebarCollapsed)}
           >
             <Sidebar size={17} />
-            <span>{isSidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}</span>
+            <span>{isSidebarCollapsed ? t('sidebar.expand') : t('sidebar.collapse')}</span>
           </button>
         </div>
       </aside>
@@ -6027,8 +6027,8 @@ export function App() {
         {page === 'home' ? (
           <WorkspaceHomePage
             providerName={generationSelectedProvider.name}
-            providerProfileName={activeGenerationProfile?.displayName ?? '未保存配置'}
-            providerModelId={activeGenerationConfig.modelId || selectedModelId || '未选择模型'}
+            providerProfileName={activeGenerationProfile?.displayName ?? t('home.provider.noSavedProfile')}
+            providerModelId={activeGenerationConfig.modelId || selectedModelId || t('home.provider.noModel')}
             selectedProviderId={selectedProviderId}
             isRealProviderReady={isRealProviderReady}
             secretAvailable={generationSecretAvailable}
@@ -6328,7 +6328,7 @@ export function App() {
             <div className={`appToast ${toast.level}`} key={toast.id}>
               <span />
               <p>{toast.message}</p>
-              <button type="button" aria-label="关闭通知" onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}>
+              <button type="button" aria-label={t('common.closeNotification')} onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}>
                 <X size={13} />
               </button>
             </div>
