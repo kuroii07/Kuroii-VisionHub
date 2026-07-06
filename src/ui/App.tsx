@@ -3076,7 +3076,7 @@ export function App() {
       if (!queue) {
         setBatchQueueStore(store);
         setBatchQueueNameDialog(null);
-        setConfigMessage('队列不存在，请刷新后重试。');
+        setConfigMessage(t('batch.message.queueNotFound'));
         return;
       }
       if (nextName === queue.name) {
@@ -3109,7 +3109,7 @@ export function App() {
     const queue = store.queues.find((item) => item.id === queueId);
     if (!queue) {
       setBatchQueueStore(store);
-      setConfigMessage('队列不存在，请刷新后重试。');
+      setConfigMessage(t('batch.message.queueNotFound'));
       return;
     }
     const summary = summarizeBatchQueue(queue);
@@ -3129,7 +3129,7 @@ export function App() {
     const queue = store.queues.find((item) => item.id === queueId);
     if (!queue) {
       setBatchQueueStore(store);
-      setConfigMessage('队列不存在，请刷新后重试。');
+      setConfigMessage(t('batch.message.queueNotFound'));
       return;
     }
     if (store.queues.length <= 1) {
@@ -3228,7 +3228,7 @@ export function App() {
     const queue = store.queues.find((item) => item.id === queueId);
     if (!queue) {
       setBatchQueueStore(store);
-      setConfigMessage('队列不存在，请刷新后重试。');
+      setConfigMessage(t('batch.message.queueNotFound'));
       return;
     }
     const summary = summarizeBatchQueue(queue);
@@ -3307,11 +3307,11 @@ export function App() {
     const generationMode = options.mode ?? 'text-to-image';
     const references = options.references ?? [];
     if (!trimmedPrompt) {
-      setConfigMessage('请先输入 Prompt，再加入批量队列。');
+      setConfigMessage(t('batch.message.addPromptRequired'));
       return;
     }
     if (generationMode === 'image-to-image' && references.length === 0) {
-      setConfigMessage('图生图任务需要先添加至少一张参考图，再加入批量队列。');
+      setConfigMessage(t('batch.message.addReferenceRequired'));
       return;
     }
 
@@ -3319,7 +3319,7 @@ export function App() {
       ? activeGenerationConfig.modelId.trim()
       : selectedModelId.trim();
     if (!providerModelId) {
-      setConfigMessage('当前模型 ID 为空，请先在平台接入或创作台选择模型。');
+      setConfigMessage(t('batch.message.modelMissing'));
       return;
     }
 
@@ -3328,7 +3328,7 @@ export function App() {
       try {
         extraHeaders = parseExtraHeaders(activeGenerationConfig.extraHeadersJson);
       } catch (error) {
-        setConfigMessage(`额外 Headers JSON 无法解析，未加入队列：${error instanceof Error ? error.message : String(error)}`);
+        setConfigMessage(t('batch.message.extraHeadersQueueParseFailed', { message: error instanceof Error ? error.message : String(error) }));
         return;
       }
     }
@@ -3370,7 +3370,9 @@ export function App() {
     const task = createBatchQueueTask({
       queueId: queue.id,
       snapshot,
-      title: `${generationMode === 'image-to-image' ? '图生图' : '文生图'} · ${providerModelId}`
+      title: generationMode === 'image-to-image'
+        ? t('batch.message.titleImageToImage', { model: providerModelId })
+        : t('batch.message.titleTextToImage', { model: providerModelId })
     });
     const nextStore = existingQueue
       ? appendBatchQueueTasks(queue.id, [task], batchQueueStore)
@@ -3379,8 +3381,8 @@ export function App() {
     selectActiveBatchQueue(queue.id);
     const omittedReferenceCount = snapshot.referencePolicy?.omittedReferenceIds.length ?? 0;
     setConfigMessage([
-      `已加入队列「${queue.name}」：${generationSelectedProvider.name} / ${providerModelId}，${requestedCount} 张。`,
-      omittedReferenceCount > 0 ? `有 ${omittedReferenceCount} 张参考图未持久化大体积数据，执行前需要重新确认参考图。` : ''
+      t('batch.message.addedCurrent', { queue: queue.name, provider: generationSelectedProvider.name, model: providerModelId, count: requestedCount }),
+      omittedReferenceCount > 0 ? t('batch.message.omittedReferences', { count: omittedReferenceCount }) : ''
     ].filter(Boolean).join(' '));
     navigateTo('batch');
   }
@@ -3391,15 +3393,15 @@ export function App() {
     const generationMode = options.mode ?? 'text-to-image';
     const references = options.references ?? [];
     if (normalizedPrompts.length === 0) {
-      setConfigMessage('请至少输入 1 条 Prompt，再创建批量变体队列。');
+      setConfigMessage(t('batch.message.variantPromptRequired'));
       return;
     }
     if (normalizedSizes.length === 0) {
-      setConfigMessage('请至少选择 1 个尺寸，再创建批量变体队列。');
+      setConfigMessage(t('batch.message.variantSizeRequired'));
       return;
     }
     if (generationMode === 'image-to-image' && references.length === 0) {
-      setConfigMessage('图生图批量变体需要先添加至少一张参考图。');
+      setConfigMessage(t('batch.message.variantReferenceRequired'));
       return;
     }
 
@@ -3407,13 +3409,13 @@ export function App() {
       ? activeGenerationConfig.modelId.trim()
       : selectedModelId.trim();
     if (!providerModelId) {
-      setConfigMessage('当前模型 ID 为空，请先在平台接入或创作台选择模型。');
+      setConfigMessage(t('batch.message.modelMissing'));
       return;
     }
 
     const estimatedTasks = normalizedPrompts.length * normalizedSizes.length;
     if (estimatedTasks > 40) {
-      setConfigMessage(`本次批量变体会创建 ${estimatedTasks} 个任务，超过单次上限 40 个；请减少 Prompt 或画面比例数量。`);
+      setConfigMessage(t('batch.message.variantTooManyTasks', { count: estimatedTasks }));
       return;
     }
 
@@ -3422,7 +3424,7 @@ export function App() {
       try {
         extraHeaders = parseExtraHeaders(activeGenerationConfig.extraHeadersJson);
       } catch (error) {
-        setConfigMessage(`额外 Headers JSON 无法解析，未加入批量变体：${error instanceof Error ? error.message : String(error)}`);
+        setConfigMessage(t('batch.message.extraHeadersVariantParseFailed', { message: error instanceof Error ? error.message : String(error) }));
         return;
       }
     }
@@ -3473,7 +3475,7 @@ export function App() {
           queueId: queue.id,
           snapshot,
           kind: 'prompt-size-sweep',
-          title: `批量变体 · ${variantSize} · ${providerModelId}`
+          title: t('batch.message.variantTitle', { size: variantSize, model: providerModelId })
         }));
       }
     }
@@ -3488,8 +3490,8 @@ export function App() {
       0
     );
     setConfigMessage([
-      `已加入队列「${queue.name}」：批量变体 ${normalizedPrompts.length} 条 Prompt × ${normalizedSizes.length} 个比例 = ${tasks.length} 个任务，单任务 ${requestedCount} 张。`,
-      omittedReferenceCount > 0 ? `有 ${omittedReferenceCount} 个任务的参考图未持久化大体积数据，执行前需要重新确认参考图。` : ''
+      t('batch.message.variantAdded', { queue: queue.name, prompts: normalizedPrompts.length, sizes: normalizedSizes.length, tasks: tasks.length, count: requestedCount }),
+      omittedReferenceCount > 0 ? t('batch.message.variantOmittedReferences', { count: omittedReferenceCount }) : ''
     ].filter(Boolean).join(' '));
     navigateTo('batch');
   }
@@ -3499,15 +3501,15 @@ export function App() {
     const generationMode = options.mode ?? 'text-to-image';
     const references = options.references ?? [];
     if (!trimmedPrompt) {
-      setConfigMessage('请先输入 Prompt，再创建多模型对比队列。');
+      setConfigMessage(t('batch.message.comparePromptRequired'));
       return;
     }
     if (!generationSupportsOpenAICompatible) {
-      setConfigMessage('多模型对比 V1 当前先支持中转站 / 聚合 API 和官方 OpenAI-compatible 配置实例。');
+      setConfigMessage(t('batch.message.compareUnsupported'));
       return;
     }
     if (generationMode === 'image-to-image' && references.length === 0) {
-      setConfigMessage('图生图对比任务需要先添加至少一张参考图。');
+      setConfigMessage(t('batch.message.compareReferenceRequired'));
       return;
     }
 
@@ -3517,13 +3519,13 @@ export function App() {
       .filter((profile): profile is ProviderConnectionProfile => Boolean(profile))
       .filter((profile) => profile.providerId === selectedProviderId);
     if (selectedProfiles.length < 2) {
-      setConfigMessage('请至少选择 2 个当前平台下的配置实例，再加入多模型对比队列。');
+      setConfigMessage(t('batch.message.compareProfilesRequired'));
       return;
     }
 
     const missingModelProfile = selectedProfiles.find((profile) => !profile.modelId.trim());
     if (missingModelProfile) {
-      setConfigMessage(`配置实例 ${missingModelProfile.displayName} 的模型 ID 为空，请先补全模型后再对比。`);
+      setConfigMessage(t('batch.message.compareModelMissing', { profile: missingModelProfile.displayName }));
       return;
     }
 
@@ -3543,7 +3545,7 @@ export function App() {
       try {
         extraHeaders = parseExtraHeaders(profileConfig.extraHeadersJson);
       } catch (error) {
-        setConfigMessage(`配置实例 ${profile.displayName} 的额外 Headers JSON 无法解析，未加入对比队列：${error instanceof Error ? error.message : String(error)}`);
+        setConfigMessage(t('batch.message.compareHeadersParseFailed', { profile: profile.displayName, message: error instanceof Error ? error.message : String(error) }));
         return;
       }
 
@@ -3587,7 +3589,7 @@ export function App() {
         snapshot,
         kind: 'model-compare',
         compareGroupId: compareGroupDraft.id,
-        title: `对比 · ${profile.displayName || profileConfig.modelId} · ${profileConfig.modelId}`
+        title: t('batch.message.compareTitle', { profile: profile.displayName || profileConfig.modelId, model: profileConfig.modelId })
       }));
     }
 
@@ -3606,8 +3608,8 @@ export function App() {
       0
     );
     setConfigMessage([
-      `已加入队列「${queue.name}」：多模型对比组 ${selectedProfiles.length} 个配置实例，${tasks.length} 个任务，单任务 ${requestedCount} 张。`,
-      omittedReferenceCount > 0 ? `有 ${omittedReferenceCount} 个任务的参考图未持久化大体积数据，执行前需要重新确认参考图。` : ''
+      t('batch.message.compareAdded', { queue: queue.name, profiles: selectedProfiles.length, tasks: tasks.length, count: requestedCount }),
+      omittedReferenceCount > 0 ? t('batch.message.variantOmittedReferences', { count: omittedReferenceCount }) : ''
     ].filter(Boolean).join(' '));
     navigateTo('batch');
   }
@@ -3645,16 +3647,16 @@ export function App() {
     const queue = store.queues.find((item) => item.id === queueId);
     const task = queue?.tasks.find((item) => item.id === taskId);
     if (!queue || !task) {
-      if (!options.suppressMessage) setConfigMessage('队列任务不存在，请刷新批量队列后重试。');
+      if (!options.suppressMessage) setConfigMessage(t('batch.message.taskMissingRefresh'));
       setBatchQueueStore(store);
       return 'skipped';
     }
     if (task.status === 'running') {
-      if (!options.suppressMessage) setConfigMessage('这个任务正在执行中，请等待完成。');
+      if (!options.suppressMessage) setConfigMessage(t('batch.message.taskRunning'));
       return 'skipped';
     }
     if (task.status === 'cancelled') {
-      if (!options.suppressMessage) setConfigMessage('这个任务已取消，如需执行请后续使用重新入队功能。');
+      if (!options.suppressMessage) setConfigMessage(t('batch.message.taskCancelled'));
       return 'skipped';
     }
     setExecutingBatchTaskId(task.id);
@@ -3672,14 +3674,14 @@ export function App() {
       setBatchQueueStore(nextStore);
       if (!options.suppressMessage) {
         setConfigMessage(execution.task.status === 'succeeded'
-          ? `队列任务执行成功：已保存 ${execution.records.length} 条作品记录。`
-          : `队列任务执行失败：${execution.task.error ?? '没有返回有效图片'}，失败记录已写入作品画廊。`);
+          ? t('batch.message.taskExecutionSuccess', { count: execution.records.length })
+          : t('batch.message.taskExecutionFailedSaved', { message: execution.task.error ?? t('batch.message.noValidImage') }));
       }
       return execution.task.status === 'succeeded' ? 'succeeded' : 'failed';
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setBatchTaskState(queueId, taskId, { status: 'failed', error: message });
-      if (!options.suppressMessage) setConfigMessage(`队列任务执行失败：${message}`);
+      if (!options.suppressMessage) setConfigMessage(t('batch.message.taskExecutionFailed', { message }));
       return 'failed';
     } finally {
       setExecutingBatchTaskId(null);
@@ -3688,19 +3690,19 @@ export function App() {
 
   async function executeBatchQueueSequentially(queueId: string) {
     if (runningBatchQueueId || executingBatchTaskId) {
-      setConfigMessage('已有队列任务正在执行，请等待当前任务完成。');
+      setConfigMessage(t('batch.message.queueAlreadyRunning'));
       return;
     }
     const store = loadBatchQueueStore();
     const queue = store.queues.find((item) => item.id === queueId);
     if (!queue) {
       setBatchQueueStore(store);
-      setConfigMessage('队列不存在，请刷新后重试。');
+      setConfigMessage(t('batch.message.queueNotFound'));
       return;
     }
     const initialPendingCount = queue.tasks.filter((task) => task.status === 'pending').length;
     if (initialPendingCount === 0) {
-      setConfigMessage('当前队列没有待执行任务。');
+      setConfigMessage(t('batch.message.queueNoPending'));
       return;
     }
 
@@ -3718,7 +3720,7 @@ export function App() {
       startedAt: queue.startedAt ?? new Date().toISOString(),
       finishedAt: undefined
     });
-    setConfigMessage(`已开始连续执行队列：共 ${initialPendingCount} 个待执行任务。`);
+    setConfigMessage(t('batch.message.sequentialStarted', { count: initialPendingCount }));
 
     let completedThisRun = 0;
     let failedThisRun = 0;
@@ -3766,8 +3768,8 @@ export function App() {
         }, finalStore);
         setBatchQueueStore(nextStore);
         setConfigMessage(wasStopped
-          ? `已停止连续执行：本轮成功 ${completedThisRun} 个，失败 ${failedThisRun} 个，剩余 ${summary.pending} 个待执行。`
-          : `连续执行完成：本轮成功 ${completedThisRun} 个，失败 ${failedThisRun} 个。`);
+          ? t('batch.message.sequentialStopped', { succeeded: completedThisRun, failed: failedThisRun, pending: summary.pending })
+          : t('batch.message.sequentialCompleted', { succeeded: completedThisRun, failed: failedThisRun }));
       }
       batchQueueStopRequestedRef.current = false;
       setRunningBatchQueueId(null);
@@ -3781,13 +3783,13 @@ export function App() {
     const queue = store.queues.find((item) => item.id === queueId);
     if (!queue) {
       setBatchQueueStore(store);
-      setConfigMessage('队列不存在，请刷新后重试。');
+      setConfigMessage(t('batch.message.queueNotFound'));
       return;
     }
     const pendingTasks = queue.tasks.filter((task) => task.status === 'pending');
     const pendingImages = pendingTasks.reduce((sum, task) => sum + Math.max(1, Math.min(4, Math.round(task.snapshot.count))), 0);
     if (pendingTasks.length === 0) {
-      setConfigMessage('当前队列没有待执行任务。');
+      setConfigMessage(t('batch.message.queueNoPending'));
       return;
     }
     requestConfirm({
@@ -3953,7 +3955,7 @@ export function App() {
     const queue = store.queues.find((item) => item.id === queueId);
     if (!queue) {
       setBatchQueueStore(store);
-      setConfigMessage('队列不存在，请刷新后重试。');
+      setConfigMessage(t('batch.message.queueNotFound'));
       return;
     }
     const summary = summarizeBatchQueue(queue);
@@ -3980,7 +3982,7 @@ export function App() {
         const latestQueue = latestStore.queues.find((item) => item.id === queue.id);
         if (!latestQueue) {
           setBatchQueueStore(latestStore);
-          setConfigMessage('队列不存在，请刷新后重试。');
+          setConfigMessage(t('batch.message.queueNotFound'));
           return;
         }
         const latestFailedTasks = latestQueue.tasks.filter((task) => task.status === 'failed');
