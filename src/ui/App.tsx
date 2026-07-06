@@ -1177,28 +1177,31 @@ function generationRequestSummaryCopyText(record: GenerationRecord, providerName
   ].filter(Boolean).join('\n\n');
 }
 
-function buildProviderDiagnosticsReport(checks: ProviderDiagnosticItem[], context: ProviderDiagnosticsReportContext) {
+function buildProviderDiagnosticsReport(checks: ProviderDiagnosticItem[], context: ProviderDiagnosticsReportContext, t: Translator) {
   const counts = checks.reduce((acc, item) => {
     acc[item.level] += 1;
     return acc;
   }, { pass: 0, warn: 0, fail: 0, info: 0 } as Record<ProviderDiagnosticLevel, number>);
+  const levelLabel = (level: ProviderDiagnosticLevel) => t(`provider.report.level.${level}` as Parameters<Translator>[0]);
   return [
-    'VisionHub 配置自检报告',
-    `生成时间：${context.generatedAt}`,
-    `平台路线：${context.platformLabel}`,
-    `服务模板：${context.serviceLabel}`,
-    `Provider：${context.providerName}`,
-    context.profileName ? `配置实例：${context.profileName}${context.profileId ? ` (${context.profileId})` : ''}` : '配置实例：当前编辑草稿',
-    context.modelId ? `模型：${context.modelId}` : '',
-    `统计：通过 ${counts.pass} / 注意 ${counts.warn} / 错误 ${counts.fail} / 提示 ${counts.info}`,
+    t('provider.report.title'),
+    t('provider.report.generatedAt', { value: context.generatedAt }),
+    t('provider.report.platform', { value: context.platformLabel }),
+    t('provider.report.service', { value: context.serviceLabel }),
+    t('provider.report.provider', { value: context.providerName }),
+    context.profileName
+      ? t('provider.report.profile', { name: context.profileName, id: context.profileId ? ` (${context.profileId})` : '' })
+      : t('provider.report.profileDraft'),
+    context.modelId ? t('provider.report.model', { value: context.modelId }) : '',
+    t('provider.report.summary', { pass: counts.pass, warn: counts.warn, fail: counts.fail, info: counts.info }),
     '',
     ...checks.map((item, index) => [
       `#${index + 1} ${item.label}`,
-      `等级：${item.level === 'pass' ? '通过' : item.level === 'warn' ? '注意' : item.level === 'fail' ? '错误' : '提示'}`,
-      `说明：${item.detail}`
+      t('provider.report.itemLevel', { level: levelLabel(item.level) }),
+      t('provider.report.itemDetail', { detail: item.detail })
     ].join('\n')),
     '',
-    '安全说明：本报告不会包含 API Key；只记录当前配置是否已保存密钥，不导出具体密钥值。'
+    t('provider.report.safety')
   ].filter((line) => line !== '').join('\n\n');
 }
 
@@ -5052,7 +5055,7 @@ export function App() {
   async function copyCurrentProviderConfig() {
     try {
       await navigator.clipboard?.writeText(serializeProviderConfig(providerConfig));
-      setConfigMessage('当前平台接入配置已复制，API Key 不会包含在导出内容中。');
+      setConfigMessage(t('provider.message.configCopied'));
     } catch (error) {
       setConfigMessage(error instanceof Error ? error.message : String(error));
     }
@@ -5060,7 +5063,7 @@ export function App() {
 
   async function copyProviderDiagnosticsReport() {
     try {
-      if (!providerDiagnostics.length) throw new Error('请先运行一次配置自检报告。');
+      if (!providerDiagnostics.length) throw new Error(t('provider.message.runDiagnosticsFirst'));
       const report = buildProviderDiagnosticsReport(providerDiagnostics, {
         platformLabel: t(`provider.platform.${selectedPlatformType}.label` as Parameters<Translator>[0]),
         serviceLabel: t(`provider.service.${selectedServiceTemplate.id}.label` as Parameters<Translator>[0]),
@@ -5072,9 +5075,9 @@ export function App() {
         endpointPreview: providerEndpointPreview(providerConfig),
         imageToImageAdapterLabel: imageToImageAdapterLabel(resolveImageToImageAdapterForDisplay(providerConfig, selectedProvider.id)),
         generatedAt: new Date().toISOString()
-      });
+      }, t);
       await navigator.clipboard?.writeText(report);
-      setConfigMessage('配置自检报告已复制，内容不包含 API Key。');
+      setConfigMessage(t('provider.message.diagnosticsCopied'));
     } catch (error) {
       setConfigMessage(error instanceof Error ? error.message : String(error));
     }
