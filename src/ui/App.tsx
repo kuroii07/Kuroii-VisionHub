@@ -5241,7 +5241,7 @@ export function App() {
         setProviderConfig(nextConfig);
         saveProviderConfig(selectedProvider.id, nextConfig);
         if (selectedProfile) {
-          const message = formatModelListFallbackMessage(error, nextConfig.modelId);
+          const message = formatModelListFallbackMessage(error, nextConfig.modelId, t);
           persistProfile({
             ...selectedProfile,
             ...nextConfig,
@@ -5258,9 +5258,9 @@ export function App() {
           });
         }
         setSelectedModel(nextConfig.modelId);
-        setConfigMessage(formatModelListFallbackMessage(error, nextConfig.modelId));
+        setConfigMessage(formatModelListFallbackMessage(error, nextConfig.modelId, t));
       } else {
-        setConfigMessage(mapProviderErrorMessage(error));
+        setConfigMessage(mapProviderErrorMessage(error, t));
       }
     } finally {
       setIsRefreshingModels(false);
@@ -5387,7 +5387,7 @@ export function App() {
           modelId: nextConfig.modelId.trim(),
           available: false,
           checkedAt: new Date().toISOString(),
-          message: formatModelListFallbackMessage(error, nextConfig.modelId)
+          message: formatModelListFallbackMessage(error, nextConfig.modelId, t)
         };
         setProviderConfig(nextConfig);
         saveProviderConfig(selectedProvider.id, nextConfig);
@@ -5406,7 +5406,7 @@ export function App() {
         }
         setConfigMessage(probe.message);
       } else {
-        const message = mapProviderErrorMessage(error);
+        const message = mapProviderErrorMessage(error, t);
         updateProviderProfileTestState(selectedProfileId, 'failed', latencyMs, message);
         setConfigMessage(message);
       }
@@ -5752,7 +5752,7 @@ export function App() {
             setSelectedModel(nextConfig.modelId);
           }
           profileStatus = 'warning';
-          profileMessage = `${formatModelListFallbackMessage(error, nextConfig.modelId)} 延迟 ${latencyMs} ms。`;
+          profileMessage = t('provider.error.withLatency', { message: formatModelListFallbackMessage(error, nextConfig.modelId, t), latency: latencyMs });
           profilePatch = {
             lastModelProbe: {
               modelId: nextConfig.modelId.trim(),
@@ -5773,12 +5773,12 @@ export function App() {
       }
     } catch (error) {
       profileStatus = 'failed';
-      profileMessage = mapProviderErrorMessage(error);
+      profileMessage = mapProviderErrorMessage(error, t);
       push({
         id: 'network-error',
-        label: '在线诊断错误',
+        label: t('provider.diagnostics.onlineError'),
         level: 'fail',
-        detail: mapProviderErrorMessage(error)
+        detail: mapProviderErrorMessage(error, t)
       });
     } finally {
       updateProviderProfileTestState(
@@ -5869,12 +5869,12 @@ export function App() {
         updateProviderProfileTestState(selectedProfileId, 'warning', Math.round(performance.now() - startedAt), message);
         setConfigMessage(message);
       } else {
-        updateProviderProfileTestState(selectedProfileId, 'failed', Math.round(performance.now() - startedAt), saved.error ?? '接口没有返回图片。');
-        setConfigMessage(`测试生成未成功：${mapProviderErrorMessage(saved.error ?? '接口没有返回图片。')} 已写入作品画廊失败记录。`);
+        updateProviderProfileTestState(selectedProfileId, 'failed', Math.round(performance.now() - startedAt), saved.error ?? t('provider.error.noImageReturned'));
+        setConfigMessage(t('provider.message.testGenerationFailedRecord', { message: mapProviderErrorMessage(saved.error ?? t('provider.error.noImageReturned'), t) }));
       }
     } catch (error) {
-      updateProviderProfileTestState(selectedProfileId, 'failed', Math.round(performance.now() - startedAt), mapProviderErrorMessage(error));
-      setConfigMessage(mapProviderErrorMessage(error));
+      updateProviderProfileTestState(selectedProfileId, 'failed', Math.round(performance.now() - startedAt), mapProviderErrorMessage(error, t));
+      setConfigMessage(mapProviderErrorMessage(error, t));
     } finally {
       setIsRunningTestGeneration(false);
     }
@@ -14168,13 +14168,13 @@ function isModelListUnavailableError(error: unknown) {
   ].some((hint) => lower.includes(hint));
 }
 
-function formatModelListFallbackMessage(error: unknown, modelId: string) {
-  const mapped = mapProviderErrorMessage(error);
-  const modelLabel = modelId.trim() || '当前手动模型 ID';
-  return `模型列表无法读取，但这不影响手动模型使用。已保留「${modelLabel}」；如果中转站不开放 /v1/models 或被 Cloudflare 拦截，请直接保存，再用左侧延迟测试或右侧真实试生图验证。原始提示：${mapped}`;
+function formatModelListFallbackMessage(error: unknown, modelId: string, t: Translator) {
+  const mapped = mapProviderErrorMessage(error, t);
+  const modelLabel = modelId.trim() || t('provider.error.currentManualModelId');
+  return t('provider.error.modelListFallback', { model: modelLabel, message: mapped });
 }
 
-function mapProviderErrorMessage(error: unknown) {
+function mapProviderErrorMessage(error: unknown, t: Translator) {
   const message = providerErrorText(error);
   const lower = message.toLowerCase();
 
@@ -14185,32 +14185,32 @@ function mapProviderErrorMessage(error: unknown) {
       lower.includes('challenges.cloudflare.com') ||
       lower.includes('cloudflare'))
   ) {
-    return '模型列表接口返回了网页验证页，而不是 JSON。通常是中转站的 /v1/models 被 Cloudflare 或权限策略拦截；请手动填写模型 ID 后保存，再用左侧延迟测试或右侧真实试生图验证。';
+    return t('provider.error.modelListHtml');
   }
 
   if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('invalid api key')) {
-    return `密钥校验失败：请检查 API Key 是否正确，或中转站是否要求 Bearer Token。原始错误：${message}`;
+    return t('provider.error.unauthorized', { message });
   }
   if (lower.includes('403') || lower.includes('forbidden')) {
-    return `接口无权限：账号、模型或中转站策略可能不允许当前请求。原始错误：${message}`;
+    return t('provider.error.forbidden', { message });
   }
   if (lower.includes('404') || lower.includes('not found')) {
-    return `接口路径可能不匹配：请检查 Base URL、协议和接口路径。原始错误：${message}`;
+    return t('provider.error.notFound', { message });
   }
   if (lower.includes('billing hard limit')) {
-    return `OpenAI 账单硬限制：当前官方项目已达到 Billing hard limit。请到 OpenAI 控制台检查付款方式、余额、项目用量上限或组织额度。原始错误：${message}`;
+    return t('provider.error.billingHardLimit', { message });
   }
   if (lower.includes('429') || lower.includes('rate limit') || lower.includes('quota')) {
-    return `额度或频率受限：请稍后重试，或检查账户额度/中转站限流。原始错误：${message}`;
+    return t('provider.error.rateLimit', { message });
   }
   if (lower.includes('timeout') || lower.includes('timed out')) {
-    return `请求超时：请检查网络、中转站可用性或代理链路。原始错误：${message}`;
+    return t('provider.error.timeout', { message });
   }
   if (lower.includes('failed to fetch') || lower.includes('dns') || lower.includes('connection')) {
-    return `网络连接失败：请检查 Base URL 是否可访问，或中转站服务是否在线。原始错误：${message}`;
+    return t('provider.error.network', { message });
   }
   if (lower.includes('json')) {
-    return `返回内容解析失败：接口可能不是 OpenAI-compatible JSON 响应。原始错误：${message}`;
+    return t('provider.error.json', { message });
   }
   return message;
 }
