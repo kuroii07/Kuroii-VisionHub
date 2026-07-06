@@ -977,17 +977,17 @@ function parseComfyUIWorkflow(fileName: string, content: string): LocalComfyUIWo
   return buildComfyUIWorkflowSummary(fileName, 'unknown', [], null);
 }
 
-function workflowFormatLabel(format: LocalComfyUIWorkflowFormat) {
-  if (format === 'api') return 'API Workflow';
-  if (format === 'ui') return 'UI Workflow';
-  return '未知格式';
+function workflowFormatLabel(format: LocalComfyUIWorkflowFormat, t: Translator) {
+  if (format === 'api') return t('provider.workflow.format.api');
+  if (format === 'ui') return t('provider.workflow.format.ui');
+  return t('provider.workflow.format.unknown');
 }
 
-function comfyUIWorkflowRunStatus(preset: LocalComfyUIWorkflowPreset) {
-  if (preset.summary.format === 'api' && preset.rawWorkflow) return '可用于创作台生成';
-  if (preset.summary.format === 'api') return '旧记录需重新导入';
-  if (preset.summary.format === 'ui') return '需导出 API workflow';
-  return '暂不可生成';
+function comfyUIWorkflowRunStatus(preset: LocalComfyUIWorkflowPreset, t: Translator) {
+  if (preset.summary.format === 'api' && preset.rawWorkflow) return t('provider.workflow.status.runnable');
+  if (preset.summary.format === 'api') return t('provider.workflow.status.legacyReimport');
+  if (preset.summary.format === 'ui') return t('provider.workflow.status.exportApi');
+  return t('provider.workflow.status.unavailable');
 }
 
 const librarySortOptions: Array<{ value: LibrarySortMode; label: string }> = [
@@ -7026,7 +7026,7 @@ function WorkspaceHomePage(props: {
       ? props.t('home.status.localWorkflowPending')
       : props.t('home.status.waitingSecret');
   const activeWorkflow = props.activeComfyUIWorkflowPreset;
-  const activeWorkflowStatus = activeWorkflow ? comfyUIWorkflowRunStatus(activeWorkflow) : null;
+  const activeWorkflowStatus = activeWorkflow ? comfyUIWorkflowRunStatus(activeWorkflow, props.t) : null;
   const continueRecord = props.recentSuccessRecords[0] ?? props.referenceRecords[0] ?? props.favoriteRecords[0] ?? null;
   const materialRecords = mergeWorkspaceRecords([
     ...props.recentSuccessRecords,
@@ -7170,7 +7170,7 @@ function WorkspaceHomePage(props: {
             <div>
               <strong>{props.t('home.local.title')}</strong>
               <span>{props.t('home.local.workflowSummary', { total: props.localComfyUIWorkflowStore.presets.length, runnable: runnableWorkflowCount })}</span>
-              <small>{activeWorkflow ? `${activeWorkflow.name} · ${workflowFormatLabel(activeWorkflow.summary.format)} · ${activeWorkflowStatus ?? props.t('home.status.checking')}` : props.t('home.local.noWorkflow')}</small>
+              <small>{activeWorkflow ? `${activeWorkflow.name} · ${workflowFormatLabel(activeWorkflow.summary.format, props.t)} · ${activeWorkflowStatus ?? props.t('home.status.checking')}` : props.t('home.local.noWorkflow')}</small>
             </div>
             <button type="button" className="workspaceIconAction" onClick={props.onOpenComfyUIWorkflowManager} aria-label={props.t('home.local.openManager')} title={props.t('home.local.openManager')}>
               <SlidersHorizontal size={15} />
@@ -8785,8 +8785,8 @@ function ComfyUIWorkflowSummaryPanel({ preset, t }: { preset: LocalComfyUIWorkfl
   return (
     <div className="localWorkflowSummary">
       <div className="localWorkflowMeta">
-        <span>{workflowFormatLabel(summary.format)}</span>
-        <span>{comfyUIWorkflowRunStatus(preset)}</span>
+        <span>{workflowFormatLabel(summary.format, t)}</span>
+        <span>{comfyUIWorkflowRunStatus(preset, t)}</span>
         <span>{pt('provider.local.nodes', { count: summary.nodeCount })}</span>
         <span>{pt('provider.workflow.links', { count: summary.linkCount ?? '-' })}</span>
       </div>
@@ -8842,9 +8842,9 @@ function ComfyUIWorkflowManagerModal(props: {
   const activePreset = props.store.presets.find((preset) => preset.id === props.store.activeId) ?? props.store.presets[0] ?? null;
 
   return (
-    <UtilityModalShell title="ComfyUI 工作流管理器" eyebrow="Local Workflow" className="comfyWorkflowModal" onClose={props.onClose}>
+    <UtilityModalShell title={props.t('provider.workflow.manager.title')} eyebrow={props.t('provider.workflow.manager.eyebrow')} className="comfyWorkflowModal" onClose={props.onClose}>
       <div className="comfyWorkflowManager">
-        <aside className="comfyWorkflowList" aria-label="已添加的 ComfyUI 工作流">
+        <aside className="comfyWorkflowList" aria-label={props.t('provider.workflow.manager.listAria')}>
           {props.store.presets.length ? (
             props.store.presets.map((preset) => (
               <button
@@ -8854,34 +8854,34 @@ function ComfyUIWorkflowManagerModal(props: {
                 key={preset.id}
               >
                 <strong>{preset.name}</strong>
-                <span>{workflowFormatLabel(preset.summary.format)} · {comfyUIWorkflowRunStatus(preset)} · 节点 {preset.summary.nodeCount}</span>
+                <span>{workflowFormatLabel(preset.summary.format, props.t)} · {comfyUIWorkflowRunStatus(preset, props.t)} · {props.t('provider.local.nodes', { count: preset.summary.nodeCount })}</span>
               </button>
             ))
           ) : (
             <div className="comfyWorkflowEmpty">
-              <strong>还没有工作流</strong>
-              <span>回到平台接入页导入 ComfyUI workflow JSON。</span>
+              <strong>{props.t('provider.workflow.manager.emptyTitle')}</strong>
+              <span>{props.t('provider.workflow.manager.emptyHint')}</span>
             </div>
           )}
         </aside>
-        <section className="comfyWorkflowDetail" aria-label="ComfyUI 工作流详情">
+        <section className="comfyWorkflowDetail" aria-label={props.t('provider.workflow.manager.detailAria')}>
           {activePreset ? (
             <>
               <div className="comfyWorkflowDetailHeader">
                 <div>
                   <strong>{activePreset.name}</strong>
-                  <small>{activePreset.summary.fileName} · {workflowFormatLabel(activePreset.summary.format)}</small>
+                  <small>{activePreset.summary.fileName} · {workflowFormatLabel(activePreset.summary.format, props.t)}</small>
                 </div>
-                <button type="button" className="miniButton dangerMiniButton" onClick={() => props.onDelete(activePreset.id)} title={`删除工作流 ${activePreset.name}`} aria-label={`删除工作流 ${activePreset.name}`}>
-                  <Trash2 size={14} /> 删除
+                <button type="button" className="miniButton dangerMiniButton" onClick={() => props.onDelete(activePreset.id)} title={props.t('provider.workflow.manager.deleteTitle', { name: activePreset.name })} aria-label={props.t('provider.workflow.manager.deleteAria', { name: activePreset.name })}>
+                  <Trash2 size={14} /> {props.t('provider.workflow.manager.delete')}
                 </button>
               </div>
               <ComfyUIWorkflowSummaryPanel preset={activePreset} t={props.t} />
             </>
           ) : (
             <div className="comfyWorkflowEmpty">
-              <strong>请选择工作流</strong>
-              <span>导入后可以在这里查看每个 workflow 的节点详情。</span>
+              <strong>{props.t('provider.workflow.manager.selectTitle')}</strong>
+              <span>{props.t('provider.workflow.manager.selectHint')}</span>
             </div>
           )}
         </section>
