@@ -5071,9 +5071,9 @@ export function App() {
         profileName: selectedProfile?.displayName,
         profileId: selectedProfile?.id ?? selectedProfileId,
         modelId: providerConfig.modelId,
-        protocolLabel: protocolLabel(providerConfig.protocol),
+        protocolLabel: protocolLabel(providerConfig.protocol, t),
         endpointPreview: providerEndpointPreview(providerConfig),
-        imageToImageAdapterLabel: imageToImageAdapterLabel(resolveImageToImageAdapterForDisplay(providerConfig, selectedProvider.id)),
+        imageToImageAdapterLabel: imageToImageAdapterLabel(resolveImageToImageAdapterForDisplay(providerConfig, selectedProvider.id), t),
         generatedAt: new Date().toISOString()
       }, t);
       await navigator.clipboard?.writeText(report);
@@ -5170,7 +5170,7 @@ export function App() {
       return;
     }
     if (!providerSupportsOpenAICompatibleModelList(selectedProvider.id)) {
-      setConfigMessage(modelListUnsupportedMessage(selectedProvider.id, providerConfig.modelId));
+      setConfigMessage(modelListUnsupportedMessage(selectedProvider.id, providerConfig.modelId, t));
       return;
     }
     if (!desktopRuntime) {
@@ -5202,7 +5202,7 @@ export function App() {
         modelOptions.find((id) => id.toLowerCase().includes('image')) ??
         modelOptions[0] ??
         providerConfig.modelId;
-      const modelProbe = buildModelProbe(nextModelId, modelOptions, '来自模型列表刷新。');
+      const modelProbe = buildModelProbe(nextModelId, modelOptions, t('provider.diagnostics.detail.modelProbeFromModelListRefresh'), t);
       const nextConfig = { ...providerConfig, modelOptions, modelId: nextModelId };
       const latencyMs = Math.round(performance.now() - startedAt);
       const testStatus = modelProbe.available ? 'passed' : 'warning';
@@ -5279,10 +5279,10 @@ export function App() {
         modelOptions: Array.from(new Set([...providerConfig.modelOptions, ...fixedModelOptions, providerConfig.modelId.trim()].filter(Boolean)))
       });
       const probe = isMiniMaxProvider(selectedProvider.id)
-        ? buildMiniMaxManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.minimaxManualProbeHint'))
+        ? buildMiniMaxManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.minimaxManualProbeHint'), t)
         : isGeminiProvider(selectedProvider.id)
-          ? buildGeminiManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.geminiManualProbeHint'))
-          : buildModelProbe(nextConfig.modelId, nextConfig.modelOptions, '当前 API 不提供 OpenAI-compatible 模型列表。');
+          ? buildGeminiManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.geminiManualProbeHint'), t)
+          : buildModelProbe(nextConfig.modelId, nextConfig.modelOptions, t('provider.diagnostics.detail.modelListUnsupportedOpenAICompatible'), t);
       setProviderConfig(nextConfig);
       saveProviderConfig(selectedProvider.id, nextConfig);
       if (selectedProfile) {
@@ -5335,7 +5335,7 @@ export function App() {
       );
       const modelOptions = models.map((model) => model.id);
       const latencyMs = Math.round(performance.now() - startedAt);
-      const modelProbe = buildModelProbe(providerConfig.modelId, modelOptions, `延迟 ${latencyMs} ms。`);
+      const modelProbe = buildModelProbe(providerConfig.modelId, modelOptions, t('provider.diagnostics.detail.modelProbeLatencySource', { latency: latencyMs }), t);
       const imageModelCount = countLikelyImageModels(modelOptions);
       const nextConfig = {
         ...providerConfig,
@@ -5582,7 +5582,8 @@ export function App() {
         desktopRuntime,
         secretAvailable: currentSecretAvailable,
         serviceConfigurable: true,
-        supportsOpenAICompatible: targetSupportsOpenAICompatible
+        supportsOpenAICompatible: targetSupportsOpenAICompatible,
+        t
       }).forEach((item) => push({ ...item, id: `readiness-${item.id}` }));
 
       buildProviderStabilityDiagnosticItems({
@@ -5669,14 +5670,14 @@ export function App() {
             })
           : ensureManualModelOption(targetConfig);
         const modelProbe = isMiniMaxProvider(targetProviderId)
-          ? buildMiniMaxManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.minimaxManualProbeHint'))
+          ? buildMiniMaxManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.minimaxManualProbeHint'), t)
           : isGeminiProvider(targetProviderId)
-            ? buildGeminiManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.geminiManualProbeHint'))
+            ? buildGeminiManualModelProbe(nextConfig.modelId, t('provider.diagnostics.detail.geminiManualProbeHint'), t)
             : {
                 modelId: nextConfig.modelId.trim(),
                 available: false,
                 checkedAt: new Date().toISOString(),
-                message: modelListUnsupportedMessage(targetProviderId, nextConfig.modelId)
+                message: modelListUnsupportedMessage(targetProviderId, nextConfig.modelId, t)
               };
         if (!diagnosticProfile || diagnosticProfile.id === selectedProfileId) {
           setProviderConfig(nextConfig);
@@ -5717,7 +5718,7 @@ export function App() {
         const latencyMs = Math.round(performance.now() - startedAt);
         const modelOptions = models.map((model) => model.id);
         const imageModelCount = countLikelyImageModels(modelOptions);
-        const modelProbe = buildModelProbe(targetConfig.modelId, modelOptions, t('provider.diagnostics.detail.modelProbeFromDiagnostics'));
+        const modelProbe = buildModelProbe(targetConfig.modelId, modelOptions, t('provider.diagnostics.detail.modelProbeFromDiagnostics'), t);
         profileStatus = models.length > 0 && modelProbe.available ? 'passed' : 'warning';
         profileMessage =
           models.length > 0 && modelProbe.available
@@ -7995,7 +7996,8 @@ function ProviderSettingsPage(props: {
     desktopRuntime: props.desktopRuntime,
     secretAvailable: props.secretAvailable,
     serviceConfigurable: props.isSelectedServiceConfigurable,
-    supportsOpenAICompatible: props.supportsOpenAICompatible
+    supportsOpenAICompatible: props.supportsOpenAICompatible,
+    t: props.t
   });
   const offlineDiagnosticItems = [
     ...readinessItems,
@@ -8003,7 +8005,8 @@ function ProviderSettingsPage(props: {
       profile: activeProfile,
       generationProfile,
       selectedProviderId: props.selectedProviderId,
-      generationProviderId: props.generationProviderId
+      generationProviderId: props.generationProviderId,
+      t: props.t
     })
   ];
   const offlineDiagnosticSummary = buildOfflineDiagnosticSummary({
@@ -8138,7 +8141,7 @@ function ProviderSettingsPage(props: {
                     </div>
                     <small>{profile.baseUrl.replace(/^https?:\/\//, '')} · {profile.modelId}</small>
                     <div className="profileMeta">
-                      <span>{protocolLabel(profile.protocol)}</span>
+                      <span>{protocolLabel(profile.protocol, props.t)}</span>
                       {generationProfile?.id === profile.id ? <span className="activeUse">{pt('provider.profile.activeUse')}</span> : null}
                       {profile.lastLatencyMs ? <span>{profile.lastLatencyMs} ms</span> : null}
                       {profile.enabled ? <span className="enabled">{pt('provider.profile.enabled')}</span> : <span>{pt('provider.profile.disabled')}</span>}
@@ -13528,43 +13531,61 @@ function officialFixedModelOptions(providerId: string) {
   return [];
 }
 
-function buildMiniMaxManualModelProbe(modelId: string, source: string) {
+function buildMiniMaxManualModelProbe(modelId: string, source: string, t?: Translator) {
   const normalizedModelId = modelId.trim();
   const options = minimaxModelOptions();
   const available = Boolean(normalizedModelId) && options.includes(normalizedModelId);
+  const fallbackModel = normalizedModelId || (t ? t('provider.diagnostics.value.notFilled') : 'not filled');
   return {
     modelId: normalizedModelId,
     available,
     checkedAt: new Date().toISOString(),
     message: available
-      ? `MiniMax 官方模板内置模型「${normalizedModelId}」。${source}`
-      : `MiniMax 当前建议使用 ${options.join(' / ')}；「${normalizedModelId || '未填写'}」未在内置模型里。${source}`
+      ? t
+        ? t('provider.diagnostics.detail.minimaxModelProbeAvailable', { model: normalizedModelId, source })
+        : `MiniMax official template includes model "${normalizedModelId}". ${source}`
+      : t
+        ? t('provider.diagnostics.detail.minimaxModelProbeMissing', { options: options.join(' / '), model: fallbackModel, source })
+        : `MiniMax currently recommends ${options.join(' / ')}; "${fallbackModel}" is not built in. ${source}`
   };
 }
 
-function buildGeminiManualModelProbe(modelId: string, source: string) {
+function buildGeminiManualModelProbe(modelId: string, source: string, t?: Translator) {
   const normalizedModelId = modelId.trim();
   const options = geminiModelOptions();
   const available = Boolean(normalizedModelId) && options.includes(normalizedModelId);
+  const fallbackModel = normalizedModelId || (t ? t('provider.diagnostics.value.notFilled') : 'not filled');
   return {
     modelId: normalizedModelId,
     available,
     checkedAt: new Date().toISOString(),
     message: available
-      ? `Gemini 官方模板内置模型「${normalizedModelId}」。${source}`
-      : `Gemini 当前建议使用 ${options.join(' / ')}；「${normalizedModelId || '未填写'}」未在内置模型里。${source}`
+      ? t
+        ? t('provider.diagnostics.detail.geminiModelProbeAvailable', { model: normalizedModelId, source })
+        : `Gemini official template includes model "${normalizedModelId}". ${source}`
+      : t
+        ? t('provider.diagnostics.detail.geminiModelProbeMissing', { options: options.join(' / '), model: fallbackModel, source })
+        : `Gemini currently recommends ${options.join(' / ')}; "${fallbackModel}" is not built in. ${source}`
   };
 }
 
-function modelListUnsupportedMessage(providerId: string, modelId: string) {
+function modelListUnsupportedMessage(providerId: string, modelId: string, t?: Translator) {
   if (isMiniMaxProvider(providerId)) {
-    const modelProbe = buildMiniMaxManualModelProbe(modelId, 'MiniMax 官方图片接口当前按固定模型 ID 配置，不读取 OpenAI-compatible /v1/models。');
+    const source = t
+      ? t('provider.diagnostics.detail.minimaxFixedModelListSource')
+      : 'MiniMax official image API uses fixed model IDs and does not read OpenAI-compatible /v1/models.';
+    const modelProbe = buildMiniMaxManualModelProbe(modelId, source, t);
     return modelProbe.message;
   }
   if (isGeminiProvider(providerId)) {
-    return buildGeminiManualModelProbe(modelId, 'Gemini 官方图片接口当前按固定模型 ID 配置，不读取 OpenAI-compatible /v1/models。').message;
+    const source = t
+      ? t('provider.diagnostics.detail.geminiFixedModelListSource')
+      : 'Gemini official image API uses fixed model IDs and does not read OpenAI-compatible /v1/models.';
+    return buildGeminiManualModelProbe(modelId, source, t).message;
   }
-  return '当前官方 API 暂不提供 OpenAI 兼容模型列表；已保留模板内置模型和手动模型 ID，可继续用真实试生图验证。';
+  return t
+    ? t('provider.diagnostics.detail.officialModelListUnsupported')
+    : 'The current official API does not provide an OpenAI-compatible model list. Built-in template models and manual model IDs are kept for real test generation.';
 }
 
 function defaultBaseUrlPlaceholder(providerId: string) {
@@ -13658,10 +13679,11 @@ function profileLabel(status: ProviderConnectionProfile['lastTestStatus']) {
   return labels[status] ?? '未测试';
 }
 
-function protocolLabel(protocol: OpenAICompatibleConfig['protocol']) {
+function protocolLabel(protocol: OpenAICompatibleConfig['protocol'], t?: Translator) {
+  if (t) return t(`provider.protocol.${protocol}.label` as Parameters<Translator>[0]);
   const labels: Record<OpenAICompatibleConfig['protocol'], string> = {
     images: 'Images',
-    'images-minimal': 'Images 精简',
+    'images-minimal': 'Images minimal',
     responses: 'Responses',
     'chat-completions': 'Chat',
     'custom-images': 'Custom'
@@ -13669,9 +13691,10 @@ function protocolLabel(protocol: OpenAICompatibleConfig['protocol']) {
   return labels[protocol];
 }
 
-function imageToImageAdapterLabel(adapter: ImageToImageAdapter) {
+function imageToImageAdapterLabel(adapter: ImageToImageAdapter, t?: Translator) {
+  if (t) return t(`provider.i2i.${adapter}.label` as Parameters<Translator>[0]);
   const labels: Record<ImageToImageAdapter, string> = {
-    auto: '自动选择',
+    auto: 'Auto',
     'openai-images-edit': 'OpenAI Images edits',
     'responses-input-image': 'Responses input_image',
     'chat-image-url': 'Chat image_url',
@@ -13853,19 +13876,26 @@ function countLikelyImageModels(modelIds: string[]) {
   return modelIds.filter((id) => /image|img|flux|sd|seedream|gpt-image|dall|wanx|qwen-image/i.test(id)).length;
 }
 
-function buildModelProbe(modelId: string, modelOptions: string[], source: string) {
+function buildModelProbe(modelId: string, modelOptions: string[], source: string, t?: Translator) {
   const normalizedModelId = modelId.trim();
   const available = Boolean(normalizedModelId) && modelOptions.includes(normalizedModelId);
   const checkedAt = new Date().toISOString();
+  const fallbackModel = normalizedModelId || (t ? t('provider.diagnostics.value.notFilled') : 'not filled');
   return {
     modelId: normalizedModelId,
     available,
     checkedAt,
     message: available
-      ? `当前模型「${normalizedModelId}」已出现在服务商模型列表中。${source}`
+      ? t
+        ? t('provider.diagnostics.detail.modelProbeAvailable', { model: normalizedModelId, source })
+        : `Current model "${normalizedModelId}" appears in the provider model list. ${source}`
       : modelOptions.length
-        ? `当前模型「${normalizedModelId || '未填写'}」没有出现在模型列表中；可能是模型 ID 写错，也可能是中转站隐藏了图片模型。${source}`
-        : `模型列表为空，已保留当前手动模型「${normalizedModelId || '未填写'}」。${source}`
+        ? t
+          ? t('provider.diagnostics.detail.modelProbeMissing', { model: fallbackModel, source })
+          : `Current model "${fallbackModel}" does not appear in the model list; the model ID may be wrong or the relay may hide image models. ${source}`
+        : t
+          ? t('provider.diagnostics.detail.modelProbeEmpty', { model: fallbackModel, source })
+          : `Model list is empty. Kept current manual model "${fallbackModel}". ${source}`
   };
 }
 
@@ -13877,13 +13907,15 @@ function buildProviderReadinessItems(input: {
   secretAvailable: boolean;
   serviceConfigurable: boolean;
   supportsOpenAICompatible: boolean;
+  t: Translator;
 }): ProviderDiagnosticItem[] {
+  const t = input.t;
   if (!input.serviceConfigurable || !input.supportsOpenAICompatible) {
     return [{
       id: 'route',
-      label: '接入路线',
+      label: t('provider.readiness.item.route'),
       level: 'info',
-      detail: '当前服务模板仍是规划展示，不开放保存、启用或真实能力测试。'
+      detail: t('provider.readiness.detail.routePlanned')
     }];
   }
 
@@ -13892,65 +13924,68 @@ function buildProviderReadinessItems(input: {
   const hasEndpointPath = input.config.endpointPath.trim().startsWith('/');
   const modelCount = input.profile?.lastModelCount;
   const modelProbe = input.profile?.lastModelProbe;
-  const generationVerified = Boolean(input.profile?.lastMessage?.includes('测试生成成功'));
+  const generationVerified = Boolean(input.profile?.lastMessage?.includes('\u6d4b\u8bd5\u751f\u6210\u6210\u529f'));
   const resolvedAdapter = resolveImageToImageAdapterForDisplay(input.config, input.providerId);
-  const protocolLabelText = protocolLabel(input.config.protocol);
+  const adapterLabel = imageToImageAdapterLabel(resolvedAdapter, t);
+  const protocolLabelText = protocolLabel(input.config.protocol, t);
   const isMiniMax = isMiniMaxProvider(input.providerId);
   const isGemini = isGeminiProvider(input.providerId);
+  const readyForGeneration = hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime;
 
   if (isMiniMax) {
     const miniMaxProbe = buildMiniMaxManualModelProbe(
       modelId,
-      'MiniMax 官方图片接口当前使用固定模型 ID，不读取 /v1/models。'
+      t('provider.readiness.detail.minimaxFixedModelSource'),
+      t
     );
     return [
       {
         id: 'config-profile',
-        label: '配置实例',
+        label: t('provider.readiness.item.configProfile'),
         level: input.profile ? 'pass' : 'info',
         detail: input.profile
-          ? '已保存为 MiniMax 官方配置实例，并使用当前配置实例的独立密钥。'
-          : '当前仍是 MiniMax 编辑草稿；保存后才会绑定独立密钥。'
+          ? t('provider.readiness.detail.minimaxProfileSaved')
+          : t('provider.readiness.detail.minimaxProfileDraft')
       },
       {
         id: 'model-list',
-        label: '模型列表',
+        label: t('provider.readiness.item.modelList'),
         level: 'info',
-        detail: 'MiniMax 官方图片接口不按 OpenAI-compatible /v1/models 刷新；请在内置 image-01 / image-01-live 或官方确认的新模型之间手动选择。'
+        detail: t('provider.readiness.detail.minimaxModelList')
       },
       {
         id: 'model-probe',
-        label: '当前模型',
+        label: t('provider.readiness.item.currentModel'),
         level: miniMaxProbe.available ? 'pass' : 'warn',
         detail: miniMaxProbe.message
       },
       {
         id: 'text-to-image',
-        label: '文生图',
+        label: t('provider.readiness.item.textToImage'),
         level: generationVerified
           ? 'pass'
-          : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
+          : readyForGeneration
             ? 'info'
             : 'warn',
         detail: generationVerified
-          ? '最近一次 MiniMax 真实试生图成功，说明当前配置至少通过了官方文生图链路。'
-          : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
-            ? '基础配置已具备；需要手动点击“真实试生图”才会消耗额度并验证 MiniMax 官方文生图。'
-            : '需要补齐桌面端、MiniMax API Key、Base URL、模型 ID 和 /v1/image_generation 路径后，才能真实试生图。'
+          ? t('provider.readiness.detail.minimaxTextToImageVerified')
+          : readyForGeneration
+            ? t('provider.readiness.detail.minimaxTextToImageReady')
+            : t('provider.readiness.detail.minimaxTextToImageMissing')
       },
       {
         id: 'image-to-image',
-        label: '图生图',
-        level: hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime ? 'info' : 'warn',
-        detail: hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
-          ? 'MiniMax 图生图会把第一张参考图作为 subject_reference.character 提交；多参考图暂不提交。'
-          : '需要补齐桌面端、MiniMax API Key、Base URL、模型 ID 和接口路径后，才能带参考图真实试生图。'
+        label: t('provider.readiness.item.imageToImage'),
+        level: readyForGeneration ? 'info' : 'warn',
+        detail: readyForGeneration
+          ? t('provider.readiness.detail.minimaxImageToImageReady')
+          : t('provider.readiness.detail.minimaxImageToImageMissing')
       },
       {
         id: 'multi-reference',
-        label: '多参考图',
+        label: t('provider.readiness.item.multiReference'),
         level: 'info',
-        detail: '当前只提交第一张参考图作为人物主体参考；多张参考图会保留在记录里，但本轮不发送给 MiniMax。'
+        detail: t('provider.readiness.detail.minimaxMultiReference')
       }
     ];
   }
@@ -13958,56 +13993,57 @@ function buildProviderReadinessItems(input: {
   if (isGemini) {
     const geminiProbe = buildGeminiManualModelProbe(
       modelId,
-      'Gemini 官方图片接口当前使用固定模型 ID，不读取 /v1/models。'
+      t('provider.readiness.detail.geminiFixedModelSource'),
+      t
     );
     return [
       {
         id: 'config-profile',
-        label: '配置实例',
+        label: t('provider.readiness.item.configProfile'),
         level: input.profile ? 'pass' : 'info',
         detail: input.profile
-          ? '已保存为 Gemini 官方配置实例，并使用当前配置实例的独立密钥。'
-          : '当前仍是 Gemini 编辑草稿；保存后才会绑定独立密钥。'
+          ? t('provider.readiness.detail.geminiProfileSaved')
+          : t('provider.readiness.detail.geminiProfileDraft')
       },
       {
         id: 'model-list',
-        label: '模型列表',
+        label: t('provider.readiness.item.modelList'),
         level: 'info',
-        detail: 'Gemini 官方图片接口按模型 ID 直接调用 generateContent；当前不读取 OpenAI-compatible /v1/models。'
+        detail: t('provider.readiness.detail.geminiModelList')
       },
       {
         id: 'model-probe',
-        label: '当前模型',
+        label: t('provider.readiness.item.currentModel'),
         level: geminiProbe.available ? 'pass' : 'warn',
         detail: geminiProbe.message
       },
       {
         id: 'text-to-image',
-        label: '文生图',
+        label: t('provider.readiness.item.textToImage'),
         level: generationVerified
           ? 'pass'
-          : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
+          : readyForGeneration
             ? 'info'
             : 'warn',
         detail: generationVerified
-          ? '最近一次 Gemini 真实试生图成功，说明当前配置至少通过了官方文生图链路。'
-          : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
-            ? '基础配置已具备；需要手动点击“真实试生图”才会消耗额度并验证 Gemini 官方文生图。'
-            : '需要补齐桌面端、Gemini API Key、Base URL、模型 ID 和 generateContent 路径后，才能真实试生图。'
+          ? t('provider.readiness.detail.geminiTextToImageVerified')
+          : readyForGeneration
+            ? t('provider.readiness.detail.geminiTextToImageReady')
+            : t('provider.readiness.detail.geminiTextToImageMissing')
       },
       {
         id: 'image-to-image',
-        label: '图生图 / 编辑',
-        level: hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime ? 'info' : 'warn',
-        detail: hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
-          ? 'Gemini 图生图会把参考图作为 inlineData parts 与文本提示一起提交；真实效果需要带参考图试生图验证。'
-          : '需要补齐桌面端、Gemini API Key、Base URL、模型 ID 和接口路径后，才能带参考图真实试生图。'
+        label: t('provider.readiness.item.imageToImageEdit'),
+        level: readyForGeneration ? 'info' : 'warn',
+        detail: readyForGeneration
+          ? t('provider.readiness.detail.geminiImageToImageReady')
+          : t('provider.readiness.detail.geminiImageToImageMissing')
       },
       {
         id: 'multi-reference',
-        label: '多参考图',
+        label: t('provider.readiness.item.multiReference'),
         level: 'info',
-        detail: '当前会把已添加参考图作为多个 inlineData parts 提交；多参考效果以后续真实测试为准。'
+        detail: t('provider.readiness.detail.geminiMultiReference')
       }
     ];
   }
@@ -14015,53 +14051,53 @@ function buildProviderReadinessItems(input: {
   return [
     {
       id: 'config-profile',
-      label: '配置实例',
+      label: t('provider.readiness.item.configProfile'),
       level: input.profile ? 'pass' : 'info',
       detail: input.profile
-        ? '已保存为配置实例，并使用当前配置实例的独立密钥。'
-        : '当前仍是编辑草稿；保存后才会绑定独立密钥。'
+        ? t('provider.readiness.detail.profileSaved')
+        : t('provider.readiness.detail.profileDraft')
     },
     {
       id: 'model-list',
-      label: '模型列表',
+      label: t('provider.readiness.item.modelList'),
       level: typeof modelCount === 'number' ? (modelCount > 0 ? 'pass' : 'warn') : 'info',
       detail: typeof modelCount === 'number'
-        ? `最近一次读取到 ${modelCount} 个模型，疑似图片模型 ${input.profile?.lastImageModelCount ?? 0} 个。`
-        : '尚未刷新 /v1/models；可点击刷新读取，若服务商不开放该接口也可以手动填写模型。'
+        ? t('provider.readiness.detail.modelListCount', { count: modelCount, imageCount: input.profile?.lastImageModelCount ?? 0 })
+        : t('provider.readiness.detail.modelListNotRefreshed')
     },
     {
       id: 'model-probe',
-      label: '当前模型',
+      label: t('provider.readiness.item.currentModel'),
       level: modelProbe ? (modelProbe.available ? 'pass' : 'warn') : (modelId ? 'info' : 'fail'),
-      detail: modelProbe?.message ?? (modelId ? `当前填写模型：${modelId}，尚未探测是否在模型列表中。` : '模型 ID 为空。')
+      detail: modelProbe?.message ?? (modelId ? t('provider.readiness.detail.currentModelNotProbed', { model: modelId }) : t('provider.readiness.detail.currentModelEmpty'))
     },
     {
       id: 'text-to-image',
-      label: '文生图',
+      label: t('provider.readiness.item.textToImage'),
       level: generationVerified
         ? 'pass'
-        : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
+        : readyForGeneration
           ? 'info'
           : 'warn',
       detail: generationVerified
-        ? '最近一次真实试生图成功，说明当前配置至少通过了真实文生图链路。'
-        : hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime
-          ? `基础配置已具备；需要手动点击“真实试生图”才会消耗额度并验证真实 ${protocolLabelText} 文生图链路。`
-          : '需要补齐桌面端、API Key、Base URL、模型 ID 和接口路径后，才能进行真实文生图验证。'
+        ? t('provider.readiness.detail.textToImageVerified')
+        : readyForGeneration
+          ? t('provider.readiness.detail.textToImageReady', { protocol: protocolLabelText })
+          : t('provider.readiness.detail.textToImageMissing')
     },
     {
       id: 'image-to-image',
-      label: '图生图',
+      label: t('provider.readiness.item.imageToImage'),
       level: hasEndpointPath && modelId ? 'info' : 'warn',
       detail: hasEndpointPath && modelId
-        ? `当前映射为 ${imageToImageAdapterLabel(resolvedAdapter)}；这是协议映射检查，真实图生图仍需后续带参考图测试。`
-        : '需要先补齐模型和接口路径，再检查图生图映射。'
+        ? t('provider.readiness.detail.imageToImageMapped', { adapter: adapterLabel })
+        : t('provider.readiness.detail.imageToImageMissing')
     },
     {
       id: 'multi-reference',
-      label: '多参考图',
+      label: t('provider.readiness.item.multiReference'),
       level: ['openai-images-edit', 'responses-input-image', 'chat-image-url', 'json-image-array'].includes(resolvedAdapter) ? 'info' : 'warn',
-      detail: `当前会按 ${imageToImageAdapterLabel(resolvedAdapter)} 组织参考图；多参考是否可用取决于服务商协议实现，后续能力测试会单独验证。`
+      detail: t('provider.readiness.detail.multiReferenceMapped', { adapter: adapterLabel })
     }
   ];
 }
@@ -14071,38 +14107,40 @@ function buildGenerationUsageReadinessItem(input: {
   generationProfile: ProviderConnectionProfile | null;
   selectedProviderId: string;
   generationProviderId: string;
+  t: Translator;
 }): ProviderDiagnosticItem {
+  const t = input.t;
   if (input.selectedProviderId !== input.generationProviderId) {
     return {
       id: 'generation-usage',
-      label: 'AI 创作页生效',
+      label: t('provider.readiness.item.generationUsage'),
       level: 'info',
-      detail: 'AI 创作页当前使用的是其他平台；启用当前配置后会同步切换到该平台。'
+      detail: t('provider.readiness.detail.generationUsageOtherPlatform')
     };
   }
   if (!input.profile) {
     return {
       id: 'generation-usage',
-      label: 'AI 创作页生效',
+      label: t('provider.readiness.item.generationUsage'),
       level: 'warn',
-      detail: '当前仍是编辑草稿，AI 创作页不会读取草稿配置；请先保存并启用。'
+      detail: t('provider.readiness.detail.generationUsageDraft')
     };
   }
   if (input.generationProfile?.id === input.profile.id) {
     return {
       id: 'generation-usage',
-      label: 'AI 创作页生效',
+      label: t('provider.readiness.item.generationUsage'),
       level: 'pass',
-      detail: `AI 创作页当前会读取「${input.profile.displayName}」及其独立密钥状态。`
+      detail: t('provider.readiness.detail.generationUsageActive', { name: input.profile.displayName })
     };
   }
   return {
     id: 'generation-usage',
-    label: 'AI 创作页生效',
+    label: t('provider.readiness.item.generationUsage'),
     level: 'warn',
     detail: input.generationProfile
-      ? `AI 创作页当前读取「${input.generationProfile.displayName}」，不是正在编辑的「${input.profile.displayName}」。`
-      : 'AI 创作页当前没有可读取的配置实例。'
+      ? t('provider.readiness.detail.generationUsageMismatch', { active: input.generationProfile.displayName, editing: input.profile.displayName })
+      : t('provider.readiness.detail.generationUsageMissing')
   };
 }
 
