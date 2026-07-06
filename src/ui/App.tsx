@@ -5444,7 +5444,7 @@ export function App() {
     const targetSupportsModelList = providerSupportsOpenAICompatibleModelList(targetProviderId);
     const startedAt = performance.now();
     let profileStatus: ProviderConnectionProfile['lastTestStatus'] = 'warning';
-    let profileMessage = '诊断未完成。';
+    let profileMessage = t('provider.diagnostics.message.incomplete');
     let profilePatch: Partial<Pick<ProviderConnectionProfile, 'lastModelCount' | 'lastImageModelCount' | 'lastModelProbe'>> = {};
 
     function push(item: ProviderDiagnosticItem) {
@@ -5455,30 +5455,30 @@ export function App() {
     try {
       push({
         id: 'runtime',
-        label: '桌面运行环境',
+        label: t('provider.diagnostics.item.runtime'),
         level: desktopRuntime ? 'pass' : 'warn',
-        detail: desktopRuntime ? '已在 Tauri 桌面端运行，可访问系统凭据与本地目录。' : '当前像是网页预览模式，真实密钥、文件夹和网络诊断不可用。'
+        detail: desktopRuntime ? t('provider.diagnostics.detail.runtimeDesktop') : t('provider.diagnostics.detail.runtimeWeb')
       });
 
       push({
         id: 'adapter',
-        label: '平台接入状态',
+        label: t('provider.diagnostics.item.adapter'),
         level: targetSupportsOpenAICompatible ? 'pass' : 'info',
-        detail: targetSupportsOpenAICompatible ? '当前平台已接入可配置的真实请求链路。' : '当前平台仍是路线图占位，暂不支持真实连通性诊断。'
+        detail: targetSupportsOpenAICompatible ? t('provider.diagnostics.detail.adapterReady') : t('provider.diagnostics.detail.adapterPlanned')
       });
 
       if (!targetSupportsOpenAICompatible) {
-        profileMessage = '当前平台暂不支持真实连通性诊断。';
+        profileMessage = t('provider.diagnostics.message.adapterUnsupported');
         return;
       }
 
       push({
         id: 'profile-secret-channel',
-        label: '配置实例与密钥通道',
+        label: t('provider.diagnostics.item.profileSecretChannel'),
         level: diagnosticProfile || selectedProfileId ? 'pass' : 'info',
         detail: diagnosticProfile || selectedProfileId
-          ? '当前配置已绑定独立密钥；配置 ID 保持不变，系统凭据不会随文案调整重建。'
-          : '当前是临时配置草稿；保存为配置实例后会使用独立密钥。'
+          ? t('provider.diagnostics.detail.profileSecretBound')
+          : t('provider.diagnostics.detail.profileSecretDraft')
       });
 
       let endpointPreview = '';
@@ -5492,15 +5492,15 @@ export function App() {
           label: 'Base URL',
           level: baseUrlLooksLikeEndpoint ? 'warn' : 'pass',
           detail: baseUrlLooksLikeEndpoint
-            ? `格式有效，但看起来填到了具体接口：${baseUrlPath}。建议 Base URL 只保留 ${baseUrl.origin}，具体路径放到“接口路径”。`
-            : `格式有效：${baseUrl.origin}`
+            ? t('provider.diagnostics.detail.baseUrlLooksEndpoint', { path: baseUrlPath, origin: baseUrl.origin })
+            : t('provider.diagnostics.detail.baseUrlValid', { origin: baseUrl.origin })
         });
       } catch {
         push({
           id: 'base-url',
           label: 'Base URL',
           level: 'fail',
-          detail: 'Base URL 不是有效网址，请使用 https://api.openai.com 或中转站根地址。'
+          detail: t('provider.diagnostics.detail.baseUrlInvalid')
         });
       }
 
@@ -5508,35 +5508,35 @@ export function App() {
       const expectedEndpointPath = defaultEndpointForProtocol(targetConfig.protocol);
       push({
         id: 'endpoint-path-shape',
-        label: '接口路径格式',
+        label: t('provider.diagnostics.item.endpointPath'),
         level: endpointPath.startsWith('/') ? 'pass' : 'warn',
         detail: endpointPath.startsWith('/')
-          ? `路径格式正常：${endpointPath}`
-          : `建议以 / 开头，例如 ${expectedEndpointPath}；保存配置时会自动补全，但界面里保持标准路径更清楚。`
+          ? t('provider.diagnostics.detail.endpointPathValid', { path: endpointPath })
+          : t('provider.diagnostics.detail.endpointPathSuggestion', { path: expectedEndpointPath })
       });
 
       const modelId = targetConfig.modelId.trim();
       push({
         id: 'model-id',
-        label: '模型 ID',
+        label: t('provider.diagnostics.item.modelId'),
         level: modelId ? 'pass' : 'fail',
         detail: modelId
-          ? `当前模型：${modelId}`
-          : '模型 ID 为空；即使密钥正确，也无法执行真实生图或模型列表回填。'
+          ? t('provider.diagnostics.detail.modelIdCurrent', { model: modelId })
+          : t('provider.diagnostics.detail.modelIdEmpty')
       });
 
       try {
         parseExtraHeaders(targetConfig.extraHeadersJson);
         push({
           id: 'headers',
-          label: '额外 Headers',
+          label: t('provider.diagnostics.item.extraHeaders'),
           level: 'pass',
-          detail: 'JSON 格式有效。'
+          detail: t('provider.diagnostics.detail.headersValid')
         });
       } catch (error) {
         push({
           id: 'headers',
-          label: '额外 Headers',
+          label: t('provider.diagnostics.item.extraHeaders'),
           level: 'fail',
           detail: error instanceof Error ? error.message : String(error)
         });
@@ -5545,9 +5545,9 @@ export function App() {
       if (targetConfig.extraHeadersJson.toLowerCase().includes('authorization')) {
         push({
           id: 'authorization-header',
-          label: '鉴权 Header',
+          label: t('provider.diagnostics.item.authHeader'),
           level: 'warn',
-          detail: '额外 Headers 中包含 Authorization。通常 API Key 会由系统凭据通道注入，除非中转站文档明确要求，否则不要在这里重复放密钥。'
+          detail: t('provider.diagnostics.detail.authHeaderWarning')
         });
       }
 
@@ -5568,7 +5568,7 @@ export function App() {
         id: 'secret',
         label: 'API Key',
         level: currentSecretAvailable ? 'pass' : 'warn',
-        detail: currentSecretAvailable ? '系统安全凭据里已有密钥。' : '尚未保存密钥；可以先填写 API Key，再点击保存或保存并启用。'
+        detail: currentSecretAvailable ? t('provider.diagnostics.detail.secretReady') : t('provider.diagnostics.detail.secretMissing')
       });
 
       const targetTemplate = diagnosticProfile?.serviceTemplateId
