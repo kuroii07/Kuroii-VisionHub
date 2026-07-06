@@ -6609,7 +6609,7 @@ function BatchQueuePage(props: {
                     {isSelected ? <em>{t('batch.queue.current')}</em> : null}
                   </div>
                   <span>{t('batch.queue.summary', { total: summary.total, pending: summary.pending, images: summary.requestedImages })}</span>
-                  <small>{queueStatusLabel(queue.status)} - {t('batch.queue.compareGroupCount', { count: queue.compareGroups?.length ?? 0 })} - {formatWorkspaceHomeTime(queue.updatedAt)}</small>
+                  <small>{queueStatusLabel(queue.status)} - {t('batch.queue.compareGroupCount', { count: queue.compareGroups?.length ?? 0 })} - {formatWorkspaceHomeTime(queue.updatedAt, t)}</small>
                   <div className="batchQueueCardActions" aria-label={t('batch.queue.actionsAria', { name: queue.name })}>
                     <button
                       type="button"
@@ -6664,7 +6664,7 @@ function BatchQueuePage(props: {
                       <span>{t('batch.template.summary', { tasks: template.taskTemplates.length, groups: template.compareGroups.length })}</span>
                       <small>
                         {template.usedCount ? t('batch.template.usedCount', { count: template.usedCount }) : t('batch.template.notUsed')}
-                        {template.lastUsedAt ? ` · ${formatWorkspaceHomeTime(template.lastUsedAt)}` : ` · ${formatWorkspaceHomeTime(template.updatedAt)}`}
+                        {template.lastUsedAt ? ` · ${formatWorkspaceHomeTime(template.lastUsedAt, t)}` : ` · ${formatWorkspaceHomeTime(template.updatedAt, t)}`}
                       </small>
                     </div>
                     <div className="batchTemplateActions">
@@ -6702,7 +6702,7 @@ function BatchQueuePage(props: {
                         <strong>{t('batch.compare.title')}</strong>
                         <span>{t('batch.compare.summary', { completed: completedCount, total: tasks.length, result: resultCount > 0 ? t('batch.compare.resultCount', { count: resultCount }) : t('batch.compare.statusOnly') })}</span>
                       </div>
-                      <small>{formatWorkspaceHomeTime(group.createdAt)}</small>
+                      <small>{formatWorkspaceHomeTime(group.createdAt, t)}</small>
                     </div>
                     <p>{group.prompt}</p>
                     <div className="batchCompareResultGrid">
@@ -6800,7 +6800,7 @@ function BatchQueuePage(props: {
                       {task.error ? <small className="batchTaskError">{task.error}</small> : null}
                     </div>
                     <div className="batchTaskSide">
-                      <span>{formatWorkspaceHomeTime(task.createdAt)}</span>
+                      <span>{formatWorkspaceHomeTime(task.createdAt, t)}</span>
                       <small>
                         {task.attempt > 0 ? t('batch.task.attemptPrefix', { count: task.attempt }) : ''}
                         {task.snapshot.referencePolicy?.omittedReferenceIds.length ? t('batch.task.referencesNeedConfirm') : t('batch.task.referenceCount', { count: task.snapshot.references?.length ?? 0 })}
@@ -7107,7 +7107,7 @@ function WorkspaceHomePage(props: {
                 <div className="workspaceContinueMeta">
                   <span>{props.providerNameMap.get(continueRecord.providerId) ?? continueRecord.providerName ?? props.providerName}</span>
                   <span>{continueRecord.modelId || props.providerModelId}</span>
-                  <span>{formatWorkspaceHomeTime(continueRecord.createdAt)}</span>
+                  <span>{formatWorkspaceHomeTime(continueRecord.createdAt, props.t)}</span>
                 </div>
                 <div className="workspaceContinueActions">
                   <button type="button" className="workspaceCommandButton primary" onClick={() => useRecordAsReferenceAndCreate(continueRecord)}>
@@ -7156,7 +7156,7 @@ function WorkspaceHomePage(props: {
                       <span className={`workspaceTodoDot ${generationStatusClass(record)}`} />
                       <span>
                         <strong>{generationStatusLabel(record)} · {generationFailureCategoryLabels[diagnosis.category]}</strong>
-                        <small>{diagnosis.title} · {formatWorkspaceHomeTime(record.createdAt)}</small>
+                        <small>{diagnosis.title} · {formatWorkspaceHomeTime(record.createdAt, props.t)}</small>
                       </span>
                     </button>
                   );
@@ -7201,7 +7201,7 @@ function WorkspaceHomePage(props: {
                 </button>
                 <div className="workspaceAssetMeta">
                   <strong>{getRecordFileName(record) || record.prompt || props.t('home.materials.untitled')}</strong>
-                  <span>{formatWorkspaceHomeTime(record.createdAt)}</span>
+                  <span>{formatWorkspaceHomeTime(record.createdAt, props.t)}</span>
                 </div>
                 <div className="workspaceAssetActions">
                   <button type="button" onClick={() => useRecordAsReferenceAndCreate(record)}>{props.t('home.action.reference')}</button>
@@ -7260,15 +7260,15 @@ function WorkspaceHomeEmpty(props: { title: string; hint: string; actionLabel?: 
   );
 }
 
-function formatWorkspaceHomeTime(value: string) {
+function formatWorkspaceHomeTime(value: string, t: Translator) {
   const time = getRecordTimeMs(value);
-  if (!time) return '时间未知';
+  if (!time) return t('common.time.unknown');
   const diffMs = Date.now() - time;
-  if (diffMs < 60 * 1000) return '刚刚';
-  if (diffMs < 60 * 60 * 1000) return `${Math.max(1, Math.round(diffMs / (60 * 1000)))} 分钟前`;
-  if (diffMs < 24 * 60 * 60 * 1000) return `${Math.max(1, Math.round(diffMs / (60 * 60 * 1000)))} 小时前`;
-  if (diffMs < 7 * 24 * 60 * 60 * 1000) return `${Math.max(1, Math.round(diffMs / (24 * 60 * 60 * 1000)))} 天前`;
-  return new Date(time).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+  if (diffMs < 60 * 1000) return t('common.time.justNow');
+  if (diffMs < 60 * 60 * 1000) return t('common.time.minutesAgo', { count: Math.max(1, Math.round(diffMs / (60 * 1000))) });
+  if (diffMs < 24 * 60 * 60 * 1000) return t('common.time.hoursAgo', { count: Math.max(1, Math.round(diffMs / (60 * 60 * 1000))) });
+  if (diffMs < 7 * 24 * 60 * 60 * 1000) return t('common.time.daysAgo', { count: Math.max(1, Math.round(diffMs / (24 * 60 * 60 * 1000))) });
+  return new Date(time).toLocaleDateString(t('common.locale'), { month: '2-digit', day: '2-digit' });
 }
 
 function GeneratePage(props: {
