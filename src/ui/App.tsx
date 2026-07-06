@@ -2682,7 +2682,7 @@ export function App() {
       setLocalComfyUIDiagnostic({
         status: 'failed',
         result: null,
-        error: 'ComfyUI 连接诊断需要 Tauri 桌面端运行时。'
+        error: t('provider.local.message.comfyDesktopRequired')
       });
       return;
     }
@@ -2699,7 +2699,7 @@ export function App() {
         }),
         new Promise<never>((_, reject) => {
           window.setTimeout(() => {
-            reject(new Error('ComfyUI 连接诊断超时：本次请求超过 12 秒没有返回，请确认地址是否为当前可访问的本地服务。'));
+            reject(new Error(t('provider.local.message.comfyTimeout')));
           }, LOCAL_COMFYUI_DIAGNOSTIC_TIMEOUT_MS);
         })
       ]);
@@ -2737,14 +2737,14 @@ export function App() {
       setLocalSdWebUIDiagnostic({
         status: 'failed',
         result: null,
-        error: 'Stable Diffusion WebUI / Forge 本地诊断需要在 Tauri 桌面版中运行。'
+        error: t('provider.local.message.sdDesktopRequired')
       });
       return;
     }
     const requestId = localSdWebUIDiagnosticRequestRef.current + 1;
     localSdWebUIDiagnosticRequestRef.current = requestId;
     setLocalSdWebUIDiagnostic((current) => ({ ...current, status: 'checking', error: '' }));
-    if (!silent) setConfigMessage('正在测试 Stable Diffusion WebUI / Forge 本地连接...');
+    if (!silent) setConfigMessage(t('provider.local.message.sdTesting'));
     try {
       const result = await Promise.race([
         diagnoseSdWebUIConnection({
@@ -2753,7 +2753,7 @@ export function App() {
         }),
         new Promise<never>((_, reject) => {
           window.setTimeout(() => {
-            reject(new Error('SD WebUI / Forge 诊断 12 秒内未响应，请检查本地服务地址、端口以及是否带 --api 启动。'));
+            reject(new Error(t('provider.local.message.sdTimeout')));
           }, LOCAL_SD_WEBUI_DIAGNOSTIC_TIMEOUT_MS);
         })
       ]);
@@ -2779,7 +2779,7 @@ export function App() {
   async function importLocalComfyUIWorkflow(file: File | null) {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.json')) {
-      const message = '请选择 ComfyUI 导出的 JSON workflow 文件。';
+      const message = t('provider.local.message.comfySelectJson');
       setLocalComfyUIWorkflowError(message);
       setConfigMessage(message);
       return;
@@ -2797,12 +2797,12 @@ export function App() {
       saveLocalComfyUIWorkflowStore(nextStore);
       setLocalComfyUIWorkflowError('');
       setConfigMessage(summary.format === 'api'
-        ? `已导入 API workflow：识别到 ${summary.nodeCount} 个节点，可在 AI 创作台选择 ComfyUI 后测试生成。`
-        : `已导入 workflow：识别到 ${summary.nodeCount} 个节点。当前文件不是 API workflow，真实生成前需要重新导出 API 格式。`);
+        ? t('provider.local.message.comfyImportApi', { count: summary.nodeCount })
+        : t('provider.local.message.comfyImportWorkflow', { count: summary.nodeCount }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setLocalComfyUIWorkflowError(`workflow 解析失败：${message}`);
-      setConfigMessage(`workflow 解析失败：${message}`);
+      setLocalComfyUIWorkflowError(t('provider.local.message.comfyParseFailed', { message }));
+      setConfigMessage(t('provider.local.message.comfyParseFailed', { message }));
     }
   }
 
@@ -2811,7 +2811,7 @@ export function App() {
     setLocalComfyUIWorkflowStore(nextStore);
     setLocalComfyUIWorkflowError('');
     saveLocalComfyUIWorkflowStore(nextStore);
-    setConfigMessage('已清除 ComfyUI workflow 解析预览。');
+    setConfigMessage(t('provider.local.message.comfyCleared'));
   }
 
   useEffect(() => {
@@ -2854,14 +2854,14 @@ export function App() {
       useStudioStore.setState({ isGenerating: true });
       try {
         if (!desktopRuntime) {
-          throw new Error('Stable Diffusion WebUI / Forge 本地生成需要在 Tauri 桌面版中运行。');
+          throw new Error(t('provider.local.message.sdGenerateDesktopRequired'));
         }
         if ((options?.mode ?? 'text-to-image') === 'image-to-image') {
-          throw new Error('0.4.3 的 SD WebUI / Forge 切片暂只支持 txt2img；img2img 和 ControlNet 后续版本再接入。');
+          throw new Error(t('provider.local.message.sdTxt2imgOnly'));
         }
         const trimmedPrompt = prompt.trim();
         if (!trimmedPrompt) {
-          throw new Error('请先填写 Prompt，再运行 SD WebUI / Forge 本地生成。');
+          throw new Error(t('provider.local.message.sdPromptRequired'));
         }
         const sdWebUIOptions = options?.metadata?.sdWebUI;
         const sdWebUIParameters = sdWebUIOptions && typeof sdWebUIOptions === 'object' && !Array.isArray(sdWebUIOptions)
@@ -2896,9 +2896,9 @@ export function App() {
         const firstSaved = savedRecords[0];
         if (firstSaved?.status === 'succeeded' && firstSaved.imageUrls[0]) {
           setGeneratePreviewUrl(firstSaved.imageUrls[0]);
-          setConfigMessage(savedRecords.length > 1 ? `SD WebUI / Forge 已生成 ${savedRecords.length} 张图片，并保存到作品画廊。` : 'SD WebUI / Forge 已生成成功，并保存到作品画廊。');
+          setConfigMessage(savedRecords.length > 1 ? t('provider.local.message.sdSuccessMany', { count: savedRecords.length }) : t('provider.local.message.sdSuccessOne'));
         } else {
-          setConfigMessage(`SD WebUI / Forge 生成失败：${firstSaved?.error ?? '没有返回图片'}。失败记录已保存到作品画廊。`);
+          setConfigMessage(t('provider.local.message.sdFailedSaved', { message: firstSaved?.error ?? t('provider.local.message.sdNoImage') }));
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -2911,7 +2911,7 @@ export function App() {
           prompt,
           imageUrls: [],
           localImagePaths: [],
-          costHint: '本地 Stable Diffusion WebUI / Forge 生成，不消耗在线 API 额度。',
+          costHint: t('provider.local.message.sdCostHint'),
           error: message,
           raw: {
             visionhub_sd_webui_error: 'frontend_preflight_failed',
@@ -2923,7 +2923,7 @@ export function App() {
         };
         const saved = await saveGenerationRecord(failed, failed.providerName);
         addResult(saved);
-        setConfigMessage(`SD WebUI / Forge 生成失败：${message}。失败记录已保存到作品画廊。`);
+        setConfigMessage(t('provider.local.message.sdFailedSaved', { message }));
       } finally {
         useStudioStore.setState({ isGenerating: false });
       }
@@ -2985,9 +2985,9 @@ export function App() {
       const firstSaved = savedRecords[0];
       if (firstSaved?.status === 'succeeded' && firstSaved.imageUrls[0]) {
         setGeneratePreviewUrl(firstSaved.imageUrls[0]);
-        setConfigMessage(savedRecords.length > 1 ? `ComfyUI 生成成功：${savedRecords.length} 张结果已保存到作品画廊。` : 'ComfyUI 生成成功：结果已保存到作品画廊。');
+        setConfigMessage(savedRecords.length > 1 ? t('provider.local.message.comfySuccessMany', { count: savedRecords.length }) : t('provider.local.message.comfySuccessOne'));
       } else {
-        setConfigMessage(`ComfyUI 生成未成功：${firstSaved?.error ?? '没有返回图片。'} 已写入作品画廊失败记录。`);
+        setConfigMessage(t('provider.local.message.comfyFailedSaved', { message: firstSaved?.error ?? t('provider.local.message.comfyNoImage') }));
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -3000,7 +3000,7 @@ export function App() {
         prompt,
         imageUrls: [],
         localImagePaths: [],
-        costHint: '本地 ComfyUI 生成，不消耗在线 API 额度。',
+        costHint: t('provider.local.message.comfyCostHint'),
         error: message,
         raw: {
           visionhub_comfyui_error: 'frontend_preflight_failed',
@@ -3013,7 +3013,7 @@ export function App() {
       };
       const saved = await saveGenerationRecord(failed, failed.providerName);
       addResult(saved);
-      setConfigMessage(`ComfyUI 生成未成功：${message} 已写入作品画廊失败记录。`);
+      setConfigMessage(t('provider.local.message.comfyFailedSaved', { message }));
     } finally {
       useStudioStore.setState({ isGenerating: false });
     }
