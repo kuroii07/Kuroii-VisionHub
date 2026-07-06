@@ -5590,7 +5590,8 @@ export function App() {
         config: targetConfig,
         providerId: targetProviderId,
         template: targetTemplate,
-        supportsModelList: targetSupportsModelList
+        supportsModelList: targetSupportsModelList,
+        t
       }).forEach((item) => push({ ...item, id: `stability-${item.id}` }));
 
       push({
@@ -13763,7 +13764,7 @@ function providerEndpointPreview(config: Partial<OpenAICompatibleConfig>) {
   }
 }
 
-function endpointRiskHint(config: Partial<OpenAICompatibleConfig>, providerId: string) {
+function endpointRiskHint(config: Partial<OpenAICompatibleConfig>, providerId: string, t?: Translator) {
   const protocol = config.protocol ?? 'images';
   const endpointPath = safeProviderConfigText(config.endpointPath);
   const expectedEndpointPath = isGeminiProvider(providerId)
@@ -13772,35 +13773,65 @@ function endpointRiskHint(config: Partial<OpenAICompatibleConfig>, providerId: s
       ? '/v1/image_generation'
       : defaultEndpointForProtocol(protocol);
   if (!endpointPath.startsWith('/')) {
-    return `\u63a5\u53e3\u8def\u5f84\u5efa\u8bae\u4ee5 / \u5f00\u5934\uff1b\u6309\u5f53\u524d\u534f\u8bae\u9ed8\u8ba4\u5e94\u4e3a ${expectedEndpointPath}\u3002`;
+    return t
+      ? t('provider.stability.detail.endpointPathSuggestion', { path: expectedEndpointPath })
+      : `Endpoint path should start with /. The default for this protocol is ${expectedEndpointPath}.`;
   }
   if (endpointPath !== expectedEndpointPath) {
-    return `\u5f53\u524d\u4f7f\u7528\u81ea\u5b9a\u4e49\u8def\u5f84 ${endpointPath}\uff1b\u8bf7\u786e\u8ba4\u670d\u52a1\u5546\u6587\u6863\u8981\u6c42\uff0c\u4e0d\u8981\u628a Base URL \u548c\u63a5\u53e3\u8def\u5f84\u91cd\u590d\u62fc\u63a5\u3002`;
+    return t
+      ? t('provider.stability.detail.endpointCustomPath', { path: endpointPath })
+      : `Using custom path ${endpointPath}. Confirm provider docs and avoid duplicating Base URL and endpoint path.`;
   }
-  return `\u5f53\u524d\u4f7f\u7528\u8be5\u534f\u8bae\u7684\u9ed8\u8ba4\u8def\u5f84 ${expectedEndpointPath}\u3002`;
+  return t
+    ? t('provider.stability.detail.endpointDefaultPath', { path: expectedEndpointPath })
+    : `Using the default path for this protocol: ${expectedEndpointPath}.`;
 }
 
-function referenceSubmissionHint(config: OpenAICompatibleConfig, providerId: string, template?: ProviderServiceTemplate) {
+function referenceSubmissionHint(config: OpenAICompatibleConfig, providerId: string, template?: ProviderServiceTemplate, t?: Translator) {
   const resolved = resolveImageToImageAdapterForDisplay(config, providerId);
-  if (template?.supportsImageToImage === false) return '\u5f53\u524d\u670d\u52a1\u6a21\u677f\u6807\u8bb0\u4e3a\u4e0d\u652f\u6301\u56fe\u751f\u56fe\uff1bAI \u521b\u4f5c\u53f0\u4e0d\u5e94\u628a\u53c2\u8003\u56fe\u5f53\u4f5c\u771f\u5b9e\u80fd\u529b\u627f\u8bfa\u3002';
-  if (isGeminiProvider(providerId)) return 'Gemini \u5b98\u65b9\u4f1a\u628a\u53c2\u8003\u56fe\u4f5c\u4e3a inlineData parts \u63d0\u4ea4\uff1b\u662f\u5426\u652f\u6301\u591a\u56fe\u7f16\u8f91\u9700\u771f\u5b9e\u5e26\u56fe\u6d4b\u8bd5\u3002';
-  if (isMiniMaxProvider(providerId)) return 'MiniMax \u5b98\u65b9\u5f53\u524d\u53ea\u63d0\u4ea4\u7b2c\u4e00\u5f20\u53c2\u8003\u56fe\u4f5c\u4e3a subject_reference.character\uff0c\u591a\u5f20\u53c2\u8003\u56fe\u6682\u4e0d\u53d1\u9001\u3002';
-  const hints: Record<Exclude<ImageToImageAdapter, 'auto'>, string> = {
-    'openai-images-edit': '\u4f1a\u4f7f\u7528 multipart \u4e0a\u4f20\u53c2\u8003\u56fe\uff0c\u9002\u5408\u5b98\u65b9 Images edits \u8def\u7ebf\u3002',
-    'responses-input-image': '\u4f1a\u628a\u53c2\u8003\u56fe\u653e\u5165 Responses input_image \u5185\u5bb9\u5757\u3002',
-    'chat-image-url': '\u4f1a\u628a\u53c2\u8003\u56fe\u653e\u5165 Chat Completions image_url \u5185\u5bb9\u5757\u3002',
-    'json-image-array': '\u4f1a\u63d0\u4ea4 image \u9996\u56fe\u548c images \u6570\u7ec4\uff0c\u9002\u5408\u81ea\u5b9a\u4e49\u4e2d\u8f6c\u7ad9\uff1b\u5b57\u6bb5\u540d\u9700\u4ee5\u670d\u52a1\u5546\u6587\u6863\u4e3a\u51c6\u3002'
+  if (template?.supportsImageToImage === false) {
+    return t
+      ? t('provider.stability.detail.referenceUnsupported')
+      : 'This service template is marked as not supporting image-to-image. AI Create should not treat reference images as a real capability promise.';
+  }
+  if (isGeminiProvider(providerId)) {
+    return t
+      ? t('provider.stability.detail.referenceGemini')
+      : 'Gemini official submits reference images as inlineData parts. Multi-image editing requires real reference-image testing.';
+  }
+  if (isMiniMaxProvider(providerId)) {
+    return t
+      ? t('provider.stability.detail.referenceMinimax')
+      : 'MiniMax official currently submits only the first reference image as subject_reference.character; multiple references are not sent.';
+  }
+  const hintKeys: Record<Exclude<ImageToImageAdapter, 'auto'>, Parameters<Translator>[0]> = {
+    'openai-images-edit': 'provider.stability.detail.referenceOpenAIImagesEdit',
+    'responses-input-image': 'provider.stability.detail.referenceResponsesInputImage',
+    'chat-image-url': 'provider.stability.detail.referenceChatImageUrl',
+    'json-image-array': 'provider.stability.detail.referenceJsonImageArray'
   };
-  return hints[resolved];
+  const fallbackHints: Record<Exclude<ImageToImageAdapter, 'auto'>, string> = {
+    'openai-images-edit': 'Uses multipart upload for reference images, suitable for official Images edits.',
+    'responses-input-image': 'Puts reference images into Responses input_image content blocks.',
+    'chat-image-url': 'Puts reference images into Chat Completions image_url content blocks.',
+    'json-image-array': 'Submits image as the first image and images as an array for custom relays. Field names must follow provider docs.'
+  };
+  return t ? t(hintKeys[resolved]) : fallbackHints[resolved];
 }
 
-function providerCostRiskHint(config: OpenAICompatibleConfig, template?: ProviderServiceTemplate) {
-  const parts = ['\u914d\u7f6e\u81ea\u68c0\u4e0d\u63d0\u4ea4\u751f\u56fe\u8bf7\u6c42\uff0c\u4e0d\u6d88\u8017\u989d\u5ea6\uff1b\u53ea\u6709\u201c\u771f\u5b9e\u8bd5\u751f\u56fe\u201d\u3001AI \u521b\u4f5c\u53f0\u751f\u6210\u6216\u6279\u91cf\u961f\u5217\u6267\u884c\u4f1a\u8c03\u7528\u63a5\u53e3\u3002'];
+function providerCostRiskHint(config: OpenAICompatibleConfig, template: ProviderServiceTemplate | undefined, t?: Translator) {
+  const parts = [t
+    ? t('provider.stability.detail.costNoConsume')
+    : 'Config self-check does not submit generation requests or consume quota. Only Real test generation, AI Create generation, or batch queue execution calls the API.'];
   if (config.protocol === 'responses' || template?.requiresPolling) {
-    parts.push('\u5f53\u524d\u8def\u7ebf\u53ef\u80fd\u5b58\u5728\u5f02\u6b65\u4efb\u52a1\u6216\u540e\u53f0\u8f6e\u8be2\uff1b\u540c\u6b65\u8d85\u65f6\u4e0d\u4e00\u5b9a\u4ee3\u8868\u672a\u6263\u8d39\uff0c\u5931\u8d25\u540e\u5efa\u8bae\u5148\u67e5\u540e\u53f0\u4efb\u52a1\u518d\u91cd\u8bd5\u3002');
+    parts.push(t
+      ? t('provider.stability.detail.costAsyncPolling')
+      : 'This route may use async tasks or background polling. A sync timeout does not always mean no charge; check background tasks before retrying after a failure.');
   }
   if (template?.status === 'planned' || template?.status === 'local-plan') {
-    parts.push('\u8be5\u670d\u52a1\u6a21\u677f\u4ecd\u662f\u89c4\u5212\u72b6\u6001\uff0c\u4e0d\u5e94\u5f00\u653e\u4fdd\u5b58\u542f\u7528\u6216\u771f\u5b9e\u8bd5\u751f\u56fe\u3002');
+    parts.push(t
+      ? t('provider.stability.detail.costPlannedTemplate')
+      : 'This service template is still in planning state and should not expose save, enable, or real test generation.');
   }
   return parts.join(' ');
 }
@@ -13810,43 +13841,56 @@ function buildProviderStabilityDiagnosticItems(input: {
   providerId: string;
   template?: ProviderServiceTemplate;
   supportsModelList: boolean;
+  t: Translator;
 }): ProviderDiagnosticItem[] {
+  const t = input.t;
   const resolvedAdapter = resolveImageToImageAdapterForDisplay(input.config, input.providerId);
   const template = input.template;
+  const endpointPreview = providerEndpointPreview(input.config);
+  const endpointHint = endpointRiskHint(input.config, input.providerId, t);
+  const adapterLabel = imageToImageAdapterLabel(resolvedAdapter, t);
   return [
     {
       id: 'endpoint-preview',
-      label: '\u76ee\u6807\u63a5\u53e3\u9884\u89c8',
+      label: t('provider.stability.item.endpointPreview'),
       level: safeProviderConfigText(input.config.baseUrl) && safeProviderConfigText(input.config.endpointPath) ? 'pass' : 'warn',
-      detail: `${providerEndpointPreview(input.config)}\uff1b${endpointRiskHint(input.config, input.providerId)}`
+      detail: t('provider.stability.detail.endpointPreview', { endpoint: endpointPreview, hint: endpointHint })
     },
     {
       id: 'capability-boundary',
-      label: '\u80fd\u529b\u8fb9\u754c',
+      label: t('provider.stability.item.capabilityBoundary'),
       level: template?.status === 'planned' || template?.status === 'local-plan' ? 'info' : 'pass',
       detail: template
-        ? `${providerServiceStatusLabel[template.status]} \u00b7 \u6587\u751f\u56fe\uff1a${template.supportsTextToImage === false ? '\u672a\u627f\u8bfa' : '\u53ef\u68c0\u67e5'}\uff1b\u56fe\u751f\u56fe\uff1a${template.supportsImageToImage === false ? '\u672a\u627f\u8bfa' : '\u53ef\u68c0\u67e5'}\uff1b${template.requiresPolling ? '\u53ef\u80fd\u5f02\u6b65\u4efb\u52a1\u3002' : '\u672a\u6807\u8bb0\u5f02\u6b65\u4efb\u52a1\u3002'}`
-        : '\u672a\u7ed1\u5b9a\u5177\u4f53\u670d\u52a1\u6a21\u677f\uff1b\u6309\u5f53\u524d Provider \u914d\u7f6e\u505a\u901a\u7528 OpenAI-compatible \u68c0\u67e5\u3002'
+        ? t('provider.stability.detail.capabilityBoundary', {
+            status: t(`provider.status.${template.status}` as Parameters<Translator>[0]),
+            textToImage: template.supportsTextToImage === false ? t('provider.stability.value.uncommitted') : t('provider.stability.value.canCheck'),
+            imageToImage: template.supportsImageToImage === false ? t('provider.stability.value.uncommitted') : t('provider.stability.value.canCheck'),
+            polling: template.requiresPolling ? t('provider.stability.value.asyncPossible') : t('provider.stability.value.asyncNotMarked')
+          })
+        : t('provider.stability.detail.capabilityBoundaryNoTemplate')
     },
     {
       id: 'reference-submission',
-      label: '\u53c2\u8003\u56fe\u63d0\u4ea4\u65b9\u5f0f',
+      label: t('provider.stability.item.referenceSubmission'),
       level: template?.supportsImageToImage === false ? 'warn' : 'info',
-      detail: `${imageToImageAdapterLabel(resolvedAdapter)}\uff1a${referenceSubmissionHint(input.config, input.providerId, template)}`
+      detail: t('provider.stability.detail.referenceSubmission', {
+        adapter: adapterLabel,
+        hint: referenceSubmissionHint(input.config, input.providerId, template, t)
+      })
     },
     {
       id: 'cost-risk-boundary',
-      label: '\u6d88\u8017\u4e0e\u91cd\u8bd5\u8fb9\u754c',
+      label: t('provider.stability.item.costRiskBoundary'),
       level: 'info',
-      detail: providerCostRiskHint(input.config, template)
+      detail: providerCostRiskHint(input.config, template, t)
     },
     {
       id: 'model-list-boundary',
-      label: '\u6a21\u578b\u5217\u8868\u8fb9\u754c',
+      label: t('provider.stability.item.modelListBoundary'),
       level: input.supportsModelList ? 'info' : 'pass',
       detail: input.supportsModelList
-        ? '\u5f53\u524d Provider \u652f\u6301\u5c1d\u8bd5\u8bfb\u53d6 /v1/models\uff1b\u5982\u679c\u4e2d\u8f6c\u7ad9\u62e6\u622a\u8be5\u63a5\u53e3\uff0c\u53ef\u624b\u52a8\u586b\u5199\u6a21\u578b ID \u540e\u7528\u771f\u5b9e\u8bd5\u751f\u56fe\u9a8c\u8bc1\u3002'
-        : '\u5f53\u524d\u5b98\u65b9\u6a21\u677f\u4e0d\u4f9d\u8d56 /v1/models\uff0c\u6309\u5185\u7f6e\u6216\u624b\u52a8\u6a21\u578b ID \u8bca\u65ad\u3002'
+        ? t('provider.stability.detail.modelListSupported')
+        : t('provider.stability.detail.modelListManualOfficial')
     }
   ];
 }
