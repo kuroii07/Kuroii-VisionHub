@@ -92,27 +92,27 @@ function savePromptReuseFavoriteIds(ids: Set<string>) {
 const COMPOSER_PRESETS: Array<{ id: string; title: string; description: string; values: Partial<ComposerValues> }> = [
   {
     id: 'cinematic-character',
-    title: '电影感角色',
-    description: '适合人像、角色卡和氛围图。',
-    values: { style: '电影感写实，情绪克制，画面高级', camera: '85mm 人像镜头，中近景，主体突出', lighting: '柔和轮廓光，背景有层次', constraints: '五官清晰，构图稳定，细节丰富，无文字水印' }
+    title: 'Cinematic character',
+    description: 'For portraits, character cards, and mood images.',
+    values: { style: 'Cinematic realism, restrained emotion, premium image quality', camera: '85mm portrait lens, medium close-up, clear subject emphasis', lighting: 'Soft rim light with layered background depth', constraints: 'Clear facial features, stable composition, rich details, no text or watermark' }
   },
   {
     id: 'premium-product',
-    title: '高级产品图',
-    description: '适合电商主图、新品发布和商业海报。',
-    values: { scene: '极简商业展台，干净背景', style: '高级商业摄影，品牌广告质感', camera: '居中构图，产品占据视觉主体', lighting: '棚拍柔光，精致边缘高光', constraints: '产品边缘清晰，材质真实，无多余文字和 logo' }
+    title: 'Premium product image',
+    description: 'For e-commerce hero images, product launches, and commercial posters.',
+    values: { scene: 'Minimal commercial display stage with a clean background', style: 'Premium commercial photography with brand-ad quality', camera: 'Centered composition with the product as the visual focus', lighting: 'Studio softbox lighting with refined edge highlights', constraints: 'Crisp product edges, realistic materials, no extra text or logo' }
   },
   {
     id: 'game-asset',
-    title: '游戏资产',
-    description: '适合道具、技能图标、角色装备和奖励卡。',
-    values: { style: '游戏美术设定，轮廓强，小尺寸可读', camera: '居中展示，背景简洁，主体完整', lighting: '明确高光和能量辉光', material: '材质边界清晰，结构易识别', constraints: '适合游戏 UI 复用，不要复杂背景，不要文字' }
+    title: 'Game asset',
+    description: 'For props, skill icons, character equipment, and reward cards.',
+    values: { style: 'Game art concept style, strong silhouette, readable at small sizes', camera: 'Centered display, simple background, complete subject', lighting: 'Clear highlights and energy glow', material: 'Distinct material boundaries and recognizable structure', constraints: 'Reusable for game UI, no complex background, no text' }
   },
   {
     id: 'social-cover',
-    title: '社媒封面',
-    description: '适合小红书、B 站、短视频缩略图和教程封面。',
-    values: { style: '高识别、强对比、信息清晰的社媒封面风格', camera: '主体放大，留出标题区，构图有点击吸引力', color: '高对比主色，移动端信息流里醒目', constraints: '主体一眼可见，文字区清楚预留，画面不拥挤' }
+    title: 'Social cover',
+    description: 'For Xiaohongshu, Bilibili, short-video thumbnails, and tutorial covers.',
+    values: { style: 'Highly recognizable social-cover style with strong contrast and clear information', camera: 'Enlarged subject, reserved title area, click-attracting composition', color: 'High-contrast main color that stands out in mobile feeds', constraints: 'Subject visible at a glance, clear reserved text area, uncluttered image' }
   }
 ];
 
@@ -138,6 +138,18 @@ function composerPresetDescription(presetId: string, fallback: string, t: Transl
   const key = i18nKey(`assist.composer.preset.${presetId}.description`);
   const translated = t(key);
   return translated === key ? fallback : translated;
+}
+
+function composerPresetValues(preset: typeof COMPOSER_PRESETS[number], t: Translator) {
+  const translatedValues: Partial<ComposerValues> = {};
+  (Object.keys(preset.values) as ComposerFieldId[]).forEach((fieldId) => {
+    const fallback = preset.values[fieldId];
+    if (!fallback) return;
+    const key = i18nKey(`assist.composer.preset.${preset.id}.value.${fieldId}`);
+    const translated = t(key);
+    translatedValues[fieldId] = translated === key ? fallback : translated;
+  });
+  return translatedValues;
 }
 
 function inspirationFilterLabel(filter: { id: 'all' | InspirationTemplateGroup; label: string }, t: Translator) {
@@ -531,7 +543,7 @@ export function PromptAssistModal(props: PromptAssistModalProps) {
   function applyComposerPreset(presetId: string) {
     const preset = COMPOSER_PRESETS.find((item) => item.id === presetId);
     if (!preset) return;
-    setComposerValues((current) => ({ ...current, ...preset.values }));
+    setComposerValues((current) => ({ ...current, ...composerPresetValues(preset, t) }));
   }
 
   function useCurrentPromptAsComposerSubject() {
