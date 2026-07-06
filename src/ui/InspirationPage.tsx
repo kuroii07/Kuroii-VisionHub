@@ -106,42 +106,42 @@ const SOURCE_FAVICON_DOMAIN_ALIASES: Record<string, string[]> = {
 };
 
 const sourceCategoryOptions: Array<{ value: InspirationSourceCategory | 'all'; label: string }> = [
-  { value: 'all', label: '全部类型' },
-  { value: 'prompt-template', label: '提示词模板' },
-  { value: 'image-gallery', label: '图片灵感' },
-  { value: 'model-community', label: '模型社区' },
-  { value: 'style-reference', label: '风格参考' },
-  { value: 'commercial-design', label: '商业设计' },
-  { value: 'other', label: '其他' }
+  { value: 'all', label: 'All types' },
+  { value: 'prompt-template', label: 'Prompt templates' },
+  { value: 'image-gallery', label: 'Image inspiration' },
+  { value: 'model-community', label: 'Model community' },
+  { value: 'style-reference', label: 'Style reference' },
+  { value: 'commercial-design', label: 'Commercial design' },
+  { value: 'other', label: 'Other' }
 ];
 
 const regionOptions: Array<{ value: InspirationRegion | 'all'; label: string }> = [
-  { value: 'all', label: '全部地区' },
-  { value: 'china', label: '国内' },
-  { value: 'global', label: '海外' },
-  { value: 'mixed', label: '综合' }
+  { value: 'all', label: 'All regions' },
+  { value: 'china', label: 'China' },
+  { value: 'global', label: 'Global' },
+  { value: 'mixed', label: 'Mixed' }
 ];
 
 const commercialReferenceOptions: Array<{ value: InspirationCommercialReference; label: string }> = [
-  { value: 'reference-only', label: '仅作参考' },
-  { value: 'user-confirmed', label: '已确认可用' },
-  { value: 'unknown', label: '未确认' }
+  { value: 'reference-only', label: 'Reference only' },
+  { value: 'user-confirmed', label: 'User confirmed' },
+  { value: 'unknown', label: 'Unknown' }
 ];
 
 const sourceKindOptions: Array<{ value: SourceKindFilter; label: string }> = [
-  { value: 'all', label: '全部来源' },
-  { value: 'preset', label: '系统预设' },
-  { value: 'custom', label: '我的自定义' }
+  { value: 'all', label: 'All sources' },
+  { value: 'preset', label: 'System presets' },
+  { value: 'custom', label: 'Custom' }
 ];
 
 const sourceLoginOptions: Array<{ value: SourceLoginFilter; label: string }> = [
-  { value: 'all', label: '全部登录' },
-  { value: 'requires-login', label: '需要登录' },
-  { value: 'no-login', label: '免登录优先' }
+  { value: 'all', label: 'All login states' },
+  { value: 'requires-login', label: 'Needs login' },
+  { value: 'no-login', label: 'No-login first' }
 ];
 
 const sourceCommercialOptions: Array<{ value: InspirationCommercialReference | 'all'; label: string }> = [
-  { value: 'all', label: '全部商用' },
+  { value: 'all', label: 'All commercial states' },
   ...commercialReferenceOptions
 ];
 
@@ -797,106 +797,106 @@ const presetInspirationSources: InspirationSource[] = [
 ];
 
 const licenseOptions: Array<{ value: InspirationLicenseStatus | 'all'; label: string }> = [
-  { value: 'all', label: '全部授权' },
-  { value: 'reference-only', label: '仅作参考' },
-  { value: 'commercial-confirmed', label: '商用已确认' },
-  { value: 'unknown', label: '未确认' }
+  { value: 'all', label: 'All licenses' },
+  { value: 'reference-only', label: 'Reference only' },
+  { value: 'commercial-confirmed', label: 'Commercial confirmed' },
+  { value: 'unknown', label: 'Unknown' }
 ];
 
 const assetSourceOptions: Array<{ value: AssetSourceFilter; label: string }> = [
-  { value: 'all', label: '全部来源' },
-  { value: 'with-source', label: '有来源' },
-  { value: 'without-source', label: '无来源' }
+  { value: 'all', label: 'All sources' },
+  { value: 'with-source', label: 'Has source' },
+  { value: 'without-source', label: 'No source' }
 ];
 
 const assetPromptOptions: Array<{ value: AssetPromptFilter; label: string }> = [
-  { value: 'all', label: '全部反推' },
-  { value: 'with-inferred', label: '已有反推' },
-  { value: 'without-inferred', label: '未反推' }
+  { value: 'all', label: 'All reverse states' },
+  { value: 'with-inferred', label: 'Has reverse prompt' },
+  { value: 'without-inferred', label: 'Not reversed' }
 ];
 
 const assetShapeOptions: Array<{ value: AssetShapeFilter; label: string }> = [
-  { value: 'all', label: '全部形状' },
-  { value: 'landscape', label: '横图' },
-  { value: 'portrait', label: '竖图' },
-  { value: 'square', label: '方形' },
-  { value: 'wide', label: '细长横图' },
-  { value: 'tall', label: '细长竖图' },
+  { value: 'all', label: 'All shapes' },
+  { value: 'landscape', label: 'Landscape' },
+  { value: 'portrait', label: 'Portrait' },
+  { value: 'square', label: 'Square' },
+  { value: 'wide', label: 'Wide' },
+  { value: 'tall', label: 'Tall' },
   { value: 'four-three', label: '4:3' },
   { value: 'three-four', label: '3:4' },
   { value: 'sixteen-nine', label: '16:9' },
   { value: 'nine-sixteen', label: '9:16' },
-  { value: 'custom', label: '自定义' }
+  { value: 'custom', label: 'Custom' }
 ];
 
 const assetFormatOptions: Array<{ value: AssetFormatFilter; label: string }> = [
-  { value: 'all', label: '全部格式' },
+  { value: 'all', label: 'All formats' },
   { value: 'png', label: 'PNG' },
   { value: 'jpg', label: 'JPG' },
   { value: 'webp', label: 'WebP' },
   { value: 'gif', label: 'GIF' },
   { value: 'svg', label: 'SVG' },
-  { value: 'unknown', label: '未知格式' }
+  { value: 'unknown', label: 'Unknown format' }
 ];
 
 const assetRatingOptions: Array<{ value: AssetRatingFilter; label: string }> = [
-  { value: 'all', label: '全部评分' },
+  { value: 'all', label: 'All ratings' },
   { value: '5', label: '★★★★★' },
   { value: '4', label: '★★★★☆' },
   { value: '3', label: '★★★☆☆' },
   { value: '2', label: '★★☆☆☆' },
   { value: '1', label: '★☆☆☆☆' },
-  { value: 'unrated', label: '尚未评分' }
+  { value: 'unrated', label: 'Unrated' }
 ];
 
 const assetRatingEditOptions = assetRatingOptions.filter((option) => option.value !== 'all') as Array<{ value: AssetRatingValue; label: string }>;
 
 const assetColorOptions: Array<{ value: AssetColorFilter; label: string; color: string }> = [
-  { value: 'all', label: '全部颜色', color: '#64748b' },
-  { value: 'red', label: '红色', color: '#ef4444' },
-  { value: 'orange', label: '橙色', color: '#f97316' },
-  { value: 'yellow', label: '黄色', color: '#eab308' },
-  { value: 'green', label: '绿色', color: '#22c55e' },
-  { value: 'cyan', label: '青色', color: '#06b6d4' },
-  { value: 'blue', label: '蓝色', color: '#3b82f6' },
-  { value: 'purple', label: '紫色', color: '#8b5cf6' },
-  { value: 'pink', label: '粉色', color: '#ec4899' },
-  { value: 'mono', label: '黑白', color: '#64748b' }
+  { value: 'all', label: 'All colors', color: '#64748b' },
+  { value: 'red', label: 'Red', color: '#ef4444' },
+  { value: 'orange', label: 'Orange', color: '#f97316' },
+  { value: 'yellow', label: 'Yellow', color: '#eab308' },
+  { value: 'green', label: 'Green', color: '#22c55e' },
+  { value: 'cyan', label: 'Cyan', color: '#06b6d4' },
+  { value: 'blue', label: 'Blue', color: '#3b82f6' },
+  { value: 'purple', label: 'Purple', color: '#8b5cf6' },
+  { value: 'pink', label: 'Pink', color: '#ec4899' },
+  { value: 'mono', label: 'Black / white', color: '#64748b' }
 ];
 
 
 const excerptCategoryOptions: Array<{ value: PromptExcerptCategory | 'all'; label: string }> = [
-  { value: 'all', label: '全部类型' },
-  { value: 'general', label: '通用 Prompt' },
-  { value: 'portrait', label: '人像' },
-  { value: 'product', label: '产品' },
-  { value: 'scene', label: '场景' },
-  { value: 'character', label: '角色' },
-  { value: 'poster', label: '海报' },
-  { value: 'game-art', label: '游戏美术' },
-  { value: 'photography', label: '摄影' },
-  { value: 'negative', label: '负面提示词' },
-  { value: 'other', label: '其他' }
+  { value: 'all', label: 'All types' },
+  { value: 'general', label: 'General prompt' },
+  { value: 'portrait', label: 'Portrait' },
+  { value: 'product', label: 'Product' },
+  { value: 'scene', label: 'Scene' },
+  { value: 'character', label: 'Character' },
+  { value: 'poster', label: 'Poster' },
+  { value: 'game-art', label: 'Game art' },
+  { value: 'photography', label: 'Photography' },
+  { value: 'negative', label: 'Negative prompt' },
+  { value: 'other', label: 'Other' }
 ];
 
 const excerptLanguageOptions: Array<{ value: PromptExcerptLanguage | 'all'; label: string }> = [
-  { value: 'all', label: '全部语言' },
-  { value: 'auto', label: '自动/未标注' },
-  { value: 'zh', label: '中文' },
-  { value: 'en', label: '英文' },
-  { value: 'ja', label: '日文' },
-  { value: 'mixed', label: '混合' }
+  { value: 'all', label: 'All languages' },
+  { value: 'auto', label: 'Auto / untagged' },
+  { value: 'zh', label: 'Chinese' },
+  { value: 'en', label: 'English' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'mixed', label: 'Mixed' }
 ];
 
 const excerptSourceOptions: Array<{ value: ExcerptSourceFilter; label: string }> = [
-  { value: 'all', label: '全部来源' },
-  { value: 'with-source', label: '有来源' },
-  { value: 'without-source', label: '无来源' }
+  { value: 'all', label: 'All sources' },
+  { value: 'with-source', label: 'Has source' },
+  { value: 'without-source', label: 'No source' }
 ];
 
 const excerptFavoriteOptions: Array<{ value: ExcerptFavoriteFilter; label: string }> = [
-  { value: 'all', label: '全部状态' },
-  { value: 'favorite', label: '只看常用' }
+  { value: 'all', label: 'All states' },
+  { value: 'favorite', label: 'Favorites only' }
 ];
 
 const emptyExcerptDraft = {
@@ -945,10 +945,10 @@ const emptyAssetDraft = {
 };
 
 const assetViewOptions: Array<{ value: 'adaptive' | 'square' | 'contain' | 'list'; label: string }> = [
-  { value: 'adaptive', label: '自适应' },
-  { value: 'square', label: '方图' },
-  { value: 'contain', label: '完整图' },
-  { value: 'list', label: '列表' }
+  { value: 'adaptive', label: 'Adaptive' },
+  { value: 'square', label: 'Square' },
+  { value: 'contain', label: 'Contain' },
+  { value: 'list', label: 'List' }
 ];
 
 function i18nKey(key: string) {
@@ -988,7 +988,7 @@ function regionLabel(value: InspirationRegion, t?: Translator) {
 
 function sourceKindLabel(value?: InspirationSource['sourceKind'], t?: Translator) {
   const kind = value ?? 'custom';
-  const fallback = kind === 'preset' ? '系统预设' : '我的自定义';
+  const fallback = kind === 'preset' ? 'System presets' : 'Custom';
   return optionLabel('inspiration.source.kind', kind, fallback, t);
 }
 
@@ -1020,9 +1020,9 @@ function tagsToText(tags?: string[]) {
 }
 
 function formatSourceTime(value?: string, t?: Translator) {
-  if (!value || value === SOURCE_PRESET_TIMESTAMP) return t ? t('inspiration.source.notOpened') : '未打开';
+  if (!value || value === SOURCE_PRESET_TIMESTAMP) return t ? t('inspiration.source.notOpened') : 'Not opened';
   const date = new Date(Number(value));
-  if (Number.isNaN(date.getTime())) return t ? t('inspiration.source.notOpened') : '未打开';
+  if (Number.isNaN(date.getTime())) return t ? t('inspiration.source.notOpened') : 'Not opened';
   return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 }
 
@@ -1232,7 +1232,7 @@ function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error('读取图片失败'));
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read image.'));
     reader.readAsDataURL(file);
   });
 }
@@ -1729,7 +1729,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
       .map((asset) => ({
         id: asset.id,
         imageUrl: asset.imageUrl!,
-        label: asset.title || '灵感图片'
+        label: asset.title || t('inspiration.asset.fallbackImageTitle')
       })),
     [filteredAssets]
   );
@@ -2336,7 +2336,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
       setMessage(t('inspiration.asset.noPromptToCopy'));
       return;
     }
-    await copyText('所选 Prompt', prompts.join('\n\n---\n\n'));
+    await copyText(t('inspiration.asset.copySelectedPromptLabel'), prompts.join('\n\n---\n\n'));
   }
 
   function removeSelectedAssets() {
@@ -2611,7 +2611,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
       setAssetMenuTarget(null);
       return;
     }
-    await copyText(targetAssets.length > 1 ? '所选 Prompt' : 'Prompt', prompts.join('\n\n---\n\n'));
+    await copyText(targetAssets.length > 1 ? t('inspiration.asset.copySelectedPromptLabel') : 'Prompt', prompts.join('\n\n---\n\n'));
     setAssetMenuTarget(null);
   }
 
@@ -2622,7 +2622,7 @@ export const InspirationPage = memo(function InspirationPage(props: {
       setAssetMenuTarget(null);
       return;
     }
-    await copyText(targetAssets.length > 1 ? '所选图片路径' : '图片路径', paths.join('\n'));
+    await copyText(targetAssets.length > 1 ? t('inspiration.asset.copySelectedPathLabel') : t('inspiration.asset.copyPathLabel'), paths.join('\n'));
     setAssetMenuTarget(null);
   }
 
