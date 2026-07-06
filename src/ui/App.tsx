@@ -12402,11 +12402,11 @@ function PromptTemplatesPage(props: { t: Translator; onUseTemplate: (prompt: str
     tags: ''
   };
   const templateSourceOptions: Array<{ value: TemplateSourceFilter; label: string }> = [
-    { value: 'all', label: '全部来源' },
-    { value: 'default', label: '系统模板' },
-    { value: 'custom', label: '我的模板' },
-    { value: 'favorite', label: '已收藏' },
-    { value: 'recent', label: '最近使用' }
+    { value: 'all', label: t('templates.sourceFilter.all') },
+    { value: 'default', label: t('templates.sourceFilter.default') },
+    { value: 'custom', label: t('templates.sourceFilter.custom') },
+    { value: 'favorite', label: t('templates.sourceFilter.favorite') },
+    { value: 'recent', label: t('templates.sourceFilter.recent') }
   ];
 
   const [templates, setTemplates] = useState<PromptTemplate[]>(() => loadPromptTemplates());
@@ -12647,11 +12647,11 @@ function PromptTemplatesPage(props: { t: Translator; onUseTemplate: (prompt: str
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('templates.searchPlaceholder')} />
         </label>
         <label>
-          <span>分类</span>
+          <span>{t('templates.categoryLabel')}</span>
           <StudioSelect value={category} onChange={(value) => setCategory(value as 'all' | PromptTemplateCategory)} options={translatedTemplateCategoryOptions} />
         </label>
         <label>
-          <span>来源</span>
+          <span>{t('templates.sourceLabel')}</span>
           <StudioSelect value={sourceFilter} onChange={(value) => setSourceFilter(value as TemplateSourceFilter)} options={translatedTemplateSourceOptions} />
         </label>
         <div className="promptLibraryToolbarActions">
@@ -12694,7 +12694,7 @@ function PromptTemplatesPage(props: { t: Translator; onUseTemplate: (prompt: str
           {filteredTemplates.length === 0 ? (
             <div className="emptyState templateEmpty">
               <Sparkles size={42} />
-              <h3>没有符合条件的模板</h3>
+              <h3>{t('templates.emptyTitle')}</h3>
           <p>{t('templates.subtitle')}</p>
             </div>
           ) : (
@@ -12755,7 +12755,7 @@ function PromptTemplatesPage(props: { t: Translator; onUseTemplate: (prompt: str
                 <label><span>Prompt</span><textarea value={draft.prompt} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} rows={8} placeholder={t('templates.fieldPromptPlaceholder')} /></label>
               </div>
               <div className="sourceEditorActions">
-                <button className="miniButton" type="button" onClick={() => { setDetailOpen(false); cancelEditTemplate(); }}><X size={13} /> 取消</button>
+                <button className="miniButton" type="button" onClick={() => { setDetailOpen(false); cancelEditTemplate(); }}><X size={13} /> {t('templates.cancel')}</button>
                 <button className="miniButton primaryMini" type="button" onClick={saveDraftTemplate}><Pencil size={13} /> {t('templates.save')}</button>
               </div>
             </>
@@ -12789,8 +12789,8 @@ function PromptTemplatesPage(props: { t: Translator; onUseTemplate: (prompt: str
 
               <div className="promptTemplateVariables">
                 <div className="sectionHeadingRow">
-                  <strong>变量预填</strong>
-                  <small>{selectedTemplateVariables.length} 个模板变量</small>
+                  <strong>{t('templates.variablesTitle')}</strong>
+                  <small>{t('templates.variableCount', { count: selectedTemplateVariables.length })}</small>
                 </div>
                 {selectedTemplateVariables.map((variable) => (
                   <label key={variable}>
@@ -12798,14 +12798,14 @@ function PromptTemplatesPage(props: { t: Translator; onUseTemplate: (prompt: str
                     <input
                       value={variableValues[variable] ?? ''}
                       onChange={(event) => setVariableValues((current) => ({ ...current, [variable]: event.target.value }))}
-                      placeholder={`填写${variable}`}
+                      placeholder={t('templates.variablePlaceholder', { name: variable })}
                     />
                   </label>
                 ))}
               </div>
 
               <label className="promptTemplatePreview">
-                <span>预览 Prompt</span>
+                <span>{t('templates.previewPrompt')}</span>
                 <textarea value={renderedPrompt} readOnly rows={9} />
               </label>
 
@@ -12831,8 +12831,8 @@ function PromptTemplatesPage(props: { t: Translator; onUseTemplate: (prompt: str
           ) : (
             <div className="emptyState templateEmpty">
               <Layers size={42} />
-              <h3>选择一个模板</h3>
-              <p>左侧选中模板后，这里会显示详情和变量预填。</p>
+              <h3>{t('templates.selectTitle')}</h3>
+              <p>{t('templates.selectHint')}</p>
             </div>
           )}
         </aside>
