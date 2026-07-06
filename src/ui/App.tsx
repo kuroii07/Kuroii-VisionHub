@@ -2904,16 +2904,16 @@ export function App() {
     const references = options?.references ?? [];
     try {
       if (!desktopRuntime) {
-        throw new Error('ComfyUI 本地生成需要 Tauri 桌面端运行时。');
+        throw new Error(t('generate.error.comfy.desktopRequired'));
       }
       if (generationMode === 'image-to-image' && references.length === 0) {
-        throw new Error('ComfyUI 图生图需要先添加至少一张参考图。');
+        throw new Error(t('generate.error.comfy.referenceRequired'));
       }
       if (!activeWorkflowPreset) {
-        throw new Error('请先到平台接入 > 本地模型 > ComfyUI 导入 API workflow。');
+        throw new Error(t('generate.error.comfy.workflowSummary'));
       }
       if (activeWorkflowPreset.summary.format !== 'api' || !activeWorkflowPreset.rawWorkflow) {
-        throw new Error('当前 ComfyUI 预设没有可提交的 API workflow。请在 ComfyUI 里启用 Dev mode 后重新导出 API 格式 workflow。');
+        throw new Error(t('generate.error.comfy.workflowInvalid'));
       }
       const result = await generateComfyUIImage({
         baseUrl: localComfyUIConfig.baseUrl,

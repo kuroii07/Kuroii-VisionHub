@@ -810,7 +810,7 @@ export function ModernGeneratePage(props: {
   const failedLatest = !isCurrentModeGenerating && latestCurrentModeResult?.status === 'failed'
     ? latestCurrentModeResult
     : undefined;
-  const failedLatestDiagnosis = failedLatest ? diagnoseGenerationFailure(failedLatest) : null;
+  const failedLatestDiagnosis = failedLatest ? diagnoseGenerationFailure(failedLatest, t) : null;
   const failedLatestNeedsCheck = isPotentialBackgroundCompletion(failedLatest);
   const imageToImageStatus = props.selectedProvider.capabilities.imageToImage;
   const multiReferenceStatus = props.selectedProvider.capabilities.multiReferenceImage;
@@ -1634,11 +1634,11 @@ export function ModernGeneratePage(props: {
             </div>
           </div>
           <div className="quickToolbar">
-            <button className={`modeToggle ${mode === 'text' ? 'active' : ''}`} onClick={() => setMode('text')}>
-              <Sparkles size={15} /> {t('generate.mode.text')}
+            <button className={`modeToggle ${mode === 'text' ? 'active' : ''}`} onClick={() => setMode('text')} title={t('generate.mode.text')} aria-label={t('generate.mode.text')}>
+              <Sparkles size={15} /> <span className="buttonText">{t('generate.mode.text')}</span>
             </button>
-            <button className={`modeToggle ${mode === 'image' ? 'active' : ''}`} onClick={() => setMode('image')}>
-              <Upload size={15} /> {t('generate.mode.image')}
+            <button className={`modeToggle ${mode === 'image' ? 'active' : ''}`} onClick={() => setMode('image')} title={t('generate.mode.image')} aria-label={t('generate.mode.image')}>
+              <Upload size={15} /> <span className="buttonText">{t('generate.mode.image')}</span>
             </button>
             <span>{selectedRatio}</span>
             <span>{props.size}</span>
@@ -1662,7 +1662,7 @@ export function ModernGeneratePage(props: {
                 aria-haspopup="menu"
               >
                 <ListChecks size={14} />
-                <span>{props.batchQueueTaskCount ? t('generate.queue.labelWithCount', { count: props.batchQueueTaskCount }) : t('generate.queue.label')}</span>
+                <span className="buttonText">{props.batchQueueTaskCount ? t('generate.queue.labelWithCount', { count: props.batchQueueTaskCount }) : t('generate.queue.label')}</span>
                 <ChevronDown size={13} />
               </button>
               {isQueueMenuOpen && queueMenuPosition && queueMenuPortalHost ? createPortal((
@@ -1957,7 +1957,7 @@ export function ModernGeneratePage(props: {
             </div>
             <div className="promptActions" aria-label={t('generate.prompt.actionsAria')}>
               <button type="button" className="chipButton" data-tooltip={t('generate.prompt.assistTooltip')} onClick={() => setAssistMode('inspiration')}>
-                <Sparkles size={13} /> {t('generate.prompt.assist')}
+                <Sparkles size={13} /> <span className="buttonText">{t('generate.prompt.assist')}</span>
               </button>
               <div className="promptSaveMenuWrap" ref={promptSaveMenuRef}>
                 <button
@@ -1999,11 +1999,11 @@ export function ModernGeneratePage(props: {
                 ), queueMenuPortalHost) : null}
               </div>
               <button type="button" className="chipButton" data-tooltip={t('generate.prompt.draftTooltip')} onClick={() => setIsDraftLibraryOpen(true)}>
-                <Library size={13} /> {t('generate.prompt.draft')} {promptDrafts.length}/12
+                <Library size={13} /> <span className="buttonText">{t('generate.prompt.draft')} {promptDrafts.length}/12</span>
               </button>
               <div className="promptPolishQuickGroup">
                 <button type="button" className="chipButton" data-tooltip={t('generate.prompt.polishTooltip')} disabled={isQuickPolishing || !props.prompt.trim()} onClick={runQuickPromptPolish}>
-                  <Wand2 size={13} /> {isQuickPolishing ? t('generate.prompt.polishing') : t('generate.prompt.polish')}
+                  <Wand2 size={13} /> <span className="buttonText">{isQuickPolishing ? t('generate.prompt.polishing') : t('generate.prompt.polish')}</span>
                 </button>
                 <StudioSelect
                   className="promptPolishQuickSelect noSelectCheck"
@@ -2016,7 +2016,7 @@ export function ModernGeneratePage(props: {
                 </button>
               </div>
               <button type="button" className="chipButton" data-tooltip={t('generate.prompt.reuseTooltip')} onClick={() => setAssistMode('reuse')}>
-                <History size={13} /> {t('generate.prompt.reuse')}
+                <History size={13} /> <span className="buttonText">{t('generate.prompt.reuse')}</span>
               </button>
             </div>
           </div>

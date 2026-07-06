@@ -22362,3 +22362,140 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+/* 0.4.6 AI Create English compact controls: prevent long labels from shifting the canvas layout. */
+.appShell[data-language="en-US"] .workspaceGenerate .generatorTopbar {
+  grid-template-columns: minmax(108px, max-content) minmax(0, 1fr);
+  gap: 8px;
+  padding-inline: 12px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .workspaceTitleBlock {
+  max-width: 118px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .tealLabel,
+.appShell[data-language="en-US"] .workspaceGenerate .workspaceTitleLine strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .quickToolbar {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .quickToolbar > span {
+  flex: 0 1 auto;
+  max-width: 78px;
+  padding-inline: 7px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .quickToolbar .sessionCount {
+  max-width: 42px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .modeToggle {
+  flex: 0 1 96px;
+  max-width: 104px;
+  padding-inline: 8px;
+  gap: 4px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .quickQueueActions {
+  flex: 0 1 auto;
+  margin-left: 0;
+  padding-left: 5px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .quickQueueButton {
+  max-width: 98px;
+  padding-inline: 8px;
+  gap: 4px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .buttonText,
+.appShell[data-language="en-US"] .workspaceGenerate .modeToggle .buttonText,
+.appShell[data-language="en-US"] .workspaceGenerate .quickQueueButton .buttonText,
+.appShell[data-language="en-US"] .workspaceGenerate .chipButton .buttonText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptHeaderRow {
+  align-items: start;
+  grid-template-columns: minmax(104px, auto) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptActions {
+  max-width: 100%;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  overflow: visible;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptActions .chipButton {
+  flex: 0 1 126px;
+  max-width: 132px;
+  padding-inline: 8px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptActions .promptSaveIconButton {
+  flex: 0 0 32px;
+  width: 32px;
+  min-width: 32px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptPolishQuickGroup {
+  flex: 0 1 226px;
+  max-width: 226px;
+  gap: 4px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptPolishQuickGroup .chipButton {
+  flex: 0 1 108px;
+  max-width: 112px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptPolishQuickSelect {
+  width: 78px;
+  flex: 0 1 78px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptPolishDetailButton {
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
+}
+
+@media (max-width: 1180px) {
+  .appShell[data-language="en-US"] .workspaceGenerate .generatorTopbar {
+    grid-template-columns: minmax(96px, max-content) minmax(0, 1fr);
+  }
+
+  .appShell[data-language="en-US"] .workspaceGenerate .workspaceTitleBlock {
+    max-width: 102px;
+  }
+
+  .appShell[data-language="en-US"] .workspaceGenerate .modeToggle {
+    flex-basis: 88px;
+    max-width: 92px;
+  }
+
+  .appShell[data-language="en-US"] .workspaceGenerate .quickToolbar > span {
+    max-width: 68px;
+  }
+
+  .appShell[data-language="en-US"] .workspaceGenerate .quickQueueButton {
+    max-width: 88px;
+  }
+}

@@ -1,4 +1,5 @@
 import type { GenerationMode, ReferenceImage } from '../domain/providerTypes';
+import type { Translator } from '../i18n';
 
 export type GenerationFailureCategory =
   | 'auth'
@@ -58,7 +59,7 @@ const DEFAULT_ACTIONS = [
   '如果刚改过配置，先保存配置后用 1 张图或小尺寸重试。'
 ];
 
-export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord | null): GenerationFailureDiagnosis {
+export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord | null, t?: Translator): GenerationFailureDiagnosis {
   const raw = record?.raw;
   const rawText = stringifyRaw(raw);
   const rawMessage = [record?.error, extractRawErrorMessage(raw), rawText].filter(Boolean).join(' ');
@@ -69,26 +70,38 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
   const requestId = extractRequestId(rawMessage, raw);
   const referenceCount = protocolMapping?.reference_count ?? record?.referenceImages?.length ?? 0;
   const generationMode = record?.generationMode ?? (referenceCount > 0 ? 'image-to-image' : 'text-to-image');
-  const details = buildDetails({ httpStatus, protocolMapping, traceId, requestId, generationMode, referenceCount, modelId: record?.modelId });
+  const details = buildDetails({ httpStatus, protocolMapping, traceId, requestId, generationMode, referenceCount, modelId: record?.modelId }, t);
   const potentialBackground = isPotentialBackgroundCompletionText(lower, httpStatus, raw);
 
   if (record?.providerId === 'comfyui-local' || lower.includes('visionhub_comfyui') || lower.includes('comfyui')) {
-    const needsApiWorkflow = lower.includes('没有可提交的 api workflow') || lower.includes('frontend_preflight_failed') || lower.includes('api workflow');
+    const needsApiWorkflow = lower.includes('frontend_preflight_failed') || lower.includes('api workflow') || lower.includes('workflow required');
     return buildDiagnosis({
       category: needsApiWorkflow ? 'protocol' : 'unknown',
       severity: 'error',
-      title: needsApiWorkflow ? 'ComfyUI workflow 需要重新导入' : 'ComfyUI 本地生成失败',
-      summary: record?.error || extractRawErrorMessage(raw) || '本地 ComfyUI 任务没有完成，需要查看 raw 响应确认是 workflow、队列还是取图问题。',
+      title: needsApiWorkflow
+        ? translateDiagnostic(t, 'generate.error.comfy.workflowTitle', 'ComfyUI workflow 需要重新导入')
+        : translateDiagnostic(t, 'generate.error.comfy.failedTitle', 'ComfyUI 本地生成失败'),
+      summary: needsApiWorkflow
+        ? translateDiagnostic(
+            t,
+            'generate.error.comfy.workflowSummary',
+            record?.error || extractRawErrorMessage(raw) || '请先到平台接入 > 本地模型 > ComfyUI 导入 API workflow。'
+          )
+        : translateDiagnostic(
+            t,
+            'generate.error.comfy.failedSummary',
+            record?.error || extractRawErrorMessage(raw) || '本地 ComfyUI 任务没有完成，需要查看 raw 响应确认是 workflow、队列还是取图问题。'
+          ),
       actions: needsApiWorkflow
         ? [
-            '到平台接入 > 本地模型 > ComfyUI，重新导入 API workflow。',
-            '在 ComfyUI 里启用 Dev mode 后，使用导出 API 格式 workflow 的 JSON，不要用普通 UI workflow。',
-            '重新导入后回到 AI 创作台再点生成。'
+            translateDiagnostic(t, 'generate.error.comfy.workflowAction1', '到平台接入 > 本地模型 > ComfyUI，重新导入 API workflow。'),
+            translateDiagnostic(t, 'generate.error.comfy.workflowAction2', '在 ComfyUI 里启用 Dev mode 后，使用导出 API 格式 workflow 的 JSON，不要用普通 UI workflow。'),
+            translateDiagnostic(t, 'generate.error.comfy.workflowAction3', '重新导入后回到 AI 创作台再点生成。')
           ]
         : [
-            '先确认 ComfyUI 界面里这个 workflow 能独立运行成功。',
-            '检查平台接入里的 Base URL 是否是当前 ComfyUI 地址。',
-            '打开失败记录详情，查看 raw 里的 prompt_id、history 或 ComfyUI 返回错误。'
+            translateDiagnostic(t, 'generate.error.comfy.failedAction1', '先确认 ComfyUI 界面里这个 workflow 能独立运行成功。'),
+            translateDiagnostic(t, 'generate.error.comfy.failedAction2', '检查平台接入里的 Base URL 是否是当前 ComfyUI 地址。'),
+            translateDiagnostic(t, 'generate.error.comfy.failedAction3', '打开失败记录详情，查看 raw 里的 prompt_id、history 或 ComfyUI 返回错误。')
           ],
       details,
       rawMessage,
@@ -374,6 +387,10 @@ export function isPotentialBackgroundCompletion(record?: DiagnosableGenerationRe
   return diagnoseGenerationFailure(record).isPotentialBackgroundCompletion;
 }
 
+function translateDiagnostic(t: Translator | undefined, key: Parameters<Translator>[0], fallback: string, params?: Record<string, string | number>) {
+  return t ? t(key, params) : fallback;
+}
+
 function buildDiagnosis(input: Omit<GenerationFailureDiagnosis, 'actions' | 'details' | 'isPotentialBackgroundCompletion'> & {
   actions: string[];
   details?: string[];
@@ -514,20 +531,20 @@ function buildDetails(input: {
   generationMode?: GenerationMode;
   referenceCount: number;
   modelId?: string;
-}) {
+}, t?: Translator) {
   const details: string[] = [];
   if (input.httpStatus) details.push(`HTTP ${input.httpStatus}`);
-  if (input.modelId) details.push(`模型：${input.modelId}`);
-  if (input.generationMode) details.push(`模式：${input.generationMode === 'image-to-image' ? '图生图' : '文生图'}`);
-  if (input.referenceCount > 0) details.push(`参考图：${input.referenceCount} 张`);
+  if (input.modelId) details.push(translateDiagnostic(t, 'generate.error.detail.model', `模型：${input.modelId}`, { model: input.modelId }));
+  if (input.generationMode) details.push(translateDiagnostic(t, 'generate.error.detail.mode', `模式：${input.generationMode === 'image-to-image' ? '图生图' : '文生图'}`, { mode: input.generationMode === 'image-to-image' ? translateDiagnostic(t, 'generate.error.detail.modeImage', '图生图') : translateDiagnostic(t, 'generate.error.detail.modeText', '文生图') }));
+  if (input.referenceCount > 0) details.push(translateDiagnostic(t, 'generate.error.detail.references', `参考图：${input.referenceCount} 张`, { count: input.referenceCount }));
   if (input.protocolMapping?.image_to_image_adapter) {
-    details.push(`图生图映射：${input.protocolMapping.image_to_image_adapter}`);
+    details.push(translateDiagnostic(t, 'generate.error.detail.adapter', `图生图映射：${input.protocolMapping.image_to_image_adapter}`, { adapter: input.protocolMapping.image_to_image_adapter }));
   }
   if (input.protocolMapping?.endpoint_path) {
-    details.push(`接口路径：${input.protocolMapping.endpoint_path}`);
+    details.push(translateDiagnostic(t, 'generate.error.detail.endpoint', `接口路径：${input.protocolMapping.endpoint_path}`, { path: input.protocolMapping.endpoint_path }));
   }
   if (input.protocolMapping?.reference_fields?.length) {
-    details.push(`参考字段：${input.protocolMapping.reference_fields.join(', ')}`);
+    details.push(translateDiagnostic(t, 'generate.error.detail.referenceFields', `参考字段：${input.protocolMapping.reference_fields.join(', ')}`, { fields: input.protocolMapping.reference_fields.join(', ') }));
   }
   if (input.traceId) details.push(`trace_id：${input.traceId}`);
   if (input.requestId) details.push(`request_id：${input.requestId}`);
