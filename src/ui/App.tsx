@@ -281,8 +281,6 @@ type ProviderServiceTemplate = {
 };
 type ProviderCapabilityMatrixCell = {
   status: ProviderMatrixStatus;
-  label: string;
-  detail: string;
 };
 type LibraryMetaEntry = {
   favorite?: boolean;
@@ -686,10 +684,10 @@ const providerServiceStatusLabel: Record<ProviderServiceTemplateStatus, string> 
 };
 
 const providerServiceRegionLabel: Record<ProviderServiceRegion, string> = {
-  domestic: '国内',
-  overseas: '国外',
-  local: '本地',
-  custom: '自定义'
+  domestic: 'provider.region.domestic',
+  overseas: 'provider.region.overseas',
+  local: 'provider.region.local',
+  custom: 'provider.region.custom'
 };
 
 const providerServiceStatusRank: Record<ProviderServiceTemplateStatus, number> = {
@@ -699,25 +697,15 @@ const providerServiceStatusRank: Record<ProviderServiceTemplateStatus, number> =
   planned: 3
 };
 
-const providerMatrixStatusLabel: Record<ProviderMatrixStatus, string> = {
-  live: '已接入',
-  configurable: '可配置',
-  partial: '部分',
-  planned: '待接入',
-  localPlan: '本地规划',
-  unsupported: '不支持',
-  unknown: '待确认'
-};
-
-const providerMatrixColumns: Array<{ key: ProviderMatrixCapabilityKey; label: string }> = [
-  { key: 'textToImage', label: '文生图' },
-  { key: 'imageToImage', label: '图生图' },
-  { key: 'multiReferenceImage', label: '多参考' },
-  { key: 'imagesApi', label: 'Images' },
-  { key: 'responsesApi', label: 'Responses' },
-  { key: 'openAICompatible', label: '兼容中转' },
-  { key: 'officialProtocol', label: '官方协议' },
-  { key: 'localService', label: '本地服务' }
+const providerMatrixColumnKeys: ProviderMatrixCapabilityKey[] = [
+  'textToImage',
+  'imageToImage',
+  'multiReferenceImage',
+  'imagesApi',
+  'responsesApi',
+  'openAICompatible',
+  'officialProtocol',
+  'localService'
 ];
 
 const defaultLibraryDisplaySettings: LibraryDisplaySettings = {
@@ -1791,16 +1779,6 @@ function mapProviderCapabilityToMatrixStatus(
   return 'unknown';
 }
 
-function matrixStatusDetail(template: ProviderServiceTemplate, status: ProviderMatrixStatus, columnLabel: string) {
-  if (status === 'live') return `${columnLabel} 已有真实调用入口，可在当前版本使用。`;
-  if (status === 'configurable') return `${columnLabel} 可保存配置，实际可用性以服务商模型和协议为准。`;
-  if (status === 'partial') return `${columnLabel} 有入口或部分映射，仍需要按服务商协议验证。`;
-  if (status === 'planned') return `${columnLabel} 仅路线展示，当前不会开放保存、启用或真实试生图。`;
-  if (status === 'localPlan') return `${columnLabel} 属于本地模型规划，不影响在线平台主流程。`;
-  if (status === 'unsupported') return `${template.label} 当前不支持 ${columnLabel}。`;
-  return `${columnLabel} 需要结合服务商文档确认。`;
-}
-
 function resolveProtocolMatrixStatus(template: ProviderServiceTemplate, capability: ProviderMatrixCapabilityKey): ProviderMatrixStatus {
   if (capability === 'localService') {
     return template.platformType === 'local' ? 'localPlan' : 'unsupported';
@@ -1841,9 +1819,7 @@ function getProviderCapabilityMatrixCell(
   }
 
   return {
-    status,
-    label: providerMatrixStatusLabel[status],
-    detail: matrixStatusDetail(template, status, column.label)
+    status
   };
 }
 
@@ -5444,13 +5420,16 @@ export function App() {
       const plannedChecks: ProviderDiagnosticItem[] = [
         {
           id: 'template-status',
-          label: '服务模板状态',
+          label: t('provider.diagnostics.templateStatus'),
           level: 'info',
-          detail: `${providerServiceStatusLabel[selectedServiceTemplate.status]}：${selectedServiceTemplate.description}`
+          detail: t('provider.statusDetail', {
+            status: t(`provider.status.${selectedServiceTemplate.status}` as Parameters<Translator>[0]),
+            description: t(`provider.service.${selectedServiceTemplate.id}.description` as Parameters<Translator>[0])
+          })
         }
       ];
       setProviderDiagnostics(plannedChecks);
-      setConfigMessage('当前服务模板尚未接入，只展示路线规划。');
+      setConfigMessage(t('provider.message.templatePlanned'));
       setIsRunningDiagnostics(false);
       return;
     }
@@ -7983,7 +7962,7 @@ function ProviderSettingsPage(props: {
     label: `${providerServiceRegionText(template.region)} · ${providerServiceTemplateLabel(template)}`,
     description: `${providerServiceStatusText(template.status)} · ${providerServiceTemplateDescription(template)}`
   }));
-  const localizedMatrixColumns = providerMatrixColumns.map((column) => ({ ...column, label: providerMatrixColumnLabel(column.key) }));
+  const localizedMatrixColumns = providerMatrixColumnKeys.map((key) => ({ key, label: providerMatrixColumnLabel(key) }));
   const providerMatrixRows = props.serviceTemplates.map((template) => ({
     template,
     cells: localizedMatrixColumns.map((column) => getProviderCapabilityMatrixCell(template, column, props.providers))
@@ -8429,7 +8408,7 @@ function ProviderSettingsPage(props: {
                   <small>{providerServiceTemplateLabel(props.selectedServiceTemplate)} · {providerServiceTemplateDescription(props.selectedServiceTemplate)}</small>
                 </div>
                 <span className={`serviceStatusBadge ${props.selectedServiceTemplate.status}`}>
-                  {providerServiceStatusLabel[props.selectedServiceTemplate.status]}
+                  {providerServiceStatusText(props.selectedServiceTemplate.status)}
                 </span>
               </div>
               <ServiceTemplateMeta template={props.selectedServiceTemplate} t={props.t} />
