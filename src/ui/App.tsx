@@ -1214,10 +1214,17 @@ function buildProviderDiagnosticsReport(checks: ProviderDiagnosticItem[], contex
   ].filter((line) => line !== '').join('\n\n');
 }
 
+type LibraryRecoveryAdviceKey =
+  | 'backgroundPoll'
+  | 'backgroundManual'
+  | 'localPathMissingPreview'
+  | 'remoteOnly'
+  | 'noImage'
+  | 'responseFormat'
+  | 'failedGeneric';
+
 type LibraryRecoveryAdvice = {
-  title: string;
-  summary: string;
-  actions: string[];
+  key: LibraryRecoveryAdviceKey;
 };
 
 function rawObjectValue(value: unknown): Record<string, unknown> | null {
@@ -1249,77 +1256,27 @@ function buildLibraryRecoveryAdvice(record: GenerationRecord): LibraryRecoveryAd
   const hasPollUrl = Boolean(recordBackgroundPollUrl(record));
 
   if (diagnosis.isPotentialBackgroundCompletion) {
-    return {
-      title: hasPollUrl ? '后台任务可重查' : '后台结果待人工核查',
-      summary: hasPollUrl
-        ? '这条记录保存了后台轮询地址，可直接重查；如果返回图片，VisionHub 会自动下载并恢复到作品画廊。'
-        : '这条记录像是同步超时，但 raw 里没有可自动重查的 poll_url，需要到中转站后台按 trace/request id 核对。',
-      actions: [
-        hasPollUrl ? '点击“重查后台任务”，不要先重新生成，避免重复消耗额度。' : '复制诊断或请求摘要，到中转站后台查是否已有完成结果。',
-        '如果后台已成功但软件未恢复，可把图片下载到本地后通过“导入本地图片”加入作品画廊。',
-        '后续同类任务可降低尺寸、数量或质量，减少同步超时概率。'
-      ]
-    };
+    return { key: hasPollUrl ? 'backgroundPoll' : 'backgroundManual' };
   }
 
   if (record.status === 'succeeded' && hasLocalPath && !hasPreview) {
-    return {
-      title: '本地图片路径存在，但预览索引缺失',
-      summary: '记录保存了本地路径，却没有可显示的图片地址，通常可通过重载历史重新补齐显示链接。',
-      actions: [
-        '先点击 AI 创作页或作品画廊里的“重载历史”。',
-        '如果仍无法预览，复制路径并确认文件是否还在原目录。',
-        '不要删除记录；确认文件存在后再决定是否重新导入。'
-      ]
-    };
+    return { key: 'localPathMissingPreview' };
   }
 
   if (record.status === 'succeeded' && !hasLocalPath && hasPreview) {
-    return {
-      title: '只有远程 / raw 图片，尚未稳定落盘',
-      summary: '记录能预览，但缺少本地图片路径；如果远程链接过期，后续可能无法继续作为参考图。',
-      actions: [
-        '重载历史会尝试从 raw 或 data URL 补写到本地图库。',
-        '如果图片来自网页下载，建议另存后通过“导入本地图片”建立稳定索引。',
-        '迁移电脑前优先打包本地图库目录，而不是只复制历史 JSON。'
-      ]
-    };
+    return { key: 'remoteOnly' };
   }
 
   if (record.status === 'failed' && diagnosis.category === 'no-image') {
-    return {
-      title: '接口响应里没有可恢复图片',
-      summary: '服务端有返回，但当前解析规则没有找到图片字段，可能是模型不对或协议返回结构不兼容。',
-      actions: [
-        '确认模型是真正的图片模型，不是文本对话模型。',
-        '复制 Raw 给中转站或检查图片字段位置，再决定是否调整协议映射。',
-        '重新生成前先用 1 张、小尺寸和默认质量排除参数问题。'
-      ]
-    };
+    return { key: 'noImage' };
   }
 
   if (record.status === 'failed' && diagnosis.category === 'response-format') {
-    return {
-      title: '返回格式异常，无法自动恢复',
-      summary: '接口返回了 HTML、网关页或非标准 JSON，VisionHub 不能从这类响应里恢复图片。',
-      actions: [
-        '检查 Base URL 是否填成网页控制台或带了具体接口路径。',
-        '到平台接入页运行“配置自检报告”，确认 Base URL、接口路径和 Headers。',
-        '不要修改系统代理；优先换一个已验证的中转站 API 地址测试。'
-      ]
-    };
+    return { key: 'responseFormat' };
   }
 
   if (record.status === 'failed') {
-    return {
-      title: '失败记录恢复建议',
-      summary: '这条记录没有可直接恢复的图片。建议先保留记录，用诊断信息定位配置或服务商问题。',
-      actions: [
-        '先复制诊断和请求摘要，确认认证、模型、协议路径、参数或额度问题。',
-        '修正配置后再重新生成，避免用错误配置反复消耗额度。',
-        '如果中转站后台已有图片，可下载后通过“导入本地图片”加入作品画廊。'
-      ]
-    };
+    return { key: 'failedGeneric' };
   }
 
   return null;
@@ -6027,6 +5984,7 @@ export function App() {
       <main className={`workspace ${page === 'generate' ? 'workspaceGenerate' : page === 'home' ? 'workspaceHomeShell' : page === 'batch' ? 'workspaceBatchShell' : ''}`}>
         {isLibraryPageMounted ? (
           <CachedLibraryPage
+            t={t}
             providers={providers}
             results={results}
             isHistoryLoaded={isHistoryLoaded}
@@ -6192,6 +6150,7 @@ export function App() {
           />
         ) : page === 'providers' ? (
           <ProviderSettingsPage
+            t={t}
             providers={providers}
             selectedProvider={selectedProvider}
             selectedProviderId={selectedProvider.id}
@@ -6321,6 +6280,7 @@ export function App() {
       ) : null}
       {isComfyUIWorkflowManagerOpen ? (
         <ComfyUIWorkflowManagerModal
+          t={t}
           store={localComfyUIWorkflowStore}
           onClose={() => setIsComfyUIWorkflowManagerOpen(false)}
           onSelect={(presetId) => {
@@ -7925,6 +7885,7 @@ function FreeGenerationPage(props: {
 
 
 function ProviderSettingsPage(props: {
+  t: Translator;
   providers: ReturnType<typeof listProviders>;
   selectedProvider: ReturnType<typeof listProviders>[number];
   selectedProviderId: string;
@@ -7990,15 +7951,34 @@ function ProviderSettingsPage(props: {
     fail: props.diagnostics.filter((item) => item.level === 'fail').length,
     info: props.diagnostics.filter((item) => item.level === 'info').length
   };
+  const pt = (key: string, params?: Record<string, string | number>) => props.t(key as Parameters<Translator>[0], params);
+  const providerPlatformLabel = (platformType: ProviderPlatformType) => pt(`provider.platform.${platformType}.label`);
+  const providerPlatformDescription = (platformType: ProviderPlatformType) => pt(`provider.platform.${platformType}.description`);
+  const providerServiceTemplateLabel = (template: ProviderServiceTemplate) => pt(`provider.service.${template.id}.label`);
+  const providerServiceTemplateDescription = (template: ProviderServiceTemplate) => pt(`provider.service.${template.id}.description`);
+  const providerServiceTemplateNotes = (template: ProviderServiceTemplate) => template.notes.map((_, index) => pt(`provider.service.${template.id}.note${index}`));
+  const providerServiceStatusText = (status: ProviderServiceTemplateStatus) => pt(`provider.status.${status}`);
+  const providerServiceRegionText = (region: ProviderServiceRegion) => pt(`provider.region.${region}`);
+  const providerMatrixStatusText = (status: ProviderMatrixStatus) => pt(`provider.matrixStatus.${status}`);
+  const providerMatrixColumnLabel = (key: ProviderMatrixCapabilityKey) => pt(`provider.matrixColumn.${key}`);
+  const providerMatrixStatusDetail = (template: ProviderServiceTemplate, status: ProviderMatrixStatus, columnLabel: string) => {
+    if (status === 'unsupported') {
+      return pt('provider.matrixDetail.unsupported', { service: providerServiceTemplateLabel(template), column: columnLabel });
+    }
+    return pt(`provider.matrixDetail.${status}`, { column: columnLabel });
+  };
+  const providerProfileFilterLabel = (filter: ProviderProfileFilter) => pt(`provider.profileFilter.${filter}`);
+  const providerDiagnosticLevelLabel = (level: ProviderDiagnosticLevel) => pt(`provider.diagnosticLevel.${level}`);
   const selectedPlatform = props.platformOptions.find((item) => item.id === props.selectedPlatformType);
   const serviceTemplateOptions = props.serviceTemplates.map((template) => ({
     value: template.id,
-    label: `${providerServiceRegionLabel[template.region]} · ${template.label}`,
-    description: `${providerServiceStatusLabel[template.status]} · ${template.description}`
+    label: `${providerServiceRegionText(template.region)} · ${providerServiceTemplateLabel(template)}`,
+    description: `${providerServiceStatusText(template.status)} · ${providerServiceTemplateDescription(template)}`
   }));
+  const localizedMatrixColumns = providerMatrixColumns.map((column) => ({ ...column, label: providerMatrixColumnLabel(column.key) }));
   const providerMatrixRows = props.serviceTemplates.map((template) => ({
     template,
-    cells: providerMatrixColumns.map((column) => getProviderCapabilityMatrixCell(template, column, props.providers))
+    cells: localizedMatrixColumns.map((column) => getProviderCapabilityMatrixCell(template, column, props.providers))
   }));
   const [isCapabilityMatrixOpen, setIsCapabilityMatrixOpen] = useState(false);
   const [isReadinessOpen, setIsReadinessOpen] = useState(false);
@@ -8008,10 +7988,10 @@ function ProviderSettingsPage(props: {
     ? props.providerProfiles.find((profile) => profile.enabled) ?? props.providerProfiles[0] ?? null
     : null;
   const generationProfileSummary = !isGenerationProviderSelected
-    ? 'AI 创作当前使用其他平台'
+    ? pt('provider.generation.otherPlatform')
     : generationProfile
-      ? `AI 创作使用 ${generationProfile.displayName}`
-      : 'AI 创作暂无配置';
+      ? pt('provider.generation.usingProfile', { name: generationProfile.displayName })
+      : pt('provider.generation.noConfig');
   const usesProviderProfiles = props.isSelectedServiceConfigurable && props.selectedServiceTemplate.platformType !== 'local';
   const profileFilterOptions = buildProviderProfileFilterOptions(props.providerProfiles);
   const filteredProviderProfiles = props.providerProfiles.filter((profile) => matchesProviderProfileFilter(profile, profileFilter));
@@ -8043,38 +8023,18 @@ function ProviderSettingsPage(props: {
     selectedProviderId: props.selectedProviderId,
     generationProviderId: props.generationProviderId
   });
-  const protocolOptions = [
-    {
-      value: 'images',
-      label: 'OpenAI Images API',
-      description: '适合 OpenAI 官方图片生成和多数图片中转，默认路径 /v1/images/generations。'
-    },
-    {
-      value: 'images-minimal',
-      label: 'Images API 精简兼容',
-      description: '只提交 model + prompt，适合会拒绝尺寸、质量、数量等扩展字段的图片中转。'
-    },
-    {
-      value: 'responses',
-      label: 'OpenAI Responses API',
-      description: '适合支持 Responses 协议的上游，可用文本 + 图片工具方式生成图片。'
-    },
-    {
-      value: 'chat-completions',
-      label: 'Chat Completions 图片包装',
-      description: '适合把图片生成包装进聊天接口的中转站，兼容性取决于服务商实现。'
-    },
-    {
-      value: 'custom-images',
-      label: '自定义图片接口路径',
-      description: '适合非标准图片接口，可手动填写 endpoint path。'
-    }
-  ];
+  const protocolOptions = (['images', 'images-minimal', 'responses', 'chat-completions', 'custom-images'] as OpenAICompatibleConfig['protocol'][]).map((protocol) => ({
+    value: protocol,
+    label: pt(`provider.protocol.${protocol}.label`),
+    description: pt(`provider.protocol.${protocol}.description`)
+  }));
   const imageToImageAdapterOptions = IMAGE_TO_IMAGE_ADAPTERS.map((adapter) => ({
     value: adapter,
-    label: imageToImageAdapterLabel(adapter),
-    description: imageToImageAdapterDescription(adapter)
+    label: pt(`provider.i2i.${adapter}.label`),
+    description: pt(`provider.i2i.${adapter}.description`)
   }));
+  const resolvedImageToImageAdapter = resolveImageToImageAdapterForDisplay(props.providerConfig, props.selectedProviderId);
+  const imageToImageAdapterDiagnosticText = `${props.providerConfig.imageToImageAdapter === 'auto' ? pt('provider.i2i.autoPrefix', { adapter: pt(`provider.i2i.${resolvedImageToImageAdapter}.label`) }) : pt('provider.i2i.fixedPrefix', { adapter: pt(`provider.i2i.${resolvedImageToImageAdapter}.label`) })}；${pt(`provider.i2i.${resolvedImageToImageAdapter}.field`)}`;
   const workflowFileInputRef = useRef<HTMLInputElement | null>(null);
   const isComfyUITemplate = props.selectedServiceTemplate.id === 'local-comfyui';
   const isSdWebUITemplate = props.selectedServiceTemplate.id === 'local-sd-webui';
@@ -8082,11 +8042,11 @@ function ProviderSettingsPage(props: {
   const sdWebUIResult = props.localSdWebUIDiagnostic.result;
   const activeWorkflowPreset = props.localComfyUIWorkflowStore.presets.find((item) => item.id === props.localComfyUIWorkflowStore.activeId) ?? props.localComfyUIWorkflowStore.presets[0] ?? null;
   const comfyUIStatusLabel: Record<LocalModelDiagnosticStatus, string> = {
-    idle: '未测试',
-    checking: '测试中',
-    online: '在线',
-    offline: '离线',
-    failed: '失败'
+    idle: pt('provider.local.status.idle'),
+    checking: pt('provider.local.status.checking'),
+    online: pt('provider.local.status.online'),
+    offline: pt('provider.local.status.offline'),
+    failed: pt('provider.local.status.failed')
   };
 
   return (
@@ -8094,8 +8054,8 @@ function ProviderSettingsPage(props: {
       <header className="topbar providerAccessTopbar">
         <div className="pageTitleBlock">
           <p className="eyebrow">Platform Access</p>
-          <h1>平台接入</h1>
-          <p>默认从中转站 / 聚合 API 开始；官方和本地待接入模板只展示规划，不会误触保存、启用或真实试生图。</p>
+          <h1>{pt('provider.title')}</h1>
+          <p>{pt('provider.subtitle')}</p>
         </div>
       </header>
 
@@ -8103,7 +8063,7 @@ function ProviderSettingsPage(props: {
         <div className="providerDirectory">
           <div className="providerAccessControls">
             <div>
-              <span className="providerPickerLabel">平台类型</span>
+              <span className="providerPickerLabel">{pt('provider.platformType')}</span>
               <div className="segmentedControl providerTypeSwitch">
                 {props.platformOptions.map((option) => (
                   <button
@@ -8112,14 +8072,14 @@ function ProviderSettingsPage(props: {
                     className={option.id === props.selectedPlatformType ? 'active' : ''}
                     onClick={() => props.onPlatformTypeChange(option.id)}
                   >
-                    {option.label}
+                    {providerPlatformLabel(option.id)}
                   </button>
                 ))}
               </div>
-              <small>{selectedPlatform?.description}</small>
+              <small>{selectedPlatform ? providerPlatformDescription(selectedPlatform.id) : ''}</small>
             </div>
             <label className="providerPickerLabel">
-              服务模板
+              {pt('provider.serviceTemplate')}
               <StudioSelect
                 value={props.selectedServiceTemplate.id}
                 onChange={props.onServiceTemplateChange}
@@ -8130,8 +8090,8 @@ function ProviderSettingsPage(props: {
           </div>
           <div className="profileListHeader">
             <div>
-              <strong>配置实例</strong>
-              <small>{props.providerProfiles.length} 个配置 · {generationProfileSummary}</small>
+              <strong>{pt('provider.profileInstances')}</strong>
+              <small>{pt('provider.profileCount', { count: props.providerProfiles.length })} · {generationProfileSummary}</small>
             </div>
             <button
               type="button"
@@ -8139,10 +8099,10 @@ function ProviderSettingsPage(props: {
               onClick={props.onNewProfile}
               disabled={!usesProviderProfiles}
             >
-              <Plus size={14} /> 新增
+              <Plus size={14} /> {pt('provider.addProfile')}
             </button>
           </div>
-          <div className="providerProfileFilters" aria-label="配置实例筛选">
+          <div className="providerProfileFilters" aria-label={pt('provider.profileFilterAria')}>
             {profileFilterOptions.map((option) => (
               <button
                 type="button"
@@ -8150,7 +8110,7 @@ function ProviderSettingsPage(props: {
                 className={profileFilter === option.id ? 'active' : ''}
                 onClick={() => setProfileFilter(option.id)}
               >
-                <span>{option.label}</span>
+                <span>{providerProfileFilterLabel(option.id)}</span>
                 <strong>{option.count}</strong>
               </button>
             ))}
@@ -8158,18 +8118,18 @@ function ProviderSettingsPage(props: {
           <div className="profileList">
             {!usesProviderProfiles ? (
               <div className="profileEmpty">
-                <strong>{props.selectedServiceTemplate.platformType === 'local' ? '本地端点配置' : providerServiceStatusLabel[props.selectedServiceTemplate.status]}</strong>
-                <span>{props.selectedServiceTemplate.platformType === 'local' ? '本地服务在右侧填写地址并测试，不创建云端配置实例，也不会占用在线额度。' : '当前模板只展示规划，暂不开放保存、启用或真实试生图。'}</span>
+                <strong>{props.selectedServiceTemplate.platformType === 'local' ? pt('provider.localEndpointConfig') : providerServiceStatusText(props.selectedServiceTemplate.status)}</strong>
+                <span>{props.selectedServiceTemplate.platformType === 'local' ? pt('provider.localEndpointHint') : pt('provider.plannedTemplateHint')}</span>
               </div>
             ) : props.providerProfiles.length === 0 ? (
               <div className="profileEmpty">
-                <strong>还没有配置</strong>
-                <span>点击新增后保存，配置会出现在这里。</span>
+                <strong>{pt('provider.noProfilesTitle')}</strong>
+                <span>{pt('provider.noProfilesHint')}</span>
               </div>
             ) : visibleProviderProfiles.length === 0 ? (
               <div className="profileEmpty">
-                <strong>没有匹配的配置</strong>
-                <span>切换筛选条件，或新增一个配置实例。</span>
+                <strong>{pt('provider.noMatchedProfilesTitle')}</strong>
+                <span>{pt('provider.noMatchedProfilesHint')}</span>
               </div>
             ) : (
               visibleProviderProfiles.map((profile) => (
@@ -8182,21 +8142,21 @@ function ProviderSettingsPage(props: {
                   <div className="profileMain">
                     <div className="profileTitleRow">
                       <strong>{profile.displayName}</strong>
-                      <span className={`profileStatus ${profile.lastTestStatus}`}>{profileLabel(profile.lastTestStatus)}</span>
+                      <span className={`profileStatus ${profile.lastTestStatus}`}>{pt(`provider.profileStatus.${profile.lastTestStatus}`)}</span>
                     </div>
                     <small>{profile.baseUrl.replace(/^https?:\/\//, '')} · {profile.modelId}</small>
                     <div className="profileMeta">
                       <span>{protocolLabel(profile.protocol)}</span>
-                      {generationProfile?.id === profile.id ? <span className="activeUse">创作使用</span> : null}
+                      {generationProfile?.id === profile.id ? <span className="activeUse">{pt('provider.profile.activeUse')}</span> : null}
                       {profile.lastLatencyMs ? <span>{profile.lastLatencyMs} ms</span> : null}
-                      {profile.enabled ? <span className="enabled">已启用</span> : <span>未启用</span>}
+                      {profile.enabled ? <span className="enabled">{pt('provider.profile.enabled')}</span> : <span>{pt('provider.profile.disabled')}</span>}
                     </div>
                     <div className="profileModelSummary">
-                      {typeof profile.lastModelCount === 'number' ? <span>模型 {profile.lastModelCount}</span> : <span>模型未刷新</span>}
-                      {typeof profile.lastImageModelCount === 'number' ? <span>疑似图片 {profile.lastImageModelCount}</span> : null}
+                      {typeof profile.lastModelCount === 'number' ? <span>{pt('provider.profile.modelCount', { count: profile.lastModelCount })}</span> : <span>{pt('provider.profile.modelNotRefreshed')}</span>}
+                      {typeof profile.lastImageModelCount === 'number' ? <span>{pt('provider.profile.imageModelCount', { count: profile.lastImageModelCount })}</span> : null}
                       {profile.lastModelProbe ? (
                         <span className={profile.lastModelProbe.available ? 'matched' : 'missing'}>
-                          {profile.lastModelProbe.available ? '当前模型已命中' : '当前模型未命中'}
+                          {profile.lastModelProbe.available ? pt('provider.profile.modelMatched') : pt('provider.profile.modelMissing')}
                         </span>
                       ) : null}
                     </div>
@@ -8205,8 +8165,8 @@ function ProviderSettingsPage(props: {
                     <button
                       type="button"
                       className="iconMiniButton"
-                      data-tooltip="测试连接延迟"
-                      aria-label="测试连接延迟"
+                      data-tooltip={pt('provider.action.testLatency')}
+                      aria-label={pt('provider.action.testLatency')}
                       onClick={() => {
                         void props.onRunProfileConnectionTest(profile.id);
                       }}
@@ -8216,20 +8176,20 @@ function ProviderSettingsPage(props: {
                     <button
                       type="button"
                       className="iconMiniButton"
-                      data-tooltip="编辑配置"
-                      aria-label="编辑配置"
+                      data-tooltip={pt('provider.action.editProfile')}
+                      aria-label={pt('provider.action.editProfile')}
                       onClick={() => props.onSelectProfile(profile.id)}
                     >
                       <Pencil size={13} />
                     </button>
-                    <button type="button" className="iconMiniButton dangerMiniButton" data-tooltip="删除配置" aria-label="删除配置" onClick={() => props.onDeleteProfile(profile.id)}>
+                    <button type="button" className="iconMiniButton dangerMiniButton" data-tooltip={pt('provider.action.deleteProfile')} aria-label={pt('provider.action.deleteProfile')} onClick={() => props.onDeleteProfile(profile.id)}>
                       <Trash2 size={13} />
                     </button>
                     <button
                       type="button"
                       className={`profileSwitch ${profile.enabled ? 'on' : ''}`}
-                      data-tooltip={profile.enabled ? '停用' : '启用'}
-                      aria-label={profile.enabled ? '停用' : '启用'}
+                      data-tooltip={profile.enabled ? pt('provider.action.disableProfile') : pt('provider.action.enableProfile')}
+                      aria-label={profile.enabled ? pt('provider.action.disableProfile') : pt('provider.action.enableProfile')}
                       onClick={() => props.onToggleProfile(profile.id, !profile.enabled)}
                     >
                       <span />
@@ -8246,23 +8206,23 @@ function ProviderSettingsPage(props: {
             <div className="localLabBox">
               <div className="providerConfigHeader">
                 <div>
-                  <strong>ComfyUI 连接诊断</strong>
-                  <small>只读取本地服务基础信息，不提交 workflow，不加入生成队列。</small>
+                  <strong>{pt('provider.local.comfy.diagnosticsTitle')}</strong>
+                  <small>{pt('provider.local.comfy.diagnosticsHint')}</small>
                 </div>
                 <span className={`serviceStatusBadge localDiagnostic-${props.localComfyUIDiagnostic.status}`}>
                   {comfyUIStatusLabel[props.localComfyUIDiagnostic.status]}
                 </span>
               </div>
-              <ServiceTemplateMeta template={props.selectedServiceTemplate} />
+              <ServiceTemplateMeta template={props.selectedServiceTemplate} t={props.t} />
               <div className="localLabNotice">
                 <HardDrive size={18} />
                 <div>
-                  <strong>本地实验室 MVP</strong>
-                  <span>已支持 API workflow 文生图测试；包含 LoadImage 节点的 API workflow 可尝试图生图。普通 UI workflow 仍需重新导出 API 格式。</span>
+                  <strong>{pt('provider.local.labMvp')}</strong>
+                  <span>{pt('provider.local.comfy.mvpHint')}</span>
                 </div>
               </div>
               <label>
-                本地服务地址
+                {pt('provider.localEndpointConfig')}
                 <div className="localEndpointRow">
                   <input
                     value={props.localComfyUIConfig.baseUrl}
@@ -8274,14 +8234,14 @@ function ProviderSettingsPage(props: {
                     className="iconButton"
                     onClick={props.onRunLocalComfyUIDiagnostics}
                     disabled={!props.desktopRuntime || props.localComfyUIDiagnostic.status === 'checking'}
-                    title="测试 ComfyUI 本地连接"
-                    aria-label="测试 ComfyUI 本地连接"
+                    title={pt('provider.local.comfy.testTitle')}
+                    aria-label={pt('provider.local.comfy.testTitle')}
                   >
-                    <Gauge size={15} /> {props.localComfyUIDiagnostic.status === 'checking' ? '测试中…' : '测试连接'}
+                    <Gauge size={15} /> {props.localComfyUIDiagnostic.status === 'checking' ? pt('provider.local.testing') : pt('provider.local.testConnection')}
                   </button>
                 </div>
                 <small className="providerFieldHint">
-                  默认 ComfyUI 地址通常是 {DEFAULT_COMFYUI_BASE_URL}；如果改过监听端口，请填写实际地址。
+                  {pt('provider.local.comfy.defaultHint', { url: DEFAULT_COMFYUI_BASE_URL })}
                 </small>
               </label>
               {props.localComfyUIDiagnostic.error ? (
@@ -8292,20 +8252,20 @@ function ProviderSettingsPage(props: {
                   <span>{comfyUIResult.resolvedBaseUrl} · {comfyUIResult.latencyMs} ms</span>
                 </section>
               ) : (
-                <div className="localDiagnosticMessage idle">填写地址后点击测试连接；未启动本地服务不会影响中转站 / 聚合 API 主流程。</div>
+                <div className="localDiagnosticMessage idle">{pt('provider.local.comfy.idleHint')}</div>
               )}
               {comfyUIResult ? (
                 <div className="localDiagnosticStats">
-                  <span>节点 {comfyUIResult.objectInfoNodeCount ?? '-'}</span>
-                  <span>运行 {comfyUIResult.queueRunning ?? '-'}</span>
-                  <span>待处理 {comfyUIResult.queuePending ?? '-'}</span>
+                  <span>{pt('provider.local.nodes', { count: comfyUIResult.objectInfoNodeCount ?? '-' })}</span>
+                  <span>{pt('provider.local.running', { count: comfyUIResult.queueRunning ?? '-' })}</span>
+                  <span>{pt('provider.local.pending', { count: comfyUIResult.queuePending ?? '-' })}</span>
                 </div>
               ) : null}
               {comfyUIResult ? (
                 <div className="localEndpointList">
                   {comfyUIResult.endpoints.map((endpoint) => (
                     <div className={`localEndpointItem ${endpoint.ok ? 'pass' : 'fail'}`} key={endpoint.path}>
-                      <span>{endpoint.ok ? '通过' : '失败'}</span>
+                      <span>{endpoint.ok ? pt('provider.diagnosticLevel.pass') : pt('provider.diagnosticLevel.fail')}</span>
                       <div>
                         <strong>{endpoint.path}{endpoint.status ? ` · HTTP ${endpoint.status}` : ''}</strong>
                         <small>{endpoint.detail}</small>
@@ -8314,11 +8274,11 @@ function ProviderSettingsPage(props: {
                   ))}
                 </div>
               ) : null}
-              <section className="localWorkflowBox" aria-label="ComfyUI workflow JSON 解析预览">
+              <section className="localWorkflowBox" aria-label={pt('provider.local.comfy.workflowPreviewAria')}>
                 <div className="localWorkflowHeader">
                   <div>
                     <strong>Workflow JSON</strong>
-                    <small>导入 API workflow 后，AI 创作台会写入 Prompt、尺寸、Seed；图生图会上传第一张参考图并写入 LoadImage 节点。</small>
+                    <small>{pt('provider.local.comfy.workflowHint')}</small>
                   </div>
                   <div className="localWorkflowActions">
                     <input
@@ -8337,16 +8297,16 @@ function ProviderSettingsPage(props: {
                       className="miniButton"
                       onClick={() => workflowFileInputRef.current?.click()}
                     >
-                      <Upload size={14} /> 导入 JSON
+                      <Upload size={14} /> {pt('provider.local.importJson')}
                     </button>
                     {props.localComfyUIWorkflowStore.presets.length ? (
                       <button type="button" className="miniButton" onClick={props.onToggleComfyUIWorkflowManager}>
-                        <Layers size={14} /> 管理器
+                        <Layers size={14} /> {pt('provider.local.manager')}
                       </button>
                     ) : null}
                     {props.localComfyUIWorkflowStore.presets.length ? (
                       <button type="button" className="miniButton" onClick={props.onClearLocalComfyUIWorkflow}>
-                        <X size={14} /> 清除
+                        <X size={14} /> {pt('provider.local.clear')}
                       </button>
                     ) : null}
                   </div>
@@ -8355,15 +8315,15 @@ function ProviderSettingsPage(props: {
                   <div className="localDiagnosticMessage failed">{props.localComfyUIWorkflowError}</div>
                 ) : null}
                 {activeWorkflowPreset ? (
-                  <ComfyUIWorkflowSummaryPanel preset={activeWorkflowPreset} />
+                  <ComfyUIWorkflowSummaryPanel preset={activeWorkflowPreset} t={props.t} />
                 ) : (
                   <div className="localDiagnosticMessage idle">
-                    导入 ComfyUI API workflow JSON 后，会预览 Prompt、KSampler、尺寸、Checkpoint 和输出节点候选。
+                    {pt('provider.local.comfy.workflowEmpty')}
                   </div>
                 )}
               </section>
               <div className="serviceTemplateNotes">
-                {props.selectedServiceTemplate.notes.map((note) => (
+                {providerServiceTemplateNotes(props.selectedServiceTemplate).map((note) => (
                   <span key={note}>{note}</span>
                 ))}
               </div>
@@ -8372,23 +8332,23 @@ function ProviderSettingsPage(props: {
             <div className="localLabBox">
               <div className="providerConfigHeader">
                 <div>
-                  <strong>Stable Diffusion WebUI / Forge 连接诊断</strong>
-                  <small>仅读取本地 /sdapi/v1 基础端点；不会改动模型、代理或系统网络设置。</small>
+                  <strong>{pt('provider.local.sd.diagnosticsTitle')}</strong>
+                  <small>{pt('provider.local.sd.diagnosticsHint')}</small>
                 </div>
                 <span className={`serviceStatusBadge localDiagnostic-${props.localSdWebUIDiagnostic.status}`}>
                   {comfyUIStatusLabel[props.localSdWebUIDiagnostic.status]}
                 </span>
               </div>
-              <ServiceTemplateMeta template={props.selectedServiceTemplate} />
+              <ServiceTemplateMeta template={props.selectedServiceTemplate} t={props.t} />
               <div className="localLabNotice">
                 <HardDrive size={18} />
                 <div>
-                  <strong>0.4.3 本地 txt2img 切片</strong>
-                  <span>支持连接诊断、txt2img 文生图和作品画廊保存；img2img / ControlNet 后续版本再接入。</span>
+                  <strong>{pt('provider.local.sd.sliceTitle')}</strong>
+                  <span>{pt('provider.local.sd.sliceHint')}</span>
                 </div>
               </div>
               <label>
-                本地服务地址
+                {pt('provider.localEndpointConfig')}
                 <div className="localEndpointRow">
                   <input
                     value={props.localSdWebUIConfig.baseUrl}
@@ -8400,14 +8360,14 @@ function ProviderSettingsPage(props: {
                     className="iconButton"
                     onClick={props.onRunLocalSdWebUIDiagnostics}
                     disabled={!props.desktopRuntime || props.localSdWebUIDiagnostic.status === 'checking'}
-                    title="测试 Stable Diffusion WebUI / Forge 本地 API 连接"
-                    aria-label="测试 Stable Diffusion WebUI / Forge 本地 API 连接"
+                    title={pt('provider.local.sd.testTitle')}
+                    aria-label={pt('provider.local.sd.testTitle')}
                   >
-                    <Gauge size={15} /> {props.localSdWebUIDiagnostic.status === 'checking' ? '测试中...' : '测试连接'}
+                    <Gauge size={15} /> {props.localSdWebUIDiagnostic.status === 'checking' ? pt('provider.local.testingEllipsis') : pt('provider.local.testConnection')}
                   </button>
                 </div>
                 <small className="providerFieldHint">
-                  默认 WebUI / Forge 地址通常是 {DEFAULT_SD_WEBUI_BASE_URL}；如果改过端口，请填写实际地址。服务启动时需要带 --api。
+                  {pt('provider.local.sd.defaultHint', { url: DEFAULT_SD_WEBUI_BASE_URL })}
                 </small>
               </label>
               {props.localSdWebUIDiagnostic.error ? (
@@ -8418,20 +8378,20 @@ function ProviderSettingsPage(props: {
                   <span>{sdWebUIResult.resolvedBaseUrl} - {sdWebUIResult.latencyMs} ms</span>
                 </section>
               ) : (
-                <div className="localDiagnosticMessage idle">填写本地服务地址后点击“测试连接”。如果本地服务没启动，不会影响中转站 / 聚合 API 工作流。</div>
+                <div className="localDiagnosticMessage idle">{pt('provider.local.sd.idleHint')}</div>
               )}
               {sdWebUIResult ? (
                 <div className="localDiagnosticStats">
-                  <span>当前模型 {sdWebUIResult.sdModelCheckpoint ?? '-'}</span>
-                  <span>采样器 {sdWebUIResult.samplerCount ?? '-'}</span>
-                  <span>模型 {sdWebUIResult.modelCount ?? '-'}</span>
+                  <span>{pt('provider.local.currentModel', { model: sdWebUIResult.sdModelCheckpoint ?? '-' })}</span>
+                  <span>{pt('provider.local.samplers', { count: sdWebUIResult.samplerCount ?? '-' })}</span>
+                  <span>{pt('provider.local.models', { count: sdWebUIResult.modelCount ?? '-' })}</span>
                 </div>
               ) : null}
               {sdWebUIResult ? (
                 <div className="localEndpointList">
                   {sdWebUIResult.endpoints.map((endpoint) => (
                     <div className={`localEndpointItem ${endpoint.ok ? 'pass' : 'fail'}`} key={endpoint.path}>
-                      <span>{endpoint.ok ? '通过' : '失败'}</span>
+                      <span>{endpoint.ok ? pt('provider.diagnosticLevel.pass') : pt('provider.diagnosticLevel.fail')}</span>
                       <div>
                         <strong>{endpoint.path}{endpoint.status ? ` - HTTP ${endpoint.status}` : ''}</strong>
                         <small>{endpoint.detail}</small>
@@ -8443,12 +8403,12 @@ function ProviderSettingsPage(props: {
               <div className="localLabNotice">
                 <Sparkles size={18} />
                 <div>
-                  <strong>创作台使用方式</strong>
-                  <span>到 AI 创作台把平台切换为 Stable Diffusion WebUI / Forge，输入 Prompt 后会调用 /sdapi/v1/txt2img 并保存到作品画廊。</span>
+                  <strong>{pt('provider.local.sd.usageTitle')}</strong>
+                  <span>{pt('provider.local.sd.usageHint')}</span>
                 </div>
               </div>
               <div className="serviceTemplateNotes">
-                {props.selectedServiceTemplate.notes.map((note) => (
+                {providerServiceTemplateNotes(props.selectedServiceTemplate).map((note) => (
                   <span key={note}>{note}</span>
                 ))}
               </div>
@@ -8457,22 +8417,22 @@ function ProviderSettingsPage(props: {
             <div className="relayBox standalone">
               <div className="providerConfigHeader">
                 <div>
-                  <strong>配置详情</strong>
-                  <small>{props.selectedServiceTemplate.label} · {props.selectedServiceTemplate.description}</small>
+                  <strong>{pt('provider.configDetails')}</strong>
+                  <small>{providerServiceTemplateLabel(props.selectedServiceTemplate)} · {providerServiceTemplateDescription(props.selectedServiceTemplate)}</small>
                 </div>
                 <span className={`serviceStatusBadge ${props.selectedServiceTemplate.status}`}>
                   {providerServiceStatusLabel[props.selectedServiceTemplate.status]}
                 </span>
               </div>
-              <ServiceTemplateMeta template={props.selectedServiceTemplate} />
+              <ServiceTemplateMeta template={props.selectedServiceTemplate} t={props.t} />
               <div className="providerConfigHealth">
-                <span>{activeProfile ? `配置：${profileLabel(activeProfile.lastTestStatus)}` : '配置：草稿'}</span>
-                <span>{props.secretAvailable ? '密钥：已配置' : '密钥：未配置'}</span>
-                <span>{activeProfile?.lastModelProbe ? (activeProfile.lastModelProbe.available ? '模型：已命中' : '模型：未命中') : '模型：未探测'}</span>
+                <span>{activeProfile ? pt('provider.chip.configStatus', { status: pt(`provider.profileStatus.${activeProfile.lastTestStatus}`) }) : pt('provider.chip.configDraft')}</span>
+                <span>{props.secretAvailable ? pt('provider.chip.secretConfigured') : pt('provider.chip.secretMissing')}</span>
+                <span>{activeProfile?.lastModelProbe ? (activeProfile.lastModelProbe.available ? pt('provider.chip.modelMatched') : pt('provider.chip.modelMissing')) : pt('provider.chip.modelNotProbed')}</span>
               </div>
-              <section className="providerOfflineDiagnostic" aria-label="非消耗配置诊断">
+              <section className="providerOfflineDiagnostic" aria-label={pt('provider.offlineDiagnosticAria')}>
                 <div className="providerOfflineDiagnosticSummary">
-                  <span>非消耗诊断</span>
+                  <span>{pt('provider.offlineDiagnostic')}</span>
                   <strong>{offlineDiagnosticSummary.title}</strong>
                   <small>{offlineDiagnosticSummary.detail}</small>
                 </div>
@@ -8483,11 +8443,11 @@ function ProviderSettingsPage(props: {
                 </div>
               </section>
               <label>
-                名称
+                {pt('provider.field.name')}
                 <input
                   value={props.providerConfig.displayName}
                   onChange={(event) => props.onConfigChange('displayName', event.target.value)}
-                  placeholder="例如 AIXW-GPT-Image2"
+                  placeholder={pt('provider.placeholder.profileName')}
                 />
               </label>
               <label>
@@ -8503,7 +8463,7 @@ function ProviderSettingsPage(props: {
                 <div className="secretInputRow">
                   <input
                     type="password"
-                    placeholder={props.desktopRuntime ? props.selectedProvider.auth.label : '请在 Tauri 桌面端保存密钥'}
+                    placeholder={props.desktopRuntime ? props.selectedProvider.auth.label : pt('provider.placeholder.desktopSecret')}
                     value={props.secretDraft}
                     onChange={(event) => props.onSecretDraftChange(event.target.value)}
                     disabled={!props.desktopRuntime}
@@ -8513,24 +8473,24 @@ function ProviderSettingsPage(props: {
                     className="iconButton secretSaveButton"
                     onClick={props.onSaveSecret}
                     disabled={!props.desktopRuntime || props.isSavingSecret || !props.secretDraft.trim()}
-                    title="保存当前配置实例密钥"
-                    aria-label="保存当前配置实例密钥"
+                    title={pt('provider.action.saveSecretTitle')}
+                    aria-label={pt('provider.action.saveSecretTitle')}
                   >
-                    {props.isSavingSecret ? '保存中…' : '保存密钥'}
+                    {props.isSavingSecret ? pt('provider.action.saving') : pt('provider.action.saveSecret')}
                   </button>
                 </div>
               </label>
               <p className="secretMessage">
-                密钥状态：{props.desktopRuntime ? (props.secretAvailable ? '已配置' : '未配置') : '网页预览模式'}
+                {pt('provider.secretStatus', { status: props.desktopRuntime ? (props.secretAvailable ? pt('provider.secret.configured') : pt('provider.secret.missing')) : pt('provider.secret.webPreview') })}
               </p>
               <label>
-                模型 ID
+                {pt('provider.field.modelId')}
                 <div className="modelPicker">
                   <input
                     list="provider-model-options"
                     value={props.providerConfig.modelId}
                     onChange={(event) => props.onConfigChange('modelId', event.target.value)}
-                    placeholder="填写服务商支持的模型 ID，例如 gpt-image-2 / nano-banana / qwen-image"
+                    placeholder={pt('provider.placeholder.modelId')}
                   />
                   <datalist id="provider-model-options">
                     {props.providerConfig.modelOptions.map((modelId) => (
@@ -8541,28 +8501,28 @@ function ProviderSettingsPage(props: {
                     className="iconButton"
                     onClick={props.onRefreshModels}
                     disabled={props.isRefreshingModels || !props.supportsModelList}
-                    title={props.supportsModelList ? '刷新模型列表' : '当前官方 API 暂不提供 OpenAI 兼容模型列表'}
-                    aria-label={props.supportsModelList ? '刷新模型列表' : '当前官方 API 暂不提供 OpenAI 兼容模型列表'}
+                    title={props.supportsModelList ? pt('provider.action.refreshModels') : pt('provider.action.modelListUnsupported')}
+                    aria-label={props.supportsModelList ? pt('provider.action.refreshModels') : pt('provider.action.modelListUnsupported')}
                   >
-                    {props.isRefreshingModels ? '…' : '刷新'}
+                    {props.isRefreshingModels ? '…' : pt('provider.action.refresh')}
                   </button>
                   <button
                     className="iconButton"
                     onClick={props.onProbeModel}
                     disabled={props.isProbingModel || props.isRefreshingModels || !props.supportsModelList}
-                    title={props.supportsModelList ? '探测当前模型是否出现在模型列表' : '当前官方 API 暂不提供 OpenAI 兼容模型探测'}
-                    aria-label={props.supportsModelList ? '探测当前模型' : '当前官方 API 暂不提供 OpenAI 兼容模型探测'}
+                    title={props.supportsModelList ? pt('provider.action.probeModelTitle') : pt('provider.action.probeUnsupported')}
+                    aria-label={props.supportsModelList ? pt('provider.action.probeModel') : pt('provider.action.probeUnsupported')}
                   >
-                    {props.isProbingModel ? '…' : '探测'}
+                    {props.isProbingModel ? '…' : pt('provider.action.probe')}
                   </button>
-                  <button className="iconButton" onClick={props.onPinModel} title="设为默认模型" aria-label="设为默认模型">
-                    默认
+                  <button className="iconButton" onClick={props.onPinModel} title={pt('provider.action.pinModel')} aria-label={pt('provider.action.pinModel')}>
+                    {pt('provider.action.default')}
                   </button>
                 </div>
               </label>
 
               <label>
-                协议类型
+                {pt('provider.field.protocol')}
                 <StudioSelect
                   value={props.providerConfig.protocol}
                   onChange={(value) => props.onConfigChange('protocol', value as OpenAICompatibleConfig['protocol'])}
@@ -8570,18 +8530,18 @@ function ProviderSettingsPage(props: {
                 />
               </label>
               <label>
-                图生图映射
+                {pt('provider.field.i2iMapping')}
                 <StudioSelect
                   value={props.providerConfig.imageToImageAdapter}
                   onChange={(value) => props.onConfigChange('imageToImageAdapter', value as ImageToImageAdapter)}
                   options={imageToImageAdapterOptions}
                 />
                 <small className="providerFieldHint">
-                  {imageToImageAdapterDiagnosticDetail(props.providerConfig, props.selectedProviderId)}
+                  {imageToImageAdapterDiagnosticText}
                 </small>
               </label>
               <label>
-                接口路径
+                {pt('provider.field.endpointPath')}
                 <input
                   value={props.providerConfig.endpointPath}
                   onChange={(event) => props.onConfigChange('endpointPath', event.target.value)}
@@ -8592,7 +8552,7 @@ function ProviderSettingsPage(props: {
                 </small>
               </label>
               <label>
-                额外 Headers(JSON)
+                {pt('provider.field.extraHeaders')}
                 <input
                   value={props.providerConfig.extraHeadersJson}
                   onChange={(event) => props.onConfigChange('extraHeadersJson', event.target.value)}
@@ -8601,22 +8561,22 @@ function ProviderSettingsPage(props: {
               </label>
               <div className="providerPrimaryActions">
                 <button className="ghostButton relaySave" onClick={props.onSaveOnly}>
-                  保存
+                  {pt('provider.action.save')}
                 </button>
                 <button className="ghostButton relaySave primaryAction" onClick={props.onSaveConfig}>
                   {props.configActionState === 'saving'
-                    ? '保存中…'
+                    ? pt('provider.action.saving')
                     : props.configActionState === 'saved'
-                      ? '已保存'
+                      ? pt('provider.action.saved')
                       : props.configActionState === 'failed'
-                        ? '保存失败'
-                        : '保存并启用'}
+                        ? pt('provider.action.saveFailed')
+                        : pt('provider.action.saveAndEnable')}
                 </button>
                 <button className="ghostButton" type="button" onClick={props.onCopyConfig}>
-                  <Copy size={15} /> 复制配置
+                  <Copy size={15} /> {pt('provider.action.copyConfig')}
                 </button>
                 <button className="ghostButton" type="button" onClick={props.onImportConfig}>
-                  <ClipboardPaste size={15} /> 粘贴配置
+                  <ClipboardPaste size={15} /> {pt('provider.action.pasteConfig')}
                 </button>
               </div>
               <div className="providerAuxToggles">
@@ -8626,7 +8586,7 @@ function ProviderSettingsPage(props: {
                   onClick={() => setIsReadinessOpen((value) => !value)}
                   aria-expanded={isReadinessOpen}
                 >
-                  <ChevronRight size={15} /> {isReadinessOpen ? '收起诊断' : '查看诊断详情'}
+                  <ChevronRight size={15} /> {isReadinessOpen ? pt('provider.action.collapseDiagnostics') : pt('provider.action.viewDiagnostics')}
                 </button>
                 <button
                   type="button"
@@ -8634,14 +8594,14 @@ function ProviderSettingsPage(props: {
                   onClick={() => setIsCapabilityMatrixOpen((value) => !value)}
                   aria-expanded={isCapabilityMatrixOpen}
                 >
-                  <ChevronRight size={15} /> {isCapabilityMatrixOpen ? '收起矩阵' : '查看能力矩阵'}
+                  <ChevronRight size={15} /> {isCapabilityMatrixOpen ? pt('provider.action.collapseMatrix') : pt('provider.action.viewMatrix')}
                 </button>
               </div>
               {isReadinessOpen ? (
-                <section className="providerReadinessPanel" aria-label="非消耗配置诊断详情">
+                <section className="providerReadinessPanel" aria-label={pt('provider.readiness.aria')}>
                   <div className="providerReadinessHeader">
-                    <strong>非消耗诊断详情</strong>
-                    <small>只检查本地配置、密钥通道、模型列表记录和创作页生效关系；不执行真实生成。</small>
+                    <strong>{pt('provider.readiness.title')}</strong>
+                    <small>{pt('provider.readiness.hint')}</small>
                   </div>
                   <div className="providerReadinessGrid">
                     {offlineDiagnosticItems.map((item) => (
@@ -8649,7 +8609,7 @@ function ProviderSettingsPage(props: {
                         <div>
                           <div className="providerReadinessTitleRow">
                             <strong>{item.label}</strong>
-                            <span>{item.level === 'pass' ? '通过' : item.level === 'warn' ? '注意' : item.level === 'fail' ? '错误' : '提示'}</span>
+                            <span>{providerDiagnosticLevelLabel(item.level)}</span>
                           </div>
                           <small>{item.detail}</small>
                         </div>
@@ -8659,22 +8619,22 @@ function ProviderSettingsPage(props: {
                 </section>
               ) : null}
               {isCapabilityMatrixOpen ? (
-                <section className="providerCapabilityPanel expanded" aria-label="平台能力矩阵 V2">
+                <section className="providerCapabilityPanel expanded" aria-label={pt('provider.matrix.aria')}>
                   <div className="providerCapabilityHeaderBlock">
                     <div>
-                      <strong>能力矩阵 V2</strong>
-                      <small>按服务模板横向查看真实接入、可配置、待接入和本地规划状态。</small>
+                      <strong>{pt('provider.matrix.title')}</strong>
+                      <small>{pt('provider.matrix.hint')}</small>
                     </div>
-                    <div className="providerCapabilityLegend" aria-label="能力状态说明">
+                    <div className="providerCapabilityLegend" aria-label={pt('provider.matrix.legendAria')}>
                       {(['live', 'configurable', 'partial', 'planned', 'localPlan'] as ProviderMatrixStatus[]).map((status) => (
-                        <span className={`capabilityCell ${status}`} key={status}>{providerMatrixStatusLabel[status]}</span>
+                        <span className={`capabilityCell ${status}`} key={status}>{providerMatrixStatusText(status)}</span>
                       ))}
                     </div>
                   </div>
                   <div className="providerCapabilityScroll">
                     <div className="providerCapabilityGrid providerCapabilityTableHead" role="row">
-                      <span>服务模板</span>
-                      {providerMatrixColumns.map((column) => (
+                      <span>{pt('provider.serviceTemplate')}</span>
+                      {localizedMatrixColumns.map((column) => (
                         <span key={column.key}>{column.label}</span>
                       ))}
                     </div>
@@ -8688,16 +8648,20 @@ function ProviderSettingsPage(props: {
                           aria-pressed={row.template.id === props.selectedServiceTemplate.id}
                         >
                           <span className="providerCapabilityService">
-                            <strong>{row.template.label}</strong>
-                            <small>{providerServiceRegionLabel[row.template.region]} · {providerServiceStatusLabel[row.template.status]} · {row.template.description}</small>
+                            <strong>{providerServiceTemplateLabel(row.template)}</strong>
+                            <small>{providerServiceRegionText(row.template.region)} · {providerServiceStatusText(row.template.status)} · {providerServiceTemplateDescription(row.template)}</small>
                           </span>
                           {row.cells.map((cell, index) => (
                             <span
                               className={`capabilityCell ${cell.status}`}
-                              title={`${providerMatrixColumns[index].label}：${cell.label}。${cell.detail}`}
-                              key={providerMatrixColumns[index].key}
+                              title={pt('provider.matrix.cellTitle', {
+                                column: localizedMatrixColumns[index].label,
+                                status: providerMatrixStatusText(cell.status),
+                                detail: providerMatrixStatusDetail(row.template, cell.status, localizedMatrixColumns[index].label)
+                              })}
+                              key={localizedMatrixColumns[index].key}
                             >
-                              {cell.label}
+                              {providerMatrixStatusText(cell.status)}
                             </span>
                           ))}
                         </button>
@@ -8709,8 +8673,8 @@ function ProviderSettingsPage(props: {
               <div className="providerDiagnostics">
                 <div className="diagnosticsHeader">
                   <div>
-                    <strong>配置自检报告</strong>
-                    <small>默认做非消耗检查；“真实试生图”会调用接口并可能消耗额度，当前 API Key 不可用时先不要点。</small>
+                    <strong>{pt('provider.diagnostics.title')}</strong>
+                    <small>{pt('provider.diagnostics.hint')}</small>
                   </div>
                   <div className="diagnosticsActions">
                     <button
@@ -8720,35 +8684,35 @@ function ProviderSettingsPage(props: {
                       }}
                       disabled={props.isRunningDiagnostics}
                     >
-                      <RefreshCcw size={15} /> {props.isRunningDiagnostics ? '自检中…' : '运行自检'}
+                      <RefreshCcw size={15} /> {props.isRunningDiagnostics ? pt('provider.action.selfChecking') : pt('provider.action.runSelfCheck')}
                     </button>
-                    <button className="rowActionButton" onClick={props.onCopyDiagnostics} disabled={!props.diagnostics.length} title="复制不含 API Key 的配置自检报告">
-                      <Copy size={15} /> 复制报告
+                    <button className="rowActionButton" onClick={props.onCopyDiagnostics} disabled={!props.diagnostics.length} title={pt('provider.action.copyReportTitle')}>
+                      <Copy size={15} /> {pt('provider.action.copyReport')}
                     </button>
                     <button
                       className="rowActionButton primaryAction"
                       onClick={props.onRunTestGeneration}
                       disabled={!props.desktopRuntime || !props.secretAvailable || props.isRunningTestGeneration || !props.isSelectedServiceConfigurable}
-                      title={!props.secretAvailable ? '请先保存 API Key' : '调用真实接口生成 1 张测试小样，可能消耗额度'}
+                      title={!props.secretAvailable ? pt('provider.action.needApiKey') : pt('provider.action.testGenerationTitle')}
                     >
-                      <Sparkles size={15} /> {props.isRunningTestGeneration ? '测试中…' : '真实试生图'}
+                      <Sparkles size={15} /> {props.isRunningTestGeneration ? pt('provider.action.testing') : pt('provider.action.realTestGeneration')}
                     </button>
                   </div>
                 </div>
                 {props.diagnostics.length === 0 ? (
-                  <p className="diagnosticsHint">保存配置后可运行自检；不会提交生图请求，也不会验证模型一定可生图。</p>
+                  <p className="diagnosticsHint">{pt('provider.diagnostics.emptyHint')}</p>
                 ) : (
                   <>
                     <div className="diagnosticsSummary">
-                      <span className="pass">通过 {diagnosticsSummary.pass}</span>
-                      <span className="warn">注意 {diagnosticsSummary.warn}</span>
-                      <span className="fail">错误 {diagnosticsSummary.fail}</span>
-                      <span className="info">提示 {diagnosticsSummary.info}</span>
+                      <span className="pass">{pt('provider.summary.pass', { count: diagnosticsSummary.pass })}</span>
+                      <span className="warn">{pt('provider.summary.warn', { count: diagnosticsSummary.warn })}</span>
+                      <span className="fail">{pt('provider.summary.fail', { count: diagnosticsSummary.fail })}</span>
+                      <span className="info">{pt('provider.summary.info', { count: diagnosticsSummary.info })}</span>
                     </div>
                     <div className="diagnosticsList">
                       {props.diagnostics.map((item) => (
                         <div className={`diagnosticsItem ${item.level}`} key={item.id}>
-                          <span>{item.level === 'pass' ? '通过' : item.level === 'warn' ? '注意' : item.level === 'fail' ? '错误' : '提示'}</span>
+                          <span>{providerDiagnosticLevelLabel(item.level)}</span>
                           <div>
                             <strong>{item.label}</strong>
                             <small>{item.detail}</small>
@@ -8762,11 +8726,11 @@ function ProviderSettingsPage(props: {
             </div>
           ) : (
             <div className="integrationBox">
-              <strong>接入状态</strong>
-              <p>{props.selectedServiceTemplate.description}</p>
-              <ServiceTemplateMeta template={props.selectedServiceTemplate} />
+              <strong>{pt('provider.integrationStatus')}</strong>
+              <p>{providerServiceTemplateDescription(props.selectedServiceTemplate)}</p>
+              <ServiceTemplateMeta template={props.selectedServiceTemplate} t={props.t} />
               <div className="serviceTemplateNotes">
-                {props.selectedServiceTemplate.notes.map((note) => (
+                {providerServiceTemplateNotes(props.selectedServiceTemplate).map((note) => (
                   <span key={note}>{note}</span>
                 ))}
               </div>
@@ -8778,34 +8742,36 @@ function ProviderSettingsPage(props: {
   );
 }
 
-function ServiceTemplateMeta({ template }: { template: ProviderServiceTemplate }) {
+function ServiceTemplateMeta({ template, t }: { template: ProviderServiceTemplate; t: Translator }) {
+  const pt = (key: string, params?: Record<string, string | number>) => t(key as Parameters<Translator>[0], params);
   const capabilityLabels = [
-    template.supportsTextToImage ? '文生图' : null,
-    template.supportsImageToImage ? '图生图' : null,
-    template.requiresPolling ? '异步任务' : null
+    template.supportsTextToImage ? pt('provider.capability.textToImage') : null,
+    template.supportsImageToImage ? pt('provider.capability.imageToImage') : null,
+    template.requiresPolling ? pt('provider.capability.asyncTask') : null
   ].filter(Boolean);
 
   return (
-    <div className="serviceTemplateMeta" aria-label="服务模板信息">
-      <span className={`regionBadge ${template.region}`}>{providerServiceRegionLabel[template.region]}</span>
-      <span className={`serviceStatusBadge ${template.status}`}>{providerServiceStatusLabel[template.status]}</span>
-      {capabilityLabels.length ? <span>{capabilityLabels.join(' / ')}</span> : <span>能力待确认</span>}
+    <div className="serviceTemplateMeta" aria-label={pt('provider.meta.aria')}>
+      <span className={`regionBadge ${template.region}`}>{pt(`provider.region.${template.region}`)}</span>
+      <span className={`serviceStatusBadge ${template.status}`}>{pt(`provider.status.${template.status}`)}</span>
+      {capabilityLabels.length ? <span>{capabilityLabels.join(' / ')}</span> : <span>{pt('provider.capability.unknown')}</span>}
       {template.apiDocUrl ? (
-        <span className="serviceDocHint">文档已登记</span>
+        <span className="serviceDocHint">{pt('provider.meta.docRegistered')}</span>
       ) : null}
     </div>
   );
 }
 
-function ComfyUIWorkflowSummaryPanel({ preset }: { preset: LocalComfyUIWorkflowPreset }) {
+function ComfyUIWorkflowSummaryPanel({ preset, t }: { preset: LocalComfyUIWorkflowPreset; t: Translator }) {
   const summary = preset.summary;
+  const pt = (key: string, params?: Record<string, string | number>) => t(key as Parameters<Translator>[0], params);
   const groups: Array<{ label: string; nodes: LocalComfyUIWorkflowNode[] }> = [
-    { label: '提示词', nodes: summary.promptNodes },
-    { label: '采样器', nodes: summary.samplerNodes },
+    { label: pt('provider.workflow.prompt'), nodes: summary.promptNodes },
+    { label: pt('provider.workflow.sampler'), nodes: summary.samplerNodes },
     { label: 'Checkpoint', nodes: summary.checkpointNodes },
-    { label: '尺寸', nodes: summary.sizeNodes },
-    { label: '输出', nodes: summary.outputNodes },
-    { label: '加载器', nodes: summary.loaderNodes }
+    { label: pt('provider.workflow.size'), nodes: summary.sizeNodes },
+    { label: pt('provider.workflow.output'), nodes: summary.outputNodes },
+    { label: pt('provider.workflow.loader'), nodes: summary.loaderNodes }
   ].filter((group) => group.nodes.length > 0);
 
   return (
@@ -8813,15 +8779,15 @@ function ComfyUIWorkflowSummaryPanel({ preset }: { preset: LocalComfyUIWorkflowP
       <div className="localWorkflowMeta">
         <span>{workflowFormatLabel(summary.format)}</span>
         <span>{comfyUIWorkflowRunStatus(preset)}</span>
-        <span>节点 {summary.nodeCount}</span>
-        <span>连线 {summary.linkCount ?? '-'}</span>
+        <span>{pt('provider.local.nodes', { count: summary.nodeCount })}</span>
+        <span>{pt('provider.workflow.links', { count: summary.linkCount ?? '-' })}</span>
       </div>
       <div className="localWorkflowFile">
         <strong>{preset.name}</strong>
-        <small>{summary.fileName} · {preset.rawWorkflow ? '已保存完整 API workflow，可在创作台测试。' : '当前只保存了解析摘要，需要重新导入 API workflow 才能生成。'}</small>
+        <small>{summary.fileName} · {preset.rawWorkflow ? pt('provider.workflow.rawSaved') : pt('provider.workflow.summaryOnly')}</small>
       </div>
       {summary.format === 'api' && !preset.rawWorkflow ? (
-        <div className="localDiagnosticMessage failed">这是旧版导入记录，缺少完整 workflow JSON。请重新导入同一个 API workflow 文件。</div>
+        <div className="localDiagnosticMessage failed">{pt('provider.workflow.legacyMissingRaw')}</div>
       ) : null}
       {summary.warnings.length ? (
         <div className="localWorkflowWarnings">
@@ -8846,19 +8812,20 @@ function ComfyUIWorkflowSummaryPanel({ preset }: { preset: LocalComfyUIWorkflowP
                     {node.title ? <small>{node.summary}</small> : null}
                   </div>
                 ))}
-                {group.nodes.length > 4 ? <span className="localWorkflowMore">还有 {group.nodes.length - 4} 个候选节点</span> : null}
+                {group.nodes.length > 4 ? <span className="localWorkflowMore">{pt('provider.workflow.moreNodes', { count: group.nodes.length - 4 })}</span> : null}
               </div>
             </section>
           ))}
         </div>
       ) : (
-        <div className="localDiagnosticMessage failed">没有识别到可用节点，请确认导出的是 ComfyUI workflow JSON。</div>
+        <div className="localDiagnosticMessage failed">{pt('provider.workflow.noNodes')}</div>
       )}
     </div>
   );
 }
 
 function ComfyUIWorkflowManagerModal(props: {
+  t: Translator;
   store: LocalComfyUIWorkflowStore;
   onClose: () => void;
   onSelect: (presetId: string) => void;
@@ -8901,7 +8868,7 @@ function ComfyUIWorkflowManagerModal(props: {
                   <Trash2 size={14} /> 删除
                 </button>
               </div>
-              <ComfyUIWorkflowSummaryPanel preset={activePreset} />
+              <ComfyUIWorkflowSummaryPanel preset={activePreset} t={props.t} />
             </>
           ) : (
             <div className="comfyWorkflowEmpty">
@@ -9984,6 +9951,7 @@ function Gallery(props: {
 }
 
 const CachedLibraryPage = memo(function CachedLibraryPage(props: {
+  t: Translator;
   providers: ReturnType<typeof listProviders>;
   results: ReturnType<typeof useStudioStore.getState>['results'];
   isHistoryLoaded: boolean;
@@ -10005,6 +9973,7 @@ const CachedLibraryPage = memo(function CachedLibraryPage(props: {
       aria-hidden={!props.isActive}
     >
       <LibraryPage
+        t={props.t}
         providers={props.providers}
         results={props.results}
         isHistoryLoaded={props.isHistoryLoaded}
@@ -10074,6 +10043,7 @@ const CachedInspirationPage = memo(function CachedInspirationPage(props: {
 });
 
 const LibraryRecordCard = memo(function LibraryRecordCard(props: {
+  t: Translator;
   record: GenerationRecord;
   providerName: string;
   meta?: LibraryMetaEntry;
@@ -10097,11 +10067,15 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
   onRemoveFromCurrentScope: (recordId: string) => void;
   onDelete: (recordId: string) => void;
 }) {
+  const ct = (key: string, params?: Record<string, string | number>) => props.t(key as Parameters<Translator>[0], params);
   const imageUrl = props.record.imageUrls[0];
-  const modeLabel = (props.record.generationMode ?? 'text-to-image') === 'image-to-image' ? '\u56fe\u751f\u56fe' : '\u6587\u751f\u56fe';
+  const modeLabel = ct(`library.modeBadge.${(props.record.generationMode ?? 'text-to-image') === 'image-to-image' ? 'image-to-image' : 'text-to-image'}`);
   const referenceCount = props.record.referenceImages?.length ?? 0;
   const referenceSummary = summarizeReferenceSources(props.record.referenceImages);
   const isFavorite = Boolean(props.meta?.favorite);
+  const statusLabel = isPotentialBackgroundCompletion(props.record)
+    ? ct('library.generationStatus.pendingRecovery')
+    : ct(`library.generationStatus.${props.record.status}`);
 
   return (
     <article
@@ -10117,7 +10091,7 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
       <button
         className={`librarySelectMark ${props.isSelected ? 'active' : ''}`}
         type="button"
-        aria-label={props.isSelected ? '取消选择' : '选择图片'}
+        aria-label={props.isSelected ? ct('library.action.unselectImage') : ct('library.action.selectImage')}
         onClick={(event) => {
           event.stopPropagation();
           props.onSelect(props.record.id, event);
@@ -10143,37 +10117,37 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
             decoding="async"
             onLoad={(event) => props.onAnalyzeColors(props.record.id, event.currentTarget)}
           />
-          <span><Maximize2 size={15} /> {'\u9884\u89c8'}</span>
+          <span><Maximize2 size={15} /> {ct('library.action.preview')}</span>
         </button>
       ) : (
-        <div className="libraryFailedThumb">{'\u751f\u6210\u5931\u8d25'}</div>
+        <div className="libraryFailedThumb">{ct('library.action.failedThumb')}</div>
       )}
       <div className="libraryImageOverlay">
-        <button className={`iconMiniButton favoriteButton ${isFavorite ? 'active' : ''}`} type="button" data-tooltip={isFavorite ? '取消收藏' : '收藏'} aria-label={isFavorite ? '取消收藏' : '收藏'} onClick={() => props.onToggleFavorite(props.record.id)}>
+        <button className={`iconMiniButton favoriteButton ${isFavorite ? 'active' : ''}`} type="button" data-tooltip={isFavorite ? ct('library.action.removeFavorite') : ct('library.action.favorite')} aria-label={isFavorite ? ct('library.action.removeFavorite') : ct('library.action.favorite')} onClick={() => props.onToggleFavorite(props.record.id)}>
           <Star size={14} fill={isFavorite ? 'currentColor' : 'none'} />
         </button>
         <div className="libraryMoreMenuWrap">
-          <button className="iconMiniButton" type="button" data-tooltip="更多操作" aria-label="更多操作">
+          <button className="iconMiniButton" type="button" data-tooltip={ct('library.action.more')} aria-label={ct('library.action.more')}>
             <MoreHorizontal size={15} />
           </button>
-          <div className="libraryQuickMenu" aria-label="图片操作">
-            <button type="button" onClick={() => props.onOpenDetails(props.record)}><Info size={13} /> 图片详情</button>
+          <div className="libraryQuickMenu" aria-label={ct('library.context.imageActions')}>
+            <button type="button" onClick={() => props.onOpenDetails(props.record)}><Info size={13} /> {ct('library.detail.title')}</button>
             {props.record.error || props.record.status === 'failed' ? (
-              <button type="button" onClick={() => props.onOpenDiagnostics(props.record)}><Gauge size={13} /> 查看诊断</button>
+              <button type="button" onClick={() => props.onOpenDiagnostics(props.record)}><Gauge size={13} /> {ct('library.action.viewDiagnostics')}</button>
             ) : null}
-            <button type="button" disabled={!imageUrl} onClick={() => props.onUseAsReference(props.record)}><ImagePlus size={13} /> 设为参考图</button>
-            <button type="button" onClick={() => props.onCopyPrompt(props.record)}><Copy size={13} /> 复制 Prompt</button>
-            <button type="button" disabled={!getRecordPrimaryPath(props.record)} onClick={() => props.onCopyPath(props.record)}><Copy size={13} /> 复制路径</button>
-            <button type="button" onClick={() => props.onExportRecord(props.record)}><Download size={13} /> 导出清单</button>
+            <button type="button" disabled={!imageUrl} onClick={() => props.onUseAsReference(props.record)}><ImagePlus size={13} /> {ct('library.action.setReference')}</button>
+            <button type="button" onClick={() => props.onCopyPrompt(props.record)}><Copy size={13} /> {ct('library.action.copyPrompt')}</button>
+            <button type="button" disabled={!getRecordPrimaryPath(props.record)} onClick={() => props.onCopyPath(props.record)}><Copy size={13} /> {ct('library.action.copyPath')}</button>
+            <button type="button" onClick={() => props.onExportRecord(props.record)}><Download size={13} /> {ct('library.action.exportList')}</button>
             <span className="libraryMenuDivider" />
-            <button type="button" onClick={() => props.onToggleFavorite(props.record.id)}><Star size={13} /> {isFavorite ? '取消收藏' : '加入收藏'}</button>
-            <button type="button" onClick={() => props.onAssignFolder(props.record.id)}><FolderOpen size={13} /> 移至文件夹</button>
-            <button type="button" onClick={() => props.onAssignCollection(props.record.id)}><Bookmark size={13} /> 加入收藏集</button>
+            <button type="button" onClick={() => props.onToggleFavorite(props.record.id)}><Star size={13} /> {isFavorite ? ct('library.action.removeFavorite') : ct('library.action.addFavorite')}</button>
+            <button type="button" onClick={() => props.onAssignFolder(props.record.id)}><FolderOpen size={13} /> {ct('library.action.moveFolder')}</button>
+            <button type="button" onClick={() => props.onAssignCollection(props.record.id)}><Bookmark size={13} /> {ct('library.action.addCollection')}</button>
             {props.isCurrentScopeRemovable ? (
-              <button type="button" onClick={() => props.onRemoveFromCurrentScope(props.record.id)}><X size={13} /> 移出当前分类</button>
+              <button type="button" onClick={() => props.onRemoveFromCurrentScope(props.record.id)}><X size={13} /> {ct('library.action.removeCurrentScope')}</button>
             ) : null}
             <span className="libraryMenuDivider" />
-            <button className="dangerAction" type="button" onClick={() => props.onDelete(props.record.id)}><Trash2 size={13} /> 删除记录</button>
+            <button className="dangerAction" type="button" onClick={() => props.onDelete(props.record.id)}><Trash2 size={13} /> {ct('library.action.deleteRecord')}</button>
           </div>
         </div>
       </div>
@@ -10182,8 +10156,8 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
           <strong>{props.displaySettings.showProvider ? props.providerName : formatTime(props.record.createdAt)}</strong>
           <div className="cardTopActions">
             <span className="statusBadge modeBadge">{modeLabel}</span>
-            {props.displaySettings.showReferenceBadge && referenceCount > 0 ? <span className="statusBadge referenceBadge" title={`\u53c2\u8003\u6765\u6e90\uff1a${referenceSummary}`}>{referenceCount}{'\u53c2\u8003'}</span> : null}
-            <span className={`statusBadge ${generationStatusClass(props.record)}`}>{generationStatusLabel(props.record)}</span>
+            {props.displaySettings.showReferenceBadge && referenceCount > 0 ? <span className="statusBadge referenceBadge" title={ct('library.reference.title', { summary: referenceSummary })}>{ct('library.reference.badge', { count: referenceCount })}</span> : null}
+            <span className={`statusBadge ${generationStatusClass(props.record)}`}>{statusLabel}</span>
           </div>
         </div>
         {props.viewMode === 'list' || props.displaySettings.showPrompt ? <p title={props.record.prompt}>{props.record.prompt}</p> : null}
@@ -10197,6 +10171,7 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
 });
 
 const LibraryPage = memo(function LibraryPage(props: {
+  t: Translator;
   providers: ReturnType<typeof listProviders>;
   results: ReturnType<typeof useStudioStore.getState>['results'];
   isHistoryLoaded: boolean;
@@ -10208,6 +10183,23 @@ const LibraryPage = memo(function LibraryPage(props: {
   onRequestConfirm: (request: ConfirmDialogRequest) => void;
   onDelete: (recordId: string) => Promise<void>;
 }) {
+  const lt = (key: string, params?: Record<string, string | number>) => props.t(key as Parameters<Translator>[0], params);
+  const libraryColorLabel = (color: LibraryColorFilter) => lt(`library.color.${color}`);
+  const libraryGenerationStatusLabel = (record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) => (
+    isPotentialBackgroundCompletion(record)
+      ? lt('library.generationStatus.pendingRecovery')
+      : lt(`library.generationStatus.${record.status}`)
+  );
+  const libraryGenerationModeLabel = (mode: GenerationRecord['generationMode']) => lt(`library.modeBadge.${mode === 'image-to-image' ? 'image-to-image' : 'text-to-image'}`);
+  const libraryReferenceSourceLabel = (source: ReferenceImage['source']) => lt(`library.referenceSource.${source}`);
+  const libraryReferenceRoleLabel = (role?: ReferenceImage['role']) => lt(`library.referenceRole.${role ?? 'auto'}`);
+  const libraryFailureCategoryLabel = (category: GenerationFailureCategory) => lt(`library.failureCategory.${category}`);
+  const libraryFailureSeverityLabel = (severity: GenerationFailureSeverity) => lt(`library.failureSeverity.${severity}`);
+  const libraryRecoveryAdviceText = (advice: LibraryRecoveryAdvice) => ({
+    title: lt(`library.recovery.${advice.key}.title`),
+    summary: lt(`library.recovery.${advice.key}.summary`),
+    actions: [1, 2, 3].map((index) => lt(`library.recovery.${advice.key}.action${index}`))
+  });
   const [query, setQuery] = useState('');
   const [providerFilter, setProviderFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'succeeded' | 'failed'>(() => {
@@ -10344,7 +10336,7 @@ const LibraryPage = memo(function LibraryPage(props: {
         }
       } catch (error) {
         console.warn('[VisionHub] library metadata file sync failed; local cache is still available', error);
-        if (!cancelled) setCopyMessage('画廊元数据文件读取失败，已暂用本地缓存');
+        if (!cancelled) setCopyMessage(lt('library.message.metadataSyncFailed'));
       } finally {
         if (!cancelled) libraryDataHydratedRef.current = true;
       }
@@ -10386,10 +10378,10 @@ const LibraryPage = memo(function LibraryPage(props: {
   );
   const providerOptions = useMemo(
     () => [
-      { value: 'all', label: '全部平台' },
+      { value: 'all', label: lt('library.filter.providerAll') },
       ...props.providers.map((provider) => ({ value: provider.id, label: providerGenerationLabel(provider) }))
     ],
-    [props.providers]
+    [props.providers, props.t]
   );
   const libraryItems = useMemo(
     () => props.results.filter((result) => result.imageUrls.length > 0 || result.status === 'failed'),
@@ -10452,22 +10444,30 @@ const LibraryPage = memo(function LibraryPage(props: {
     }).join('|');
   }, [activeCustomFilters, colorFilter, libraryItems, libraryMeta, libraryScope, normalizedQuery, quickFilters, ratingFilter, shapeFilter, sortMode]);
   const statusOptions = [
-    { value: 'succeeded', label: '成功记录' },
-    { value: 'failed', label: '失败记录' },
-    { value: 'all', label: '全部记录' }
+    { value: 'succeeded', label: lt('library.status.succeeded') },
+    { value: 'failed', label: lt('library.status.failed') },
+    { value: 'all', label: lt('library.status.all') }
   ];
   const modeOptions = [
-    { value: 'all', label: '\u5168\u90e8\u7c7b\u578b' },
-    { value: 'text-to-image', label: '\u6587\u751f\u56fe' },
-    { value: 'image-to-image', label: '\u56fe\u751f\u56fe' },
-    { value: 'with-references', label: '\u6709\u53c2\u8003\u56fe' }
+    { value: 'all', label: lt('library.mode.all') },
+    { value: 'text-to-image', label: lt('library.mode.text-to-image') },
+    { value: 'image-to-image', label: lt('library.mode.image-to-image') },
+    { value: 'with-references', label: lt('library.mode.with-references') }
   ];
   const timeOptions = [
-    { value: 'all', label: '\u5168\u90e8\u65f6\u95f4' },
-    { value: 'today', label: '\u4eca\u5929' },
-    { value: '7d', label: '\u8fd1 7 \u5929' },
-    { value: '30d', label: '\u8fd1 30 \u5929' }
+    { value: 'all', label: lt('library.time.all') },
+    { value: 'today', label: lt('library.time.today') },
+    { value: '7d', label: lt('library.time.7d') },
+    { value: '30d', label: lt('library.time.30d') }
   ];
+  const translatedLibraryQuickFilters = libraryQuickFilters.map((filter) => ({ ...filter, label: lt(`library.quick.${filter.value}`) }));
+  const translatedLibraryViewOptions = libraryViewOptions.map((option) => ({ ...option, label: lt(`library.view.${option.value}`) }));
+  const translatedLibrarySortOptions = librarySortOptions.map((option) => ({ ...option, label: lt(`library.sort.${option.value}`) }));
+  const translatedLibraryShapeOptions = libraryShapeOptions.map((option) => ({ ...option, label: lt(`library.shape.${option.value}`) }));
+  const translatedLibraryFormatOptions = libraryFormatOptions.map((option) => ({ ...option, label: lt(`library.format.${option.value}`) }));
+  const translatedLibraryRatingOptions = libraryRatingOptions.map((option) => ({ ...option, label: lt(`library.rating.${option.value}`) }));
+  const translatedLibraryColorOptions = libraryColorOptions.map((option) => ({ ...option, label: libraryColorLabel(option.value) }));
+  const translatedLibraryAddActions = libraryAddActions.map((action) => ({ ...action, label: lt(`library.add.${action.id}`), detail: lt(`library.add.${action.id}Detail`) }));
   const filteredItems = useMemo(() => sortLibraryRecords(libraryItems.filter((result) => {
     const providerName = providerNameMap.get(result.providerId) ?? result.providerName ?? result.providerId;
     const generationMode = result.generationMode ?? 'text-to-image';
@@ -10525,8 +10525,8 @@ const LibraryPage = memo(function LibraryPage(props: {
           result.error ?? '',
           getRecordFileName(result),
           getRecordPrimaryPath(result),
-          meta?.favorite ? 'favorite 收藏 starred 星标 已收藏' : '',
-          ...(meta?.colorFamilies?.map((family) => getLibraryColorLabel(family)) ?? []),
+          meta?.favorite ? lt('library.searchTokens.favorite') : '',
+          ...(meta?.colorFamilies?.map((family) => libraryColorLabel(family)) ?? []),
           ...(meta?.tags ?? [])
         ].join(' ').toLowerCase();
         if (!customText.includes(customQuery)) return false;
@@ -10544,8 +10544,8 @@ const LibraryPage = memo(function LibraryPage(props: {
       if (criteria.ratingFilter && criteria.ratingFilter !== 'all' && criteria.ratingFilter !== 'unrated' && rating !== Number(criteria.ratingFilter)) return false;
       return true;
     });
-    const statusText = generationStatusLabel(result);
-    const modeSearchText = generationMode === 'image-to-image' ? '图生图 image-to-image img2img' : '文生图 text-to-image txt2img';
+    const statusText = libraryGenerationStatusLabel(result);
+    const modeSearchText = generationMode === 'image-to-image' ? `${lt('library.modeBadge.image-to-image')} image-to-image img2img` : `${lt('library.modeBadge.text-to-image')} text-to-image txt2img`;
     const haystack = [
       result.prompt,
       result.modelId,
@@ -10558,10 +10558,10 @@ const LibraryPage = memo(function LibraryPage(props: {
       result.error ?? '',
       getRecordFileName(result),
       getRecordPrimaryPath(result),
-      meta?.favorite ? 'favorite 收藏 starred 星标 已收藏' : '',
-      ...(meta?.colorFamilies?.map((family) => getLibraryColorLabel(family)) ?? []),
-      result.localImagePaths?.[0] ? 'local 本地 已落盘 文件存在' : '',
-      result.referenceImages?.length ? 'reference 参考图 有参考图' : '',
+      meta?.favorite ? lt('library.searchTokens.favorite') : '',
+      ...(meta?.colorFamilies?.map((family) => libraryColorLabel(family)) ?? []),
+      result.localImagePaths?.[0] ? lt('library.searchTokens.local') : '',
+      result.referenceImages?.length ? lt('library.searchTokens.reference') : '',
       ...(meta?.tags ?? [])
     ]
       .join(' ')
@@ -10630,6 +10630,8 @@ const LibraryPage = memo(function LibraryPage(props: {
     () => selectedRecord ? buildLibraryRecoveryAdvice(selectedRecord) : null,
     [selectedRecord]
   );
+  const diagnosticRecordRecoveryAdviceText = diagnosticRecordRecoveryAdvice ? libraryRecoveryAdviceText(diagnosticRecordRecoveryAdvice) : null;
+  const selectedRecordRecoveryAdviceText = selectedRecordRecoveryAdvice ? libraryRecoveryAdviceText(selectedRecordRecoveryAdvice) : null;
   const selectedRecordMeta = selectedRecord ? libraryMeta[selectedRecord.id] : undefined;
   const selectedRecordFileName = selectedRecord ? getRecordFileName(selectedRecord) || selectedRecord.id : '';
   const selectedRecordDetailMeta = selectedRecord
@@ -10669,13 +10671,13 @@ const LibraryPage = memo(function LibraryPage(props: {
     };
   }, [libraryItems, libraryMeta, nowMs]);
   const selectedScopeTitle =
-    libraryScope.type === 'all' ? '全部作品'
-      : libraryScope.type === 'favorites' ? '收藏'
-      : libraryScope.type === 'recent7d' ? '最近 7 天'
-      : libraryScope.type === 'recent-viewed' ? '最近查看'
-      : libraryScope.type === 'local' ? '本地已落盘'
-      : libraryScope.type === 'folder' ? libraryOrganization.folders.find((folder) => folder.id === libraryScope.id)?.name ?? '文件夹'
-      : libraryOrganization.collections.find((collection) => collection.id === libraryScope.id)?.name ?? '收藏集';
+    libraryScope.type === 'all' ? lt('library.organizer.all')
+      : libraryScope.type === 'favorites' ? lt('library.organizer.favorites')
+      : libraryScope.type === 'recent7d' ? lt('library.organizer.recent7d')
+      : libraryScope.type === 'recent-viewed' ? lt('library.organizer.recentViewed')
+      : libraryScope.type === 'local' ? lt('library.organizer.local')
+      : libraryScope.type === 'folder' ? libraryOrganization.folders.find((folder) => folder.id === libraryScope.id)?.name ?? lt('library.organizer.folders')
+      : libraryOrganization.collections.find((collection) => collection.id === libraryScope.id)?.name ?? lt('library.organizer.collections');
 
   useEffect(() => {
     const total = filteredItems.length;
@@ -10792,7 +10794,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     if (!value) return;
     try {
       await navigator.clipboard?.writeText(value);
-      setCopyMessage(`${label} copied`);
+      setCopyMessage(lt('library.message.copied', { label }));
     } catch (error) {
       setCopyMessage(error instanceof Error ? error.message : String(error));
     }
@@ -10815,7 +10817,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   function toggleFavorite(recordId: string) {
     const isFavorite = Boolean(libraryMeta[recordId]?.favorite);
     updateLibraryMeta(recordId, { favorite: !isFavorite });
-    setCopyMessage(isFavorite ? '已取消收藏' : '已加入收藏');
+    setCopyMessage(isFavorite ? lt('library.message.favoriteRemoved') : lt('library.message.favoriteAdded'));
   }
 
   function setRecordRating(recordId: string, rating: number) {
@@ -10866,7 +10868,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       return next;
     });
     setContextMenu(null);
-    setCopyMessage(favorite ? `已收藏 ${uniqueIds.length} 项` : `已取消收藏 ${uniqueIds.length} 项`);
+    setCopyMessage(favorite ? lt('library.message.batchFavoriteAdded', { count: uniqueIds.length }) : lt('library.message.batchFavoriteRemoved', { count: uniqueIds.length }));
   }
 
   function updateDisplaySettings(patch: Partial<LibraryDisplaySettings>) {
@@ -10947,7 +10949,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       .map((item) => ({
         id: item.id,
         imageUrl: item.imageUrls[0],
-        label: getRecordFileName(item) || item.prompt || '作品图片'
+        label: getRecordFileName(item) || item.prompt || lt('library.title')
       }));
     return items.length > 1 ? { items, currentId: record.id } : undefined;
   }
@@ -10995,9 +10997,9 @@ const LibraryPage = memo(function LibraryPage(props: {
 
   async function deleteRecord(recordId: string) {
     props.onRequestConfirm({
-      title: '删除图册记录',
-      message: '确定删除这条图册记录吗？这只会从 VisionHub 图册中移除记录，不会删除磁盘上的图片文件。',
-      confirmLabel: '删除',
+      title: lt('library.confirm.deleteRecordTitle'),
+      message: lt('library.confirm.deleteRecordMessage'),
+      confirmLabel: lt('library.confirm.delete'),
       tone: 'danger',
       onConfirm: async () => {
         try {
@@ -11005,7 +11007,7 @@ const LibraryPage = memo(function LibraryPage(props: {
           setSelectedRecordId((current) => (current === recordId ? null : current));
           setDiagnosticRecordId((current) => (current === recordId ? null : current));
           setSelectedRecordIds((current) => current.filter((item) => item !== recordId));
-          setCopyMessage('已删除图册记录');
+          setCopyMessage(lt('library.message.deleteRecordSuccess'));
         } catch (error) {
           setCopyMessage(error instanceof Error ? error.message : String(error));
           throw error;
@@ -11022,9 +11024,9 @@ const LibraryPage = memo(function LibraryPage(props: {
       return;
     }
     props.onRequestConfirm({
-      title: '批量删除图册记录',
-      message: `确定删除选中的 ${uniqueIds.length} 条图册记录吗？这只会从 VisionHub 图册中移除记录，不会删除磁盘上的图片文件。`,
-      confirmLabel: '删除',
+      title: lt('library.confirm.deleteRecordsTitle'),
+      message: lt('library.confirm.deleteRecordsMessage', { count: uniqueIds.length }),
+      confirmLabel: lt('library.confirm.delete'),
       tone: 'danger',
       onConfirm: async () => {
         try {
@@ -11036,7 +11038,7 @@ const LibraryPage = memo(function LibraryPage(props: {
           setDiagnosticRecordId((current) => (current && uniqueIds.includes(current) ? null : current));
           setSelectionAnchorId(null);
           setContextMenu(null);
-          setCopyMessage(`已删除 ${uniqueIds.length} 条图册记录`);
+          setCopyMessage(lt('library.message.deleteRecordsSuccess', { count: uniqueIds.length }));
         } catch (error) {
           setCopyMessage(error instanceof Error ? error.message : String(error));
           throw error;
@@ -11056,7 +11058,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       .map((record) => getRecordPrimaryPath(record))
       .filter(Boolean);
     if (!paths.length) {
-      setCopyMessage('选中记录没有可复制路径');
+      setCopyMessage(lt('library.message.noPaths'));
       setContextMenu(null);
       return;
     }
@@ -11065,12 +11067,12 @@ const LibraryPage = memo(function LibraryPage(props: {
   }
 
   function buildLibraryRecordList(records: GenerationRecord[]) {
-    const exportedAt = new Date().toLocaleString('zh-CN');
+    const exportedAt = new Date().toLocaleString();
     return [
-      '# VisionHub Studio 作品画廊记录清单',
+      lt('library.export.title'),
       '',
-      `- 导出时间：${exportedAt}`,
-      `- 记录数量：${records.length}`,
+      lt('library.export.time', { time: exportedAt }),
+      lt('library.export.count', { count: records.length }),
       '',
       ...records.flatMap((record, index) => {
         const providerName = providerNameMap.get(record.providerId) ?? record.providerName ?? record.providerId;
@@ -11081,14 +11083,14 @@ const LibraryPage = memo(function LibraryPage(props: {
           `## ${index + 1}. ${fileName}`,
           '',
           `- ID：${record.id}`,
-          `- 状态：${generationStatusLabel(record)}`,
-          `- 平台：${providerName}`,
-          `- 模型：${record.modelId || '-'}`,
-          `- 类型：${(record.generationMode ?? 'text-to-image') === 'image-to-image' ? '图生图' : '文生图'}`,
-          `- 生成时间：${formatTime(record.createdAt)}`,
-          `- 文件 / 图片路径：${primaryPath}`,
-          `- 收藏：${meta?.favorite ? '是' : '否'}`,
-          `- 尺寸：${getRecordSizeLabel(record, meta)}`,
+          lt('library.export.status', { status: libraryGenerationStatusLabel(record) }),
+          lt('library.export.provider', { provider: providerName }),
+          lt('library.export.model', { model: record.modelId || '-' }),
+          lt('library.export.type', { type: libraryGenerationModeLabel(record.generationMode) }),
+          lt('library.export.created', { time: formatTime(record.createdAt) }),
+          lt('library.export.path', { path: primaryPath }),
+          lt('library.export.favorite', { value: meta?.favorite ? lt('library.export.yes') : lt('library.export.no') }),
+          lt('library.export.size', { size: getRecordSizeLabel(record, meta) }),
           '',
           'Prompt：',
           '',
@@ -11110,10 +11112,10 @@ const LibraryPage = memo(function LibraryPage(props: {
       if (isTauriRuntime()) {
         const result = await saveTextFileWithDialog({ suggestedFileName, content });
         if (!result.saved) {
-          setCopyMessage('已取消导出清单');
+          setCopyMessage(lt('library.message.exportCancelled'));
           return;
         }
-        setCopyMessage(result.path ? `已导出：${result.path}` : `已导出 ${records.length} 条记录清单`);
+        setCopyMessage(result.path ? lt('library.message.exportedPath', { path: result.path }) : lt('library.message.exportedCount', { count: records.length }));
       } else {
         const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
         const url = URL.createObjectURL(blob);
@@ -11124,7 +11126,7 @@ const LibraryPage = memo(function LibraryPage(props: {
         anchor.click();
         anchor.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 800);
-        setCopyMessage(`已导出 ${records.length} 条记录清单`);
+        setCopyMessage(lt('library.message.exportedCount', { count: records.length }));
       }
       setContextMenu(null);
     } catch (error) {
@@ -11150,7 +11152,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       const updated = await props.onRecheckBackgroundRecord(record);
       setDiagnosticRecordId(updated.id);
       setSelectedRecordId(null);
-      setCopyMessage(updated.status === 'succeeded' ? '后台任务已恢复到作品画廊' : '后台任务已重查');
+      setCopyMessage(updated.status === 'succeeded' ? lt('library.message.backgroundRecovered') : lt('library.message.backgroundRechecked'));
     } catch (error) {
       setCopyMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -11198,8 +11200,8 @@ const LibraryPage = memo(function LibraryPage(props: {
       type,
       mode: 'create',
       defaultName: type === 'folder'
-        ? `文件夹 ${libraryOrganization.folders.length + 1}`
-        : `收藏集 ${libraryOrganization.collections.length + 1}`
+        ? `${lt('library.dialog.newFolder')} ${libraryOrganization.folders.length + 1}`
+        : `${lt('library.dialog.newCollection')} ${libraryOrganization.collections.length + 1}`
     });
   }
 
@@ -11234,7 +11236,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       });
     }
     selectLibraryScope({ type: 'folder', id: folder.id });
-    setCopyMessage(selectedRecordIds.length ? `已创建文件夹并归入 ${selectedRecordIds.length} 项` : `已创建文件夹：${name}`);
+    setCopyMessage(selectedRecordIds.length ? lt('library.message.createdFolderAssigned', { count: selectedRecordIds.length }) : lt('library.message.createdFolder', { name }));
   }
 
   function createLibraryCollection(name: string) {
@@ -11263,14 +11265,14 @@ const LibraryPage = memo(function LibraryPage(props: {
       });
     }
     selectLibraryScope({ type: 'collection', id: collection.id });
-    setCopyMessage(selectedRecordIds.length ? `已创建收藏集并加入 ${selectedRecordIds.length} 项` : `已创建收藏集：${name}`);
+    setCopyMessage(selectedRecordIds.length ? lt('library.message.createdCollectionAssigned', { count: selectedRecordIds.length }) : lt('library.message.createdCollection', { name }));
   }
 
   function deleteLibraryFolder(folder: LibraryFolder) {
     props.onRequestConfirm({
-      title: '删除文件夹',
-      message: `确定删除“${folder.name}”吗？图片记录和磁盘文件都会保留，只会移除这个画廊文件夹分类。`,
-      confirmLabel: '删除',
+      title: lt('library.confirm.deleteFolderTitle'),
+      message: lt('library.confirm.deleteFolderMessage', { name: folder.name }),
+      confirmLabel: lt('library.confirm.delete'),
       tone: 'danger',
       onConfirm: async () => {
         const nextOrganization = {
@@ -11289,16 +11291,16 @@ const LibraryPage = memo(function LibraryPage(props: {
           return next;
         });
         if (libraryScope.type === 'folder' && libraryScope.id === folder.id) selectLibraryScope({ type: 'all' });
-        setCopyMessage(`已删除文件夹：${folder.name}`);
+        setCopyMessage(lt('library.message.deletedFolder', { name: folder.name }));
       }
     });
   }
 
   function deleteLibraryCollection(collection: LibraryCollection) {
     props.onRequestConfirm({
-      title: '删除收藏集',
-      message: `确定删除“${collection.name}”吗？图片记录和磁盘文件都会保留，只会移除这个收藏集。`,
-      confirmLabel: '删除',
+      title: lt('library.confirm.deleteCollectionTitle'),
+      message: lt('library.confirm.deleteCollectionMessage', { name: collection.name }),
+      confirmLabel: lt('library.confirm.delete'),
       tone: 'danger',
       onConfirm: async () => {
         const nextOrganization = {
@@ -11320,7 +11322,7 @@ const LibraryPage = memo(function LibraryPage(props: {
           return next;
         });
         if (libraryScope.type === 'collection' && libraryScope.id === collection.id) selectLibraryScope({ type: 'all' });
-        setCopyMessage(`已删除收藏集：${collection.name}`);
+        setCopyMessage(lt('library.message.deletedCollection', { name: collection.name }));
       }
     });
   }
@@ -11341,7 +11343,7 @@ const LibraryPage = memo(function LibraryPage(props: {
           ))
         };
     updateLibraryOrganization(nextOrganization);
-    setCopyMessage(`已重命名：${name}`);
+    setCopyMessage(lt('library.message.renamed', { name }));
   }
 
   function assignRecordsToFolder(recordIds: string[], folderId: string) {
@@ -11356,7 +11358,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     });
     setAssignDialog(null);
     setContextMenu(null);
-    setCopyMessage(`已移动 ${recordIds.length} 项到文件夹`);
+    setCopyMessage(lt('library.message.movedToFolder', { count: recordIds.length }));
   }
 
   function assignRecordsToCollection(recordIds: string[], collectionId: string) {
@@ -11375,7 +11377,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     });
     setAssignDialog(null);
     setContextMenu(null);
-    setCopyMessage(`已加入 ${recordIds.length} 项到收藏集`);
+    setCopyMessage(lt('library.message.addedToCollection', { count: recordIds.length }));
   }
 
   function removeRecordsFromCurrentScope(recordIds: string[]) {
@@ -11397,7 +11399,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       return next;
     });
     setContextMenu(null);
-    setCopyMessage(`已从当前分类移出 ${recordIds.length} 项`);
+    setCopyMessage(lt('library.message.removedFromScope', { count: recordIds.length }));
   }
 
   async function importLibraryFiles() {
@@ -11406,7 +11408,7 @@ const LibraryPage = memo(function LibraryPage(props: {
       const records = result.records;
       records.forEach(props.onAddResult);
       attachImportedRecordsToCurrentScope(records);
-      setCopyMessage(importLibrarySummary('导入图片', records.length, result.skippedDuplicates, result.skippedUnsupported));
+      setCopyMessage(importLibrarySummary(lt('library.message.importFiles'), records.length, result.skippedDuplicates, result.skippedUnsupported));
     } catch (error) {
       setCopyMessage(error instanceof Error ? error.message : String(error));
     }
@@ -11418,17 +11420,17 @@ const LibraryPage = memo(function LibraryPage(props: {
       const records = result.records;
       records.forEach(props.onAddResult);
       attachImportedRecordsToCurrentScope(records);
-      setCopyMessage(importLibrarySummary('导入文件夹', records.length, result.skippedDuplicates, result.skippedUnsupported));
+      setCopyMessage(importLibrarySummary(lt('library.message.importFolder'), records.length, result.skippedDuplicates, result.skippedUnsupported));
     } catch (error) {
       setCopyMessage(error instanceof Error ? error.message : String(error));
     }
   }
 
   function importLibrarySummary(label: string, imported: number, skippedDuplicates: number, skippedUnsupported: number) {
-    if (!imported && !skippedDuplicates && !skippedUnsupported) return '未选择图片或没有新增图片';
-    const parts = [`${label}：新增 ${imported}`];
-    if (skippedDuplicates) parts.push(`跳过重复 ${skippedDuplicates}`);
-    if (skippedUnsupported) parts.push(`跳过不支持 ${skippedUnsupported}`);
+    if (!imported && !skippedDuplicates && !skippedUnsupported) return lt('library.message.noImport');
+    const parts = [lt('library.message.importSummary', { label, count: imported })];
+    if (skippedDuplicates) parts.push(lt('library.message.skippedDuplicates', { count: skippedDuplicates }));
+    if (skippedUnsupported) parts.push(lt('library.message.skippedUnsupported', { count: skippedUnsupported }));
     return parts.join('，');
   }
 
@@ -11509,10 +11511,10 @@ const LibraryPage = memo(function LibraryPage(props: {
   function addCustomQuickFilter() {
     const criteria = currentCustomQuickFilterCriteria();
     if (!customQuickFilterHasCriteria(criteria)) {
-      setCopyMessage('请先设置一个筛选条件，再保存快捷筛选。');
+      setCopyMessage(lt('library.message.needFilter'));
       return;
     }
-    const label = quickFilterName.trim() || `筛选 ${customQuickFilters.length + 1}`;
+    const label = quickFilterName.trim() || lt('library.quick.placeholder', { count: customQuickFilters.length + 1 });
     const nextFilter: LibraryCustomQuickFilter = {
       id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       label,
@@ -11525,7 +11527,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     setActiveCustomQuickFilterIds((current) => [...current, nextFilter.id]);
     setQuickFilterName('');
     setQuickFilterEditorOpen(false);
-    setCopyMessage(`已添加快捷筛选：${label}`);
+    setCopyMessage(lt('library.message.addedQuickFilter', { name: label }));
   }
 
   function deleteCustomQuickFilter(filterId: string) {
@@ -11533,7 +11535,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     setCustomQuickFilters(next);
     saveLibraryCustomQuickFilters(next);
     setActiveCustomQuickFilterIds((current) => current.filter((id) => id !== filterId));
-    setCopyMessage('已删除快捷筛选');
+    setCopyMessage(lt('library.message.deletedQuickFilter'));
   }
 
   function toggleCustomQuickFilter(filterId: string) {
@@ -11563,25 +11565,25 @@ const LibraryPage = memo(function LibraryPage(props: {
       <header className="topbar libraryTopbar">
         <div className="pageTitleBlock">
           <p className="eyebrow">Local Library</p>
-          <h1>{'\u4f5c\u54c1\u753b\u5eca'}</h1>
-          <p>{'\u7ba1\u7406\u5df2\u751f\u6210\u56fe\u7247\uff0c\u67e5\u770b Prompt\uff0c\u590d\u5236\u8def\u5f84\u5e76\u6253\u5f00\u6240\u5728\u6587\u4ef6\u5939\u3002'}</p>
+          <h1>{lt('library.title')}</h1>
+          <p>{lt('library.subtitle')}</p>
         </div>
         <div className="statusPills">
-          <span><Image size={15} /> {props.isHistoryLoaded ? `${successCount} ${'\u7ec4\u6210\u529f\u56fe\u7247'}` : '\u6b63\u5728\u52a0\u8f7d'}</span>
-          <span><HardDrive size={15} /> {localPathCount} {'\u7ec4\u5df2\u843d\u76d8'}</span>
-          <span><Info size={15} /> {failedCount} {'\u6761\u5931\u8d25\u8bb0\u5f55'}</span>
+          <span><Image size={15} /> {props.isHistoryLoaded ? lt('library.stats.success', { count: successCount }) : lt('library.loading')}</span>
+          <span><HardDrive size={15} /> {lt('library.stats.local', { count: localPathCount })}</span>
+          <span><Info size={15} /> {lt('library.stats.failed', { count: failedCount })}</span>
         </div>
       </header>
 
       {filtersVisible ? (
-        <section className="libraryInlineFilters" aria-label="作品画廊过滤器">
+        <section className="libraryInlineFilters" aria-label={lt('library.filter.aria')}>
           <div className="libraryStructuredFilters">
-            <label><span>平台</span><StudioSelect className="libraryFilterSelect filterIconPlatform" leadingIcon={<Globe2 size={15} />} value={providerFilter} onChange={setProviderFilter} options={providerOptions} /></label>
-            <label><span>状态</span><StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Info size={15} />} value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | 'succeeded' | 'failed')} options={statusOptions} /></label>
-            <label><span>类型</span><StudioSelect className="libraryFilterSelect filterIconType" leadingIcon={<Image size={15} />} value={modeFilter} onChange={(value) => setModeFilter(value as typeof modeFilter)} options={modeOptions} /></label>
-            <label><span>时间</span><StudioSelect className="libraryFilterSelect filterIconTime" leadingIcon={<Clock3 size={15} />} value={timeFilter} onChange={(value) => setTimeFilter(value as LibraryTimeFilter)} options={timeOptions} /></label>
+            <label><span>{lt('library.filter.provider')}</span><StudioSelect className="libraryFilterSelect filterIconPlatform" leadingIcon={<Globe2 size={15} />} value={providerFilter} onChange={setProviderFilter} options={providerOptions} /></label>
+            <label><span>{lt('library.filter.status')}</span><StudioSelect className="libraryFilterSelect filterIconStatus" leadingIcon={<Info size={15} />} value={statusFilter} onChange={(value) => setStatusFilter(value as 'all' | 'succeeded' | 'failed')} options={statusOptions} /></label>
+            <label><span>{lt('library.filter.type')}</span><StudioSelect className="libraryFilterSelect filterIconType" leadingIcon={<Image size={15} />} value={modeFilter} onChange={(value) => setModeFilter(value as typeof modeFilter)} options={modeOptions} /></label>
+            <label><span>{lt('library.filter.time')}</span><StudioSelect className="libraryFilterSelect filterIconTime" leadingIcon={<Clock3 size={15} />} value={timeFilter} onChange={(value) => setTimeFilter(value as LibraryTimeFilter)} options={timeOptions} /></label>
             <label className="libraryColorFilter" ref={colorFilterRef}>
-              <span>颜色</span>
+              <span>{lt('library.filter.color')}</span>
               <button
                 className={`libraryColorFilterButton ${colorMenuOpen ? 'active' : ''}`}
                 type="button"
@@ -11590,11 +11592,11 @@ const LibraryPage = memo(function LibraryPage(props: {
                 onClick={() => setColorMenuOpen((value) => !value)}
               >
                 <span className="libraryColorWheel" />
-                <span>{getLibraryColorLabel(colorFilter) || '颜色'}</span>
+                <span>{libraryColorLabel(colorFilter) || lt('library.filter.color')}</span>
               </button>
               {colorMenuOpen ? (
-                <div className="libraryColorFilterMenu" role="listbox" aria-label="颜色筛选">
-                  {libraryColorOptions.map((option) => (
+                <div className="libraryColorFilterMenu" role="listbox" aria-label={lt('library.filter.colorAria')}>
+                  {translatedLibraryColorOptions.map((option) => (
                     <button
                       className={colorFilter === option.value ? 'active' : ''}
                       key={option.value}
@@ -11613,15 +11615,15 @@ const LibraryPage = memo(function LibraryPage(props: {
                 </div>
               ) : null}
             </label>
-            <label><span>形状</span><StudioSelect className="libraryFilterSelect filterIconShape" leadingIcon={<Grid2X2 size={15} />} value={shapeFilter} onChange={(value) => setShapeFilter(value as LibraryShapeFilter)} options={libraryShapeOptions} /></label>
-            <label><span>格式</span><StudioSelect className="libraryFilterSelect filterIconFormat" leadingIcon={<Database size={15} />} value={formatFilter} onChange={(value) => setFormatFilter(value as LibraryFormatFilter)} options={libraryFormatOptions} /></label>
-            <label><span>评分</span><StudioSelect className="libraryFilterSelect filterIconRating" leadingIcon={<Star size={15} />} value={ratingFilter} onChange={(value) => setRatingFilter(value as LibraryRatingFilter)} options={libraryRatingOptions} /></label>
+            <label><span>{lt('library.filter.shape')}</span><StudioSelect className="libraryFilterSelect filterIconShape" leadingIcon={<Grid2X2 size={15} />} value={shapeFilter} onChange={(value) => setShapeFilter(value as LibraryShapeFilter)} options={translatedLibraryShapeOptions} /></label>
+            <label><span>{lt('library.filter.format')}</span><StudioSelect className="libraryFilterSelect filterIconFormat" leadingIcon={<Database size={15} />} value={formatFilter} onChange={(value) => setFormatFilter(value as LibraryFormatFilter)} options={translatedLibraryFormatOptions} /></label>
+            <label><span>{lt('library.filter.rating')}</span><StudioSelect className="libraryFilterSelect filterIconRating" leadingIcon={<Star size={15} />} value={ratingFilter} onChange={(value) => setRatingFilter(value as LibraryRatingFilter)} options={translatedLibraryRatingOptions} /></label>
             <button className="miniButton libraryClearFiltersButton" type="button" disabled={!activeFilterCount} onClick={clearLibraryFilters}>
-              {activeFilterCount ? `清空 ${activeFilterCount}` : '清空'}
+              {activeFilterCount ? lt('library.filter.clearCount', { count: activeFilterCount }) : lt('library.filter.clear')}
             </button>
           </div>
-          <div className="libraryQuickFilters" aria-label="快捷筛选">
-            {libraryQuickFilters.map((filter) => {
+          <div className="libraryQuickFilters" aria-label={lt('library.quick.aria')}>
+            {translatedLibraryQuickFilters.map((filter) => {
               const isActive = filter.value === 'failed' ? statusFilter === 'failed' : quickFilters.includes(filter.value);
               return (
                 <button
@@ -11649,7 +11651,7 @@ const LibraryPage = memo(function LibraryPage(props: {
                   <button
                     className="libraryCustomQuickFilterDelete"
                     type="button"
-                    aria-label={`删除快捷筛选 ${filter.label}`}
+                    aria-label={lt('library.quick.deleteNamed', { name: filter.label })}
                     onClick={(event) => {
                       event.stopPropagation();
                       deleteCustomQuickFilter(filter.id);
@@ -11664,7 +11666,7 @@ const LibraryPage = memo(function LibraryPage(props: {
               <button
                 className={`libraryQuickFilterAddButton ${quickFilterEditorOpen ? 'active' : ''}`}
                 type="button"
-                aria-label="添加自定义快捷筛选"
+                aria-label={lt('library.quick.addAria')}
                 aria-haspopup="dialog"
                 aria-expanded={quickFilterEditorOpen}
                 onClick={() => setQuickFilterEditorOpen((value) => !value)}
@@ -11672,28 +11674,28 @@ const LibraryPage = memo(function LibraryPage(props: {
                 <Plus size={14} />
               </button>
               {quickFilterEditorOpen ? (
-                <div className="libraryQuickFilterEditor" role="dialog" aria-label="添加快捷筛选">
+                <div className="libraryQuickFilterEditor" role="dialog" aria-label={lt('library.quick.dialogAria')}>
                   <div>
-                    <strong>自定义快捷筛选</strong>
-                    <span>保存当前搜索词和上方筛选条件</span>
+                    <strong>{lt('library.quick.title')}</strong>
+                    <span>{lt('library.quick.hint')}</span>
                   </div>
                   <input
                     value={quickFilterName}
                     onChange={(event) => setQuickFilterName(event.target.value)}
-                    placeholder={`筛选 ${customQuickFilters.length + 1}`}
+                    placeholder={lt('library.quick.placeholder', { count: customQuickFilters.length + 1 })}
                     maxLength={16}
                   />
                   <button className="libraryQuickFilterSave" type="button" onClick={addCustomQuickFilter}>
-                    保存当前筛选
+                    {lt('library.quick.save')}
                   </button>
                   {customQuickFilters.length ? (
-                    <div className="libraryQuickFilterManage" aria-label="管理自定义快捷筛选">
+                    <div className="libraryQuickFilterManage" aria-label={lt('library.quick.manageAria')}>
                       {customQuickFilters.map((filter) => (
                         <button
                           key={filter.id}
                           type="button"
                           onClick={() => deleteCustomQuickFilter(filter.id)}
-                          title={`删除 ${filter.label}`}
+                          title={lt('library.quick.deleteTitle', { name: filter.label })}
                         >
                           <span>{filter.label}</span>
                           <X size={12} />
@@ -11709,63 +11711,63 @@ const LibraryPage = memo(function LibraryPage(props: {
       ) : null}
 
       {selectedRecords.length > 0 ? (
-        <section className="librarySelectionBar" aria-label="当前选择">
-          <strong>已选 {selectedRecords.length} 项</strong>
-          <span>{selectedRecords.length === filteredItems.length ? '当前结果已全选' : `当前结果 ${filteredItems.length} 项`}</span>
-          <button className="miniButton" type="button" onClick={selectAllFilteredRecords}>全选当前结果</button>
-          <button className="miniButton" type="button" onClick={clearSelection}>取消选择</button>
+        <section className="librarySelectionBar" aria-label={lt('library.selection.aria')}>
+          <strong>{lt('library.selection.count', { count: selectedRecords.length })}</strong>
+          <span>{selectedRecords.length === filteredItems.length ? lt('library.selection.allSelected') : lt('library.selection.resultCount', { count: filteredItems.length })}</span>
+          <button className="miniButton" type="button" onClick={selectAllFilteredRecords}>{lt('library.selection.selectAll')}</button>
+          <button className="miniButton" type="button" onClick={clearSelection}>{lt('library.selection.clear')}</button>
           <div className="libraryBatchMenuWrap">
-            <button className="miniButton" type="button"><MoreHorizontal size={13} /> 批量操作</button>
-            <div className="libraryQuickMenu libraryBatchMenu" aria-label="批量操作">
-              <button type="button" onClick={() => setRecordsFavorite(selectedRecordIds, true)}><Star size={13} /> 加入收藏</button>
-              <button type="button" onClick={() => setRecordsFavorite(selectedRecordIds, false)}><Star size={13} /> 取消收藏</button>
+            <button className="miniButton" type="button"><MoreHorizontal size={13} /> {lt('library.selection.batch')}</button>
+            <div className="libraryQuickMenu libraryBatchMenu" aria-label={lt('library.selection.batch')}>
+              <button type="button" onClick={() => setRecordsFavorite(selectedRecordIds, true)}><Star size={13} /> {lt('library.action.addFavorite')}</button>
+              <button type="button" onClick={() => setRecordsFavorite(selectedRecordIds, false)}><Star size={13} /> {lt('library.action.removeFavorite')}</button>
               <span className="libraryMenuDivider" />
-              <button type="button" onClick={() => void copySelectedPrompts(selectedRecords)}><Copy size={13} /> 复制 Prompt</button>
-              <button type="button" onClick={() => void copySelectedPaths(selectedRecords)}><Copy size={13} /> 复制路径</button>
-              <button type="button" onClick={() => exportSelectedRecordList(selectedRecords)}><Download size={13} /> 导出清单</button>
+              <button type="button" onClick={() => void copySelectedPrompts(selectedRecords)}><Copy size={13} /> {lt('library.action.copyPrompt')}</button>
+              <button type="button" onClick={() => void copySelectedPaths(selectedRecords)}><Copy size={13} /> {lt('library.action.copyPath')}</button>
+              <button type="button" onClick={() => exportSelectedRecordList(selectedRecords)}><Download size={13} /> {lt('library.action.exportList')}</button>
               <span className="libraryMenuDivider" />
-              <button type="button" onClick={() => setAssignDialog({ type: 'folder', recordIds: selectedRecordIds })}><FolderOpen size={13} /> 移至文件夹</button>
-              <button type="button" onClick={() => setAssignDialog({ type: 'collection', recordIds: selectedRecordIds })}><Bookmark size={13} /> 加入收藏集</button>
+              <button type="button" onClick={() => setAssignDialog({ type: 'folder', recordIds: selectedRecordIds })}><FolderOpen size={13} /> {lt('library.action.moveFolder')}</button>
+              <button type="button" onClick={() => setAssignDialog({ type: 'collection', recordIds: selectedRecordIds })}><Bookmark size={13} /> {lt('library.action.addCollection')}</button>
               {(libraryScope.type === 'folder' || libraryScope.type === 'collection') ? (
-                <button type="button" onClick={() => removeRecordsFromCurrentScope(selectedRecordIds)}><X size={13} /> 移出当前分类</button>
+                <button type="button" onClick={() => removeRecordsFromCurrentScope(selectedRecordIds)}><X size={13} /> {lt('library.action.removeCurrentScope')}</button>
               ) : null}
             </div>
           </div>
-          <button className="miniButton danger" type="button" onClick={() => void deleteRecords(selectedRecordIds)}><Trash2 size={13} /> 删除</button>
+          <button className="miniButton danger" type="button" onClick={() => void deleteRecords(selectedRecordIds)}><Trash2 size={13} /> {lt('library.action.delete')}</button>
         </section>
       ) : null}
 
-      <section className="libraryWorkspace" aria-label="作品画廊内容">
+      <section className="libraryWorkspace" aria-label={lt('library.workspace.aria')}>
         {libraryOrganizerOpen ? (
-          <button className="libraryOrganizerBackdrop" type="button" aria-label="关闭画廊分类" onClick={() => setLibraryOrganizerOpen(false)} />
+          <button className="libraryOrganizerBackdrop" type="button" aria-label={lt('library.organizer.closeAria')} onClick={() => setLibraryOrganizerOpen(false)} />
         ) : null}
-        <aside className={`libraryOrganizer ${libraryOrganizerOpen ? 'open' : ''}`} aria-label="画廊分类" aria-hidden={!libraryOrganizerOpen}>
+        <aside className={`libraryOrganizer ${libraryOrganizerOpen ? 'open' : ''}`} aria-label={lt('library.organizer.aria')} aria-hidden={!libraryOrganizerOpen}>
           <div className="libraryOrganizerHeader">
             <div>
-              <strong>画廊分类</strong>
+              <strong>{lt('library.organizer.title')}</strong>
               <span>{selectedScopeTitle}</span>
             </div>
-            <button className="iconMiniButton" type="button" data-tooltip="关闭" aria-label="关闭画廊分类" onClick={() => setLibraryOrganizerOpen(false)}><X size={14} /></button>
+            <button className="iconMiniButton" type="button" data-tooltip={lt('library.action.close')} aria-label={lt('library.organizer.closeAria')} onClick={() => setLibraryOrganizerOpen(false)}><X size={14} /></button>
           </div>
           <div className="libraryOrganizerGroup">
             <button className={libraryScope.type === 'all' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'all' })}>
-              <Image size={14} /><span>全部作品</span><em>{libraryItems.length}</em>
+              <Image size={14} /><span>{lt('library.organizer.all')}</span><em>{libraryItems.length}</em>
             </button>
             <button className={libraryScope.type === 'favorites' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'favorites' })}>
-              <Star size={14} /><span>收藏</span><em>{favoriteScopeCount}</em>
+              <Star size={14} /><span>{lt('library.organizer.favorites')}</span><em>{favoriteScopeCount}</em>
             </button>
             <button className={libraryScope.type === 'recent7d' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'recent7d' })}>
-              <Clock3 size={14} /><span>最近 7 天</span><em>{recentScopeCount}</em>
+              <Clock3 size={14} /><span>{lt('library.organizer.recent7d')}</span><em>{recentScopeCount}</em>
             </button>
             <button className={libraryScope.type === 'recent-viewed' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'recent-viewed' })}>
-              <Clock3 size={14} /><span>最近查看</span><em>{recentViewedScopeCount}</em>
+              <Clock3 size={14} /><span>{lt('library.organizer.recentViewed')}</span><em>{recentViewedScopeCount}</em>
             </button>
             <button className={libraryScope.type === 'local' ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'local' })}>
-              <HardDrive size={14} /><span>本地已落盘</span><em>{localScopeCount}</em>
+              <HardDrive size={14} /><span>{lt('library.organizer.local')}</span><em>{localScopeCount}</em>
             </button>
           </div>
           <div className="libraryOrganizerSection">
-            <div><strong>文件夹</strong><button type="button" aria-label="新建文件夹" onClick={() => openCreateOrganizerDialog('folder')}><Plus size={13} /></button></div>
+            <div><strong>{lt('library.organizer.folders')}</strong><button type="button" aria-label={lt('library.organizer.newFolder')} onClick={() => openCreateOrganizerDialog('folder')}><Plus size={13} /></button></div>
             {libraryOrganization.folders.length ? libraryOrganization.folders.map((folder) => (
               <div className="libraryOrganizerItem" key={folder.id}>
                 <button className={libraryScope.type === 'folder' && libraryScope.id === folder.id ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'folder', id: folder.id })}>
@@ -11775,7 +11777,7 @@ const LibraryPage = memo(function LibraryPage(props: {
                   <button
                     className="libraryOrganizerIconAction"
                     type="button"
-                    aria-label={`重命名文件夹 ${folder.name}`}
+                    aria-label={lt('library.organizer.renameFolder', { name: folder.name })}
                     onClick={() => openRenameOrganizerDialog('folder', folder.id, folder.name)}
                   >
                     <Pencil size={12} />
@@ -11783,17 +11785,17 @@ const LibraryPage = memo(function LibraryPage(props: {
                   <button
                     className="libraryOrganizerDelete"
                     type="button"
-                    aria-label={`删除文件夹 ${folder.name}`}
+                    aria-label={lt('library.organizer.deleteFolder', { name: folder.name })}
                     onClick={() => deleteLibraryFolder(folder)}
                   >
                     <X size={12} />
                   </button>
                 </span>
               </div>
-            )) : <p>还没有文件夹</p>}
+            )) : <p>{lt('library.organizer.noFolders')}</p>}
           </div>
           <div className="libraryOrganizerSection">
-            <div><strong>收藏集</strong><button type="button" aria-label="新建收藏集" onClick={() => openCreateOrganizerDialog('collection')}><Plus size={13} /></button></div>
+            <div><strong>{lt('library.organizer.collections')}</strong><button type="button" aria-label={lt('library.organizer.newCollection')} onClick={() => openCreateOrganizerDialog('collection')}><Plus size={13} /></button></div>
             {libraryOrganization.collections.length ? libraryOrganization.collections.map((collection) => (
               <div className="libraryOrganizerItem" key={collection.id}>
                 <button className={libraryScope.type === 'collection' && libraryScope.id === collection.id ? 'active' : ''} type="button" onClick={() => selectLibraryScope({ type: 'collection', id: collection.id })}>
@@ -11803,7 +11805,7 @@ const LibraryPage = memo(function LibraryPage(props: {
                   <button
                     className="libraryOrganizerIconAction"
                     type="button"
-                    aria-label={`重命名收藏集 ${collection.name}`}
+                    aria-label={lt('library.organizer.renameCollection', { name: collection.name })}
                     onClick={() => openRenameOrganizerDialog('collection', collection.id, collection.name)}
                   >
                     <Pencil size={12} />
@@ -11811,14 +11813,14 @@ const LibraryPage = memo(function LibraryPage(props: {
                   <button
                     className="libraryOrganizerDelete"
                     type="button"
-                    aria-label={`删除收藏集 ${collection.name}`}
+                    aria-label={lt('library.organizer.deleteCollection', { name: collection.name })}
                     onClick={() => deleteLibraryCollection(collection)}
                   >
                     <X size={12} />
                   </button>
                 </span>
               </div>
-            )) : <p>还没有收藏集</p>}
+            )) : <p>{lt('library.organizer.noCollections')}</p>}
           </div>
         </aside>
 
@@ -11834,27 +11836,28 @@ const LibraryPage = memo(function LibraryPage(props: {
                 <Image size={15} />}
               {selectedScopeTitle}
             </strong>
-            <span>{filteredItems.length} 项</span>
+            <span>{lt('library.count.items', { count: filteredItems.length })}</span>
             {libraryScope.type !== 'all' ? (
-              <button className="libraryScopeClearButton" type="button" aria-label="返回全部作品" onClick={() => selectLibraryScope({ type: 'all' })}>
+              <button className="libraryScopeClearButton" type="button" aria-label={lt('library.organizer.backAll')} onClick={() => selectLibraryScope({ type: 'all' })}>
                 <X size={13} />
               </button>
             ) : null}
           </div>
 
           {!props.isHistoryLoaded ? (
-            <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>{'\u6b63\u5728\u52a0\u8f7d\u672c\u5730\u5386\u53f2'}</h3></div>
+            <div className="emptyState libraryEmpty"><Sparkles size={42} /><h3>{lt('library.empty.loadingTitle')}</h3></div>
           ) : filteredItems.length === 0 ? (
             <div className="emptyState libraryEmpty">
               <Sparkles size={42} />
-              <h3>{libraryItems.length === 0 ? '\u8fd8\u6ca1\u6709\u672c\u5730\u56fe\u7247' : '\u6ca1\u6709\u7b26\u5408\u6761\u4ef6\u7684\u8bb0\u5f55'}</h3>
-              <p>{libraryItems.length === 0 ? '\u5148\u5728\u751f\u6210\u5de5\u4f5c\u53f0\u751f\u6210\u4e00\u5f20\u56fe\uff0c\u6210\u529f\u540e\u4f1a\u81ea\u52a8\u8fdb\u5165\u672c\u5730\u56fe\u518c\u3002' : '\u8bd5\u7740\u6e05\u7a7a\u641c\u7d22\u8bcd\u6216\u5207\u6362\u7b5b\u9009\u6761\u4ef6\u3002'}</p>
+              <h3>{libraryItems.length === 0 ? lt('library.empty.noImagesTitle') : lt('library.empty.noMatchesTitle')}</h3>
+              <p>{libraryItems.length === 0 ? lt('library.empty.noImagesHint') : lt('library.empty.noMatchesHint')}</p>
             </div>
           ) : (
             <section className={`libraryGrid libraryGridV2 view-${viewMode} ${displaySettings.compact ? 'compact' : ''}`} style={gridStyle}>
               {visibleLibraryItems.map((result) => (
                 <LibraryRecordCard
                   key={result.id}
+                  t={props.t}
                   record={result}
                   providerName={providerNameMap.get(result.providerId) ?? result.providerName ?? result.providerId}
                   meta={libraryMeta[result.id]}
@@ -11893,68 +11896,69 @@ const LibraryPage = memo(function LibraryPage(props: {
           onContextMenu={(event) => event.preventDefault()}
         >
           <div className="libraryContextMenuHeader">
-            <strong>{contextSelection.length > 1 ? `${contextSelection.length} 项已选` : '图片操作'}</strong>
-            <button className="iconMiniButton" type="button" data-tooltip="关闭" aria-label="关闭" onClick={() => setContextMenu(null)}><X size={13} /></button>
+            <strong>{contextSelection.length > 1 ? lt('library.context.selected', { count: contextSelection.length }) : lt('library.context.imageActions')}</strong>
+            <button className="iconMiniButton" type="button" data-tooltip={lt('library.action.close')} aria-label={lt('library.action.close')} onClick={() => setContextMenu(null)}><X size={13} /></button>
           </div>
           {contextSelection.length === 1 ? (
             <>
               <button type="button" role="menuitem" onClick={() => openContextDetails(contextSelection)}>
-                <Info size={13} /> 打开详情
+                <Info size={13} /> {lt('library.action.openDetails')}
               </button>
               {contextSelection[0]?.error || contextSelection[0]?.status === 'failed' ? (
                 <button type="button" role="menuitem" onClick={() => openContextDiagnostics(contextSelection)}>
-                  <Gauge size={13} /> 查看诊断
+                  <Gauge size={13} /> {lt('library.action.viewDiagnostics')}
                 </button>
               ) : null}
               <button type="button" role="menuitem" disabled={!contextSelection[0]?.imageUrls[0]} onClick={() => useContextRecordAsReference(contextSelection)}>
-                <ImagePlus size={13} /> 设为参考图
+                <ImagePlus size={13} /> {lt('library.action.setReference')}
               </button>
             </>
           ) : null}
           <button type="button" role="menuitem" onClick={() => void copySelectedPrompts(contextSelection)}>
-            <Copy size={13} /> 复制 Prompt
+            <Copy size={13} /> {lt('library.action.copyPrompt')}
           </button>
           <button type="button" role="menuitem" onClick={() => void copySelectedPaths(contextSelection)}>
-            <Copy size={13} /> 复制路径
+            <Copy size={13} /> {lt('library.action.copyPath')}
           </button>
           <button type="button" role="menuitem" onClick={() => exportSelectedRecordList(contextSelection)}>
-            <Download size={13} /> 导出清单
+            <Download size={13} /> {lt('library.action.exportList')}
           </button>
           <span className="libraryMenuDivider" />
           <button type="button" role="menuitem" onClick={() => setAssignDialog({ type: 'folder', recordIds: contextSelection.map((record) => record.id) })}>
-            <FolderOpen size={13} /> 移至文件夹
+            <FolderOpen size={13} /> {lt('library.action.moveFolder')}
           </button>
           <button type="button" role="menuitem" onClick={() => setAssignDialog({ type: 'collection', recordIds: contextSelection.map((record) => record.id) })}>
-            <Bookmark size={13} /> 加入收藏集
+            <Bookmark size={13} /> {lt('library.action.addCollection')}
           </button>
           {(libraryScope.type === 'folder' || libraryScope.type === 'collection') ? (
             <button type="button" role="menuitem" onClick={() => removeRecordsFromCurrentScope(contextSelection.map((record) => record.id))}>
-              <X size={13} /> 移出当前分类
+              <X size={13} /> {lt('library.action.removeCurrentScope')}
             </button>
           ) : null}
           <span className="libraryMenuDivider" />
           {contextSelection.length === 1 ? (
             <button type="button" role="menuitem" onClick={() => setRecordsFavorite(contextSelection.map((record) => record.id), !libraryMeta[contextSelection[0].id]?.favorite)}>
-              <Star size={13} /> {libraryMeta[contextSelection[0].id]?.favorite ? '取消收藏' : '加入收藏'}
+              <Star size={13} /> {libraryMeta[contextSelection[0].id]?.favorite ? lt('library.action.removeFavorite') : lt('library.action.addFavorite')}
             </button>
           ) : (
             <>
               <button type="button" role="menuitem" onClick={() => setRecordsFavorite(contextSelection.map((record) => record.id), true)}>
-                <Star size={13} /> 加入收藏
+                <Star size={13} /> {lt('library.action.addFavorite')}
               </button>
               <button type="button" role="menuitem" onClick={() => setRecordsFavorite(contextSelection.map((record) => record.id), false)}>
-                <Star size={13} /> 取消收藏
+                <Star size={13} /> {lt('library.action.removeFavorite')}
               </button>
             </>
           )}
           <button className="dangerAction" type="button" role="menuitem" onClick={() => void deleteRecords(contextSelection.map((record) => record.id))}>
-            <Trash2 size={13} /> {contextSelection.length > 1 ? '删除选中记录' : '删除记录'}
+            <Trash2 size={13} /> {contextSelection.length > 1 ? lt('library.action.deleteSelected') : lt('library.action.deleteRecord')}
           </button>
         </div>
       ) : null}
 
       {organizerDialog ? (
         <LibraryOrganizerDialog
+          t={props.t}
           type={organizerDialog.type}
           mode={organizerDialog.mode}
           defaultName={organizerDialog.defaultName}
@@ -11971,6 +11975,7 @@ const LibraryPage = memo(function LibraryPage(props: {
 
       {assignDialog ? (
         <LibraryAssignDialog
+          t={props.t}
           type={assignDialog.type}
           recordCount={assignDialog.recordIds.length}
           assignedIds={
@@ -11997,13 +12002,13 @@ const LibraryPage = memo(function LibraryPage(props: {
           <div className={`libraryDockPanel dockPanel-${activePanel} ${activePanel === 'add' ? 'dockAlignEnd' : 'dockAlignStart'}`}>
             <div className="libraryDockPanelHeader">
               <strong>
-                {activePanel === 'main' ? '画廊菜单' : activePanel === 'view' ? '网格样式' : activePanel === 'display' ? '显示设置' : activePanel === 'sort' ? '排序方式' : '新增'}
+                {activePanel === 'main' ? lt('library.dock.menuTitle') : activePanel === 'view' ? lt('library.dock.viewTitle') : activePanel === 'display' ? lt('library.dock.displayTitle') : activePanel === 'sort' ? lt('library.dock.sortTitle') : lt('library.dock.addTitle')}
               </strong>
               <button
                 className="iconMiniButton"
                 type="button"
-                data-tooltip={isDockSubPanel ? '返回菜单' : '关闭面板'}
-                aria-label={isDockSubPanel ? '返回菜单' : '关闭面板'}
+                data-tooltip={isDockSubPanel ? lt('library.dock.backMenu') : lt('library.dock.closePanel')}
+                aria-label={isDockSubPanel ? lt('library.dock.backMenu') : lt('library.dock.closePanel')}
                 onClick={() => setActivePanel(isDockSubPanel ? 'main' : null)}
               >
                 {isDockSubPanel ? <Sidebar size={14} /> : <X size={14} />}
@@ -12013,65 +12018,65 @@ const LibraryPage = memo(function LibraryPage(props: {
               <div className="libraryMainMenuGrid">
                 <button type="button" onClick={() => setSearchVisible((value) => !value)}>
                   <Sidebar size={15} />
-                  <span>{searchVisible ? '隐藏搜索栏' : '显示搜索栏'}</span>
+                  <span>{searchVisible ? lt('library.dock.hideSearch') : lt('library.dock.showSearch')}</span>
                 </button>
                 <button type="button" onClick={() => setFiltersVisible((value) => !value)}>
                   <SlidersHorizontal size={15} />
-                  <span>{filtersVisible ? '隐藏过滤器' : '显示过滤器'}{activeFilterCount ? ` (${activeFilterCount})` : ''}</span>
+                  <span>{filtersVisible ? lt('library.dock.hideFilters') : lt('library.dock.showFilters')}{activeFilterCount ? ` (${activeFilterCount})` : ''}</span>
                 </button>
                 <button className="menuHasChild" type="button" onClick={() => setActivePanel('view')}>
                   <Grid2X2 size={15} />
-                  <span>网格样式</span>
+                  <span>{lt('library.dock.viewTitle')}</span>
                   <ChevronRight className="menuChevron" size={14} />
                 </button>
                 <button className="menuHasChild" type="button" onClick={() => setActivePanel('display')}>
                   <Settings size={15} />
-                  <span>显示设置</span>
+                  <span>{lt('library.dock.displayTitle')}</span>
                   <ChevronRight className="menuChevron" size={14} />
                 </button>
                 <button className="menuHasChild" type="button" onClick={() => setActivePanel('sort')}>
                   <Clock3 size={15} />
-                  <span>排序方式</span>
+                  <span>{lt('library.dock.sortTitle')}</span>
                   <ChevronRight className="menuChevron" size={14} />
                 </button>
                 <button type="button" onClick={() => setThumbnailScale((value) => Math.min(1.28, Number((value + 0.08).toFixed(2))))}>
                   <ZoomIn size={15} />
-                  <span>放大</span>
+                  <span>{lt('library.dock.zoomIn')}</span>
                 </button>
                 <button type="button" onClick={() => setThumbnailScale((value) => Math.max(0.78, Number((value - 0.08).toFixed(2))))}>
                   <ZoomOut size={15} />
-                  <span>缩小</span>
+                  <span>{lt('library.dock.zoomOut')}</span>
                 </button>
               </div>
             ) : null}
             {activePanel === 'view' ? (
               <div className="librarySegmentGrid">
-                {libraryViewOptions.map((option) => (
+                {translatedLibraryViewOptions.map((option) => (
                   <button className={viewMode === option.value ? 'active' : ''} key={option.value} type="button" onClick={() => setViewMode(option.value)}>{option.label}</button>
                 ))}
-                <button type="button" onClick={() => setThumbnailScale((value) => Math.min(1.28, Number((value + 0.08).toFixed(2))))}><ZoomIn size={14} /> 放大</button>
-                <button type="button" onClick={() => setThumbnailScale((value) => Math.max(0.78, Number((value - 0.08).toFixed(2))))}><ZoomOut size={14} /> 缩小</button>
+                <button type="button" onClick={() => setThumbnailScale((value) => Math.min(1.28, Number((value + 0.08).toFixed(2))))}><ZoomIn size={14} /> {lt('library.dock.zoomIn')}</button>
+                <button type="button" onClick={() => setThumbnailScale((value) => Math.max(0.78, Number((value - 0.08).toFixed(2))))}><ZoomOut size={14} /> {lt('library.dock.zoomOut')}</button>
               </div>
             ) : null}
             {activePanel === 'display' ? (
               <div className="libraryDisplayList">
-                <label><input type="checkbox" checked={displaySettings.showPrompt} onChange={(event) => updateDisplaySettings({ showPrompt: event.target.checked })} /> 显示卡片 Prompt 摘要</label>
-                <label><input type="checkbox" checked={displaySettings.showProvider} onChange={(event) => updateDisplaySettings({ showProvider: event.target.checked })} /> 显示平台</label>
-                <label><input type="checkbox" checked={displaySettings.showModel} onChange={(event) => updateDisplaySettings({ showModel: event.target.checked })} /> 显示模型名</label>
-                <label><input type="checkbox" checked={displaySettings.showReferenceBadge} onChange={(event) => updateDisplaySettings({ showReferenceBadge: event.target.checked })} /> 显示参考图标记</label>
-                <label><input type="checkbox" checked={displaySettings.compact} onChange={(event) => updateDisplaySettings({ compact: event.target.checked })} /> 紧凑间距</label>
+                <label><input type="checkbox" checked={displaySettings.showPrompt} onChange={(event) => updateDisplaySettings({ showPrompt: event.target.checked })} /> {lt('library.display.showPrompt')}</label>
+                <label><input type="checkbox" checked={displaySettings.showProvider} onChange={(event) => updateDisplaySettings({ showProvider: event.target.checked })} /> {lt('library.display.showProvider')}</label>
+                <label><input type="checkbox" checked={displaySettings.showModel} onChange={(event) => updateDisplaySettings({ showModel: event.target.checked })} /> {lt('library.display.showModel')}</label>
+                <label><input type="checkbox" checked={displaySettings.showReferenceBadge} onChange={(event) => updateDisplaySettings({ showReferenceBadge: event.target.checked })} /> {lt('library.display.showReferenceBadge')}</label>
+                <label><input type="checkbox" checked={displaySettings.compact} onChange={(event) => updateDisplaySettings({ compact: event.target.checked })} /> {lt('library.display.compact')}</label>
               </div>
             ) : null}
             {activePanel === 'sort' ? (
               <div className="librarySegmentGrid">
-                {librarySortOptions.map((option) => (
+                {translatedLibrarySortOptions.map((option) => (
                   <button className={sortMode === option.value ? 'active' : ''} key={option.value} type="button" onClick={() => setSortMode(option.value)}>{option.label}</button>
                 ))}
               </div>
             ) : null}
             {activePanel === 'add' ? (
               <div className="libraryAddList">
-                {libraryAddActions.map((action) => (
+                {translatedLibraryAddActions.map((action) => (
                   <button key={action.id} type="button" onClick={() => handleAddAction(action.id)}>
                     {action.id === 'folder' ? <FolderOpen size={15} /> : action.id === 'collection' ? <Bookmark size={15} /> : action.id === 'import-file' ? <Upload size={15} /> : <Database size={15} />}
                     <span>{action.label}</span>
@@ -12082,20 +12087,20 @@ const LibraryPage = memo(function LibraryPage(props: {
           </div>
         ) : null}
         <div className="libraryDockBar">
-          <button className={`libraryDockIcon ${libraryOrganizerOpen ? 'active' : ''}`} type="button" data-tooltip="画廊分类" aria-label="画廊分类" onClick={() => setLibraryOrganizerOpen((value) => !value)}>
+          <button className={`libraryDockIcon ${libraryOrganizerOpen ? 'active' : ''}`} type="button" data-tooltip={lt('library.dock.organizer')} aria-label={lt('library.organizer.aria')} onClick={() => setLibraryOrganizerOpen((value) => !value)}>
             <FolderOpen size={18} />
           </button>
-          <button className="libraryDockIcon" type="button" data-tooltip="菜单" aria-label="菜单" onClick={() => setActivePanel((panel) => panel === 'main' ? null : 'main')}>
+          <button className="libraryDockIcon" type="button" data-tooltip={lt('library.dock.menu')} aria-label={lt('library.dock.menu')} onClick={() => setActivePanel((panel) => panel === 'main' ? null : 'main')}>
             <SlidersHorizontal size={18} />{activeFilterCount ? <span>{activeFilterCount}</span> : null}
           </button>
           {searchVisible ? (
             <label className="libraryDockSearch">
-              <input ref={searchInputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 Prompt、模型、平台、收藏、路径或错误信息" />
+              <input ref={searchInputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={lt('library.search.placeholder')} />
             </label>
           ) : (
-            <button className="libraryDockRestore" type="button" onClick={() => setSearchVisible(true)}>显示搜索栏</button>
+            <button className="libraryDockRestore" type="button" onClick={() => setSearchVisible(true)}>{lt('library.dock.showSearch')}</button>
           )}
-          <button className="libraryDockAdd" type="button" data-tooltip="新增" aria-label="新增" onClick={() => setActivePanel((panel) => panel === 'add' ? null : 'add')}><Plus size={19} /></button>
+          <button className="libraryDockAdd" type="button" data-tooltip={lt('library.dock.addTitle')} aria-label={lt('library.dock.addTitle')} onClick={() => setActivePanel((panel) => panel === 'add' ? null : 'add')}><Plus size={19} /></button>
         </div>
       </section>
 
@@ -12104,18 +12109,18 @@ const LibraryPage = memo(function LibraryPage(props: {
           <button
             className="libraryDetailBackdrop"
             type="button"
-            aria-label="关闭图片详情"
+            aria-label={lt('library.detail.closeAria')}
             onClick={() => setSelectedRecordId(null)}
           />
-          <aside className="libraryDetailDrawer" aria-label="图片详情">
+          <aside className="libraryDetailDrawer" aria-label={lt('library.detail.aria')}>
             <div className="libraryDetailHeader">
               <div className="libraryDetailTitle">
                 <p className="eyebrow">Image Details</p>
-                <h2>{libraryMeta[selectedRecord.id]?.favorite ? '收藏作品' : '图片详情'}</h2>
+                <h2>{libraryMeta[selectedRecord.id]?.favorite ? lt('library.detail.favoriteTitle') : lt('library.detail.title')}</h2>
                 <small title={selectedRecordFileName}>{selectedRecordFileName}</small>
               </div>
               <div className="libraryDetailHeaderActions">
-                <button className="iconMiniButton" type="button" data-tooltip="关闭详情" aria-label="关闭详情" onClick={() => setSelectedRecordId(null)}><X size={15} /></button>
+                <button className="iconMiniButton" type="button" data-tooltip={lt('library.detail.close')} aria-label={lt('library.detail.close')} onClick={() => setSelectedRecordId(null)}><X size={15} /></button>
               </div>
             </div>
             {selectedRecord.imageUrls[0] ? (
@@ -12128,46 +12133,46 @@ const LibraryPage = memo(function LibraryPage(props: {
                     onLoad={(event) => analyzeRecordColors(selectedRecord.id, event.currentTarget)}
                   />
                 </button>
-                <div className="libraryRatingControl" aria-label="图片评分">
+                <div className="libraryRatingControl" aria-label={lt('library.detail.ratingAria')}>
                   {libraryRatingValues.map((rating) => (
                     <button
                       className={(selectedRecordMeta?.rating ?? 0) >= rating ? 'active' : ''}
                       key={rating}
                       type="button"
-                      aria-label={`${rating} 星`}
-                      title={`${rating} 星`}
+                      aria-label={lt('library.detail.ratingStar', { count: rating })}
+                      title={lt('library.detail.ratingStar', { count: rating })}
                       onClick={() => setRecordRating(selectedRecord.id, rating)}
                     >
                       <Star size={15} fill={(selectedRecordMeta?.rating ?? 0) >= rating ? 'currentColor' : 'none'} />
                     </button>
                   ))}
                 </div>
-                <span className="libraryDetailImageMetaOverlay" aria-label="图片信息">
+                <span className="libraryDetailImageMetaOverlay" aria-label={lt('library.detail.imageInfo')}>
                   {selectedRecordDetailMeta.map((item, index) => (
                     <span key={`${item}-${index}`}>{item}</span>
                   ))}
                 </span>
               </div>
             ) : (
-              <div className="libraryDetailMissing">没有可预览图片</div>
+              <div className="libraryDetailMissing">{lt('library.detail.noPreview')}</div>
             )}
             <div className="libraryDetailColorSection">
-              <span>主色</span>
+              <span>{lt('library.detail.primaryColor')}</span>
               {selectedRecordMeta?.colorPalette?.length ? (
-                <div className="libraryAutoColorPalette" aria-label="自动识别主色">
+                <div className="libraryAutoColorPalette" aria-label={lt('library.detail.paletteAria')}>
                   {selectedRecordMeta.colorPalette.map((color) => (
                     <span key={color} title={color} style={{ background: color }} />
                   ))}
                 </div>
               ) : (
-                <small>{selectedRecordMeta?.colorAnalysisFailed ? '未识别' : '分析中'}</small>
+                <small>{selectedRecordMeta?.colorAnalysisFailed ? lt('library.detail.unrecognized') : lt('library.detail.analyzing')}</small>
               )}
             </div>
             <div className="libraryDetailSection promptDetailSection">
               <div className="libraryPromptHeader">
                 <strong>Prompt</strong>
                 <button className="miniButton libraryPromptCopyButton" type="button" onClick={() => void copyText('Prompt', selectedRecord.prompt)}>
-                  <Copy size={12} /> 复制
+                  <Copy size={12} /> {lt('library.action.copy')}
                 </button>
               </div>
               <p>{selectedRecord.prompt}</p>
@@ -12175,7 +12180,7 @@ const LibraryPage = memo(function LibraryPage(props: {
             <div className="libraryDetailOrganizerSection">
               <div className="libraryDetailOrganizerHeader">
                 <div className="libraryDetailOrganizerTitleLine">
-                  <strong>归类</strong>
+                  <strong>{lt('library.detail.organize')}</strong>
                   <div className="libraryDetailOrganizerChips">
                     {selectedRecordFolder ? (
                       <button type="button" onClick={() => {
@@ -12186,7 +12191,7 @@ const LibraryPage = memo(function LibraryPage(props: {
                         <span>{selectedRecordFolder.name}</span>
                       </button>
                     ) : (
-                      <span><FolderOpen size={13} /> 未归入文件夹</span>
+                      <span><FolderOpen size={13} /> {lt('library.detail.noFolder')}</span>
                     )}
                     {selectedRecordCollections.length ? selectedRecordCollections.map((collection) => (
                       <button key={collection.id} type="button" onClick={() => {
@@ -12197,53 +12202,53 @@ const LibraryPage = memo(function LibraryPage(props: {
                         <span>{collection.name}</span>
                       </button>
                     )) : (
-                      <span><Bookmark size={13} /> 未加入收藏集</span>
+                      <span><Bookmark size={13} /> {lt('library.detail.noCollection')}</span>
                     )}
                   </div>
                 </div>
                 <div className="libraryDetailOrganizerActions">
-                  <button className="iconMiniButton" type="button" data-tooltip="移至文件夹" aria-label="移至文件夹" onClick={() => setAssignDialog({ type: 'folder', recordIds: [selectedRecord.id] })}><FolderOpen size={14} /></button>
-                  <button className="iconMiniButton" type="button" data-tooltip="加入收藏集" aria-label="加入收藏集" onClick={() => setAssignDialog({ type: 'collection', recordIds: [selectedRecord.id] })}><Bookmark size={14} /></button>
+                  <button className="iconMiniButton" type="button" data-tooltip={lt('library.action.moveFolder')} aria-label={lt('library.action.moveFolder')} onClick={() => setAssignDialog({ type: 'folder', recordIds: [selectedRecord.id] })}><FolderOpen size={14} /></button>
+                  <button className="iconMiniButton" type="button" data-tooltip={lt('library.action.addCollection')} aria-label={lt('library.action.addCollection')} onClick={() => setAssignDialog({ type: 'collection', recordIds: [selectedRecord.id] })}><Bookmark size={14} /></button>
                   {(libraryScope.type === 'folder' || libraryScope.type === 'collection') ? (
-                    <button className="iconMiniButton" type="button" data-tooltip="移出当前分类" aria-label="移出当前分类" onClick={() => removeRecordsFromCurrentScope([selectedRecord.id])}><X size={14} /></button>
+                    <button className="iconMiniButton" type="button" data-tooltip={lt('library.action.removeCurrentScope')} aria-label={lt('library.action.removeCurrentScope')} onClick={() => removeRecordsFromCurrentScope([selectedRecord.id])}><X size={14} /></button>
                   ) : null}
                 </div>
               </div>
             </div>
-            {selectedRecordRecoveryAdvice ? (
+            {selectedRecordRecoveryAdviceText ? (
               <div className="libraryDetailSection libraryRecoveryAdvicePanel">
                 <div className="generationDiagnosticHeader">
                   <div>
-                    <span>恢复建议</span>
-                    <strong>{selectedRecordRecoveryAdvice.title}</strong>
+                    <span>{lt('library.detail.recoveryAdvice')}</span>
+                    <strong>{selectedRecordRecoveryAdviceText.title}</strong>
                   </div>
                 </div>
-                <p>{selectedRecordRecoveryAdvice.summary}</p>
+                <p>{selectedRecordRecoveryAdviceText.summary}</p>
                 <ul className="generationErrorActionsList libraryErrorActionsList">
-                  {selectedRecordRecoveryAdvice.actions.map((action) => <li key={action}>{action}</li>)}
+                  {selectedRecordRecoveryAdviceText.actions.map((action) => <li key={action}>{action}</li>)}
                 </ul>
               </div>
             ) : null}
             <div className="libraryDetailActions">
-              <button className={`miniButton ${libraryMeta[selectedRecord.id]?.favorite ? 'active' : ''}`} type="button" onClick={() => toggleFavorite(selectedRecord.id)}><Star size={13} /> {libraryMeta[selectedRecord.id]?.favorite ? '已收藏' : '收藏'}</button>
-              <button className="miniButton" type="button" disabled={!selectedRecord.imageUrls[0]} onClick={() => useRecordAsReference(selectedRecord)}><ImagePlus size={13} /> 设为参考图</button>
-              <button className="miniButton" type="button" onClick={() => props.onRetryRecord(selectedRecord)}><RefreshCcw size={13} /> 重新生成</button>
+              <button className={`miniButton ${libraryMeta[selectedRecord.id]?.favorite ? 'active' : ''}`} type="button" onClick={() => toggleFavorite(selectedRecord.id)}><Star size={13} /> {libraryMeta[selectedRecord.id]?.favorite ? lt('library.action.favorited') : lt('library.action.favorite')}</button>
+              <button className="miniButton" type="button" disabled={!selectedRecord.imageUrls[0]} onClick={() => useRecordAsReference(selectedRecord)}><ImagePlus size={13} /> {lt('library.action.setReference')}</button>
+              <button className="miniButton" type="button" onClick={() => props.onRetryRecord(selectedRecord)}><RefreshCcw size={13} /> {lt('library.action.retry')}</button>
               {selectedRecord.error || selectedRecord.status === 'failed' ? (
-                <button className="miniButton" type="button" onClick={() => openRecordDiagnostics(selectedRecord)}><Gauge size={13} /> 查看诊断</button>
+                <button className="miniButton" type="button" onClick={() => openRecordDiagnostics(selectedRecord)}><Gauge size={13} /> {lt('library.action.viewDiagnostics')}</button>
               ) : null}
-              <button className="miniButton" type="button" disabled={!getRecordPrimaryPath(selectedRecord)} onClick={() => void copyText('Path', getRecordPrimaryPath(selectedRecord))}><Copy size={13} /> 路径</button>
+              <button className="miniButton" type="button" disabled={!getRecordPrimaryPath(selectedRecord)} onClick={() => void copyText('Path', getRecordPrimaryPath(selectedRecord))}><Copy size={13} /> {lt('library.action.path')}</button>
               <button className="miniButton" type="button" disabled={!getRecordRevealPath(selectedRecord)} onClick={() => {
                 const path = getRecordRevealPath(selectedRecord);
                 if (path) void revealGenerationFile(path);
-              }}><FolderOpen size={13} /> 文件夹</button>
-              <button className="miniButton danger" type="button" onClick={() => void deleteRecord(selectedRecord.id)}><Trash2 size={13} /> 删除记录</button>
+              }}><FolderOpen size={13} /> {lt('library.action.folder')}</button>
+              <button className="miniButton danger" type="button" onClick={() => void deleteRecord(selectedRecord.id)}><Trash2 size={13} /> {lt('library.action.deleteRecord')}</button>
             </div>
             {selectedRecord.referenceImages?.length ? (
               <div
                 className="libraryDetailSection libraryReferenceDetailSection"
                 style={{ '--reference-detail-list-max-height': `${Math.min(selectedRecord.referenceImages.length * 92 - 10, 358)}px` } as CSSProperties}
               >
-                <strong>参考图来源</strong>
+                <strong>{lt('library.detail.references')}</strong>
                 <div className="libraryReferenceDetailList">
                   {selectedRecord.referenceImages.map((reference, index) => {
                     const previewUrl = getReferencePreviewUrl(reference);
@@ -12255,13 +12260,13 @@ const LibraryPage = memo(function LibraryPage(props: {
                           disabled={!previewUrl}
                           onClick={() => previewUrl && props.onPreview(previewUrl)}
                         >
-                          {previewUrl ? <img src={previewUrl} alt={reference.name ?? `参考图 ${index + 1}`} /> : <ImagePlus size={16} />}
+                          {previewUrl ? <img src={previewUrl} alt={reference.name ?? lt('library.detail.referenceAlt', { index: index + 1 })} /> : <ImagePlus size={16} />}
                         </button>
                         <div>
-                          <strong>{reference.name || `参考图 ${index + 1}`}</strong>
-                          <span>{referenceSourceDisplayLabel(reference.source)} · {referenceRoleLabel(reference.role)}</span>
+                          <strong>{reference.name || lt('library.detail.referenceName', { index: index + 1 })}</strong>
+                          <span>{libraryReferenceSourceLabel(reference.source)} · {libraryReferenceRoleLabel(reference.role)}</span>
                           {reference.localPath ? <small title={reference.localPath}>{reference.localPath}</small> : null}
-                          {reference.sourceGenerationId ? <small>来源记录：{reference.sourceGenerationId}</small> : null}
+                          {reference.sourceGenerationId ? <small>{lt('library.detail.sourceRecord', { id: reference.sourceGenerationId })}</small> : null}
                         </div>
                       </article>
                     );
@@ -12277,47 +12282,47 @@ const LibraryPage = memo(function LibraryPage(props: {
           <button
             className="libraryDetailBackdrop"
             type="button"
-            aria-label="关闭错误诊断"
+            aria-label={lt('library.diagnostic.closeAria')}
             onClick={() => setDiagnosticRecordId(null)}
           />
-          <aside className="libraryDetailDrawer libraryDiagnosticDrawer" aria-label="错误诊断">
+          <aside className="libraryDetailDrawer libraryDiagnosticDrawer" aria-label={lt('library.diagnostic.aria')}>
             <div className="libraryDetailHeader">
               <div className="libraryDetailTitle">
                 <p className="eyebrow">Error Diagnostics</p>
-                <h2>错误诊断</h2>
+                <h2>{lt('library.diagnostic.title')}</h2>
                 <small title={getRecordFileName(diagnosticRecord) || diagnosticRecord.id}>{getRecordFileName(diagnosticRecord) || diagnosticRecord.id}</small>
               </div>
               <div className="libraryDetailHeaderActions">
-                <button className="iconMiniButton" type="button" data-tooltip="查看详情" aria-label="查看详情" onClick={() => openRecordDetails(diagnosticRecord)}><Info size={15} /></button>
-                <button className="iconMiniButton" type="button" data-tooltip="关闭诊断" aria-label="关闭诊断" onClick={() => setDiagnosticRecordId(null)}><X size={15} /></button>
+                <button className="iconMiniButton" type="button" data-tooltip={lt('library.diagnostic.viewDetails')} aria-label={lt('library.diagnostic.viewDetails')} onClick={() => openRecordDetails(diagnosticRecord)}><Info size={15} /></button>
+                <button className="iconMiniButton" type="button" data-tooltip={lt('library.diagnostic.close')} aria-label={lt('library.diagnostic.close')} onClick={() => setDiagnosticRecordId(null)}><X size={15} /></button>
               </div>
             </div>
             <div className={`libraryDetailSection warning generationDiagnosticPanel severity-${diagnosticRecordFailureDiagnosis.severity}`}>
               <div className="generationDiagnosticHeader">
                 <div>
-                  <span>错误诊断报告</span>
+                  <span>{lt('library.diagnostic.report')}</span>
                   <strong>{diagnosticRecordFailureDiagnosis.title}</strong>
                 </div>
-                <em>{generationFailureCategoryLabels[diagnosticRecordFailureDiagnosis.category]} · {generationFailureSeverityLabels[diagnosticRecordFailureDiagnosis.severity]}</em>
+                <em>{libraryFailureCategoryLabel(diagnosticRecordFailureDiagnosis.category)} · {libraryFailureSeverityLabel(diagnosticRecordFailureDiagnosis.severity)}</em>
               </div>
               <p>{diagnosticRecordFailureDiagnosis.summary}</p>
-              <div className="generationDiagnosisChips" aria-label="诊断关键参数">
-                <span>状态：{generationStatusLabel(diagnosticRecord)}</span>
-                <span>平台：{diagnosticRecordProviderName}</span>
-                <span>模型：{diagnosticRecord.modelId || '-'}</span>
+              <div className="generationDiagnosisChips" aria-label={lt('library.diagnostic.paramsAria')}>
+                <span>{lt('library.diagnostic.status', { status: libraryGenerationStatusLabel(diagnosticRecord) })}</span>
+                <span>{lt('library.diagnostic.provider', { provider: diagnosticRecordProviderName })}</span>
+                <span>{lt('library.diagnostic.model', { model: diagnosticRecord.modelId || '-' })}</span>
                 {diagnosticRecordFailureDetails.map((detail) => <span key={detail}>{detail}</span>)}
               </div>
               {diagnosticRecordFailureDiagnosis.isPotentialBackgroundCompletion ? (
                 <div className="generationBackgroundNotice">
                   <Clock3 size={14} />
-                  <span>这类记录不一定彻底失败，建议先重载历史或到中转站后台核查是否已有生成结果，再决定是否重新生成。</span>
+                  <span>{lt('library.diagnostic.backgroundNotice')}</span>
                 </div>
               ) : null}
               {diagnosticRecordFailureDiagnosis.isPotentialBackgroundCompletion ? (
                 <div className="generationRecoveryCallout">
                   <div>
-                    <strong>后台任务重查</strong>
-                    <span>如果 raw 中保存了 poll_url，可尝试向中转站重新查询结果；成功后会自动恢复到作品画廊。</span>
+                    <strong>{lt('library.diagnostic.recheckTitle')}</strong>
+                    <span>{lt('library.diagnostic.recheckHint')}</span>
                   </div>
                   <button
                     className="miniButton"
@@ -12325,36 +12330,36 @@ const LibraryPage = memo(function LibraryPage(props: {
                     disabled={recheckingRecordId === diagnosticRecord.id}
                     onClick={() => void recheckDiagnosticRecord(diagnosticRecord)}
                   >
-                    <RefreshCcw size={13} /> {recheckingRecordId === diagnosticRecord.id ? '重查中…' : '重查后台任务'}
+                    <RefreshCcw size={13} /> {recheckingRecordId === diagnosticRecord.id ? lt('library.diagnostic.rechecking') : lt('library.diagnostic.recheck')}
                   </button>
                 </div>
               ) : null}
-              {diagnosticRecordRecoveryAdvice ? (
+              {diagnosticRecordRecoveryAdviceText ? (
                 <div className="generationDiagnosticBlock libraryRecoveryAdvicePanel compact">
-                  <strong>{diagnosticRecordRecoveryAdvice.title}</strong>
-                  <p>{diagnosticRecordRecoveryAdvice.summary}</p>
+                  <strong>{diagnosticRecordRecoveryAdviceText.title}</strong>
+                  <p>{diagnosticRecordRecoveryAdviceText.summary}</p>
                   <ul className="generationErrorActionsList libraryErrorActionsList">
-                    {diagnosticRecordRecoveryAdvice.actions.map((action) => <li key={action}>{action}</li>)}
+                    {diagnosticRecordRecoveryAdviceText.actions.map((action) => <li key={action}>{action}</li>)}
                   </ul>
                 </div>
               ) : null}
               <div className="generationDiagnosticBlock">
-                <strong>建议操作</strong>
+                <strong>{lt('library.diagnostic.actions')}</strong>
                 <ul className="generationErrorActionsList libraryErrorActionsList">
                   {diagnosticRecordFailureActions.map((action) => <li key={action}>{action}</li>)}
                 </ul>
               </div>
               {diagnosticRecordFailureRawText ? (
                 <details className="generationRawDetails">
-                  <summary>原始错误 / Raw 摘要</summary>
+                  <summary>{lt('library.diagnostic.rawSummary')}</summary>
                   <pre>{clipDiagnosticText(diagnosticRecordFailureRawText)}</pre>
                 </details>
               ) : null}
               <div className="libraryDetailInlineActions generationDiagnosticActions">
-                <button className="miniButton" type="button" onClick={() => props.onRetryRecord(diagnosticRecord)}><RefreshCcw size={13} /> 重新生成</button>
-                <button className="miniButton" type="button" onClick={() => void copyText('错误诊断', generationFailureCopyText(diagnosticRecord, diagnosticRecordProviderName))}><Copy size={13} /> 复制诊断</button>
-                <button className="miniButton" type="button" onClick={() => void copyText('请求摘要', generationRequestSummaryCopyText(diagnosticRecord, diagnosticRecordProviderName))}><Copy size={13} /> 复制请求摘要</button>
-                <button className="miniButton" type="button" disabled={!diagnosticRecordFailureRawText} onClick={() => void copyText('Raw', diagnosticRecordFailureRawText)}><Database size={13} /> 复制 Raw</button>
+                <button className="miniButton" type="button" onClick={() => props.onRetryRecord(diagnosticRecord)}><RefreshCcw size={13} /> {lt('library.action.retry')}</button>
+                <button className="miniButton" type="button" onClick={() => void copyText(lt('library.diagnostic.title'), generationFailureCopyText(diagnosticRecord, diagnosticRecordProviderName))}><Copy size={13} /> {lt('library.diagnostic.copyDiagnosis')}</button>
+                <button className="miniButton" type="button" onClick={() => void copyText(lt('library.diagnostic.copyRequest'), generationRequestSummaryCopyText(diagnosticRecord, diagnosticRecordProviderName))}><Copy size={13} /> {lt('library.diagnostic.copyRequest')}</button>
+                <button className="miniButton" type="button" disabled={!diagnosticRecordFailureRawText} onClick={() => void copyText('Raw', diagnosticRecordFailureRawText)}><Database size={13} /> {lt('library.diagnostic.copyRaw')}</button>
               </div>
             </div>
           </aside>
@@ -12906,6 +12911,7 @@ function BatchQueueNameDialog(props: {
 }
 
 function LibraryOrganizerDialog(props: {
+  t: Translator;
   type: 'folder' | 'collection';
   mode: 'create' | 'rename';
   defaultName: string;
@@ -12913,18 +12919,19 @@ function LibraryOrganizerDialog(props: {
   onClose: () => void;
   onSubmit: (name: string) => void;
 }) {
+  const dt = (key: string, params?: Record<string, string | number>) => props.t(key as Parameters<Translator>[0], params);
   const [name, setName] = useState(props.defaultName);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const title = props.mode === 'rename'
-    ? props.type === 'folder' ? '重命名文件夹' : '重命名收藏集'
-    : props.type === 'folder' ? '新建文件夹' : '新建收藏集';
+    ? props.type === 'folder' ? dt('library.dialog.renameFolder') : dt('library.dialog.renameCollection')
+    : props.type === 'folder' ? dt('library.dialog.newFolder') : dt('library.dialog.newCollection');
   const hint = props.mode === 'rename'
-    ? '只修改画廊内显示名称，不影响图片记录和磁盘文件。'
+    ? dt('library.dialog.renameHint')
     : props.selectedCount
-    ? `创建后会自动加入当前选中的 ${props.selectedCount} 项。`
+    ? dt('library.dialog.createSelectedHint', { count: props.selectedCount })
     : props.type === 'folder'
-      ? '用于把作品归入一个主要分类。'
-      : '用于把作品加入可复用的项目合集。';
+      ? dt('library.dialog.folderHint')
+      : dt('library.dialog.collectionHint');
 
   useEffect(() => {
     window.setTimeout(() => {
@@ -12949,13 +12956,13 @@ function LibraryOrganizerDialog(props: {
       <section className="organizerDialog" role="dialog" aria-modal="true" aria-labelledby="organizer-dialog-title" onClick={(event) => event.stopPropagation()}>
         <header>
           <div>
-            <p className="eyebrow">Gallery Organizer</p>
+            <p className="eyebrow">{dt('library.dialog.eyebrow')}</p>
             <h2 id="organizer-dialog-title">{title}</h2>
           </div>
-          <button className="iconMiniButton" type="button" data-tooltip="关闭" aria-label="关闭" onClick={props.onClose}><X size={15} /></button>
+          <button className="iconMiniButton" type="button" data-tooltip={dt('library.action.close')} aria-label={dt('library.action.close')} onClick={props.onClose}><X size={15} /></button>
         </header>
         <label>
-          <span>名称</span>
+          <span>{dt('library.dialog.name')}</span>
           <input
             ref={inputRef}
             value={name}
@@ -12971,8 +12978,8 @@ function LibraryOrganizerDialog(props: {
         </label>
         <p>{hint}</p>
         <div className="organizerDialogActions">
-          <button type="button" className="confirmCancelButton" onClick={props.onClose}>取消</button>
-          <button type="button" className="confirmPrimaryButton" disabled={!name.trim()} onClick={submit}>{props.mode === 'rename' ? '保存' : '创建'}</button>
+          <button type="button" className="confirmCancelButton" onClick={props.onClose}>{dt('library.dialog.cancel')}</button>
+          <button type="button" className="confirmPrimaryButton" disabled={!name.trim()} onClick={submit}>{props.mode === 'rename' ? dt('library.dialog.save') : dt('library.dialog.create')}</button>
         </div>
       </section>
     </div>
@@ -12980,6 +12987,7 @@ function LibraryOrganizerDialog(props: {
 }
 
 function LibraryAssignDialog(props: {
+  t: Translator;
   type: 'folder' | 'collection';
   recordCount: number;
   assignedIds: string[];
@@ -12989,11 +12997,12 @@ function LibraryAssignDialog(props: {
   onCreate: () => void;
   onSelect: (targetId: string) => void;
 }) {
+  const dt = (key: string, params?: Record<string, string | number>) => props.t(key as Parameters<Translator>[0], params);
   const items: Array<{ id: string; name: string; color?: string }> = props.type === 'folder'
     ? props.folders.map((folder) => ({ id: folder.id, name: folder.name, color: folder.color }))
     : props.collections.map((collection) => ({ id: collection.id, name: collection.name }));
-  const title = props.type === 'folder' ? '移至文件夹' : '加入收藏集';
-  const emptyText = props.type === 'folder' ? '还没有文件夹' : '还没有收藏集';
+  const title = props.type === 'folder' ? dt('library.dialog.assignFolder') : dt('library.dialog.assignCollection');
+  const emptyText = props.type === 'folder' ? dt('library.organizer.noFolders') : dt('library.organizer.noCollections');
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -13008,11 +13017,11 @@ function LibraryAssignDialog(props: {
       <section className="assignDialog" role="dialog" aria-modal="true" aria-label={title} onClick={(event) => event.stopPropagation()}>
         <header>
           <div>
-            <p className="eyebrow">Gallery Organizer</p>
+            <p className="eyebrow">{dt('library.dialog.eyebrow')}</p>
             <h2>{title}</h2>
-            <span>{props.recordCount} 项</span>
+            <span>{dt('library.count.items', { count: props.recordCount })}</span>
           </div>
-          <button className="iconMiniButton" type="button" data-tooltip="关闭" aria-label="关闭" onClick={props.onClose}><X size={15} /></button>
+          <button className="iconMiniButton" type="button" data-tooltip={dt('library.action.close')} aria-label={dt('library.action.close')} onClick={props.onClose}><X size={15} /></button>
         </header>
         <div className="assignDialogList">
           {items.length ? items.map((item) => {
@@ -13024,7 +13033,7 @@ function LibraryAssignDialog(props: {
                 ? <span className="libraryFolderDot" style={{ background: item.color ?? libraryFolderColors[0] }} />
                 : <Bookmark size={14} />}
               <span>{item.name}</span>
-              {isAssigned ? <em>{props.recordCount === 1 ? '已在此处' : '部分已在'}</em> : null}
+              {isAssigned ? <em>{props.recordCount === 1 ? dt('library.dialog.alreadyHere') : dt('library.dialog.partlyHere')}</em> : null}
             </button>
             );
           }) : (
@@ -13032,7 +13041,7 @@ function LibraryAssignDialog(props: {
           )}
         </div>
         <button className="assignDialogCreate" type="button" onClick={props.onCreate}>
-          <Plus size={14} /> {props.type === 'folder' ? '新建文件夹' : '新建收藏集'}
+          <Plus size={14} /> {props.type === 'folder' ? dt('library.dialog.newFolder') : dt('library.dialog.newCollection')}
         </button>
       </section>
     </div>
@@ -14190,7 +14199,7 @@ function mapProviderErrorMessage(error: unknown) {
     return `接口无权限：账号、模型或中转站策略可能不允许当前请求。原始错误：${message}`;
   }
   if (lower.includes('404') || lower.includes('not found')) {
-    return `接口路径可能不匹配：请检查 Base URL、协议类型和接口路径。原始错误：${message}`;
+    return `接口路径可能不匹配：请检查 Base URL、协议和接口路径。原始错误：${message}`;
   }
   if (lower.includes('billing hard limit')) {
     return `OpenAI 账单硬限制：当前官方项目已达到 Billing hard limit。请到 OpenAI 控制台检查付款方式、余额、项目用量上限或组织额度。原始错误：${message}`;

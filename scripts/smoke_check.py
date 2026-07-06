@@ -300,7 +300,7 @@ for term in [
     "changeGenerationModel",
     "onProfileChange",
     "配置实例”下拉中选择当前使用哪一个",
-    "Images API 精简兼容",
+    "provider.protocol.images-minimal.label",
     "测试生成",
     "provider-hub-test-generation",
     "diagnostics",
@@ -334,7 +334,7 @@ for term in [
     "LoadImage",
     "referenceCount",
 ]:
-    assert term in app_src, f"Provider diagnostics v1 missing: {term}"
+    assert term in app_src or term in i18n_src, f"Provider diagnostics v1 missing: {term}"
 brand_block = app_src.split('<div className="brand">', 1)[1].split('<nav className="navGroup">', 1)[0]
 footer_block = app_src.split('<div className="sidebarFooter">', 1)[1].split("</div>", 1)[0]
 assert "sidebarCollapseButton" not in brand_block, "Collapse button should not stay in the brand area"

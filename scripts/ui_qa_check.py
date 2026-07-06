@@ -198,9 +198,9 @@ def assert_empty_and_error_states_exist() -> None:
     generate = (ROOT / "src/ui/GeneratePage.tsx").read_text(encoding="utf-8")
     inspiration = (ROOT / "src/ui/InspirationPage.tsx").read_text(encoding="utf-8")
     checks = {
-        "library empty state": "libraryEmpty" in app and ("\\u8fd8\\u6ca1\\u6709\\u672c\\u5730\\u56fe\\u7247" in app or "\\u6ca1\\u6709\\u7b26\\u5408\\u6761\\u4ef6\\u7684\\u8bb0\\u5f55" in app),
+        "library empty state": "libraryEmpty" in app and "library.empty.noImagesTitle" in app and "library.empty.noMatchesTitle" in app,
         "batch queue empty state": "batch.emptyQueueTitle" in app and "batch.emptyTitle" in app,
-        "provider profile empty state": "\u8fd8\u6ca1\u6709\u914d\u7f6e" in app,
+        "provider profile empty state": "provider.noProfilesTitle" in app and "provider.noProfilesHint" in app,
         "generation failure diagnostics": "diagnoseGenerationFailure" in generate,
         "inspiration empty state": "empty" in inspiration.lower() and ("inspiration.source.emptyTitle" in inspiration or "inspiration.asset.emptyTitle" in inspiration or "inspiration.excerpt.emptyTitle" in inspiration),
     }
