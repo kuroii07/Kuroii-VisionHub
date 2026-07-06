@@ -1061,13 +1061,13 @@ function isPotentialBackgroundCompletion(record: Pick<GenerationRecord, 'status'
   return diagnoseGenerationFailure(record).isPotentialBackgroundCompletion;
 }
 
-function generationStatusLabel(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
-  if (record.status === 'succeeded') return '成功';
-  if (isPotentialBackgroundCompletion(record)) return '待核查';
-  if (record.status === 'running') return '生成中';
-  if (record.status === 'queued') return '排队中';
-  if (record.status === 'cancelled') return '已取消';
-  return '失败';
+function generationStatusLabel(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>, t?: Translator) {
+  if (record.status === 'succeeded') return t ? t('library.generationStatus.succeeded') : 'Succeeded';
+  if (isPotentialBackgroundCompletion(record)) return t ? t('library.generationStatus.pendingRecovery') : 'Needs check';
+  if (record.status === 'running') return t ? t('library.generationStatus.running') : 'Running';
+  if (record.status === 'queued') return t ? t('library.generationStatus.queued') : 'Queued';
+  if (record.status === 'cancelled') return t ? t('library.generationStatus.cancelled') : 'Cancelled';
+  return t ? t('library.generationStatus.failed') : 'Failed';
 }
 
 function generationStatusClass(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
@@ -1076,7 +1076,9 @@ function generationStatusClass(record: Pick<GenerationRecord, 'status' | 'error'
 
 function generationFailureHint(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>, t?: Translator) {
   const diagnosis = diagnoseGenerationFailure(record, t);
-  return `${diagnosis.title}：${diagnosis.summary}`;
+  return t
+    ? t('library.copy.inlineFailureHint', { title: diagnosis.title, summary: diagnosis.summary })
+    : `${diagnosis.title}: ${diagnosis.summary}`;
 }
 
 function generationFailureActions(record: Pick<GenerationRecord, 'status' | 'error' | 'raw' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>, t?: Translator) {
@@ -1118,6 +1120,21 @@ function generationFailureSeverityLabel(severity: GenerationFailureSeverity, t?:
   return t ? t(`generate.error.severity.${severity}` as Parameters<Translator>[0]) : generationFailureSeverityLabels[severity];
 }
 
+function translateOrFallback(
+  t: Translator | undefined,
+  key: Parameters<Translator>[0],
+  fallback: string,
+  params?: Record<string, string | number>
+) {
+  return t ? t(key, params) : fallback;
+}
+
+function generationModeCopyLabel(mode: GenerationRecord['generationMode'] | undefined, t?: Translator) {
+  if (mode === 'image-to-image') return t ? t('library.modeBadge.image-to-image') : 'Image to image';
+  if (mode === 'imported') return t ? t('library.modeBadge.imported') : 'Imported image';
+  return t ? t('library.modeBadge.text-to-image') : 'Text to image';
+}
+
 function safeStringifyDiagnosticRaw(raw: unknown) {
   if (raw == null) return '';
   try {
@@ -1127,9 +1144,10 @@ function safeStringifyDiagnosticRaw(raw: unknown) {
   }
 }
 
-function clipDiagnosticText(text: string, maxLength = 1400) {
+function clipDiagnosticText(text: string, maxLength = 1400, t?: Translator) {
   if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength)}\n…已截断，复制 Raw 可查看完整内容。`;
+  const clipped = text.slice(0, maxLength);
+  return t ? t('library.copy.rawTruncated', { text: clipped }) : `${clipped}\n...Truncated. Copy Raw to inspect the full content.`;
 }
 
 function generationFailureRawText(record: Pick<GenerationRecord, 'error' | 'raw' | 'status' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>, t?: Translator) {
@@ -1140,48 +1158,62 @@ function generationFailureRawText(record: Pick<GenerationRecord, 'error' | 'raw'
 function generationFailureCopyText(record: GenerationRecord, providerName?: string, t?: Translator) {
   const diagnosis = diagnoseGenerationFailure(record, t);
   const detailLines = generationFailureDetails(record, t);
+  const categoryLabel = generationFailureCategoryLabel(diagnosis.category, t);
+  const severityLabel = generationFailureSeverityLabel(diagnosis.severity, t);
+  const statusLabel = generationStatusLabel(record, t);
+  const primaryPath = getRecordPrimaryPath(record);
+  const mode = generationModeCopyLabel(record.generationMode, t);
+  const actionsText = diagnosis.actions.map((action, index) => `${index + 1}. ${action}`).join('\n');
   return [
-    'VisionHub 生成失败诊断',
-    `诊断：${diagnosis.title}`,
-    `摘要：${diagnosis.summary}`,
-    `分类：${generationFailureCategoryLabel(diagnosis.category, t)} / ${generationFailureSeverityLabel(diagnosis.severity, t)}`,
-    `状态：${generationStatusLabel(record)} (${record.status})`,
-    providerName ? `平台：${providerName} (${record.providerId})` : `平台：${record.providerName ?? record.providerId}`,
-    `模型：${record.modelId || '-'}`,
-    `模式：${(record.generationMode ?? 'text-to-image') === 'image-to-image' ? '图生图' : (record.generationMode === 'imported' ? '导入图片' : '文生图')}`,
-    `参考图：${record.referenceImages?.length ?? 0} 张`,
-    record.durationMs ? `耗时：${record.durationMs}ms` : '',
-    record.createdAt ? `创建时间：${record.createdAt}` : '',
-    getRecordPrimaryPath(record) ? `图片/路径：${getRecordPrimaryPath(record)}` : '',
-    detailLines.length ? `细节：${detailLines.join(' · ')}` : '',
-    diagnosis.actions.length ? `建议：\n${diagnosis.actions.map((action, index) => `${index + 1}. ${action}`).join('\n')}` : '',
-    diagnosis.rawMessage ? `原始错误：${diagnosis.rawMessage}` : ''
+    translateOrFallback(t, 'library.copy.failureReportTitle', 'VisionHub generation failure diagnosis'),
+    translateOrFallback(t, 'library.copy.field.diagnosis', `Diagnosis: ${diagnosis.title}`, { value: diagnosis.title }),
+    translateOrFallback(t, 'library.copy.field.summary', `Summary: ${diagnosis.summary}`, { value: diagnosis.summary }),
+    translateOrFallback(t, 'library.copy.field.category', `Category: ${categoryLabel} / ${severityLabel}`, { category: categoryLabel, severity: severityLabel }),
+    translateOrFallback(t, 'library.copy.field.status', `Status: ${statusLabel} (${record.status})`, { status: statusLabel, raw: record.status }),
+    providerName
+      ? translateOrFallback(t, 'library.copy.field.providerWithId', `Provider: ${providerName} (${record.providerId})`, { provider: providerName, id: record.providerId })
+      : translateOrFallback(t, 'library.copy.field.provider', `Provider: ${record.providerName ?? record.providerId}`, { provider: record.providerName ?? record.providerId }),
+    translateOrFallback(t, 'library.copy.field.model', `Model: ${record.modelId || '-'}`, { model: record.modelId || '-' }),
+    translateOrFallback(t, 'library.copy.field.mode', `Mode: ${mode}`, { mode }),
+    translateOrFallback(t, 'library.copy.field.references', `References: ${record.referenceImages?.length ?? 0}`, { count: record.referenceImages?.length ?? 0 }),
+    record.durationMs ? translateOrFallback(t, 'library.copy.field.duration', `Duration: ${record.durationMs}ms`, { ms: record.durationMs }) : '',
+    record.createdAt ? translateOrFallback(t, 'library.copy.field.createdAt', `Created at: ${record.createdAt}`, { time: record.createdAt }) : '',
+    primaryPath ? translateOrFallback(t, 'library.copy.field.imagePath', `Image/path: ${primaryPath}`, { path: primaryPath }) : '',
+    detailLines.length ? translateOrFallback(t, 'library.copy.field.details', `Details: ${detailLines.join(' / ')}`, { details: detailLines.join(' / ') }) : '',
+    diagnosis.actions.length ? translateOrFallback(t, 'library.copy.field.actions', `Suggested actions:\n${actionsText}`, { actions: actionsText }) : '',
+    diagnosis.rawMessage ? translateOrFallback(t, 'library.copy.field.rawError', `Raw error: ${diagnosis.rawMessage}`, { message: diagnosis.rawMessage }) : ''
   ].filter(Boolean).join('\n\n');
 }
 
 function generationRequestSummaryCopyText(record: GenerationRecord, providerName?: string, t?: Translator) {
   const diagnosis = diagnoseGenerationFailure(record, t);
   const rawText = generationFailureRawText(record, t);
+  const categoryLabel = generationFailureCategoryLabel(diagnosis.category, t);
+  const severityLabel = generationFailureSeverityLabel(diagnosis.severity, t);
+  const statusLabel = generationStatusLabel(record, t);
+  const primaryPath = getRecordPrimaryPath(record);
+  const mode = generationModeCopyLabel(record.generationMode, t);
+  const clippedRawText = rawText ? clipDiagnosticText(rawText, 1800, t) : '';
   return [
-    'VisionHub 请求摘要',
-    `记录 ID：${record.id}`,
-    `状态：${generationStatusLabel(record)} (${record.status})`,
-    `平台：${providerName ?? record.providerName ?? record.providerId}`,
-    `Provider ID：${record.providerId}`,
-    `模型：${record.modelId || '-'}`,
-    `模式：${(record.generationMode ?? 'text-to-image') === 'image-to-image' ? '图生图' : (record.generationMode === 'imported' ? '导入图片' : '文生图')}`,
-    `参考图：${record.referenceImages?.length ?? 0} 张`,
-    record.costHint ? `费用提示：${record.costHint}` : '',
-    record.durationMs ? `耗时：${record.durationMs}ms` : '',
-    record.createdAt ? `创建时间：${record.createdAt}` : '',
-    getRecordPrimaryPath(record) ? `主路径：${getRecordPrimaryPath(record)}` : '',
-    `诊断分类：${generationFailureCategoryLabel(diagnosis.category, t)} / ${generationFailureSeverityLabel(diagnosis.severity, t)}`,
-    diagnosis.httpStatus ? `HTTP：${diagnosis.httpStatus}` : '',
-    diagnosis.traceId ? `trace_id：${diagnosis.traceId}` : '',
-    diagnosis.requestId ? `request_id：${diagnosis.requestId}` : '',
-    `Prompt：\n${record.prompt}`,
-    record.error ? `错误：${record.error}` : '',
-    rawText ? `Raw 摘要：\n${clipDiagnosticText(rawText, 1800)}` : ''
+    translateOrFallback(t, 'library.copy.requestSummaryTitle', 'VisionHub request summary'),
+    translateOrFallback(t, 'library.copy.field.recordId', `Record ID: ${record.id}`, { id: record.id }),
+    translateOrFallback(t, 'library.copy.field.status', `Status: ${statusLabel} (${record.status})`, { status: statusLabel, raw: record.status }),
+    translateOrFallback(t, 'library.copy.field.provider', `Provider: ${providerName ?? record.providerName ?? record.providerId}`, { provider: providerName ?? record.providerName ?? record.providerId }),
+    translateOrFallback(t, 'library.copy.field.providerId', `Provider ID: ${record.providerId}`, { id: record.providerId }),
+    translateOrFallback(t, 'library.copy.field.model', `Model: ${record.modelId || '-'}`, { model: record.modelId || '-' }),
+    translateOrFallback(t, 'library.copy.field.mode', `Mode: ${mode}`, { mode }),
+    translateOrFallback(t, 'library.copy.field.references', `References: ${record.referenceImages?.length ?? 0}`, { count: record.referenceImages?.length ?? 0 }),
+    record.costHint ? translateOrFallback(t, 'library.copy.field.cost', `Cost hint: ${record.costHint}`, { value: record.costHint }) : '',
+    record.durationMs ? translateOrFallback(t, 'library.copy.field.duration', `Duration: ${record.durationMs}ms`, { ms: record.durationMs }) : '',
+    record.createdAt ? translateOrFallback(t, 'library.copy.field.createdAt', `Created at: ${record.createdAt}`, { time: record.createdAt }) : '',
+    primaryPath ? translateOrFallback(t, 'library.copy.field.mainPath', `Primary path: ${primaryPath}`, { path: primaryPath }) : '',
+    translateOrFallback(t, 'library.copy.field.diagnosticCategory', `Diagnostic category: ${categoryLabel} / ${severityLabel}`, { category: categoryLabel, severity: severityLabel }),
+    diagnosis.httpStatus ? translateOrFallback(t, 'library.copy.field.http', `HTTP: ${diagnosis.httpStatus}`, { status: diagnosis.httpStatus }) : '',
+    diagnosis.traceId ? translateOrFallback(t, 'library.copy.field.traceId', `trace_id: ${diagnosis.traceId}`, { value: diagnosis.traceId }) : '',
+    diagnosis.requestId ? translateOrFallback(t, 'library.copy.field.requestId', `request_id: ${diagnosis.requestId}`, { value: diagnosis.requestId }) : '',
+    translateOrFallback(t, 'library.copy.field.prompt', `Prompt:\n${record.prompt}`, { prompt: record.prompt }),
+    record.error ? translateOrFallback(t, 'library.copy.field.error', `Error: ${record.error}`, { message: record.error }) : '',
+    clippedRawText ? translateOrFallback(t, 'library.copy.field.rawSummary', `Raw summary:\n${clippedRawText}`, { summary: clippedRawText }) : ''
   ].filter(Boolean).join('\n\n');
 }
 
@@ -9884,7 +9916,9 @@ function Gallery(props: {
   results: ReturnType<typeof useStudioStore.getState>['results'];
   isHistoryLoaded: boolean;
   onPreview: (imageUrl: string) => void;
+  t?: Translator;
 }) {
+  const t = props.t ?? createTranslator('zh-CN');
   const successCount = props.results.filter((result) => result.status === 'succeeded').length;
   const latest = props.results[0];
 
@@ -9892,22 +9926,22 @@ function Gallery(props: {
     <>
       <section className="galleryHeader">
         <div>
-          <h2>生成历史</h2>
+          <h2>{t('library.legacy.title')}</h2>
           <p>
-            {props.isHistoryLoaded ? `已载入 ${props.results.length} 条记录，成功图片 ${successCount} 组。` : '正在载入本地历史…'}
-            {latest ? ` 最新：${formatTime(latest.createdAt)}` : ''}
+            {props.isHistoryLoaded ? t('library.legacy.historyLoaded', { count: props.results.length, success: successCount }) : t('library.legacy.loading')}
+            {latest ? t('library.legacy.latest', { time: formatTime(latest.createdAt) }) : ''}
           </p>
         </div>
         <button className="ghostButton" disabled>
-          <Download size={16} /> 批量导出
+          <Download size={16} /> {t('library.legacy.batchExport')}
         </button>
       </section>
       <section className="gallery">
         {props.results.length === 0 ? (
           <div className="emptyState">
             <Sparkles size={42} />
-            <h3>先生成一张图片</h3>
-            <p>真实平台接入后，这里会保存每张图的来源平台、模型、Prompt、成本和耗时。</p>
+            <h3>{t('library.legacy.emptyTitle')}</h3>
+            <p>{t('library.legacy.emptyHint')}</p>
           </div>
         ) : (
           props.results.map((result) => (
@@ -9916,16 +9950,16 @@ function Gallery(props: {
                 <button className="imageButton" onClick={() => props.onPreview(result.imageUrls[0])}>
                   <img src={result.imageUrls[0]} alt={result.prompt} />
                   <span>
-                    <Maximize2 size={15} /> 预览
+                    <Maximize2 size={15} /> {t('library.action.preview')}
                   </span>
                 </button>
               ) : (
-                <div className="failedPreview">生成失败</div>
+                <div className="failedPreview">{t('library.action.failedThumb')}</div>
               )}
               <div className="resultBody">
                 <div className="resultTitleRow">
                   <strong>{result.providerName ?? props.providers.find((provider) => provider.id === result.providerId)?.name}</strong>
-                    <span className={`statusBadge ${generationStatusClass(result)}`}>{generationStatusLabel(result)}</span>
+                  <span className={`statusBadge ${generationStatusClass(result)}`}>{generationStatusLabel(result, t)}</span>
                 </div>
                 <p title={result.prompt}>{result.prompt}</p>
                 <div className="metadataRow">
@@ -9935,7 +9969,7 @@ function Gallery(props: {
                   </span>
                   <span>{result.durationMs ?? '-'}ms</span>
                 </div>
-                {result.error ? <small className="errorText">{generationFailureHint(result)}</small> : <small>{result.costHint}</small>}
+                {result.error ? <small className="errorText">{generationFailureHint(result, t)}</small> : <small>{result.costHint}</small>}
                 <div className="cardActions">
                   <button className="miniButton" onClick={() => void navigator.clipboard?.writeText(result.prompt)}>
                     <Copy size={13} /> Prompt
@@ -9948,7 +9982,7 @@ function Gallery(props: {
                       if (path) void revealGenerationFile(path);
                     }}
                   >
-                    <FolderOpen size={13} /> 文件夹
+                    <FolderOpen size={13} /> {t('library.action.folder')}
                   </button>
                 </div>
               </div>
