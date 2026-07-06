@@ -73,79 +73,79 @@ type SizeOption = {
 };
 
 const SIZE_OPTIONS: SizeOption[] = [
-  { value: '1024x1024', ratio: '1:1', desc: 'AI 绘图标准正方形', badge: '1K' },
-  { value: '1280x1280', ratio: '1:1', desc: '高清头像 / 商品主图', badge: '2K' },
-  { value: '1536x1536', ratio: '1:1', desc: '艺术插画头像 / 专辑封面', badge: '2K' },
-  { value: '2048x2048', ratio: '1:1', desc: '极致高清正方形素材', badge: '4K', experimental: true },
+  { value: '1024x1024', ratio: '1:1', desc: 'Standard AI square image', badge: '1K' },
+  { value: '1280x1280', ratio: '1:1', desc: 'HD avatar / product hero', badge: '2K' },
+  { value: '1536x1536', ratio: '1:1', desc: 'Art avatar / album cover', badge: '2K' },
+  { value: '2048x2048', ratio: '1:1', desc: 'Ultra HD square asset', badge: '4K', experimental: true },
 
-  { value: '1280x720', ratio: '16:9', desc: '720P 标清宽屏', badge: '1K' },
-  { value: '1536x864', ratio: '16:9', desc: '常见网页 / 大屏配图', badge: '2K' },
-  { value: '2048x1152', ratio: '16:9', desc: '高清横屏壁纸', badge: '2K' },
-  { value: '2560x1440', ratio: '16:9', desc: '2K 极清画质，标准上限', badge: '2K' },
-  { value: '3840x2160', ratio: '16:9', desc: '4K 顶级画质，极限图像', badge: '4K', experimental: true },
+  { value: '1280x720', ratio: '16:9', desc: '720P standard widescreen', badge: '1K' },
+  { value: '1536x864', ratio: '16:9', desc: 'Common web / large screen image', badge: '2K' },
+  { value: '2048x1152', ratio: '16:9', desc: 'HD landscape wallpaper', badge: '2K' },
+  { value: '2560x1440', ratio: '16:9', desc: '2K crisp quality, standard upper range', badge: '2K' },
+  { value: '3840x2160', ratio: '16:9', desc: '4K top quality, extreme image', badge: '4K', experimental: true },
 
-  { value: '720x1280', ratio: '9:16', desc: '手机短视频封面 / 故事', badge: '1K' },
-  { value: '864x1536', ratio: '9:16', desc: '移动端高清竖屏', badge: '2K' },
-  { value: '1152x2048', ratio: '9:16', desc: '手机超清壁纸', badge: '2K' },
-  { value: '1440x2560', ratio: '9:16', desc: '2K 手机屏 / 全面屏', badge: '2K' },
-  { value: '2160x3840', ratio: '9:16', desc: '4K 竖屏极限', badge: '4K', experimental: true },
+  { value: '720x1280', ratio: '9:16', desc: 'Mobile short-video cover / story', badge: '1K' },
+  { value: '864x1536', ratio: '9:16', desc: 'HD mobile vertical frame', badge: '2K' },
+  { value: '1152x2048', ratio: '9:16', desc: 'Ultra HD mobile wallpaper', badge: '2K' },
+  { value: '1440x2560', ratio: '9:16', desc: '2K mobile / full-screen frame', badge: '2K' },
+  { value: '2160x3840', ratio: '9:16', desc: '4K vertical extreme output', badge: '4K', experimental: true },
 
-  { value: '1792x768', ratio: '21:9', desc: '电影感宽画幅 / 横版 Banner', badge: '2K' },
-  { value: '2240x960', ratio: '21:9', desc: '带鱼屏游戏壁纸 / 宽景概念图', badge: '2K' },
-  { value: '2576x1104', ratio: '21:9', desc: '极宽超清场景设计', badge: '2K' },
-  { value: '3136x1344', ratio: '21:9', desc: '电影级巨幕宽画幅', badge: '4K', experimental: true },
+  { value: '1792x768', ratio: '21:9', desc: 'Cinematic wide frame / landscape banner', badge: '2K' },
+  { value: '2240x960', ratio: '21:9', desc: 'Ultrawide game wallpaper / wide concept', badge: '2K' },
+  { value: '2576x1104', ratio: '21:9', desc: 'Ultra-wide high-res scene design', badge: '2K' },
+  { value: '3136x1344', ratio: '21:9', desc: 'Cinematic giant-screen wide frame', badge: '4K', experimental: true },
 
-  { value: '1024x768', ratio: '4:3', desc: '经典平板 / iPad 基础画幅', badge: '1K' },
-  { value: '1280x960', ratio: '4:3', desc: '传统演示文档 / 幻灯片', badge: '2K' },
-  { value: '2048x1536', ratio: '4:3', desc: '视网膜屏高清画幅', badge: '2K' },
-  { value: '2688x2016', ratio: '4:3', desc: '高画质经典插画', badge: '4K', experimental: true },
+  { value: '1024x768', ratio: '4:3', desc: 'Classic tablet / iPad base frame', badge: '1K' },
+  { value: '1280x960', ratio: '4:3', desc: 'Traditional presentation / slide frame', badge: '2K' },
+  { value: '2048x1536', ratio: '4:3', desc: 'Retina HD classic frame', badge: '2K' },
+  { value: '2688x2016', ratio: '4:3', desc: 'High-quality classic illustration', badge: '4K', experimental: true },
 
-  { value: '768x1024', ratio: '3:4', desc: '电子书 / 常规竖直排版', badge: '1K' },
-  { value: '960x1280', ratio: '3:4', desc: '电商主图 / 详情页首选', badge: '2K' },
-  { value: '1536x2048', ratio: '3:4', desc: '高清平板竖屏海报', badge: '2K' },
-  { value: '2016x2688', ratio: '3:4', desc: '艺术海报 / 精细出版', badge: '4K', experimental: true },
+  { value: '768x1024', ratio: '3:4', desc: 'E-book / regular vertical layout', badge: '1K' },
+  { value: '960x1280', ratio: '3:4', desc: 'E-commerce hero / detail-page pick', badge: '2K' },
+  { value: '1536x2048', ratio: '3:4', desc: 'HD tablet vertical poster', badge: '2K' },
+  { value: '2016x2688', ratio: '3:4', desc: 'Art poster / fine publishing', badge: '4K', experimental: true },
 
-  { value: '1152x768', ratio: '3:2', desc: '横向摄影 / 基础画幅', badge: '1K' },
-  { value: '1536x1024', ratio: '3:2', desc: '横版封面 / 场景图', badge: '2K' },
-  { value: '2304x1536', ratio: '3:2', desc: '高清横版摄影比例', badge: '2K' },
-  { value: '3072x2048', ratio: '3:2', desc: '4K 横版精细输出', badge: '4K', experimental: true },
+  { value: '1152x768', ratio: '3:2', desc: 'Landscape photo / base frame', badge: '1K' },
+  { value: '1536x1024', ratio: '3:2', desc: 'Landscape cover / scene image', badge: '2K' },
+  { value: '2304x1536', ratio: '3:2', desc: 'HD landscape photography ratio', badge: '2K' },
+  { value: '3072x2048', ratio: '3:2', desc: '4K landscape fine output', badge: '4K', experimental: true },
 
-  { value: '768x1152', ratio: '2:3', desc: '竖版海报 / 基础画幅', badge: '1K' },
-  { value: '1024x1536', ratio: '2:3', desc: '竖版角色图 / 海报', badge: '2K' },
-  { value: '1536x2304', ratio: '2:3', desc: '高清竖版人像海报', badge: '2K' },
-  { value: '2048x3072', ratio: '2:3', desc: '4K 竖版精细输出', badge: '4K', experimental: true },
+  { value: '768x1152', ratio: '2:3', desc: 'Vertical poster / base frame', badge: '1K' },
+  { value: '1024x1536', ratio: '2:3', desc: 'Vertical character image / poster', badge: '2K' },
+  { value: '1536x2304', ratio: '2:3', desc: 'HD vertical portrait poster', badge: '2K' },
+  { value: '2048x3072', ratio: '2:3', desc: '4K vertical fine output', badge: '4K', experimental: true },
 
-  { value: '1280x1024', ratio: '5:4', desc: '传统显示器 / 产品图', badge: '1K' },
-  { value: '1600x1280', ratio: '5:4', desc: '高清产品展示画幅', badge: '2K' },
-  { value: '2560x2048', ratio: '5:4', desc: '高精细产品海报', badge: '2K' },
-  { value: '3200x2560', ratio: '5:4', desc: '4K 产品图精细输出', badge: '4K', experimental: true },
+  { value: '1280x1024', ratio: '5:4', desc: 'Traditional monitor / product image', badge: '1K' },
+  { value: '1600x1280', ratio: '5:4', desc: 'HD product showcase frame', badge: '2K' },
+  { value: '2560x2048', ratio: '5:4', desc: 'High-detail product poster', badge: '2K' },
+  { value: '3200x2560', ratio: '5:4', desc: '4K product image fine output', badge: '4K', experimental: true },
 
-  { value: '1024x1280', ratio: '4:5', desc: '社媒帖子 / 竖版构图', badge: '1K' },
-  { value: '1280x1600', ratio: '4:5', desc: '小红书 / 电商竖图', badge: '2K' },
-  { value: '2048x2560', ratio: '4:5', desc: '高清竖版商业海报', badge: '2K' },
-  { value: '2560x3200', ratio: '4:5', desc: '4K 竖版精细输出', badge: '4K', experimental: true }
+  { value: '1024x1280', ratio: '4:5', desc: 'Social post / vertical composition', badge: '1K' },
+  { value: '1280x1600', ratio: '4:5', desc: 'Xiaohongshu / e-commerce vertical image', badge: '2K' },
+  { value: '2048x2560', ratio: '4:5', desc: 'HD vertical commercial poster', badge: '2K' },
+  { value: '2560x3200', ratio: '4:5', desc: '4K vertical fine output', badge: '4K', experimental: true }
 ];
 
 const BATCH_VARIANT_RATIO_OPTIONS = [
-  { ratio: '1:1', label: '1:1 方图', size: '1024x1024', hint: '头像 / 商品主图' },
-  { ratio: '16:9', label: '16:9 横屏', size: '1536x864', hint: '封面 / 大屏配图' },
-  { ratio: '9:16', label: '9:16 竖屏', size: '864x1536', hint: '手机封面 / 壁纸' },
-  { ratio: '4:3', label: '4:3 横图', size: '1280x960', hint: '演示 / 经典画幅' },
-  { ratio: '3:4', label: '3:4 竖图', size: '960x1280', hint: '电商 / 详情首图' },
-  { ratio: '3:2', label: '3:2 摄影横图', size: '1536x1024', hint: '横版摄影 / 场景' },
-  { ratio: '2:3', label: '2:3 海报竖图', size: '1024x1536', hint: '角色 / 海报' },
-  { ratio: '21:9', label: '21:9 电影宽幅', size: '1792x768', hint: '宽景 / Banner' },
-  { ratio: '4:5', label: '4:5 社媒竖图', size: '1280x1600', hint: '社媒 / 商业海报' }
+  { ratio: '1:1', label: '1:1 square', size: '1024x1024', hint: 'Avatar / product hero' },
+  { ratio: '16:9', label: '16:9 landscape', size: '1536x864', hint: 'Cover / large screen' },
+  { ratio: '9:16', label: '9:16 vertical', size: '864x1536', hint: 'Mobile cover / wallpaper' },
+  { ratio: '4:3', label: '4:3 landscape', size: '1280x960', hint: 'Slides / classic frame' },
+  { ratio: '3:4', label: '3:4 vertical', size: '960x1280', hint: 'E-commerce / detail hero' },
+  { ratio: '3:2', label: '3:2 photo landscape', size: '1536x1024', hint: 'Landscape photo / scene' },
+  { ratio: '2:3', label: '2:3 poster vertical', size: '1024x1536', hint: 'Character / poster' },
+  { ratio: '21:9', label: '21:9 cinematic wide', size: '1792x768', hint: 'Wide scene / banner' },
+  { ratio: '4:5', label: '4:5 social vertical', size: '1280x1600', hint: 'Social / commercial poster' }
 ];
 
 type BatchVariantRatioOption = typeof BATCH_VARIANT_RATIO_OPTIONS[number];
 
 const REFERENCE_ROLE_OPTIONS = [
-  { value: 'auto', label: '自动' },
-  { value: 'composition', label: '构图' },
-  { value: 'style', label: '风格' },
-  { value: 'character', label: '角色' },
-  { value: 'color', label: '颜色' }
+  { value: 'auto', label: 'Auto' },
+  { value: 'composition', label: 'Composition' },
+  { value: 'style', label: 'Style' },
+  { value: 'character', label: 'Character' },
+  { value: 'color', label: 'Color' }
 ];
 
 type ReferenceDragState = 'supported' | 'unsupported' | null;
@@ -277,10 +277,10 @@ function providerAccessDescription(provider: ReturnType<typeof listProviders>[nu
 }
 
 function profileStatusLabel(status: ProviderConnectionProfile['lastTestStatus'], t?: Translator) {
-  if (status === 'passed') return t ? t('common.status.passed') : '已验证';
-  if (status === 'warning') return t ? t('common.status.warning') : '注意';
-  if (status === 'failed') return t ? t('common.status.failed') : '失败';
-  return t ? t('common.status.untested') : '未测试';
+  if (status === 'passed') return t ? t('common.status.passed') : 'Verified';
+  if (status === 'warning') return t ? t('common.status.warning') : 'Warning';
+  if (status === 'failed') return t ? t('common.status.failed') : 'Failed';
+  return t ? t('common.status.untested') : 'Untested';
 }
 
 function compactModelLabel(modelId: string) {
@@ -293,10 +293,11 @@ function compactModelLabel(modelId: string) {
     .slice(0, 20);
 }
 
-function formatDraftTime(value: string) {
+function formatDraftTime(value: string, t?: Translator) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '刚刚';
-  return date.toLocaleString('zh-CN', {
+  if (Number.isNaN(date.getTime())) return t ? t('common.time.justNow') : 'Just now';
+  const locale = t ? t('common.locale') : undefined;
+  return date.toLocaleString(locale && locale !== 'common.locale' ? locale : undefined, {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -306,10 +307,10 @@ function formatDraftTime(value: string) {
 
 function promptDraftKindLabel(kind: PromptDraftKind, t?: Translator) {
   const labels: Record<PromptDraftKind, string> = {
-    manual: t ? t('draft.kind.manual') : '手动',
-    previous: t ? t('draft.kind.previous') : '上一版',
-    polished: t ? t('draft.kind.polished') : '润色',
-    retry: t ? t('draft.kind.retry') : '重试'
+    manual: t ? t('draft.kind.manual') : 'Manual',
+    previous: t ? t('draft.kind.previous') : 'Previous',
+    polished: t ? t('draft.kind.polished') : 'Polished',
+    retry: t ? t('draft.kind.retry') : 'Retry'
   };
   return labels[kind];
 }
@@ -436,7 +437,7 @@ function saveCanvasClearedAfter(value: Partial<Record<CanvasGenerationMode, numb
 function buildPromptDraft(prompt: string, kind: PromptDraftKind, title?: string): PromptDraft | null {
   const trimmed = prompt.trim();
   if (!trimmed) return null;
-  const label = title || `${promptDraftKindLabel(kind)}草稿`;
+  const label = title || `${promptDraftKindLabel(kind)} draft`;
   return {
     id: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     title: `${label} · ${trimmed.slice(0, 22)}`,
@@ -455,7 +456,7 @@ function mergePromptDraft(drafts: PromptDraft[], draft: PromptDraft | null) {
 }
 
 
-function buildSavedPromptTitle(prompt: string, fallback = '当前 Prompt') {
+function buildSavedPromptTitle(prompt: string, fallback = 'Current Prompt') {
   const firstLine = prompt
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -495,8 +496,12 @@ function inferPromptTemplateCategory(prompt: string, mode: DefaultGenerationMode
   return 'style';
 }
 
-function buildSavedPromptTags(mode: DefaultGenerationMode) {
-  return ['AI创作台', mode === 'image' ? '图生图' : '文生图', '当前Prompt'];
+function buildSavedPromptTags(mode: DefaultGenerationMode, t?: Translator) {
+  return [
+    t ? t('generate.prompt.tagCreateDesk') : 'AI Create',
+    mode === 'image' ? (t ? t('generate.prompt.tagImageToImage') : 'Image to image') : (t ? t('generate.prompt.tagTextToImage') : 'Text to image'),
+    t ? t('generate.prompt.tagCurrentPrompt') : 'Current Prompt'
+  ];
 }
 
 function resolveActivePromptPolishConfigId(settings: PromptPolishSettings) {
@@ -1034,7 +1039,7 @@ export function ModernGeneratePage(props: {
       tone: t('generate.prompt.templateTone'),
       description: t('generate.prompt.templateDesc'),
       prompt,
-      tags: buildSavedPromptTags(mode)
+      tags: buildSavedPromptTags(mode, t)
     });
     const currentTemplates = loadPromptTemplates();
     const nextTemplates = [template, ...currentTemplates.filter((item) => item.prompt.trim() !== prompt)].slice(0, 300);
@@ -1062,7 +1067,7 @@ export function ModernGeneratePage(props: {
         sourceName: t('generate.prompt.excerptSource'),
         language: inferPromptExcerptLanguage(prompt),
         category: inferPromptExcerptCategory(prompt),
-        tags: buildSavedPromptTags(mode),
+        tags: buildSavedPromptTags(mode, t),
         note: t('generate.prompt.excerptNote'),
         favorite: false,
         createdAt: now,
@@ -2507,7 +2512,7 @@ export function ModernGeneratePage(props: {
                           setIsDraftLibraryOpen(false);
                         }}
                       >
-                        <span>{promptDraftKindLabel(draft.kind, t)} · {formatDraftTime(draft.createdAt)}</span>
+                        <span>{promptDraftKindLabel(draft.kind, t)} · {formatDraftTime(draft.createdAt, t)}</span>
                         <strong>{draft.title}</strong>
                         <small>{draft.prompt}</small>
                       </button>
@@ -2534,11 +2539,11 @@ export function ModernGeneratePage(props: {
 
 function statusLabel(status: ReturnType<typeof listProviders>[number]['capabilities']['imageToImage'], t?: Translator) {
   const labels: Record<string, string> = {
-    supported: t ? t('common.status.supported') : '支持',
-    partial: t ? t('common.status.partial') : '部分支持',
-    planned: t ? t('common.status.planned') : '规划中',
-    unknown: t ? t('common.status.unknown') : '待确认',
-    unsupported: t ? t('common.status.unsupported') : '不支持'
+    supported: t ? t('common.status.supported') : 'Supported',
+    partial: t ? t('common.status.partial') : 'Partial',
+    planned: t ? t('common.status.planned') : 'Planned',
+    unknown: t ? t('common.status.unknown') : 'Unknown',
+    unsupported: t ? t('common.status.unsupported') : 'Unsupported'
   };
   return labels[status] ?? status;
 }
