@@ -2489,7 +2489,7 @@ export function App() {
       return;
     }
     if (isCreatingProviderProfile) {
-      const draftConfig = createEmptyProviderDraftConfig(selectedProvider, selectedServiceTemplate);
+      const draftConfig = createEmptyProviderDraftConfig(selectedProvider, selectedServiceTemplate, t);
       setSelectedProfileId(null);
       setProviderConfig(draftConfig);
       setSecretAvailable(false);
@@ -2504,7 +2504,7 @@ export function App() {
       null;
     const config = nextProfile
       ? profileToProviderConfig(nextProfile)
-      : createEmptyProviderDraftConfig(selectedProvider, selectedServiceTemplate);
+      : createEmptyProviderDraftConfig(selectedProvider, selectedServiceTemplate, t);
     setSelectedProfileId(nextProfile?.id ?? null);
     setProviderConfig(config);
     if (supportsOpenAICompatible) setSelectedModel(config.modelId);
@@ -2569,7 +2569,7 @@ export function App() {
       setSelectedPlatformType(template.platformType);
       setSelectedServiceTemplateId(template.id);
     }
-    setConfigMessage(`AI 创作已切换到配置实例：${profile.displayName}`);
+    setConfigMessage(t('provider.message.generationProfileSelected', { name: profile.displayName }));
   }
 
   function changeGenerationModel(modelId: string) {
@@ -4625,7 +4625,7 @@ export function App() {
 
   async function saveActiveProviderSecret() {
     if (!isSelectedServiceConfigurable) {
-      setSecretMessage('当前服务模板尚未接入，暂不能保存密钥。');
+      setSecretMessage(t('provider.message.plannedSaveSecretBlocked'));
       return false;
     }
     const trimmedSecret = secretDraft.trim();
@@ -4872,7 +4872,7 @@ export function App() {
 
   function buildProfileFromCurrentConfig(enable: boolean) {
     if (!isSelectedServiceConfigurable) {
-      throw new Error('当前服务模板尚未接入，暂不能保存配置。');
+      throw new Error(t('provider.message.plannedSaveConfigBlocked'));
     }
     if (!providerConfig.baseUrl.trim()) {
       throw new Error('请先填写 Base URL。');
@@ -4947,10 +4947,10 @@ export function App() {
 
   function startNewProviderProfile() {
     if (!isSelectedServiceConfigurable) {
-      setConfigMessage('当前服务模板尚未接入，只展示规划说明。');
+      setConfigMessage(t('provider.message.templatePlanned'));
       return;
     }
-    const draftConfig = createEmptyProviderDraftConfig(selectedProvider, selectedServiceTemplate);
+    const draftConfig = createEmptyProviderDraftConfig(selectedProvider, selectedServiceTemplate, t);
     setIsCreatingProviderProfile(true);
     setSelectedProfileId(null);
     setProviderConfig(draftConfig);
@@ -5048,7 +5048,7 @@ export function App() {
       const host = new URL(config.baseUrl).hostname.replace(/^www\./, '');
       return `${host} · ${config.modelId || 'model'}`;
     } catch {
-      return `${selectedServiceTemplate.label || selectedProvider.name} · ${config.modelId || 'model'}`;
+      return `${providerServiceTemplateDisplayName(selectedServiceTemplate, t) || selectedProvider.name} · ${config.modelId || 'model'}`;
     }
   }
 
@@ -5166,7 +5166,7 @@ export function App() {
 
   async function refreshModels() {
     if (!isSelectedServiceConfigurable) {
-      setConfigMessage('当前服务模板尚未接入，暂不能刷新模型。');
+      setConfigMessage(t('provider.message.plannedRefreshModelsBlocked'));
       return;
     }
     if (!providerSupportsOpenAICompatibleModelList(selectedProvider.id)) {
@@ -5269,7 +5269,7 @@ export function App() {
 
   async function probeCurrentModel() {
     if (!isSelectedServiceConfigurable) {
-      setConfigMessage('当前服务模板尚未接入，暂不能探测模型。');
+      setConfigMessage(t('provider.message.plannedProbeModelBlocked'));
       return;
     }
     if (!providerSupportsOpenAICompatibleModelList(selectedProvider.id)) {
@@ -5810,7 +5810,7 @@ export function App() {
 
   async function runProviderTestGeneration() {
     if (!isSelectedServiceConfigurable) {
-      setConfigMessage('当前服务模板尚未接入，暂不能真实试生图。');
+      setConfigMessage(t('provider.message.plannedTestGenerationBlocked'));
       return;
     }
     if (!supportsOpenAICompatible) {
@@ -8055,7 +8055,7 @@ function ProviderSettingsPage(props: {
     <>
       <header className="topbar providerAccessTopbar">
         <div className="pageTitleBlock">
-          <p className="eyebrow">Platform Access</p>
+          <p className="eyebrow">{pt('provider.eyebrow')}</p>
           <h1>{pt('provider.title')}</h1>
           <p>{pt('provider.subtitle')}</p>
         </div>
@@ -8457,7 +8457,7 @@ function ProviderSettingsPage(props: {
                 <input
                   value={props.providerConfig.baseUrl}
                   onChange={(event) => props.onConfigChange('baseUrl', event.target.value)}
-                  placeholder={defaultBaseUrlPlaceholder(props.selectedProviderId)}
+                  placeholder={defaultBaseUrlPlaceholder(props.selectedProviderId, props.t)}
                 />
               </label>
               <label>
@@ -8547,10 +8547,10 @@ function ProviderSettingsPage(props: {
                 <input
                   value={props.providerConfig.endpointPath}
                   onChange={(event) => props.onConfigChange('endpointPath', event.target.value)}
-                  placeholder={defaultEndpointPlaceholder(props.selectedProviderId)}
+                  placeholder={defaultEndpointPlaceholder(props.selectedProviderId, props.t)}
                 />
                 <small className="providerFieldHint">
-                  {providerEndpointHint(props.selectedProviderId)}
+                  {providerEndpointHint(props.selectedProviderId, props.t)}
                 </small>
               </label>
               <label>
@@ -13470,9 +13470,16 @@ function getReferencePreviewUrl(reference: ReferenceImage) {
   return reference.previewUrl || reference.dataUrl || reference.localPath || '';
 }
 
+function providerServiceTemplateDisplayName(template: ProviderServiceTemplate, t?: Translator) {
+  return t
+    ? t(`provider.service.${template.id}.label` as Parameters<Translator>[0])
+    : template.defaultDisplayName ?? template.label;
+}
+
 function createEmptyProviderDraftConfig(
   provider: ReturnType<typeof listProviders>[number],
-  serviceTemplate?: ProviderServiceTemplate
+  serviceTemplate?: ProviderServiceTemplate,
+  t?: Translator
 ): OpenAICompatibleConfig {
   const isOfficialOpenAI = provider.id === 'openai-gpt-image';
   const isMiniMax = provider.id === 'minimax-image';
@@ -13480,7 +13487,7 @@ function createEmptyProviderDraftConfig(
   const firstModel = provider.models[0]?.id ?? '';
   return {
     ...defaultOpenAICompatibleConfig,
-    displayName: serviceTemplate?.defaultDisplayName ?? '',
+    displayName: serviceTemplate ? providerServiceTemplateDisplayName(serviceTemplate, t) : '',
     baseUrl: isOfficialOpenAI ? OFFICIAL_OPENAI_BASE_URL : isMiniMax ? 'https://api.minimaxi.com' : isGemini ? 'https://generativelanguage.googleapis.com' : '',
     modelId: firstModel,
     protocol: isMiniMax ? 'custom-images' : 'images',
@@ -13595,27 +13602,33 @@ function modelListUnsupportedMessage(providerId: string, modelId: string, t?: Tr
     : 'The current official API does not provide an OpenAI-compatible model list. Built-in template models and manual model IDs are kept for real test generation.';
 }
 
-function defaultBaseUrlPlaceholder(providerId: string) {
+function defaultBaseUrlPlaceholder(providerId: string, t?: Translator) {
   if (providerId === 'openai-gpt-image') return OFFICIAL_OPENAI_BASE_URL;
   if (providerId === 'minimax-image') return 'https://api.minimaxi.com';
   if (providerId === 'gemini-image') return 'https://generativelanguage.googleapis.com';
-  return 'https://你的聚合站或中转站';
+  return t ? t('provider.placeholder.baseUrlRelay') : 'https://your-relay.example.com';
 }
 
-function defaultEndpointPlaceholder(providerId: string) {
+function defaultEndpointPlaceholder(providerId: string, t?: Translator) {
   if (providerId === 'minimax-image') return '/v1/image_generation';
   if (providerId === 'gemini-image') return '/v1beta/models/{model}:generateContent';
-  return '/v1/images/generations';
+  return t ? t('provider.placeholder.endpointPath') : '/v1/images/generations';
 }
 
-function providerEndpointHint(providerId: string) {
+function providerEndpointHint(providerId: string, t?: Translator) {
   if (providerId === 'minimax-image') {
-    return 'MiniMax 官方文生图接口默认使用 /v1/image_generation；这是官方图片 API 路径，不是 OpenAI-compatible /v1/images/generations。';
+    return t
+      ? t('provider.endpointHint.minimax')
+      : 'MiniMax official text-to-image uses /v1/image_generation by default. This is the official image API path, not OpenAI-compatible /v1/images/generations.';
   }
   if (providerId === 'gemini-image') {
-    return 'Gemini 官方图片接口默认使用 /v1beta/models/{model}:generateContent；保存后后端会把 {model} 替换为当前模型 ID。';
+    return t
+      ? t('provider.endpointHint.gemini')
+      : 'Gemini official image API uses /v1beta/models/{model}:generateContent. After saving, the backend replaces {model} with the current model ID.';
   }
-  return '可按中转站文档自主修改，例如 /images/generations、/v1/images/generations 或 /v1/responses；保存后真实请求会使用这里的路径。';
+  return t
+    ? t('provider.endpointHint.default')
+    : 'Follow relay docs, for example /images/generations, /v1/images/generations, or /v1/responses. Saved requests use this path.';
 }
 
 function getDefaultProviderServiceTemplateForProvider(providerId: string) {
