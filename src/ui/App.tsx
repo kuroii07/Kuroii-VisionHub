@@ -5594,16 +5594,16 @@ export function App() {
 
       push({
         id: 'protocol',
-        label: '协议与接口路径',
+        label: t('provider.diagnostics.item.protocol'),
         level: targetConfig.endpointPath.trim().startsWith('/') ? 'pass' : 'warn',
         detail: targetConfig.endpointPath === defaultEndpointForProtocol(targetConfig.protocol)
-          ? `当前协议：${targetConfig.protocol}；使用默认目标接口：${endpointPreview || targetConfig.endpointPath}`
-          : `当前协议：${targetConfig.protocol}；使用自定义目标接口：${endpointPreview || targetConfig.endpointPath}`
+          ? t('provider.diagnostics.detail.protocolDefaultEndpoint', { protocol: targetConfig.protocol, endpoint: endpointPreview || targetConfig.endpointPath })
+          : t('provider.diagnostics.detail.protocolCustomEndpoint', { protocol: targetConfig.protocol, endpoint: endpointPreview || targetConfig.endpointPath })
       });
 
       push({
         id: 'image-to-image-adapter',
-        label: '图生图映射',
+        label: t('provider.diagnostics.item.imageToImageAdapter'),
         level: targetConfig.imageToImageAdapter === 'auto' ? 'info' : 'pass',
         detail: imageToImageAdapterDiagnosticDetail(targetConfig, targetProviderId)
       });
@@ -5611,16 +5611,16 @@ export function App() {
       if (storageSettings) {
         push({
           id: 'library-storage',
-          label: '作品保存目录',
+          label: t('provider.diagnostics.item.libraryStorage'),
           level: 'pass',
-          detail: `当前保存到：${storageSettings.resolved_library_dir}`
+          detail: t('provider.diagnostics.detail.libraryStoragePath', { path: storageSettings.resolved_library_dir })
         });
       } else {
         push({
           id: 'library-storage',
-          label: '作品保存目录',
+          label: t('provider.diagnostics.item.libraryStorage'),
           level: desktopRuntime ? 'warn' : 'info',
-          detail: desktopRuntime ? '尚未读取到图库保存路径；可到偏好设置确认作品画廊目录。' : '网页预览模式无法读取桌面图库目录。'
+          detail: desktopRuntime ? t('provider.diagnostics.detail.libraryStorageMissing') : t('provider.diagnostics.detail.libraryStorageWeb')
         });
       }
 
@@ -5634,29 +5634,29 @@ export function App() {
         const polishConfigReady = Boolean(safeProviderConfigText(appSettings.promptPolish.baseUrl) && safeProviderConfigText(appSettings.promptPolish.modelId));
         push({
           id: 'prompt-polish-channel',
-          label: '提示词润色通道',
+          label: t('provider.diagnostics.item.promptPolishChannel'),
           level: polishConfigReady && polishSecretAvailable ? 'pass' : 'warn',
           detail: polishConfigReady
             ? polishSecretAvailable
-              ? `模型润色使用独立凭据 ${PROMPT_POLISH_SECRET_ID}，不会复用生图平台 Key。`
-              : `模型润色配置已填写，但独立凭据 ${PROMPT_POLISH_SECRET_ID} 尚未保存；失败时会按设置回退到本地规则。`
-            : '当前启用模型润色，但 Base URL 或模型 ID 不完整；建议补全或切回本地规则。'
+              ? t('provider.diagnostics.detail.promptPolishReady', { id: PROMPT_POLISH_SECRET_ID })
+              : t('provider.diagnostics.detail.promptPolishSecretMissing', { id: PROMPT_POLISH_SECRET_ID })
+            : t('provider.diagnostics.detail.promptPolishConfigIncomplete')
         });
       } else {
         push({
           id: 'prompt-polish-channel',
-          label: '提示词润色通道',
+          label: t('provider.diagnostics.item.promptPolishChannel'),
           level: 'info',
-          detail: '当前默认使用本地规则润色，不消耗额度；模型润色仍保留独立凭据通道。'
+          detail: t('provider.diagnostics.detail.promptPolishLocal')
         });
       }
 
       if (targetConfig.protocol === 'responses') {
         push({
           id: 'responses-background',
-          label: 'Responses 后台轮询',
+          label: t('provider.diagnostics.item.responsesBackground'),
           level: 'info',
-          detail: '生成请求会优先尝试 background/store 并轮询 response id；若中转不支持 background 会回退同步请求，长任务仍可能受 524 影响。'
+          detail: t('provider.diagnostics.detail.responsesBackground')
         });
       }
 
