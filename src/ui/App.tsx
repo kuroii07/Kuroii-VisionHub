@@ -2010,52 +2010,57 @@ function createLocalId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-const shortcutGroups: Array<{ title: string; items: Array<{ keys: string[]; action: string }> }> = [
+type ShortcutGroupDefinition = {
+  titleKey: Parameters<Translator>[0];
+  items: Array<{ keys: string[]; actionKey: Parameters<Translator>[0] }>;
+};
+
+const shortcutGroups: ShortcutGroupDefinition[] = [
   {
-    title: '全局',
+    titleKey: 'shortcut.group.global',
     items: [
-      { keys: ['Ctrl', '/'], action: '打开快捷键说明' },
-      { keys: ['Ctrl', 'B'], action: '展开 / 收起侧边栏' },
-      { keys: ['Ctrl', ','], action: '打开平台接入' },
-      { keys: ['Ctrl', '0'], action: '打开工作台首页' },
-      { keys: ['Ctrl', '1'], action: '打开 AI 创作' },
-      { keys: ['Ctrl', '2'], action: '打开免费平台' },
-      { keys: ['Ctrl', '3'], action: '打开作品画廊' },
-      { keys: ['Ctrl', '4'], action: '打开灵感中心' },
-      { keys: ['Ctrl', '5'], action: '打开提示词库' },
-      { keys: ['Ctrl', '6'], action: '打开平台接入' },
-      { keys: ['Ctrl', '7'], action: '打开偏好设置' },
-      { keys: ['Ctrl', '8'], action: '打开批量队列' },
-      { keys: ['Esc'], action: '关闭浮窗 / 关闭图片预览' }
+      { keys: ['Ctrl', '/'], actionKey: 'shortcut.action.openShortcuts' },
+      { keys: ['Ctrl', 'B'], actionKey: 'shortcut.action.toggleSidebar' },
+      { keys: ['Ctrl', ','], actionKey: 'shortcut.action.openProviders' },
+      { keys: ['Ctrl', '0'], actionKey: 'shortcut.action.openHome' },
+      { keys: ['Ctrl', '1'], actionKey: 'shortcut.action.openGenerate' },
+      { keys: ['Ctrl', '2'], actionKey: 'shortcut.action.openFree' },
+      { keys: ['Ctrl', '3'], actionKey: 'shortcut.action.openLibrary' },
+      { keys: ['Ctrl', '4'], actionKey: 'shortcut.action.openInspiration' },
+      { keys: ['Ctrl', '5'], actionKey: 'shortcut.action.openTemplates' },
+      { keys: ['Ctrl', '6'], actionKey: 'shortcut.action.openProviders' },
+      { keys: ['Ctrl', '7'], actionKey: 'shortcut.action.openSettings' },
+      { keys: ['Ctrl', '8'], actionKey: 'shortcut.action.openBatch' },
+      { keys: ['Esc'], actionKey: 'shortcut.action.closeOverlay' }
     ]
   },
   {
-    title: 'AI 创作',
+    titleKey: 'shortcut.group.generate',
     items: [
-      { keys: ['Ctrl', 'Enter'], action: '提交当前生成任务' },
-      { keys: ['Ctrl', 'K'], action: '聚焦 Prompt 输入框' },
-      { keys: ['Ctrl', 'Shift', 'R'], action: '添加参考图' },
-      { keys: ['Ctrl', 'Shift', 'C'], action: '清空参考图' },
-      { keys: ['Ctrl', 'Shift', 'I'], action: '切换到图生图' },
-      { keys: ['Ctrl', 'Shift', 'T'], action: '切换到文生图' }
+      { keys: ['Ctrl', 'Enter'], actionKey: 'shortcut.action.submitGenerate' },
+      { keys: ['Ctrl', 'K'], actionKey: 'shortcut.action.focusPrompt' },
+      { keys: ['Ctrl', 'Shift', 'R'], actionKey: 'shortcut.action.addReference' },
+      { keys: ['Ctrl', 'Shift', 'C'], actionKey: 'shortcut.action.clearReferences' },
+      { keys: ['Ctrl', 'Shift', 'I'], actionKey: 'shortcut.action.modeImage' },
+      { keys: ['Ctrl', 'Shift', 'T'], actionKey: 'shortcut.action.modeText' }
     ]
   },
   {
-    title: '作品画廊 / 数据',
+    titleKey: 'shortcut.group.libraryData',
     items: [
-      { keys: ['Ctrl', 'F'], action: '聚焦作品画廊搜索框' },
-      { keys: ['Ctrl', 'O'], action: '打开作品画廊目录' },
-      { keys: ['Ctrl', 'E'], action: '导出设置备份' }
+      { keys: ['Ctrl', 'F'], actionKey: 'shortcut.action.focusLibrarySearch' },
+      { keys: ['Ctrl', 'O'], actionKey: 'shortcut.action.openLibraryDir' },
+      { keys: ['Ctrl', 'E'], actionKey: 'shortcut.action.exportSettingsBackup' }
     ]
   },
   {
-    title: '图片预览',
+    titleKey: 'shortcut.group.preview',
     items: [
-      { keys: ['+'], action: '放大预览图' },
-      { keys: ['-'], action: '缩小预览图' },
-      { keys: ['0'], action: '重置缩放和位置' },
-      { keys: ['Space'], action: '重置缩放和位置' },
-      { keys: ['Esc'], action: '关闭预览' }
+      { keys: ['+'], actionKey: 'shortcut.action.zoomInPreview' },
+      { keys: ['-'], actionKey: 'shortcut.action.zoomOutPreview' },
+      { keys: ['0'], actionKey: 'shortcut.action.resetPreview' },
+      { keys: ['Space'], actionKey: 'shortcut.action.resetPreview' },
+      { keys: ['Esc'], actionKey: 'shortcut.action.closePreview' }
     ]
   }
 ];
@@ -6268,10 +6273,11 @@ export function App() {
       </main>
 
       {activeUtilityModal === 'shortcuts' ? (
-        <ShortcutsModal onClose={() => setActiveUtilityModal(null)} />
+        <ShortcutsModal t={t} onClose={() => setActiveUtilityModal(null)} />
       ) : null}
       {activeUtilityModal === 'system-info' ? (
         <SystemInfoModal
+          t={t}
           desktopRuntime={desktopRuntime}
           storageSettings={storageSettings}
           settingsMessage={settingsMessage}
@@ -6301,6 +6307,7 @@ export function App() {
       ) : null}
       {confirmDialog ? (
         <ConfirmDialog
+          t={t}
           request={confirmDialog}
           onClose={() => setConfirmDialog(null)}
           onError={(error) => setConfirmDialog((current) => (current ? { ...current, error } : current))}
@@ -6308,6 +6315,7 @@ export function App() {
       ) : null}
       {batchQueueNameDialog ? (
         <BatchQueueNameDialog
+          t={t}
           mode={batchQueueNameDialog.mode}
           defaultName={batchQueueNameDialog.defaultName}
           onClose={() => setBatchQueueNameDialog(null)}
@@ -12835,6 +12843,7 @@ function PromptTemplatesPage(props: { t: Translator; onUseTemplate: (prompt: str
 }
 
 function BatchQueueNameDialog(props: {
+  t: Translator;
   mode: 'create' | 'rename';
   defaultName: string;
   onClose: () => void;
@@ -12842,10 +12851,10 @@ function BatchQueueNameDialog(props: {
 }) {
   const [name, setName] = useState(props.defaultName);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const title = props.mode === 'rename' ? '重命名队列' : '新建队列';
+  const title = props.mode === 'rename' ? props.t('batch.dialog.renameQueue') : props.t('batch.dialog.newQueue');
   const hint = props.mode === 'rename'
-    ? '只修改批量队列的显示名称，不影响队列任务、作品画廊记录和磁盘图片。'
-    : '新队列会被设为当前队列；之后在 AI 创作台加入队列时，会进入这个队列。';
+    ? props.t('batch.dialog.renameHint')
+    : props.t('batch.dialog.createHint');
 
   useEffect(() => {
     window.setTimeout(() => {
@@ -12879,12 +12888,12 @@ function BatchQueueNameDialog(props: {
             <p className="eyebrow">Batch Queue</p>
             <h2 id="batch-queue-name-dialog-title">{title}</h2>
           </div>
-          <button className="iconMiniButton" type="button" data-tooltip="关闭" aria-label="关闭" onClick={props.onClose}>
+          <button className="iconMiniButton" type="button" data-tooltip={props.t('common.close')} aria-label={props.t('common.close')} onClick={props.onClose}>
             <X size={15} />
           </button>
         </header>
         <label>
-          <span>队列名称</span>
+          <span>{props.t('batch.dialog.queueName')}</span>
           <input
             ref={inputRef}
             value={name}
@@ -12900,9 +12909,9 @@ function BatchQueueNameDialog(props: {
         </label>
         <p>{hint}</p>
         <div className="organizerDialogActions">
-          <button type="button" className="confirmCancelButton" onClick={props.onClose}>取消</button>
+          <button type="button" className="confirmCancelButton" onClick={props.onClose}>{props.t('common.cancel')}</button>
           <button type="button" className="confirmPrimaryButton" disabled={!name.trim()} onClick={submit}>
-            {props.mode === 'rename' ? '保存' : '创建'}
+            {props.mode === 'rename' ? props.t('common.save') : props.t('common.create')}
           </button>
         </div>
       </section>
@@ -13049,13 +13058,14 @@ function LibraryAssignDialog(props: {
 }
 
 function ConfirmDialog(props: {
+  t: Translator;
   request: ConfirmDialogState;
   onClose: () => void;
   onError: (error: string) => void;
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const confirmLabel = props.request.confirmLabel ?? '确认';
-  const cancelLabel = props.request.cancelLabel ?? '取消';
+  const confirmLabel = props.request.confirmLabel ?? props.t('common.confirm');
+  const cancelLabel = props.request.cancelLabel ?? props.t('common.cancel');
   const tone = props.request.tone ?? 'default';
 
   useEffect(() => {
@@ -13096,7 +13106,7 @@ function ConfirmDialog(props: {
             {cancelLabel}
           </button>
           <button type="button" className={`confirmPrimaryButton ${tone}`} disabled={isSubmitting} onClick={() => void handleConfirm()}>
-            {isSubmitting ? '处理中…' : confirmLabel}
+            {isSubmitting ? props.t('common.processing') : confirmLabel}
           </button>
         </div>
       </section>
@@ -13105,7 +13115,7 @@ function ConfirmDialog(props: {
 }
 
 
-function UtilityModalShell(props: { title: string; eyebrow?: string; className?: string; onClose: () => void; children: ReactNode }) {
+function UtilityModalShell(props: { t?: Translator; title: string; eyebrow?: string; className?: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === 'Escape') props.onClose();
@@ -13122,7 +13132,7 @@ function UtilityModalShell(props: { title: string; eyebrow?: string; className?:
             {props.eyebrow ? <p className="eyebrow">{props.eyebrow}</p> : null}
             <h2>{props.title}</h2>
           </div>
-          <button type="button" data-tooltip="关闭" aria-label="关闭" onClick={props.onClose}>
+          <button type="button" data-tooltip={props.t ? props.t('common.close') : 'Close'} aria-label={props.t ? props.t('common.close') : 'Close'} onClick={props.onClose}>
             <X size={18} />
           </button>
         </header>
@@ -13132,20 +13142,20 @@ function UtilityModalShell(props: { title: string; eyebrow?: string; className?:
   );
 }
 
-function ShortcutsModal(props: { onClose: () => void }) {
+function ShortcutsModal(props: { t: Translator; onClose: () => void }) {
   return (
-    <UtilityModalShell title="快捷键" eyebrow="Keyboard Shortcuts" onClose={props.onClose}>
+    <UtilityModalShell t={props.t} title={props.t('shortcut.title')} eyebrow="Keyboard Shortcuts" onClose={props.onClose}>
       <div className="shortcutModalContent">
         {shortcutGroups.map((group) => (
-          <section className="shortcutGroup" key={group.title}>
-            <h3>{group.title}</h3>
+          <section className="shortcutGroup" key={group.titleKey}>
+            <h3>{props.t(group.titleKey)}</h3>
             <div className="shortcutList">
               {group.items.map((item) => (
-                <div className="shortcutRow" key={`${group.title}-${item.action}`}>
+                <div className="shortcutRow" key={`${group.titleKey}-${item.actionKey}`}>
                   <div className="shortcutKeys">
                     {item.keys.map((key) => <kbd key={key}>{key}</kbd>)}
                   </div>
-                  <span>{item.action}</span>
+                  <span>{props.t(item.actionKey)}</span>
                 </div>
               ))}
             </div>
@@ -13157,21 +13167,22 @@ function ShortcutsModal(props: { onClose: () => void }) {
 }
 
 function SystemInfoModal(props: {
+  t: Translator;
   desktopRuntime: boolean;
   storageSettings: StorageSettings | null;
   settingsMessage: string;
   onClose: () => void;
 }) {
   const rows = [
-    { label: '版本', value: APP_VERSION },
-    { label: '运行环境', value: props.desktopRuntime ? 'Tauri 桌面端' : 'Web 预览模式' },
-    { label: '作品画廊目录', value: props.storageSettings?.resolved_library_dir ?? (props.desktopRuntime ? '正在读取…' : '桌面端可用') },
-    { label: '默认图库目录', value: props.storageSettings?.default_library_dir ?? '—' },
-    { label: '最近操作', value: props.settingsMessage || '暂无新的设置操作' }
+    { label: props.t('systemInfo.version'), value: APP_VERSION },
+    { label: props.t('systemInfo.runtime'), value: props.desktopRuntime ? props.t('systemInfo.runtimeDesktop') : props.t('systemInfo.runtimeWeb') },
+    { label: props.t('systemInfo.libraryDir'), value: props.storageSettings?.resolved_library_dir ?? (props.desktopRuntime ? props.t('common.loading') : props.t('systemInfo.desktopOnly')) },
+    { label: props.t('systemInfo.defaultLibraryDir'), value: props.storageSettings?.default_library_dir ?? '—' },
+    { label: props.t('systemInfo.recentAction'), value: props.settingsMessage || props.t('systemInfo.noRecentAction') }
   ];
 
   return (
-    <UtilityModalShell title="系统信息" eyebrow="System" onClose={props.onClose}>
+    <UtilityModalShell t={props.t} title={props.t('systemInfo.title')} eyebrow="System" onClose={props.onClose}>
       <div className="systemInfoList">
         {rows.map((row) => (
           <div className="systemInfoRow" key={row.label}>
