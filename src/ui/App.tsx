@@ -6113,7 +6113,7 @@ export function App() {
               onReferenceImagesChange={setReferenceImages}
             />
             {generatePreviewUrl ? (
-              <ImagePreviewModal imageUrl={generatePreviewUrl} onClose={() => setGeneratePreviewUrl(null)} />
+              <ImagePreviewModal t={t} imageUrl={generatePreviewUrl} onClose={() => setGeneratePreviewUrl(null)} />
             ) : null}
           </>
         ) : page === 'batch' ? (
@@ -9995,6 +9995,7 @@ const CachedLibraryPage = memo(function CachedLibraryPage(props: {
       />
       {props.isActive && props.preview ? (
         <ImagePreviewModal
+          t={props.t}
           imageUrl={props.preview.imageUrl}
           navigation={props.preview.navigation}
           onNavigate={props.onNavigatePreview}
@@ -10040,6 +10041,7 @@ const CachedInspirationPage = memo(function CachedInspirationPage(props: {
       />
       {props.isActive && props.preview ? (
         <ImagePreviewModal
+          t={props.t}
           imageUrl={props.preview.imageUrl}
           navigation={props.preview.navigation}
           onNavigate={props.onNavigatePreview}
@@ -13196,6 +13198,7 @@ function SystemInfoModal(props: {
 }
 
 const ImagePreviewModal = memo(function ImagePreviewModal(props: {
+  t: Translator;
   imageUrl: string;
   navigation?: ImagePreviewNavigation;
   onNavigate?: (item: ImagePreviewNavigationItem) => void;
@@ -13349,17 +13352,17 @@ const ImagePreviewModal = memo(function ImagePreviewModal(props: {
     <div ref={modalRef} className="modalBackdrop previewModalBackdrop" onClick={props.onClose} onKeyDown={handlePreviewKeyDown} tabIndex={-1}>
       <div className="previewModal">
         <div className="previewToolbar" onClick={(event) => event.stopPropagation()}>
-          <button type="button" data-tooltip="缩小" aria-label="缩小" onClick={() => zoomBy(-0.2)}>
+          <button type="button" data-tooltip={props.t('imagePreview.zoomOut')} aria-label={props.t('imagePreview.zoomOut')} onClick={() => zoomBy(-0.2)}>
             <ZoomOut size={16} />
           </button>
           <span>{Math.round(scale * 100)}%</span>
-          <button type="button" data-tooltip="放大" aria-label="放大" onClick={() => zoomBy(0.2)}>
+          <button type="button" data-tooltip={props.t('imagePreview.zoomIn')} aria-label={props.t('imagePreview.zoomIn')} onClick={() => zoomBy(0.2)}>
             <ZoomIn size={16} />
           </button>
-          <button type="button" data-tooltip="适配窗口" aria-label="适配窗口" onClick={resetView}>
+          <button type="button" data-tooltip={props.t('imagePreview.fit')} aria-label={props.t('imagePreview.fit')} onClick={resetView}>
             <Maximize2 size={16} />
           </button>
-          <button type="button" data-tooltip="关闭预览" aria-label="关闭预览" onClick={props.onClose}>
+          <button type="button" data-tooltip={props.t('imagePreview.close')} aria-label={props.t('imagePreview.close')} onClick={props.onClose}>
             <X size={18} />
           </button>
         </div>
@@ -13369,8 +13372,8 @@ const ImagePreviewModal = memo(function ImagePreviewModal(props: {
               className="previewNavButton previous"
               type="button"
               disabled={!canNavigatePrevious}
-              data-tooltip="上一张"
-              aria-label="上一张"
+              data-tooltip={props.t('imagePreview.previous')}
+              aria-label={props.t('imagePreview.previous')}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation();
@@ -13383,8 +13386,8 @@ const ImagePreviewModal = memo(function ImagePreviewModal(props: {
               className="previewNavButton next"
               type="button"
               disabled={!canNavigateNext}
-              data-tooltip="下一张"
-              aria-label="下一张"
+              data-tooltip={props.t('imagePreview.next')}
+              aria-label={props.t('imagePreview.next')}
               onPointerDown={(event) => event.stopPropagation()}
               onClick={(event) => {
                 event.stopPropagation();
@@ -13393,7 +13396,7 @@ const ImagePreviewModal = memo(function ImagePreviewModal(props: {
             >
               <ChevronRight size={30} />
             </button>
-            <div className="previewNavCounter" aria-label="预览序号">
+            <div className="previewNavCounter" aria-label={props.t('imagePreview.counter')}>
               {navigationIndex + 1} / {navigationItems.length}
             </div>
           </>
@@ -13411,7 +13414,7 @@ const ImagePreviewModal = memo(function ImagePreviewModal(props: {
           <img
             ref={imageRef}
             src={props.imageUrl}
-            alt="生成图片预览"
+            alt={props.t('imagePreview.alt')}
             draggable={false}
             onClick={(event) => event.stopPropagation()}
           />
