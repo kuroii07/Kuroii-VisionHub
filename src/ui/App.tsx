@@ -1074,17 +1074,17 @@ function generationStatusClass(record: Pick<GenerationRecord, 'status' | 'error'
   return isPotentialBackgroundCompletion(record) ? 'pendingRecovery' : record.status;
 }
 
-function generationFailureHint(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
-  const diagnosis = diagnoseGenerationFailure(record);
+function generationFailureHint(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>, t?: Translator) {
+  const diagnosis = diagnoseGenerationFailure(record, t);
   return `${diagnosis.title}：${diagnosis.summary}`;
 }
 
-function generationFailureActions(record: Pick<GenerationRecord, 'status' | 'error' | 'raw' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>) {
-  return diagnoseGenerationFailure(record).actions;
+function generationFailureActions(record: Pick<GenerationRecord, 'status' | 'error' | 'raw' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>, t?: Translator) {
+  return diagnoseGenerationFailure(record, t).actions;
 }
 
-function generationFailureDetails(record: Pick<GenerationRecord, 'status' | 'error' | 'raw' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>) {
-  return diagnoseGenerationFailure(record).details;
+function generationFailureDetails(record: Pick<GenerationRecord, 'status' | 'error' | 'raw' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>, t?: Translator) {
+  return diagnoseGenerationFailure(record, t).details;
 }
 
 const generationFailureCategoryLabels: Record<GenerationFailureCategory, string> = {
@@ -1110,6 +1110,14 @@ const generationFailureSeverityLabels: Record<GenerationFailureSeverity, string>
   info: '提示'
 };
 
+function generationFailureCategoryLabel(category: GenerationFailureCategory, t?: Translator) {
+  return t ? t(`generate.error.category.${category}` as Parameters<Translator>[0]) : generationFailureCategoryLabels[category];
+}
+
+function generationFailureSeverityLabel(severity: GenerationFailureSeverity, t?: Translator) {
+  return t ? t(`generate.error.severity.${severity}` as Parameters<Translator>[0]) : generationFailureSeverityLabels[severity];
+}
+
 function safeStringifyDiagnosticRaw(raw: unknown) {
   if (raw == null) return '';
   try {
@@ -1124,19 +1132,19 @@ function clipDiagnosticText(text: string, maxLength = 1400) {
   return `${text.slice(0, maxLength)}\n…已截断，复制 Raw 可查看完整内容。`;
 }
 
-function generationFailureRawText(record: Pick<GenerationRecord, 'error' | 'raw' | 'status' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>) {
-  const diagnosis = diagnoseGenerationFailure(record);
+function generationFailureRawText(record: Pick<GenerationRecord, 'error' | 'raw' | 'status' | 'generationMode' | 'referenceImages' | 'modelId' | 'providerId'>, t?: Translator) {
+  const diagnosis = diagnoseGenerationFailure(record, t);
   return safeStringifyDiagnosticRaw(record.raw) || diagnosis.rawMessage || record.error || '';
 }
 
-function generationFailureCopyText(record: GenerationRecord, providerName?: string) {
-  const diagnosis = diagnoseGenerationFailure(record);
-  const detailLines = generationFailureDetails(record);
+function generationFailureCopyText(record: GenerationRecord, providerName?: string, t?: Translator) {
+  const diagnosis = diagnoseGenerationFailure(record, t);
+  const detailLines = generationFailureDetails(record, t);
   return [
     'VisionHub 生成失败诊断',
     `诊断：${diagnosis.title}`,
     `摘要：${diagnosis.summary}`,
-    `分类：${generationFailureCategoryLabels[diagnosis.category]} / ${generationFailureSeverityLabels[diagnosis.severity]}`,
+    `分类：${generationFailureCategoryLabel(diagnosis.category, t)} / ${generationFailureSeverityLabel(diagnosis.severity, t)}`,
     `状态：${generationStatusLabel(record)} (${record.status})`,
     providerName ? `平台：${providerName} (${record.providerId})` : `平台：${record.providerName ?? record.providerId}`,
     `模型：${record.modelId || '-'}`,
@@ -1151,9 +1159,9 @@ function generationFailureCopyText(record: GenerationRecord, providerName?: stri
   ].filter(Boolean).join('\n\n');
 }
 
-function generationRequestSummaryCopyText(record: GenerationRecord, providerName?: string) {
-  const diagnosis = diagnoseGenerationFailure(record);
-  const rawText = generationFailureRawText(record);
+function generationRequestSummaryCopyText(record: GenerationRecord, providerName?: string, t?: Translator) {
+  const diagnosis = diagnoseGenerationFailure(record, t);
+  const rawText = generationFailureRawText(record, t);
   return [
     'VisionHub 请求摘要',
     `记录 ID：${record.id}`,
@@ -1167,7 +1175,7 @@ function generationRequestSummaryCopyText(record: GenerationRecord, providerName
     record.durationMs ? `耗时：${record.durationMs}ms` : '',
     record.createdAt ? `创建时间：${record.createdAt}` : '',
     getRecordPrimaryPath(record) ? `主路径：${getRecordPrimaryPath(record)}` : '',
-    `诊断分类：${generationFailureCategoryLabels[diagnosis.category]} / ${generationFailureSeverityLabels[diagnosis.severity]}`,
+    `诊断分类：${generationFailureCategoryLabel(diagnosis.category, t)} / ${generationFailureSeverityLabel(diagnosis.severity, t)}`,
     diagnosis.httpStatus ? `HTTP：${diagnosis.httpStatus}` : '',
     diagnosis.traceId ? `trace_id：${diagnosis.traceId}` : '',
     diagnosis.requestId ? `request_id：${diagnosis.requestId}` : '',
@@ -7136,12 +7144,12 @@ function WorkspaceHomePage(props: {
                   </button>
                 ) : null}
                 {props.recentFailureRecords.map((record) => {
-                  const diagnosis = diagnoseGenerationFailure(record);
+                  const diagnosis = diagnoseGenerationFailure(record, props.t);
                   return (
                     <button type="button" className="workspaceTodoItem" key={record.id} onClick={() => props.onNavigate('library')}>
                       <span className={`workspaceTodoDot ${generationStatusClass(record)}`} />
                       <span>
-                        <strong>{generationStatusLabel(record)} · {generationFailureCategoryLabels[diagnosis.category]}</strong>
+                        <strong>{generationStatusLabel(record)} · {generationFailureCategoryLabel(diagnosis.category, props.t)}</strong>
                         <small>{diagnosis.title} · {formatWorkspaceHomeTime(record.createdAt, props.t)}</small>
                       </span>
                     </button>
@@ -10611,20 +10619,20 @@ const LibraryPage = memo(function LibraryPage(props: {
   const contextSelection = selectedRecords.length ? selectedRecords : contextRecord ? [contextRecord] : [];
   const diagnosticRecordProviderName = diagnosticRecord ? providerNameMap.get(diagnosticRecord.providerId) ?? diagnosticRecord.providerName ?? diagnosticRecord.providerId : '';
   const diagnosticRecordFailureDiagnosis = useMemo(
-    () => diagnosticRecord && (diagnosticRecord.error || diagnosticRecord.status === 'failed') ? diagnoseGenerationFailure(diagnosticRecord) : null,
-    [diagnosticRecord]
+    () => diagnosticRecord && (diagnosticRecord.error || diagnosticRecord.status === 'failed') ? diagnoseGenerationFailure(diagnosticRecord, props.t) : null,
+    [diagnosticRecord, props.t]
   );
   const diagnosticRecordFailureDetails = useMemo(
-    () => diagnosticRecordFailureDiagnosis && diagnosticRecord ? generationFailureDetails(diagnosticRecord) : [],
-    [diagnosticRecord, diagnosticRecordFailureDiagnosis]
+    () => diagnosticRecordFailureDiagnosis && diagnosticRecord ? generationFailureDetails(diagnosticRecord, props.t) : [],
+    [diagnosticRecord, diagnosticRecordFailureDiagnosis, props.t]
   );
   const diagnosticRecordFailureActions = useMemo(
-    () => diagnosticRecordFailureDiagnosis && diagnosticRecord ? generationFailureActions(diagnosticRecord) : [],
-    [diagnosticRecord, diagnosticRecordFailureDiagnosis]
+    () => diagnosticRecordFailureDiagnosis && diagnosticRecord ? generationFailureActions(diagnosticRecord, props.t) : [],
+    [diagnosticRecord, diagnosticRecordFailureDiagnosis, props.t]
   );
   const diagnosticRecordFailureRawText = useMemo(
-    () => diagnosticRecordFailureDiagnosis && diagnosticRecord ? generationFailureRawText(diagnosticRecord) : '',
-    [diagnosticRecord, diagnosticRecordFailureDiagnosis]
+    () => diagnosticRecordFailureDiagnosis && diagnosticRecord ? generationFailureRawText(diagnosticRecord, props.t) : '',
+    [diagnosticRecord, diagnosticRecordFailureDiagnosis, props.t]
   );
   const diagnosticRecordRecoveryAdvice = useMemo(
     () => diagnosticRecord ? buildLibraryRecoveryAdvice(diagnosticRecord) : null,
@@ -12361,8 +12369,8 @@ const LibraryPage = memo(function LibraryPage(props: {
               ) : null}
               <div className="libraryDetailInlineActions generationDiagnosticActions">
                 <button className="miniButton" type="button" onClick={() => props.onRetryRecord(diagnosticRecord)}><RefreshCcw size={13} /> {lt('library.action.retry')}</button>
-                <button className="miniButton" type="button" onClick={() => void copyText(lt('library.diagnostic.title'), generationFailureCopyText(diagnosticRecord, diagnosticRecordProviderName))}><Copy size={13} /> {lt('library.diagnostic.copyDiagnosis')}</button>
-                <button className="miniButton" type="button" onClick={() => void copyText(lt('library.diagnostic.copyRequest'), generationRequestSummaryCopyText(diagnosticRecord, diagnosticRecordProviderName))}><Copy size={13} /> {lt('library.diagnostic.copyRequest')}</button>
+                <button className="miniButton" type="button" onClick={() => void copyText(lt('library.diagnostic.title'), generationFailureCopyText(diagnosticRecord, diagnosticRecordProviderName, lt))}><Copy size={13} /> {lt('library.diagnostic.copyDiagnosis')}</button>
+                <button className="miniButton" type="button" onClick={() => void copyText(lt('library.diagnostic.copyRequest'), generationRequestSummaryCopyText(diagnosticRecord, diagnosticRecordProviderName, lt))}><Copy size={13} /> {lt('library.diagnostic.copyRequest')}</button>
                 <button className="miniButton" type="button" disabled={!diagnosticRecordFailureRawText} onClick={() => void copyText('Raw', diagnosticRecordFailureRawText)}><Database size={13} /> {lt('library.diagnostic.copyRaw')}</button>
               </div>
             </div>

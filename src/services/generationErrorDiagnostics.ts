@@ -53,11 +53,13 @@ type ProtocolMapping = {
   is_image_to_image?: boolean;
 };
 
-const DEFAULT_ACTIONS = [
-  '复制错误信息和 trace/request id，和中转站后台记录对照。',
-  '确认当前模型、协议类型、接口路径和图生图映射是否匹配。',
-  '如果刚改过配置，先保存配置后用 1 张图或小尺寸重试。'
-];
+function defaultActions(t?: Translator) {
+  return [
+    translateDiagnostic(t, 'generate.error.default.action1', '复制错误信息和 trace/request id，和中转站后台记录对照。'),
+    translateDiagnostic(t, 'generate.error.default.action2', '确认当前模型、协议类型、接口路径和图生图映射是否匹配。'),
+    translateDiagnostic(t, 'generate.error.default.action3', '如果刚改过配置，先保存配置后用 1 张图或小尺寸重试。')
+  ];
+}
 
 export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord | null, t?: Translator): GenerationFailureDiagnosis {
   const raw = record?.raw;
@@ -116,18 +118,20 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: needsEndpoint ? 'network' : 'unknown',
       severity: 'error',
-      title: needsEndpoint ? 'SD WebUI / Forge 本地 API 不可用' : 'SD WebUI / Forge 本地生成失败',
-      summary: record?.error || extractRawErrorMessage(raw) || '本地 SD WebUI / Forge txt2img 未完成，请检查端点、模型、采样器或参数。',
+      title: needsEndpoint
+        ? translateDiagnostic(t, 'generate.error.sd.endpointTitle', 'SD WebUI / Forge 本地 API 不可用')
+        : translateDiagnostic(t, 'generate.error.sd.failedTitle', 'SD WebUI / Forge 本地生成失败'),
+      summary: translateDiagnostic(t, 'generate.error.sd.summary', record?.error || extractRawErrorMessage(raw) || '本地 SD WebUI / Forge txt2img 未完成，请检查端点、模型、采样器或参数。'),
       actions: needsEndpoint
         ? [
-            '确认 Stable Diffusion WebUI / Forge 已启动，并且启动参数包含 --api。',
-            '到“平台接入 > 本地模型 > Stable Diffusion WebUI / Forge”检查 Base URL 和端口。',
-            '先在浏览器打开 WebUI，确认本地服务可访问，再运行“测试连接”。'
+            translateDiagnostic(t, 'generate.error.sd.endpointAction1', '确认 Stable Diffusion WebUI / Forge 已启动，并且启动参数包含 --api。'),
+            translateDiagnostic(t, 'generate.error.sd.endpointAction2', '到“平台接入 > 本地模型 > Stable Diffusion WebUI / Forge”检查 Base URL 和端口。'),
+            translateDiagnostic(t, 'generate.error.sd.endpointAction3', '先在浏览器打开 WebUI，确认本地服务可访问，再运行“测试连接”。')
           ]
         : [
-            '先在 WebUI / Forge 的 txt2img 页面测试同一段 Prompt。',
-            '检查 checkpoint、采样器、图片尺寸和显存余量。',
-            '打开失败记录详情，查看原始 /sdapi/v1/txt2img 响应。'
+            translateDiagnostic(t, 'generate.error.sd.failedAction1', '先在 WebUI / Forge 的 txt2img 页面测试同一段 Prompt。'),
+            translateDiagnostic(t, 'generate.error.sd.failedAction2', '检查 checkpoint、采样器、图片尺寸和显存余量。'),
+            translateDiagnostic(t, 'generate.error.sd.failedAction3', '打开失败记录详情，查看原始 /sdapi/v1/txt2img 响应。')
           ],
       details,
       rawMessage,
@@ -141,12 +145,12 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: 'timeout-background',
       severity: 'warning',
-      title: '同步超时，后台可能仍在生成',
-      summary: '连接先断开了，不一定代表任务失败。中转站或上游可能仍在后台处理。',
+      title: translateDiagnostic(t, 'generate.error.timeout.title', '同步超时，后台可能仍在生成'),
+      summary: translateDiagnostic(t, 'generate.error.timeout.summary', '连接先断开了，不一定代表任务失败。中转站或上游可能仍在后台处理。'),
       actions: [
-        '先点“重载历史”，或稍后到作品画廊/中转站后台查看是否已生成。',
-        '下次可先降低尺寸、质量或生成数量，减少同步等待时间。',
-        '如果经常出现，优先检查中转站是否支持后台任务轮询。'
+        translateDiagnostic(t, 'generate.error.timeout.action1', '先点“重载历史”，或稍后到作品画廊/中转站后台查看是否已生成。'),
+        translateDiagnostic(t, 'generate.error.timeout.action2', '下次可先降低尺寸、质量或生成数量，减少同步等待时间。'),
+        translateDiagnostic(t, 'generate.error.timeout.action3', '如果经常出现，优先检查中转站是否支持后台任务轮询。')
       ],
       details,
       rawMessage,
@@ -161,12 +165,12 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: 'content-safety',
       severity: 'warning',
-      title: '内容安全拦截',
-      summary: '请求被安全策略拦截，通常需要修改提示词或参考图后再提交。',
+      title: translateDiagnostic(t, 'generate.error.safety.title', '内容安全拦截'),
+      summary: translateDiagnostic(t, 'generate.error.safety.summary', '请求被安全策略拦截，通常需要修改提示词或参考图后再提交。'),
       actions: [
-        '删除攻击、露骨、暴力、真实人物敏感身份等高风险描述。',
-        '如果提示词没问题，换一张参考图或减少参考图中的敏感元素。',
-        '不要直接重试同一请求，先改 Prompt 或输入图。'
+        translateDiagnostic(t, 'generate.error.safety.action1', '删除攻击、露骨、暴力、真实人物敏感身份等高风险描述。'),
+        translateDiagnostic(t, 'generate.error.safety.action2', '如果提示词没问题，换一张参考图或减少参考图中的敏感元素。'),
+        translateDiagnostic(t, 'generate.error.safety.action3', '不要直接重试同一请求，先改 Prompt 或输入图。')
       ],
       details,
       rawMessage,
@@ -180,12 +184,12 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: 'auth',
       severity: 'error',
-      title: '认证失败',
-      summary: '当前 API Key 没被服务商接受，可能是 Key 无效、过期、填错通道或中转站鉴权格式不对。',
+      title: translateDiagnostic(t, 'generate.error.auth.title', '认证失败'),
+      summary: translateDiagnostic(t, 'generate.error.auth.summary', '当前 API Key 没被服务商接受，可能是 Key 无效、过期、填错通道或中转站鉴权格式不对。'),
       actions: [
-        '到平台接入页重新保存当前 Provider profile 的 API Key。',
-        '确认 Base URL 对应的是同一家中转站，不要把官方 Key 和中转站 Key 混用。',
-        '如果中转站要求额外 Header，检查额外 Header JSON 是否正确。'
+        translateDiagnostic(t, 'generate.error.auth.action1', '到平台接入页重新保存当前 Provider profile 的 API Key。'),
+        translateDiagnostic(t, 'generate.error.auth.action2', '确认 Base URL 对应的是同一家中转站，不要把官方 Key 和中转站 Key 混用。'),
+        translateDiagnostic(t, 'generate.error.auth.action3', '如果中转站要求额外 Header，检查额外 Header JSON 是否正确。')
       ],
       details,
       rawMessage,
@@ -199,12 +203,12 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: 'permission',
       severity: 'error',
-      title: '权限不足或模型未开通',
-      summary: '账号/Key 可能没有当前模型、图片接口或图生图能力的权限。',
+      title: translateDiagnostic(t, 'generate.error.permission.title', '权限不足或模型未开通'),
+      summary: translateDiagnostic(t, 'generate.error.permission.summary', '账号/Key 可能没有当前模型、图片接口或图生图能力的权限。'),
       actions: [
-        '换一个已确认支持生图的模型测试。',
-        '检查中转站账号是否开通图片模型、图生图和对应额度。',
-        '官方 OpenAI 通道需要确认组织验证、项目权限和模型权限。'
+        translateDiagnostic(t, 'generate.error.permission.action1', '换一个已确认支持生图的模型测试。'),
+        translateDiagnostic(t, 'generate.error.permission.action2', '检查中转站账号是否开通图片模型、图生图和对应额度。'),
+        translateDiagnostic(t, 'generate.error.permission.action3', '官方 OpenAI 通道需要确认组织验证、项目权限和模型权限。')
       ],
       details,
       rawMessage,
@@ -218,12 +222,12 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: hasAny(lower, ['rate limit', 'too many requests', '限流', '并发']) ? 'rate-limit' : 'quota',
       severity: 'warning',
-      title: '额度/频率受限',
-      summary: '当前账号可能余额不足、达到频率限制、并发限制或项目账单上限。',
+      title: translateDiagnostic(t, 'generate.error.quota.title', '额度/频率受限'),
+      summary: translateDiagnostic(t, 'generate.error.quota.summary', '当前账号可能余额不足、达到频率限制、并发限制或项目账单上限。'),
       actions: [
-        '检查中转站余额、套餐、并发限制和失败扣费规则。',
-        '降低生成数量/尺寸后重试，或等一段时间再试。',
-        '如果是官方 OpenAI，检查项目用量上限、付款方式和组织额度。'
+        translateDiagnostic(t, 'generate.error.quota.action1', '检查中转站余额、套餐、并发限制和失败扣费规则。'),
+        translateDiagnostic(t, 'generate.error.quota.action2', '降低生成数量/尺寸后重试，或等一段时间再试。'),
+        translateDiagnostic(t, 'generate.error.quota.action3', '如果是官方 OpenAI，检查项目用量上限、付款方式和组织额度。')
       ],
       details,
       rawMessage,
@@ -237,11 +241,13 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: 'protocol',
       severity: 'error',
-      title: referenceCount > 1 ? '多参考图协议不匹配' : '图生图协议不匹配',
+      title: referenceCount > 1
+        ? translateDiagnostic(t, 'generate.error.protocol.multiTitle', '多参考图协议不匹配')
+        : translateDiagnostic(t, 'generate.error.protocol.singleTitle', '图生图协议不匹配'),
       summary: referenceCount > 1
-        ? '当前服务商可能只兼容单参考图，或不接受现在的多图字段结构。'
-        : '当前图生图字段、请求形态或接口路径与服务商要求不一致。',
-      actions: protocolActions(protocolMapping, referenceCount),
+        ? translateDiagnostic(t, 'generate.error.protocol.multiSummary', '当前服务商可能只兼容单参考图，或不接受现在的多图字段结构。')
+        : translateDiagnostic(t, 'generate.error.protocol.singleSummary', '当前图生图字段、请求形态或接口路径与服务商要求不一致。'),
+      actions: protocolActions(protocolMapping, referenceCount, t),
       details,
       rawMessage,
       httpStatus,
@@ -254,12 +260,14 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: hasAny(lower, ['model', '模型']) ? 'model' : 'protocol',
       severity: 'error',
-      title: hasAny(lower, ['model', '模型']) ? '模型不存在或名称不对' : '接口路径不存在',
-      summary: '服务商没有找到当前模型或接口路径。',
+      title: hasAny(lower, ['model', '模型'])
+        ? translateDiagnostic(t, 'generate.error.notFound.modelTitle', '模型不存在或名称不对')
+        : translateDiagnostic(t, 'generate.error.notFound.endpointTitle', '接口路径不存在'),
+      summary: translateDiagnostic(t, 'generate.error.notFound.summary', '服务商没有找到当前模型或接口路径。'),
       actions: [
-        '从中转站后台复制准确模型名，避免手打别名。',
-        '检查协议类型和 endpoint path，例如官方图生图应是 /v1/images/edits。',
-        '如果模型列表拉取失败，先手动填一个确认可用的图片模型。'
+        translateDiagnostic(t, 'generate.error.notFound.action1', '从中转站后台复制准确模型名，避免手打别名。'),
+        translateDiagnostic(t, 'generate.error.notFound.action2', '检查协议类型和 endpoint path，例如官方图生图应是 /v1/images/edits。'),
+        translateDiagnostic(t, 'generate.error.notFound.action3', '如果模型列表拉取失败，先手动填一个确认可用的图片模型。')
       ],
       details,
       rawMessage,
@@ -273,12 +281,12 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: 'parameter',
       severity: 'error',
-      title: '请求参数不被接受',
-      summary: '服务商拒绝了当前参数，常见原因是尺寸、质量、模型名、输出格式或参考图字段不支持。',
+      title: translateDiagnostic(t, 'generate.error.parameter.title', '请求参数不被接受'),
+      summary: translateDiagnostic(t, 'generate.error.parameter.summary', '服务商拒绝了当前参数，常见原因是尺寸、质量、模型名、输出格式或参考图字段不支持。'),
       actions: [
-        '先切回常用尺寸、质量“自动”、生成数量 1 后重试。',
-        '图生图先只保留 1 张参考图，确认单图成功后再试多图。',
-        '检查平台接入里的协议类型、图生图映射和接口路径。'
+        translateDiagnostic(t, 'generate.error.parameter.action1', '先切回常用尺寸、质量“自动”、生成数量 1 后重试。'),
+        translateDiagnostic(t, 'generate.error.parameter.action2', '图生图先只保留 1 张参考图，确认单图成功后再试多图。'),
+        translateDiagnostic(t, 'generate.error.parameter.action3', '检查平台接入里的协议类型、图生图映射和接口路径。')
       ],
       details,
       rawMessage,
@@ -292,12 +300,12 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: 'response-format',
       severity: 'error',
-      title: '返回内容不是标准 JSON',
-      summary: '接口返回了 HTML、网关页或非标准响应，通常是 Base URL/路径不对，或中转站需要浏览器验证。',
+      title: translateDiagnostic(t, 'generate.error.responseFormat.title', '返回内容不是标准 JSON'),
+      summary: translateDiagnostic(t, 'generate.error.responseFormat.summary', '接口返回了 HTML、网关页或非标准响应，通常是 Base URL/路径不对，或中转站需要浏览器验证。'),
       actions: [
-        '检查 Base URL 不要带多余路径，endpoint path 单独填写。',
-        '确认中转站 API 域名不是网页控制台地址。',
-        '如果返回 Cloudflare/登录页，说明该地址不适合直接作为 API。'
+        translateDiagnostic(t, 'generate.error.responseFormat.action1', '检查 Base URL 不要带多余路径，endpoint path 单独填写。'),
+        translateDiagnostic(t, 'generate.error.responseFormat.action2', '确认中转站 API 域名不是网页控制台地址。'),
+        translateDiagnostic(t, 'generate.error.responseFormat.action3', '如果返回 Cloudflare/登录页，说明该地址不适合直接作为 API。')
       ],
       details,
       rawMessage,
@@ -311,12 +319,12 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: 'server',
       severity: 'warning',
-      title: '服务商/中转站异常',
-      summary: '请求已到服务端，但上游或中转站没有正常完成。',
+      title: translateDiagnostic(t, 'generate.error.server.title', '服务商/中转站异常'),
+      summary: translateDiagnostic(t, 'generate.error.server.summary', '请求已到服务端，但上游或中转站没有正常完成。'),
       actions: [
-        '稍后重试，或换同平台其他图片模型测试。',
-        '降低尺寸、质量、生成数量，排除单次任务过重。',
-        '如果持续失败，把 trace/request id 发给中转站排查。'
+        translateDiagnostic(t, 'generate.error.server.action1', '稍后重试，或换同平台其他图片模型测试。'),
+        translateDiagnostic(t, 'generate.error.server.action2', '降低尺寸、质量、生成数量，排除单次任务过重。'),
+        translateDiagnostic(t, 'generate.error.server.action3', '如果持续失败，把 trace/request id 发给中转站排查。')
       ],
       details,
       rawMessage,
@@ -330,12 +338,12 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: 'network',
       severity: 'error',
-      title: '网络连接失败',
-      summary: '软件没有稳定连到当前 API 地址，可能是地址不可达、证书问题或服务临时断开。',
+      title: translateDiagnostic(t, 'generate.error.network.title', '网络连接失败'),
+      summary: translateDiagnostic(t, 'generate.error.network.summary', '软件没有稳定连到当前 API 地址，可能是地址不可达、证书问题或服务临时断开。'),
       actions: [
-        '检查 Base URL 是否能在浏览器或中转站文档中确认。',
-        '不要修改系统代理；先换一个已验证可用的中转站 API 地址测试。',
-        '如果是本地服务，确认服务端口已启动。'
+        translateDiagnostic(t, 'generate.error.network.action1', '检查 Base URL 是否能在浏览器或中转站文档中确认。'),
+        translateDiagnostic(t, 'generate.error.network.action2', '不要修改系统代理；先换一个已验证可用的中转站 API 地址测试。'),
+        translateDiagnostic(t, 'generate.error.network.action3', '如果是本地服务，确认服务端口已启动。')
       ],
       details,
       rawMessage,
@@ -349,12 +357,12 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
     return buildDiagnosis({
       category: 'no-image',
       severity: 'error',
-      title: '接口成功响应但没有图片',
-      summary: '服务端返回了响应，但里面没有可提取的图片 URL 或 base64。',
+      title: translateDiagnostic(t, 'generate.error.noImage.title', '接口成功响应但没有图片'),
+      summary: translateDiagnostic(t, 'generate.error.noImage.summary', '服务端返回了响应，但里面没有可提取的图片 URL 或 base64。'),
       actions: [
-        '确认当前模型是真正的生图模型，而不是只返回文本的对话模型。',
-        '检查协议类型：Responses、Images、Chat Completions 的返回结构不同。',
-        '打开失败记录详情，查看 raw 响应里图片字段位置是否和当前解析规则不一致。'
+        translateDiagnostic(t, 'generate.error.noImage.action1', '确认当前模型是真正的生图模型，而不是只返回文本的对话模型。'),
+        translateDiagnostic(t, 'generate.error.noImage.action2', '检查协议类型：Responses、Images、Chat Completions 的返回结构不同。'),
+        translateDiagnostic(t, 'generate.error.noImage.action3', '打开失败记录详情，查看 raw 响应里图片字段位置是否和当前解析规则不一致。')
       ],
       details,
       rawMessage,
@@ -367,9 +375,9 @@ export function diagnoseGenerationFailure(record?: DiagnosableGenerationRecord |
   return buildDiagnosis({
     category: 'unknown',
     severity: 'error',
-    title: '生图失败，原因待确认',
-    summary: '这类错误还没有被明确归类，需要结合 HTTP 状态、trace id 和 raw 响应继续判断。',
-    actions: DEFAULT_ACTIONS,
+    title: translateDiagnostic(t, 'generate.error.unknown.title', '生图失败，原因待确认'),
+    summary: translateDiagnostic(t, 'generate.error.unknown.summary', '这类错误还没有被明确归类，需要结合 HTTP 状态、trace id 和 raw 响应继续判断。'),
+    actions: defaultActions(t),
     details,
     rawMessage,
     httpStatus,
@@ -502,24 +510,24 @@ function isProtocolMismatch(
   return referenceCount > 1 && mapping?.image_to_image_adapter === 'json-image-array' && httpStatus === 400;
 }
 
-function protocolActions(mapping: ProtocolMapping | undefined, referenceCount: number) {
+function protocolActions(mapping: ProtocolMapping | undefined, referenceCount: number, t?: Translator) {
   const adapter = mapping?.image_to_image_adapter;
   if (referenceCount > 1) {
     return [
-      '先只保留 1 张参考图重试，确认单图链路稳定。',
+      translateDiagnostic(t, 'generate.error.protocol.multiActionKeepOne', '先只保留 1 张参考图重试，确认单图链路稳定。'),
       adapter === 'json-image-array'
-        ? '如果服务商是 GPT Image 官方兼容路线，改用 OpenAI Images edits，并把路径设为 /v1/images/edits。'
-        : '确认服务商文档是否支持多参考图，以及字段名是 image[]、images 还是 input_image。',
-      '如果中转站只支持单图，把多参考作为待接入能力，不要直接按 4 张发送。',
-      '保留当前 trace id，发给中转站确认多图字段结构。'
+        ? translateDiagnostic(t, 'generate.error.protocol.multiActionOpenAIEdit', '如果服务商是 GPT Image 官方兼容路线，改用 OpenAI Images edits，并把路径设为 /v1/images/edits。')
+        : translateDiagnostic(t, 'generate.error.protocol.multiActionFields', '确认服务商文档是否支持多参考图，以及字段名是 image[]、images 还是 input_image。'),
+      translateDiagnostic(t, 'generate.error.protocol.multiActionSingleOnly', '如果中转站只支持单图，把多参考作为待接入能力，不要直接按 4 张发送。'),
+      translateDiagnostic(t, 'generate.error.protocol.multiActionTrace', '保留当前 trace id，发给中转站确认多图字段结构。')
     ];
   }
   return [
     adapter === 'openai-images-edit'
-      ? '确认 endpoint path 是 /v1/images/edits，不是 /v1/images/generations。'
-      : '在平台接入里切换图生图映射：OpenAI edits / Responses input_image / Chat image_url / JSON image-array 逐一匹配。',
-    '确认当前模型支持图生图，而不是纯文生图或聊天模型。',
-    '先用默认尺寸、质量自动、生成数量 1 测试。'
+      ? translateDiagnostic(t, 'generate.error.protocol.singleActionOpenAIEdit', '确认 endpoint path 是 /v1/images/edits，不是 /v1/images/generations。')
+      : translateDiagnostic(t, 'generate.error.protocol.singleActionSwitchMapping', '在平台接入里切换图生图映射：OpenAI edits / Responses input_image / Chat image_url / JSON image-array 逐一匹配。'),
+    translateDiagnostic(t, 'generate.error.protocol.singleActionModel', '确认当前模型支持图生图，而不是纯文生图或聊天模型。'),
+    translateDiagnostic(t, 'generate.error.protocol.singleActionDefaults', '先用默认尺寸、质量自动、生成数量 1 测试。')
   ];
 }
 
