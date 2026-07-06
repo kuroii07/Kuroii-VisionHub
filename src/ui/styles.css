@@ -22435,40 +22435,49 @@ body {
 }
 
 .appShell[data-language="en-US"] .workspaceGenerate .promptActions {
+  flex: 1 1 auto;
   max-width: 100%;
+  min-width: 0;
   justify-content: flex-end;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 5px;
+  flex-wrap: nowrap;
+  gap: 4px;
   overflow: visible;
 }
 
 .appShell[data-language="en-US"] .workspaceGenerate .promptActions .chipButton {
-  flex: 0 1 126px;
-  max-width: 132px;
-  padding-inline: 8px;
+  flex: 0 1 116px;
+  max-width: 116px;
+  min-width: 0;
+  padding-inline: 7px;
+}
+
+.appShell[data-language="en-US"] .workspaceGenerate .promptActions > .chipButton:last-child {
+  flex: 0 0 116px;
+  max-width: 116px;
 }
 
 .appShell[data-language="en-US"] .workspaceGenerate .promptActions .promptSaveIconButton {
-  flex: 0 0 32px;
-  width: 32px;
-  min-width: 32px;
+  flex: 0 0 30px;
+  width: 30px;
+  min-width: 30px;
 }
 
 .appShell[data-language="en-US"] .workspaceGenerate .promptPolishQuickGroup {
-  flex: 0 1 226px;
-  max-width: 226px;
+  flex: 0 1 204px;
+  max-width: 204px;
+  min-width: 0;
   gap: 4px;
 }
 
 .appShell[data-language="en-US"] .workspaceGenerate .promptPolishQuickGroup .chipButton {
-  flex: 0 1 108px;
-  max-width: 112px;
+  flex: 0 1 102px;
+  max-width: 102px;
 }
 
 .appShell[data-language="en-US"] .workspaceGenerate .promptPolishQuickSelect {
-  width: 78px;
-  flex: 0 1 78px;
+  width: 62px;
+  flex: 0 0 62px;
 }
 
 .appShell[data-language="en-US"] .workspaceGenerate .promptPolishDetailButton {

@@ -1793,7 +1793,7 @@ export function ModernGeneratePage(props: {
               <button
                 className="clearCanvasButton"
                 type="button"
-                data-tooltip={t('generate.canvas.clearTooltip')}
+                title={t('generate.canvas.clearTooltip')}
                 aria-label={t('generate.canvas.clearAria')}
                 onClick={clearCurrentCanvas}
                 disabled={isCurrentModeGenerating}
