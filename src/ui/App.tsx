@@ -5062,8 +5062,8 @@ export function App() {
     try {
       if (!providerDiagnostics.length) throw new Error('请先运行一次配置自检报告。');
       const report = buildProviderDiagnosticsReport(providerDiagnostics, {
-        platformLabel: providerPlatformOptions.find((item) => item.id === selectedPlatformType)?.label ?? selectedPlatformType,
-        serviceLabel: selectedServiceTemplate.label,
+        platformLabel: t(`provider.platform.${selectedPlatformType}.label` as Parameters<Translator>[0]),
+        serviceLabel: t(`provider.service.${selectedServiceTemplate.id}.label` as Parameters<Translator>[0]),
         providerName: selectedProvider.name,
         profileName: selectedProfile?.displayName,
         profileId: selectedProfile?.id ?? selectedProfileId,
@@ -10362,13 +10362,13 @@ const LibraryPage = memo(function LibraryPage(props: {
   }, [libraryMeta, libraryOrganization, displaySettings, customQuickFilters]);
   const isDockSubPanel = activePanel !== null && activePanel !== 'main' && activePanel !== 'add';
   const providerNameMap = useMemo(
-    () => new Map(props.providers.map((provider) => [provider.id, providerGenerationLabel(provider)])),
-    [props.providers]
+    () => new Map(props.providers.map((provider) => [provider.id, providerGenerationLabel(provider, props.t)])),
+    [props.providers, props.t]
   );
   const providerOptions = useMemo(
     () => [
       { value: 'all', label: lt('library.filter.providerAll') },
-      ...props.providers.map((provider) => ({ value: provider.id, label: providerGenerationLabel(provider) }))
+      ...props.providers.map((provider) => ({ value: provider.id, label: providerGenerationLabel(provider, props.t) }))
     ],
     [props.providers, props.t]
   );
@@ -13603,12 +13603,12 @@ function providerProfileBelongsToTemplate(
   return template.id === 'aggregator-openai-compatible' || template.id === 'official-openai' || template.id === 'official-minimax' || template.id === 'official-gemini' || template.id === 'local-sd-webui';
 }
 
-function providerGenerationLabel(provider: ReturnType<typeof listProviders>[number]) {
+function providerGenerationLabel(provider: ReturnType<typeof listProviders>[number], t: Translator) {
   const template = getDefaultProviderServiceTemplateForProvider(provider.id);
-  const platform = template
-    ? providerPlatformOptions.find((item) => item.id === template.platformType)
-    : undefined;
-  return template && platform ? `${platform.label} · ${template.label}` : provider.name;
+  if (!template) return provider.name;
+  const platformLabel = t(`provider.platform.${template.platformType}.label` as Parameters<Translator>[0]);
+  const serviceLabel = t(`provider.service.${template.id}.label` as Parameters<Translator>[0]);
+  return `${platformLabel} · ${serviceLabel}`;
 }
 
 type ProviderProfileFilter = 'all' | 'enabled' | 'passed' | 'warning' | 'failed' | 'untested';
