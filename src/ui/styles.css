@@ -1659,7 +1659,7 @@ textarea {
   white-space: nowrap;
 }
 
-.promptHeaderRow span {
+.promptHeaderRow > div:first-child span {
   color: #8592a6;
   font-size: 12px;
 }
@@ -2075,7 +2075,7 @@ textarea {
   color: #f4f7ff;
 }
 
-.promptHeaderRow span {
+.promptHeaderRow > div:first-child span {
   color: #91a0b7;
 }
 
@@ -2646,7 +2646,7 @@ select option {
   letter-spacing: 0.02em;
 }
 
-.workspaceGenerate .promptHeaderRow span {
+.workspaceGenerate .promptHeaderRow > div:first-child span {
   padding: 2px 8px;
   border-radius: 999px;
   color: #9facbf;
@@ -4208,7 +4208,7 @@ kbd {
 .workspaceGenerate .quickToolbar > span,
 .workspaceGenerate .modeToggle,
 .workspaceGenerate .chipButton.ghostSoon,
-.workspaceGenerate .promptHeaderRow span,
+.workspaceGenerate .promptHeaderRow > div:first-child span,
 .workspaceGenerate .ratioGrid button,
 .workspaceGenerate .resolutionList button {
   color: var(--app-text-2);
@@ -8789,7 +8789,7 @@ body {
   min-width: 120px;
 }
 
-.workspaceGenerate .promptHeaderRow span {
+.workspaceGenerate .promptHeaderRow > div:first-child span {
   color: var(--app-muted);
   border: 1px solid var(--app-line);
   background: var(--app-surface-2);
@@ -9426,7 +9426,7 @@ body {
 .appShell.theme-light .segmentedControl,
 .appShell.theme-light .workspaceGenerate .quickToolbar > span,
 .appShell.theme-light .workspaceGenerate .modeToggle,
-.appShell.theme-light .workspaceGenerate .promptHeaderRow span,
+.appShell.theme-light .workspaceGenerate .promptHeaderRow > div:first-child span,
 .appShell.theme-light .workspaceGenerate .chipButton,
 .appShell.theme-light .workspaceGenerate .ratioGrid button,
 .appShell.theme-light .workspaceGenerate .resolutionList button,
@@ -9495,7 +9495,7 @@ body {
 
 .appShell.theme-dark .workspaceGenerate .quickToolbar > span,
 .appShell.theme-dark .workspaceGenerate .modeToggle,
-.appShell.theme-dark .workspaceGenerate .promptHeaderRow span,
+.appShell.theme-dark .workspaceGenerate .promptHeaderRow > div:first-child span,
 .appShell.theme-dark .workspaceGenerate .chipButton,
 .appShell.theme-dark .workspaceGenerate .ratioGrid button,
 .appShell.theme-dark .workspaceGenerate .resolutionList button,
