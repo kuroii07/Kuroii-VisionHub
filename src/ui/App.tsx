@@ -2127,6 +2127,7 @@ function readUrlSearchList(name: string) {
 export function App() {
   const providers = useMemo(() => listProviders(), []);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => readInitialAppSettings());
+  const t = useMemo(() => createTranslator(appSettings.language), [appSettings.language]);
   const [page, setPage] = useState<Page>(() => readInitialPage(appSettings.startupPage));
   const [secretDraft, setSecretDraft] = useState('');
   const [secretAvailable, setSecretAvailable] = useState(false);
@@ -4154,7 +4155,7 @@ export function App() {
     if (!imageUrl) return null;
     return {
       id: `generated-${record.id}-${Date.now()}`,
-      name: record.providerName ? `${record.providerName} 生成图` : '生成结果',
+      name: record.providerName ? t('app.reference.generatedName', { provider: record.providerName }) : t('app.reference.generatedFallback'),
       mimeType: imageUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : imageUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/png',
       dataUrl: imageUrl.startsWith('data:image/') ? imageUrl : undefined,
       localPath: record.localImagePaths?.[0],
@@ -4251,7 +4252,7 @@ export function App() {
         if (!cancelled && (checked || recovered)) {
           window.dispatchEvent(new CustomEvent(appToastEventName, {
             detail: {
-              message: recovered ? `后台任务自动恢复 ${recovered} 条记录` : `已自动重查 ${checked} 条后台记录，暂未发现可恢复图片`,
+              message: recovered ? t('app.message.backgroundRecovered', { count: recovered }) : t('app.message.backgroundChecked', { count: checked }),
               level: recovered ? 'success' : 'info'
             } satisfies ToastEventDetail
           }));
@@ -4269,7 +4270,7 @@ export function App() {
     if (!asset.imageUrl) return;
     const reference: ReferenceImage = {
       id: `inspiration-${asset.id}-${Date.now()}`,
-      name: asset.title || '灵感收藏',
+      name: asset.title || t('inspiration.flow.referenceName'),
       mimeType: asset.imageUrl.startsWith('data:image/jpeg') ? 'image/jpeg' : asset.imageUrl.startsWith('data:image/webp') ? 'image/webp' : 'image/png',
       dataUrl: asset.imageUrl.startsWith('data:image/') ? asset.imageUrl : undefined,
       localPath: asset.imagePath,
@@ -4287,7 +4288,7 @@ export function App() {
     setLibraryPreview(null);
     setInspirationPreview(null);
     navigateTo('generate');
-  }, [navigateTo, prompt, setPrompt]);
+  }, [navigateTo, prompt, setPrompt, t]);
 
   const useInspirationPrompt = useCallback((promptText: string) => {
     if (!promptText.trim()) return;
@@ -4297,19 +4298,19 @@ export function App() {
 
   const createPromptTemplateFromInspiration = useCallback((title: string, promptText: string, tags: string[]) => {
     const trimmedPrompt = promptText.trim();
-    if (!trimmedPrompt) return '没有可用 Prompt。';
+    if (!trimmedPrompt) return t('inspiration.flow.noPrompt');
     const templates = loadPromptTemplates();
     const template: PromptTemplate = {
       id: `inspiration-${Date.now()}`,
-      title: title.trim() || '灵感模板',
+      title: title.trim() || t('inspiration.flow.templateTitle'),
       category: 'style',
-      tone: '来自灵感中心收藏',
+      tone: t('inspiration.flow.templateTone'),
       prompt: trimmedPrompt,
-      tags: tags.length ? tags : ['灵感中心']
+      tags: tags.length ? tags : [t('inspiration.flow.templateTag')]
     };
     savePromptTemplates([template, ...templates.filter((item) => item.prompt !== trimmedPrompt)].slice(0, 200));
-    return '已转入提示词库。';
-  }, []);
+    return t('inspiration.flow.templateSaved');
+  }, [t]);
 
   function updateAppSettings(patch: Partial<AppSettings>) {
     if (typeof patch.sidebarCollapsed === 'boolean') {
@@ -5926,7 +5927,6 @@ export function App() {
     }
   }
 
-  const t = useMemo(() => createTranslator(appSettings.language), [appSettings.language]);
   const navLabels: Record<Page, string> = {
     home: t('nav.home'),
     generate: t('nav.generate'),
