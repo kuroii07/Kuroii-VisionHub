@@ -169,9 +169,17 @@ Current checkpoint: `0.5.0` release-candidate preparation. `0.4.6` Chinese / Eng
 - 0.3.10 收口补丁已完成绿色版构建验证：Windows release exe 已同步到本地绿色版目录，启动不再出现调试控制台；工作区首页“继续上次创作”保持左右排版，左侧预览按原始图片比例完整显示，右侧标题和 Prompt 保持摘要展示，避免长文本撑破首页布局。
 - 偏好设置里的“提示词与历史”已完成收束：历史策略保留在普通偏好卡片，提示词润色配置和图片反推配置已整理到独立“提示词工具区”；如果后续继续增长，再拆成单独的提示词工具页。
 - 0.4.6 中英文国际化 V1 已完成收口：`src/ui/App.tsx` 界面中文硬编码扫描为 0，主框架、核心页面、Provider / 画廊 / 偏好设置等主要可见文案已迁入共享 i18n 字典；灵感中心来源目录内容、Prompt 分类关键词和 toast 中文语义识别作为内容数据 / 启发式规则保留。
+- 0.5.0 release-candidate first slice has been validated: version metadata is synchronized to `0.5.0`, release-candidate consistency checks were added and passed, `run_checks.ps1` now covers version consistency, repository hygiene, smoke, production build, Cargo check, and diff whitespace checks, and the draft release notes live at `docs/release-notes/0.5.0-draft.md`.
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.0 Release-candidate preparation
+
+- App version is now `0.5.0`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Added `scripts/release_candidate_check.py` to verify version consistency and tracked repository hygiene before release-candidate builds.
+- `scripts/run_checks.ps1` now runs the release-candidate check, smoke check, production build, Cargo check, and `git diff --check` from the project root after loading the portable toolchain.
+- Added `docs/release-notes/0.5.0-draft.md` as the working release notes draft. Green release exe validation and final artifact SHA256 recording are still next steps.
 
 ### v0.4.6 Chinese / English Internationalization V1
 
@@ -524,9 +532,11 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\run_checks.ps1"
 
 这个脚本会运行：
 
-- smoke check
+- release candidate consistency check
+- smoke check / UI QA baseline
 - TypeScript + Vite build
 - Cargo check
+- `git diff --check`
 
 ## 日常开发命令
 

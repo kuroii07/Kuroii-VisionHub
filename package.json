@@ -1,7 +1,7 @@
 {
   "name": "visionhub-studio",
   "private": true,
-  "version": "0.4.6",
+  "version": "0.5.0",
   "type": "module",
   "description": "Desktop-first multi-provider AI image generation workspace.",
   "scripts": {
@@ -10,7 +10,7 @@
     "build": "tsc && vite build",
     "tauri:build": "tauri build",
     "smoke": "python scripts/smoke_check.py",
-    "verify": "python scripts/smoke_check.py && tsc --noEmit"
+    "verify": "powershell -ExecutionPolicy Bypass -File .\\scripts\\run_checks.ps1"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

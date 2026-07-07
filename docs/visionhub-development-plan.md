@@ -4,7 +4,7 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.4.6`
+- Current app version: `0.5.0`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
@@ -106,7 +106,7 @@
 | ~~`0.4.4`~~ | 轻量迁移支持 V1 | 数据目录入口、备份目录入口、迁移说明导出和安全边界说明 | closed |
 | ~~`0.4.5`~~ | Global experience and performance QA | First QA baseline implemented | no release |
 | ~~`0.4.6`~~ | Chinese / English Internationalization V1 | Closed final 0.4.x baseline | no release |
-| `0.5.0` | 发布候选准备 | 版本号、内部验证脚本、迁移文档、release notes 草稿和绿色版验收 | 视情况 |
+| `0.5.0` | Release-candidate preparation | Version consistency, validation scripts, migration docs, release notes draft, and green release validation | first slice validated |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -817,6 +817,8 @@ Acceptance:
 
 ### 5.27 `0.5.0` Release-candidate preparation
 
+Status 2026-07-07: first slice validated. Version consistency has moved to `0.5.0`; `scripts/release_candidate_check.py` verifies package / lock / Tauri / Cargo / app display / docs version alignment plus tracked repository hygiene; `scripts/run_checks.ps1` is the single local verification entry point before release-candidate builds.
+
 目标：
 
 - 从“持续开发版”进入“可迁移、可复现、可发布候选版”。
@@ -920,4 +922,4 @@ Acceptance:
 
 ## 9. 下一步推荐
 
-Next formal development should enter `0.5.0` release-candidate preparation: version consistency, validation scripts, release notes draft, repository hygiene, and green release exe validation.
+Next formal development should continue `0.5.0` release-candidate preparation with green release exe validation, release artifact SHA256 recording, and final repository hygiene review.
