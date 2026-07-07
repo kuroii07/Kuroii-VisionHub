@@ -80,6 +80,53 @@ def git_ls_files() -> list[str]:
     return [line.strip().replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
 
 
+
+TEXT_SCAN_SUFFIXES = {
+    ".css",
+    ".html",
+    ".js",
+    ".json",
+    ".jsx",
+    ".lock",
+    ".md",
+    ".ps1",
+    ".py",
+    ".rs",
+    ".svg",
+    ".toml",
+    ".ts",
+    ".tsx",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+
+SECRET_PATTERNS = {
+    # Do not print matched values. Report only file path and pattern label.
+    "openai_like_key": re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b"),
+    "google_api_key": re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b"),
+    "aws_access_key": re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
+    "long_bearer_token": re.compile(r"(?i)bearer\s+[A-Za-z0-9._-]{24,}"),
+}
+
+
+def check_no_tracked_secret_literals(tracked: list[str]) -> None:
+    hits: list[str] = []
+    for path in tracked:
+        file_path = ROOT / path
+        if file_path.suffix.lower() not in TEXT_SCAN_SUFFIXES:
+            continue
+        try:
+            content = file_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for label, pattern in SECRET_PATTERNS.items():
+            if pattern.search(content):
+                hits.append(f"{path} ({label})")
+                break
+
+    require(not hits, "tracked secret-like literals found: " + ", ".join(hits[:20]))
+
 def check_repository_hygiene() -> None:
     tracked = git_ls_files()
     forbidden_prefixes = (
@@ -94,6 +141,9 @@ def check_repository_hygiene() -> None:
         ".msi",
         ".blockmap",
         ".log",
+        ".zip",
+        ".7z",
+        ".rar",
     )
     forbidden_names = {
         ".env",
@@ -115,6 +165,7 @@ def check_repository_hygiene() -> None:
             bad_paths.append(path)
 
     require(not bad_paths, "tracked build/private artifacts found: " + ", ".join(bad_paths[:20]))
+    check_no_tracked_secret_literals(tracked)
 
 
 def main() -> None:

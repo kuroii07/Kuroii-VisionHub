@@ -177,7 +177,7 @@ Current checkpoint: `0.5.0` release-candidate preparation. `0.4.6` Chinese / Eng
 ### v0.5.0 Release-candidate preparation
 
 - App version is now `0.5.0`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
-- Added `scripts/release_candidate_check.py` to verify version consistency and tracked repository hygiene before release-candidate builds.
+- Added and hardened `scripts/release_candidate_check.py` to verify version consistency, tracked repository hygiene, forbidden build/archive artifacts, and high-risk secret-like literals before release-candidate builds.
 - `scripts/run_checks.ps1` now runs the release-candidate check, smoke check, production build, Cargo check, and `git diff --check` from the project root after loading the portable toolchain.
 - Updated `docs/release-notes/0.5.0-draft.md` with green release exe validation, MSI / NSIS bundle paths, local artifact sizes, SHA256 values, and remaining unsigned / installer-QA caveats.
 
