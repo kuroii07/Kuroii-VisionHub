@@ -4816,11 +4816,11 @@ export function App() {
   async function saveImageReverseSecret() {
     const trimmedSecret = imageReverseSecretDraft.trim();
     if (!trimmedSecret) {
-      setSettingsMessage(imageReverseSecretAvailable ? '图片反推专用 API Key 已配置；如需更换，请先输入新的 Key。' : '请先填写图片反推专用 API Key。');
+      setSettingsMessage(imageReverseSecretAvailable ? t('settings.imageReverseMessage.secretChangeRequired') : t('settings.imageReverseMessage.secretRequired'));
       return false;
     }
     if (!desktopRuntime) {
-      setSettingsMessage('当前是网页预览模式，只有 Tauri 桌面端会写入系统凭据。');
+      setSettingsMessage(t('provider.message.desktopSecretRequired'));
       return false;
     }
 
@@ -4829,7 +4829,7 @@ export function App() {
       const status = await saveProviderSecret(IMAGE_PROMPT_REVERSE_SECRET_ID, trimmedSecret);
       setImageReverseSecretAvailable(status.available);
       setImageReverseSecretDraft('');
-      setSettingsMessage('图片反推专用 API Key 已保存，不会影响生图平台配置。');
+      setSettingsMessage(t('settings.imageReverseMessage.secretSaved'));
       return status.available;
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
@@ -4844,7 +4844,7 @@ export function App() {
   }
 
   function saveImageReverseConfig() {
-    const displayName = imageReverseDraft.displayName.trim() || '图片反推 Prompt 专用配置';
+    const displayName = imageReverseDraft.displayName.trim() || t('settings.imageReverseConfigPlaceholder');
     const baseUrl = imageReverseDraft.baseUrl.trim();
     const modelId = imageReverseDraft.modelId.trim();
     try {
@@ -4865,25 +4865,25 @@ export function App() {
       extraHeadersJson: imageReverseDraft.extraHeadersJson.trim() || '{}'
     };
     updateAppSettings({ imagePromptReverse: nextSettings });
-    setSettingsMessage('图片反推 Prompt 专用配置已保存；它不会进入 AI 生图工作台模型列表。');
+    setSettingsMessage(t('settings.imageReverseMessage.configSaved'));
   }
 
   async function refreshImageReverseModels() {
     const baseUrl = imageReverseDraft.baseUrl.trim();
     if (!baseUrl) {
-      setSettingsMessage('请先填写图片反推专用 Base URL。');
+      setSettingsMessage(t('settings.imageReverseMessage.baseUrlRequired'));
       return;
     }
     if (imageReverseDraft.protocol === 'gemini-generate-content') {
-      setSettingsMessage('Gemini generateContent 暂不支持通过 /v1/models 自动刷新，请直接填写模型 ID。');
+      setSettingsMessage(t('settings.imageReverseMessage.geminiManualModel'));
       return;
     }
     if (!desktopRuntime) {
-      setSettingsMessage('当前是网页预览模式，只有 Tauri 桌面端可以刷新模型列表。');
+      setSettingsMessage(t('settings.imageReverseMessage.desktopRefreshRequired'));
       return;
     }
     if (!imageReverseSecretAvailable) {
-      setSettingsMessage('请先保存图片反推专用 API Key，再刷新模型列表。');
+      setSettingsMessage(t('settings.imageReverseMessage.secretRequiredBeforeRefresh'));
       return;
     }
 
@@ -4899,7 +4899,7 @@ export function App() {
         new Set([...models.map((model) => model.id), imageReverseDraft.modelId.trim()].filter(Boolean))
       );
       if (!modelOptions.length) {
-        setSettingsMessage('模型接口已返回，但没有发现可用模型。');
+        setSettingsMessage(t('settings.imageReverseMessage.noModels'));
         return;
       }
       setImageReverseDraft((current) => ({
@@ -4907,7 +4907,7 @@ export function App() {
         modelOptions,
         modelId: modelOptions.includes(current.modelId.trim()) ? current.modelId.trim() : ''
       }));
-      setSettingsMessage(`已刷新 ${modelOptions.length} 个候选模型，请在图片反推模型框里选择或手动填写后保存配置。`);
+      setSettingsMessage(t('settings.imageReverseMessage.modelsRefreshed', { count: modelOptions.length }));
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     } finally {
