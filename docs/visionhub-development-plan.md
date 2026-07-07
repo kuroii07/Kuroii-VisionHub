@@ -8,7 +8,7 @@
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.4.6` Chinese / English internationalization V1: shared i18n dictionary, real language switching for the app shell, workspace home, and preference entry points; continue migrating major pages without changing AI Create Desk layout.
+- Current focus: `0.5.0` release-candidate preparation: version consistency, validation scripts, release notes draft, repository hygiene, and green release exe validation. `0.4.6` i18n V1 is closed.
 
 ## 2. 后续开发前必读
 
@@ -104,7 +104,8 @@
 | ~~`0.4.2`~~ | Provider 稳定接入 V5 | 官方 API 增量、聚合站模板验证、能力测试和配置自检增强 | closed |
 | ~~`0.4.3`~~ | 本地模型增强 V2 | Stable Diffusion WebUI / Forge 连接、ComfyUI 图生图和本地结果统一入库 | first slice implemented |
 | ~~`0.4.4`~~ | 轻量迁移支持 V1 | 数据目录入口、备份目录入口、迁移说明导出和安全边界说明 | closed |
-| `0.4.5` | 全局体验与性能 QA | 浅色 / 暗色、长文本、多语言、空状态、错误状态和大型历史性能收口 | first QA pass implemented |
+| ~~`0.4.5`~~ | Global experience and performance QA | First QA baseline implemented | no release |
+| ~~`0.4.6`~~ | Chinese / English Internationalization V1 | Closed final 0.4.x baseline | no release |
 | `0.5.0` | 发布候选准备 | 版本号、内部验证脚本、迁移文档、release notes 草稿和绿色版验收 | 视情况 |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
@@ -797,7 +798,24 @@ Status 2026-07-02: first QA baseline plus prompt-tool settings consolidation imp
 - 视觉 QA 有截图或自动化证据，不能只凭主观观察声称完成。
 - 提示词润色和图片反推至少先收束到独立工具区，后续若继续膨胀再升级成单独页面。
 
-### 5.26 `0.5.0` 发布候选准备
+### 5.26 `0.4.6` Chinese / English Internationalization V1
+
+Status 2026-07-07: closed. `src/ui/App.tsx` static Chinese UI-text scan is now 0 lines. Main visible UI text for the app shell, core pages, Provider workflows, gallery workflows, preferences, shared dialogs, action messages, and fallback labels has moved to the shared `src/i18n` dictionary.
+
+Remaining Chinese scan matches are intentionally outside the UI-chrome migration scope:
+
+- Inspiration Center source-directory content in `src/ui/InspirationPage.tsx`: platform names, tags, notes, keywords, membership notes, and copyright notes are content-library data.
+- Prompt / image-type keyword heuristics in `src/ui/GeneratePage.tsx`: Chinese tokens are needed for local classification of user prompts.
+- Toast semantic heuristics in `src/ui/toast.ts`: Chinese tokens are needed to classify success / warning / error messages.
+- User prompts, model names, provider names, raw API errors, file paths, and user-saved templates remain untranslated by design.
+
+Acceptance:
+
+- Language switching keeps the AI Create Desk layout stable in Chinese and English.
+- Major visible app UI is covered by typed i18n keys instead of scattered hardcoded strings.
+- Content data and heuristics are documented so future scans do not treat them as unfinished UI migration.
+
+### 5.27 `0.5.0` Release-candidate preparation
 
 目标：
 
@@ -818,7 +836,7 @@ Status 2026-07-02: first QA baseline plus prompt-tool settings consolidation imp
 - release exe 能启动并进入主要页面。
 - 版本号、产品名、安装包名和 README 当前状态一致。
 
-### 5.27 `v1.0 前` 发布与迁移准备
+### 5.28 `v1.0 pre` Release and migration preparation
 
 目标：
 
@@ -902,4 +920,4 @@ Status 2026-07-02: first QA baseline plus prompt-tool settings consolidation imp
 
 ## 9. 下一步推荐
 
-Next formal development should continue `0.4.6` page-by-page i18n migration before moving to `0.5.0` release-candidate preparation.
+Next formal development should enter `0.5.0` release-candidate preparation: version consistency, validation scripts, release notes draft, repository hygiene, and green release exe validation.

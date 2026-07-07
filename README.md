@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.4.6` Chinese / English internationalization V1 / shared i18n dictionary, app shell, workspace home, and preference entry-point migration.
+Current checkpoint: `0.5.0` release-candidate preparation. `0.4.6` Chinese / English internationalization V1 has been closed as the final 0.4.x baseline.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -168,6 +168,7 @@ Current checkpoint: `0.4.6` Chinese / English internationalization V1 / shared i
 - 0.3.9 批量队列与多模型对比 V1 已进入可用性收尾：AI 创作台保留基础生图参数优先显示，批量变体和多模型对比统一收进队列下拉菜单和“批量 / 对比”弹窗；可把当前文生图 / 图生图参数加入当前选中的本地批量队列，也可在“批量变体”按多 Prompt × 多画面比例创建任务，或在“多模型对比”选择多个配置实例，一键按同一 Prompt 创建对比组任务。批量队列页已支持自定义队列、新建 / 重命名 / 删除队列、当前队列切换、单任务确认执行、取消、失败任务单个或批量重新入队、失败或已取消任务删除、连续队列执行、当前任务完成后暂停 / 继续、对比结果并排查看，以及本地批量模板保存 / 套用 / 删除；删除只移除本地队列任务或队列快照，不删除作品画廊记录或磁盘图片。
 - 0.3.10 收口补丁已完成绿色版构建验证：Windows release exe 已同步到本地绿色版目录，启动不再出现调试控制台；工作区首页“继续上次创作”保持左右排版，左侧预览按原始图片比例完整显示，右侧标题和 Prompt 保持摘要展示，避免长文本撑破首页布局。
 - 偏好设置里的“提示词与历史”已完成收束：历史策略保留在普通偏好卡片，提示词润色配置和图片反推配置已整理到独立“提示词工具区”；如果后续继续增长，再拆成单独的提示词工具页。
+- 0.4.6 中英文国际化 V1 已完成收口：`src/ui/App.tsx` 界面中文硬编码扫描为 0，主框架、核心页面、Provider / 画廊 / 偏好设置等主要可见文案已迁入共享 i18n 字典；灵感中心来源目录内容、Prompt 分类关键词和 toast 中文语义识别作为内容数据 / 启发式规则保留。
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
@@ -176,8 +177,9 @@ Current checkpoint: `0.4.6` Chinese / English internationalization V1 / shared i
 
 - App version is now `0.4.6`, synchronized across package metadata, Tauri metadata, Cargo metadata, app version display, README, and roadmap docs.
 - Added shared `src/i18n` dictionary and a typed translator so UI text can migrate out of scattered hardcoded strings.
-- Language switching now covers the app shell, navigation, theme toggle, workspace home, and the Preferences header / Appearance entry points.
-- This is the first i18n slice; user prompts, model names, provider names, raw API errors, file paths, and user-saved templates remain untranslated by design.
+- Language switching now covers the app shell, navigation, workspace home, AI Create Desk, Provider settings, gallery workflows, preferences, and shared dialogs / action messages.
+- `src/ui/App.tsx` now has zero Chinese hardcoded UI lines in the latest static scan.
+- Remaining Chinese matches are intentional content or heuristics: Inspiration Center source-directory data, Prompt / image-type keyword classification, and toast semantic detection. User prompts, model names, provider names, raw API errors, file paths, and user-saved templates remain untranslated by design.
 
 ### v0.4.5 Global Experience and Performance QA
 
@@ -848,9 +850,12 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
   - 不做独立健康检查中心，避免低价值扫描和复杂自动修复。
   - 偏好设置集中提供 AppData、作品画廊、图片收藏和备份目录入口。
   - 导出不含 API Key 的迁移说明，列出 Provider profile id、需要复制的目录和需要重新输入的凭据。
-- `0.4.5` 全局体验与性能 QA
+- ~~`0.4.5`~~ 全局体验与性能 QA - first QA baseline implemented
   - 全页面浅色 / 暗色、长文本、多语言、空状态、错误状态和大历史数据压力验收。
   - 检查图标按钮 tooltip、`aria-label`、危险操作确认和大型列表性能。
+- ~~`0.4.6`~~ Chinese / English Internationalization V1 - closed
+  - 共享 i18n 字典、语言切换、主框架和核心页面文案迁移已收口。
+  - 保留内容数据、用户数据、模型名、Provider 名、文件路径、raw API 错误和启发式关键词原文。
 - `0.5.0` 发布候选准备
   - 统一版本号、产品名、README 当前状态、验证脚本和 release notes 草稿。
   - 构建 release exe 做免安装绿色版验收。

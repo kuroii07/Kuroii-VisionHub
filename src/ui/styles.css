@@ -2694,7 +2694,7 @@ select option {
 }
 
 .workspaceGenerate .chipButton.ghostSoon::after {
-  content: '待接入';
+  content: 'TBD';
   margin-left: 6px;
   padding: 1px 5px;
   border-radius: 999px;
