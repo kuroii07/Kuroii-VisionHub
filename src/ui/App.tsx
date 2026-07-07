@@ -5131,11 +5131,11 @@ export function App() {
   async function importProviderConfigFromClipboard() {
     try {
       const text = await navigator.clipboard?.readText();
-      if (!text?.trim()) throw new Error('剪贴板里没有可粘贴的平台配置 JSON。');
+      if (!text?.trim()) throw new Error(t('provider.message.importClipboardEmpty'));
       const importedConfig = parseProviderConfigImport(text);
       setProviderConfig(importedConfig);
       setSelectedModel(importedConfig.modelId);
-      setConfigMessage('已从剪贴板粘贴配置，并填入配置详情。请确认后保存。');
+      setConfigMessage(t('provider.message.configPastedFromClipboard'));
     } catch (error) {
       setConfigMessage(error instanceof Error ? error.message : String(error));
     }
@@ -5146,7 +5146,7 @@ export function App() {
       const normalizedConfig = normalizeProviderConfig(providerConfig);
       const profile = buildProfileFromCurrentConfig(true);
       persistProfile({ ...profile, ...normalizedConfig, enabled: true });
-      setConfigMessage(`已将 ${normalizedConfig.modelId} 设为默认模型。`);
+      setConfigMessage(t('provider.message.defaultModelPinned', { model: normalizedConfig.modelId }));
     } catch (error) {
       setConfigMessage(error instanceof Error ? error.message : String(error));
     }
