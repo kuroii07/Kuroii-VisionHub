@@ -5159,8 +5159,8 @@ export function App() {
       }
       await openExternalUrl(platform.url);
       setFreePlatformMessage(prompt.trim()
-        ? `已复制 ${platform.name} 专用 Prompt，并打开网页。`
-        : `已打开 ${platform.name} 网页。`);
+        ? t('free.message.copiedPromptAndOpened', { name: platform.name })
+        : t('free.message.openedWebsite', { name: platform.name }));
     } catch (error) {
       setFreePlatformMessage(error instanceof Error ? error.message : String(error));
     }
@@ -5168,9 +5168,9 @@ export function App() {
 
   async function copyPromptForPlatform(platform: FreePlatform) {
     try {
-      if (!prompt.trim()) throw new Error('请先在 AI 创作里写好 Prompt。');
+      if (!prompt.trim()) throw new Error(t('free.message.promptRequired'));
       await navigator.clipboard?.writeText(buildFreePlatformPrompt(platform, prompt));
-      setFreePlatformMessage(`已复制 ${platform.name} 专用 Prompt。`);
+      setFreePlatformMessage(t('free.message.copiedPrompt', { name: platform.name }));
     } catch (error) {
       setFreePlatformMessage(error instanceof Error ? error.message : String(error));
     }
@@ -5179,7 +5179,7 @@ export function App() {
   async function openPlatform(platform: FreePlatform) {
     try {
       await openExternalUrl(platform.url);
-      setFreePlatformMessage(`已打开 ${platform.name}。`);
+      setFreePlatformMessage(t('free.message.openedPlatform', { name: platform.name }));
     } catch (error) {
       setFreePlatformMessage(error instanceof Error ? error.message : String(error));
     }
@@ -5187,23 +5187,23 @@ export function App() {
 
   async function importWebResultFromPlatform(platform: FreePlatform, file: File) {
     try {
-      if (!file.type.startsWith('image/')) throw new Error('请选择网页下载的图片文件。');
+      if (!file.type.startsWith('image/')) throw new Error(t('free.message.imageFileRequired'));
       const adaptedPrompt = buildFreePlatformPrompt(platform, prompt);
       const dataUrl = await fileToDataUrl(file);
       await importInspirationAsset({
-        title: `${platform.name} 网页成品 · ${file.name.replace(/\.[^.]+$/, '')}`,
+        title: t('free.import.title', { name: platform.name, file: file.name.replace(/\.[^.]+$/, '') }),
         dataUrl,
         fileName: file.name,
         sourceUrl: platform.url,
         sourcePlatform: platform.name,
         originalPrompt: adaptedPrompt || prompt.trim() || undefined,
-        tags: ['免费平台', platform.name, platform.region === 'china' ? '国内平台' : '海外平台', platform.supportsImageToImage ? '图生图' : '文生图'],
-        note: `从 ${platform.name} 网页下载后导入。${platform.commercialNote}`,
+        tags: [t('free.import.tag.freePlatform'), platform.name, platform.region === 'china' ? t('free.platform.region.china') : t('free.platform.region.global'), platform.supportsImageToImage ? t('free.import.tag.imageToImage') : t('free.import.tag.textToImage')],
+        note: t('free.import.note', { name: platform.name, note: platform.commercialNote }),
         licenseStatus: platform.commercialUse === 'allowed' ? 'commercial-confirmed' : 'reference-only'
       });
       setIsInspirationPageMounted(true);
       setInspirationImportVersion((version) => version + 1);
-      setFreePlatformMessage(`已把 ${platform.name} 网页下载图导入图片收藏。`);
+      setFreePlatformMessage(t('free.message.importedToInspiration', { name: platform.name }));
     } catch (error) {
       setFreePlatformMessage(error instanceof Error ? error.message : String(error));
     }

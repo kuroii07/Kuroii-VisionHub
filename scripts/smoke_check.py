@@ -273,7 +273,7 @@ for term in [
 for term in [
     "FreeGenerationPage",
     "FREE_PLATFORMS",
-    "免费平台",
+    "free.import.tag.freePlatform",
     "onCopyPromptAndOpen",
     "openExternalUrl(platform.url)",
     "freePlatformMessage",
