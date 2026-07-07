@@ -4675,11 +4675,11 @@ export function App() {
     }
     const trimmedSecret = secretDraft.trim();
     if (!trimmedSecret) {
-      setSecretMessage(secretAvailable ? 'API Key 已配置；如需更换，请先输入新的 API Key。' : '请先填写 API Key。');
+      setSecretMessage(secretAvailable ? t('provider.message.apiKeyChangeRequired') : t('provider.message.apiKeyRequired'));
       return false;
     }
     if (!desktopRuntime) {
-      setSecretMessage('当前是网页预览模式，只有 Tauri 桌面端会写入系统凭据。');
+      setSecretMessage(t('provider.message.desktopSecretRequired'));
       return false;
     }
 
@@ -4688,7 +4688,7 @@ export function App() {
       const status = await saveProviderSecret(activeSecretId(), trimmedSecret);
       setSecretAvailable(status.available);
       setSecretDraft('');
-      setSecretMessage(selectedProfileId ? 'API Key 已保存到当前配置实例。' : 'API Key 已保存；保存配置后会绑定到配置实例。');
+      setSecretMessage(selectedProfileId ? t('provider.message.apiKeySavedToProfile') : t('provider.message.apiKeySavedToDraft'));
       return status.available;
     } catch (error) {
       setSecretMessage(error instanceof Error ? error.message : String(error));
@@ -4920,10 +4920,10 @@ export function App() {
       throw new Error(t('provider.message.plannedSaveConfigBlocked'));
     }
     if (!providerConfig.baseUrl.trim()) {
-      throw new Error('请先填写 Base URL。');
+      throw new Error(t('provider.error.baseUrlRequired'));
     }
     if (!providerConfig.modelId.trim()) {
-      throw new Error('请先填写模型 ID。');
+      throw new Error(t('provider.error.modelIdRequired'));
     }
     const normalizedConfig = normalizeProviderConfig({
       ...providerConfig,
@@ -4970,19 +4970,19 @@ export function App() {
       const profile = buildProfileFromCurrentConfig(enable);
       if (secretDraft.trim()) {
         if (!desktopRuntime) {
-          throw new Error('当前是网页预览模式，只有 Tauri 桌面端会写入系统凭据。');
+          throw new Error(t('provider.message.desktopSecretRequired'));
         }
         const status = await saveProviderSecret(providerProfileSecretId(profile.id), secretDraft);
         setSecretAvailable(status.available);
         setSecretDraft('');
-        setSecretMessage('API Key 已保存到当前配置实例。');
+        setSecretMessage(t('provider.message.apiKeySavedToProfile'));
       }
       persistProfile(profile);
       setConfigActionState('saved');
       setConfigMessage(
         enable
-          ? `已保存并启用：${profile.displayName}。已加入左侧配置列表。`
-          : `已保存：${profile.displayName}。已加入左侧配置列表，暂未启用。`
+          ? t('provider.message.profileSavedAndEnabled', { name: profile.displayName })
+          : t('provider.message.profileSaved', { name: profile.displayName })
       );
     } catch (error) {
       setConfigActionState('failed');
@@ -5005,7 +5005,7 @@ export function App() {
     setProviderDiagnostics([]);
     setConfigActionState('idle');
     setSelectedModel(draftConfig.modelId);
-    setConfigMessage('正在新建配置；保存后会出现在左侧配置列表。');
+    setConfigMessage(t('provider.message.newProfileDraft'));
   }
 
   function selectProviderProfile(profileId: string) {
