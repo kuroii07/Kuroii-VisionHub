@@ -450,18 +450,18 @@ const LOCAL_SD_WEBUI_DIAGNOSTIC_TIMEOUT_MS = 12_000;
 const providerPlatformOptions: ProviderPlatformOption[] = [
   {
     id: 'aggregator',
-    label: '中转站 / 聚合 API',
-    description: '默认主入口，适合中转站、聚合站和 OpenAI-compatible 服务。'
+    label: 'Relay / Aggregator API',
+    description: 'Default entry for relays, aggregators, and OpenAI-compatible services.'
   },
   {
     id: 'official',
-    label: '官方 API',
-    description: '官方服务商入口；当前只有 OpenAI 官方已接入真实生图。'
+    label: 'Official API',
+    description: 'Official provider entry. Live integrations can call real APIs; planned entries stay informational.'
   },
   {
     id: 'local',
-    label: '本地模型',
-    description: '本地工作流规划区，暂不影响在线中转站使用。'
+    label: 'Local models',
+    description: 'Local workflow entry that does not affect the online relay flow.'
   }
 ];
 
@@ -469,149 +469,149 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
   {
     id: 'aggregator-openai-compatible',
     platformType: 'aggregator',
-    label: 'OpenAI 兼容中转',
-    description: '当前真实可用。适合把 GPT Image、Nano Banana、Qwen、豆包、Grok、Midjourney、可灵等包装成 OpenAI-compatible 的中转站。',
+    label: 'OpenAI-compatible relay',
+    description: 'Live now. Best for relay services that wrap GPT Image, Nano Banana, Qwen, Doubao, Grok, Midjourney, Kling, and similar models as OpenAI-compatible APIs.',
     status: 'connected',
     region: 'custom',
     sortRank: 10,
     providerId: 'custom-http-provider',
-    defaultDisplayName: 'OpenAI 兼容中转',
+    defaultDisplayName: 'OpenAI-compatible relay',
     supportsTextToImage: true,
     supportsImageToImage: true,
-    notes: ['Base URL、模型 ID、协议路径以服务商文档为准。', '旧的中转站配置会自动归到这里，profile id 不会变化。']
+    notes: ['Follow the provider docs for Base URL, model ID, and protocol path.', 'Legacy relay configs are migrated here without changing profile IDs.']
   },
   {
     id: 'aggregator-generic-api',
     platformType: 'aggregator',
-    label: '聚合网站 API',
-    description: '通用聚合站模板；能保存配置，图片能力取决于服务商实际支持。',
+    label: 'Aggregator API',
+    description: 'Generic aggregator template. It can save config; image capabilities depend on the actual provider.',
     status: 'configurable',
     region: 'custom',
     sortRank: 20,
     providerId: 'custom-http-provider',
-    defaultDisplayName: '聚合网站 API',
+    defaultDisplayName: 'Aggregator API',
     supportsTextToImage: true,
     supportsImageToImage: true,
-    notes: ['适合没有明确品牌模板的聚合 API。', '保存前请按服务商文档填写 Base URL、模型 ID 和协议。']
+    notes: ['Use this when there is no dedicated brand template.', 'Before saving, fill Base URL, model ID, and protocol from the provider docs.']
   },
   {
     id: 'siliconflow',
     platformType: 'aggregator',
-    label: '硅基流动',
-    description: '国内主流聚合站候选；先作为可配置模板，图片能力待按实际模型验证。',
+    label: 'SiliconFlow',
+    description: 'Mainland aggregator candidate. Kept configurable first; image capability needs model-level validation.',
     status: 'configurable',
     region: 'domestic',
     sortRank: 30,
     providerId: 'custom-http-provider',
-    defaultDisplayName: '硅基流动',
+    defaultDisplayName: 'SiliconFlow',
     apiDocUrl: 'https://docs.siliconflow.cn/',
     supportsTextToImage: true,
     supportsImageToImage: false,
-    notes: ['可保存连接配置；图片模型和 OpenAI-compatible 兼容程度以服务商为准。']
+    notes: ['Connection config can be saved; image models and OpenAI-compatible behavior depend on the provider.']
   },
   {
     id: 'aggregator-custom',
     platformType: 'aggregator',
-    label: '其他聚合站',
-    description: '通用自定义模板，适合其他 OpenAI-compatible 聚合 API。',
+    label: 'Other aggregator',
+    description: 'Generic custom template for other OpenAI-compatible aggregator APIs.',
     status: 'configurable',
     region: 'custom',
     sortRank: 90,
     providerId: 'custom-http-provider',
-    defaultDisplayName: '其他聚合站',
+    defaultDisplayName: 'Other aggregator',
     supportsTextToImage: true,
     supportsImageToImage: true,
-    notes: ['保留最大手动配置空间，适合服务商文档比较特殊的场景。']
+    notes: ['Keeps maximum manual config space for providers with unusual docs.']
   },
   {
     id: 'official-openai',
     platformType: 'official',
-    label: 'OpenAI 官方',
-    description: '当前真实可用；仅用于 https://api.openai.com。',
+    label: 'OpenAI official',
+    description: 'Live now; only for https://api.openai.com.',
     status: 'connected',
     region: 'overseas',
     sortRank: 10,
     providerId: 'openai-gpt-image',
-    defaultDisplayName: 'OpenAI 官方',
+    defaultDisplayName: 'OpenAI official',
     apiDocUrl: 'https://platform.openai.com/docs/guides/images',
     supportsTextToImage: true,
     supportsImageToImage: true,
-    notes: ['ChatGPT Plus 网页额度不等于 API 额度。', '旧官方 OpenAI 配置会自动归到这里，profile id 不会变化。']
+    notes: ['ChatGPT Plus web quota is not API quota.', 'Legacy official OpenAI configs are migrated here without changing profile IDs.']
   },
   {
     id: 'official-minimax',
     platformType: 'official',
-    label: 'MiniMax 官方',
-    description: '国内官方 API V4 第一批；支持按官方图片接口接入文生图。',
+    label: 'MiniMax official',
+    description: 'First official API V4 slice for China; supports text-to-image through the official image endpoint.',
     status: 'configurable',
     region: 'domestic',
     sortRank: 20,
     providerId: 'minimax-image',
-    defaultDisplayName: 'MiniMax 官方',
+    defaultDisplayName: 'MiniMax official',
     apiDocUrl: 'https://platform.minimaxi.com/',
     supportsTextToImage: true,
     supportsImageToImage: true,
-    notes: ['使用 MiniMax 官方 Bearer API Key，独立于中转站 Key。', '当前接入 image-01 / image-01-live 文生图和单张人物主体参考图；多参考图后续补。']
+    notes: ['Uses the MiniMax official Bearer API key, separate from relay keys.', 'Currently supports image-01 / image-01-live text-to-image and single character subject reference; multi-reference comes later.']
   },
   {
     id: 'official-mimo',
     platformType: 'official',
-    label: '小米 MiMo 官方',
-    description: '国内主流候选；官方 API 当前面向文本、图像理解和全模态推理，暂未开放生图 endpoint。',
+    label: 'Xiaomi MiMo official',
+    description: 'Mainland candidate. The official API currently focuses on text, image understanding, and multimodal reasoning; no image-generation endpoint is open yet.',
     status: 'planned',
     region: 'domestic',
     sortRank: 30,
     apiDocUrl: 'https://mimo.mi.com/docs/zh-CN/quick-start/usage-guide/multimodal-understanding/image-understanding',
     supportsTextToImage: false,
     supportsImageToImage: false,
-    notes: ['官方文档显示图片能力是图像理解：支持 URL / Base64 图片输入，用于描述、分类和视觉问答。', '未发现公开文生图 / 图生图 endpoint；继续只展示候选说明，不开放真实生图。']
+    notes: ['Docs show image understanding with URL / Base64 image input for captioning, classification, and visual Q&A.', 'No public text-to-image / image-to-image endpoint found; keep this as informational only.']
   },
   {
     id: 'official-gemini',
     platformType: 'official',
-    label: 'Google Gemini / Nano Banana 官方',
-    description: '海外官方 API V4 第一批；支持 Gemini 图片生成 / 编辑，返回 inline image 后落盘。',
+    label: 'Google Gemini / Nano Banana official',
+    description: 'First global official API V4 slice; supports Gemini image generation / editing and saves returned inline images.',
     status: 'configurable',
     region: 'overseas',
     sortRank: 40,
     providerId: 'gemini-image',
-    defaultDisplayName: 'Google Gemini 官方',
+    defaultDisplayName: 'Google Gemini official',
     apiDocUrl: 'https://ai.google.dev/gemini-api/docs/image-generation',
     supportsTextToImage: true,
     supportsImageToImage: true,
-    notes: ['使用 Google Gemini API Key，独立于中转站 Key。', '当前接入 gemini-2.5-flash-image，支持文生图和参考图编辑；多图数量后续补。']
+    notes: ['Uses a Google Gemini API key, separate from relay keys.', 'Currently uses gemini-2.5-flash-image for text-to-image and reference-image editing; multi-image limits come later.']
   },
   {
     id: 'official-xai',
     platformType: 'official',
-    label: 'xAI 官方',
-    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
+    label: 'xAI official',
+    description: 'Planned only. Save, enable, and real test generation are disabled for now.',
     status: 'planned',
     region: 'overseas',
     sortRank: 50,
     apiDocUrl: 'https://docs.x.ai/docs/guides/image-generations',
     supportsTextToImage: true,
     supportsImageToImage: false,
-    notes: ['后续按官方图片接口能力接入。']
+    notes: ['Future work will follow the official image endpoint capabilities.']
   },
   {
     id: 'official-volcengine',
     platformType: 'official',
-    label: '火山方舟 / Seedream 官方',
-    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
+    label: 'Volcengine / Seedream official',
+    description: 'Planned only. Save, enable, and real test generation are disabled for now.',
     status: 'planned',
     region: 'domestic',
     sortRank: 60,
     supportsTextToImage: true,
     supportsImageToImage: true,
     requiresPolling: true,
-    notes: ['后续需要接入火山鉴权、模型参数和结果落盘链路。']
+    notes: ['Future work needs Volcengine auth, model parameters, and result persistence.']
   },
   {
     id: 'official-bailian',
     platformType: 'official',
-    label: '阿里百炼 / 通义万相官方',
-    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
+    label: 'Alibaba Model Studio / Tongyi Wanxiang official',
+    description: 'Planned only. Save, enable, and real test generation are disabled for now.',
     status: 'planned',
     region: 'domestic',
     sortRank: 70,
@@ -619,39 +619,39 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     supportsTextToImage: true,
     supportsImageToImage: true,
     requiresPolling: true,
-    notes: ['后续需要接入官方鉴权与异步任务轮询。']
+    notes: ['Future work needs official auth and async task polling.']
   },
   {
     id: 'official-kling',
     platformType: 'official',
-    label: '可灵企业 API',
-    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
+    label: 'Kling enterprise API',
+    description: 'Planned only. Save, enable, and real test generation are disabled for now.',
     status: 'planned',
     region: 'domestic',
     sortRank: 80,
     supportsTextToImage: true,
     supportsImageToImage: true,
     requiresPolling: true,
-    notes: ['后续可作为图像 / 视频生成企业 API 路线。']
+    notes: ['Can become an image / video generation enterprise API route later.']
   },
   {
     id: 'official-jimeng',
     platformType: 'official',
-    label: '即梦企业 API',
-    description: '待接入；当前只展示规划，不允许保存启用或真实试生图。',
+    label: 'Jimeng enterprise API',
+    description: 'Planned only. Save, enable, and real test generation are disabled for now.',
     status: 'planned',
     region: 'domestic',
     sortRank: 90,
     supportsTextToImage: true,
     supportsImageToImage: true,
     requiresPolling: true,
-    notes: ['后续可作为国内官方企业 API 路线。']
+    notes: ['Can become a mainland official enterprise API route later.']
   },
   {
     id: 'local-comfyui',
     platformType: 'local',
     label: 'ComfyUI',
-    description: '本地 ComfyUI 已支持连接诊断、API workflow 导入、文生图和带 LoadImage 节点的图生图测试。',
+    description: 'Local ComfyUI supports connection diagnostics, API workflow import, text-to-image, and image-to-image tests with LoadImage nodes.',
     status: 'configurable',
     region: 'local',
     sortRank: 10,
@@ -659,28 +659,28 @@ const providerServiceTemplates: ProviderServiceTemplate[] = [
     supportsTextToImage: true,
     supportsImageToImage: true,
     requiresPolling: true,
-    notes: ['支持 ComfyUI API workflow；普通 UI workflow 需要从 ComfyUI 重新导出 API 格式。', '当前会自动写入 Prompt、负面提示词、尺寸、Seed；图生图会上传第一张参考图并写入 LoadImage 节点。']
+    notes: ['Supports ComfyUI API workflows; regular UI workflows must be re-exported from ComfyUI in API format.', 'Currently writes Prompt, negative prompt, size, and Seed automatically; image-to-image uploads the first reference image into LoadImage nodes.']
   },
   {
     id: 'local-sd-webui',
     platformType: 'local',
     label: 'Stable Diffusion WebUI / Forge',
-    description: '0.4.3 已支持本地连接诊断、txt2img 文生图和作品画廊保存；WebUI / Forge 启动时需要带 --api。',
+    description: '0.4.3 supports local connection diagnostics, txt2img, and gallery save. WebUI / Forge must be launched with --api.',
     status: 'configurable',
     region: 'local',
     sortRank: 20,
     providerId: 'sd-webui-local',
     supportsTextToImage: true,
     supportsImageToImage: false,
-    notes: ['A1111 Stable Diffusion WebUI 或 Forge 需要以 --api 启动。', '当前切片支持 txt2img、Seed、负面提示词、采样器、步数、CFG 和作品画廊保存；img2img / ControlNet 后续再接入。']
+    notes: ['A1111 Stable Diffusion WebUI or Forge must be started with --api.', 'Current slice supports txt2img, Seed, negative prompt, sampler, steps, CFG, and gallery save; img2img / ControlNet comes later.']
   }
 ];
 
 const providerServiceStatusLabel: Record<ProviderServiceTemplateStatus, string> = {
-  connected: '已接入',
-  configurable: '可配置',
-  planned: '待接入',
-  'local-plan': '本地规划'
+  connected: 'Live',
+  configurable: 'Configurable',
+  planned: 'Planned',
+  'local-plan': 'Local plan'
 };
 
 const providerServiceRegionLabel: Record<ProviderServiceRegion, string> = {
