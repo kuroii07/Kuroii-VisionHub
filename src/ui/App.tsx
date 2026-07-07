@@ -7338,15 +7338,15 @@ function GeneratePage(props: {
     <>
       <header className="topbar">
         <div>
-          <p className="eyebrow">Generation Workspace</p>
-          <h1>专注生图：选择平台、模型、尺寸和精度，然后开始生成。</h1>
+          <p className="eyebrow">{t('generate.legacy.eyebrow')}</p>
+          <h1>{t('generate.legacy.subtitle')}</h1>
         </div>
         <div className="statusPills">
           <span>
             <ShieldCheck size={15} /> {props.isRealProviderReady ? t('generate.provider.connectionReady') : t('generate.provider.demoMode')}
           </span>
           <span>
-            <Gauge size={15} /> 当前平台：{props.selectedProvider.name}
+            <Gauge size={15} /> {t('generate.legacy.currentProvider', { provider: props.selectedProvider.name })}
           </span>
         </div>
       </header>
@@ -7355,8 +7355,8 @@ function GeneratePage(props: {
         <div className="composerCard">
           <div className="cardHeader">
             <div>
-              <span className="badge">Create</span>
-              <h2>生图控制台</h2>
+              <span className="badge">{t('generate.legacy.createBadge')}</span>
+              <h2>{t('generate.legacy.consoleTitle')}</h2>
             </div>
             <StudioSelect
               value={props.selectedProviderId}
@@ -7369,12 +7369,12 @@ function GeneratePage(props: {
             className="promptInput"
             value={props.prompt}
             onChange={(event) => props.onPromptChange(event.target.value)}
-            placeholder="描述你想生成的图片，例如：赛博国风海报、商业产品图、角色设定、分镜概念图…"
+            placeholder={t('generate.legacy.promptPlaceholder')}
           />
 
           <div className="generationControls">
             <label>
-              模型
+              {t('generate.legacy.modelLabel')}
               <StudioSelect
                 value={modelValue}
                 onChange={props.onModelChange}
@@ -7382,7 +7382,7 @@ function GeneratePage(props: {
               />
             </label>
             <label>
-              尺寸比例
+              {t('generate.legacy.sizeLabel')}
               <StudioSelect
                 value={props.size}
                 onChange={props.onSizeChange}
@@ -7394,7 +7394,7 @@ function GeneratePage(props: {
               />
             </label>
             <label>
-              精度
+              {t('generate.legacy.qualityLabel')}
               <StudioSelect
                 value={props.quality}
                 onChange={props.onQualityChange}
@@ -7406,7 +7406,7 @@ function GeneratePage(props: {
               />
             </label>
             <label>
-              数量
+              {t('generate.legacy.countLabel')}
               <input
                 type="number"
                 min={1}
@@ -7418,10 +7418,10 @@ function GeneratePage(props: {
           </div>
 
           <button className="generateButton" onClick={props.onGenerate} disabled={props.isGenerating || !props.prompt.trim()}>
-            <Sparkles size={18} /> {props.isGenerating ? '生成中…' : props.isRealProviderReady ? '调用真实接口生成' : '生成 Demo 图片'}
+            <Sparkles size={18} /> {props.isGenerating ? t('generate.legacy.generating') : props.isRealProviderReady ? t('generate.legacy.generateLive') : t('generate.legacy.generateDemo')}
           </button>
           <p className="modeHint">
-            模型来源于平台接入的配置；如果要新增中转站、刷新模型或修改 API Key，请前往平台接入。
+            {t('generate.legacy.modeHint')}
           </p>
         </div>
       </section>
