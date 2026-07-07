@@ -7324,7 +7324,9 @@ function GeneratePage(props: {
   onQualityChange: (quality: string) => void;
   onGenerate: () => void;
   onPreview: (imageUrl: string) => void;
+  t?: Translator;
 }) {
+  const t = props.t ?? createTranslator('zh-CN');
   const modelOptions = props.supportsOpenAICompatible
     ? props.providerConfig.modelOptions.length > 0
       ? props.providerConfig.modelOptions
@@ -7341,7 +7343,7 @@ function GeneratePage(props: {
         </div>
         <div className="statusPills">
           <span>
-            <ShieldCheck size={15} /> {props.isRealProviderReady ? '真实通道已就绪' : '未配置密钥时使用演示模式'}
+            <ShieldCheck size={15} /> {props.isRealProviderReady ? t('generate.provider.connectionReady') : t('generate.provider.demoMode')}
           </span>
           <span>
             <Gauge size={15} /> 当前平台：{props.selectedProvider.name}
