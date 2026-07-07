@@ -4701,11 +4701,11 @@ export function App() {
   async function savePromptPolishSecret() {
     const trimmedSecret = promptPolishSecretDraft.trim();
     if (!trimmedSecret) {
-      setSettingsMessage(promptPolishSecretAvailable ? '润色专用 API Key 已配置；如需更换，请先输入新的 Key。' : '请先填写润色专用 API Key。');
+      setSettingsMessage(promptPolishSecretAvailable ? t('settings.promptPolishMessage.secretChangeRequired') : t('settings.promptPolishMessage.secretRequired'));
       return false;
     }
     if (!desktopRuntime) {
-      setSettingsMessage('当前是网页预览模式，只有 Tauri 桌面端会写入系统凭据。');
+      setSettingsMessage(t('provider.message.desktopSecretRequired'));
       return false;
     }
 
@@ -4714,7 +4714,7 @@ export function App() {
       const status = await saveProviderSecret(PROMPT_POLISH_SECRET_ID, trimmedSecret);
       setPromptPolishSecretAvailable(status.available);
       setPromptPolishSecretDraft('');
-      setSettingsMessage('润色专用 API Key 已保存，不会影响生图平台配置。');
+      setSettingsMessage(t('settings.promptPolishMessage.secretSaved'));
       return status.available;
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
@@ -4729,7 +4729,7 @@ export function App() {
   }
 
   function savePromptPolishConfig() {
-    const displayName = promptPolishDraft.displayName.trim() || '提示词润色专用配置';
+    const displayName = promptPolishDraft.displayName.trim() || t('settings.promptPolishConfigPlaceholder');
     const baseUrl = promptPolishDraft.baseUrl.trim();
     const modelId = promptPolishDraft.modelId.trim();
     try {
@@ -4766,21 +4766,21 @@ export function App() {
       ]).values()).slice(0, 30)
     };
     updateAppSettings({ promptPolish: nextSettings });
-    setSettingsMessage('提示词润色配置已保存；本地润色仍可在引擎里切换使用。');
+    setSettingsMessage(t('settings.promptPolishMessage.configSaved'));
   }
 
   async function refreshPromptPolishModels() {
     const baseUrl = promptPolishDraft.baseUrl.trim();
     if (!baseUrl) {
-      setSettingsMessage('请先填写润色专用 Base URL。');
+      setSettingsMessage(t('settings.promptPolishMessage.baseUrlRequired'));
       return;
     }
     if (!desktopRuntime) {
-      setSettingsMessage('当前是网页预览模式，只有 Tauri 桌面端可以刷新模型列表。');
+      setSettingsMessage(t('settings.promptPolishMessage.desktopRefreshRequired'));
       return;
     }
     if (!promptPolishSecretAvailable) {
-      setSettingsMessage('请先保存润色专用 API Key，再刷新模型列表。');
+      setSettingsMessage(t('settings.promptPolishMessage.secretRequiredBeforeRefresh'));
       return;
     }
 
@@ -4796,7 +4796,7 @@ export function App() {
         new Set([...models.map((model) => model.id), promptPolishDraft.modelId.trim()].filter(Boolean))
       );
       if (!modelOptions.length) {
-        setSettingsMessage('模型接口已返回，但没有发现可用模型。');
+        setSettingsMessage(t('settings.promptPolishMessage.noModels'));
         return;
       }
       setPromptPolishDraft((current) => ({
@@ -4804,7 +4804,7 @@ export function App() {
         modelOptions,
         modelId: modelOptions.includes(current.modelId.trim()) ? current.modelId.trim() : ''
       }));
-      setSettingsMessage(`已刷新 ${modelOptions.length} 个润色文本模型，请在模型选择框里选择或手动填写后保存配置。`);
+      setSettingsMessage(t('settings.promptPolishMessage.modelsRefreshed', { count: modelOptions.length }));
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     } finally {
