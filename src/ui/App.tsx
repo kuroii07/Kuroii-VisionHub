@@ -5026,9 +5026,9 @@ export function App() {
     const profile = providerProfiles.find((item) => item.id === profileId);
     if (!profile) return;
     requestConfirm({
-      title: '删除配置实例',
-      message: `确定删除配置「${profile.displayName}」吗？这不会删除作品画廊，也不会影响已经保存的图片。`,
-      confirmLabel: '删除',
+      title: t('provider.confirm.deleteProfileTitle'),
+      message: t('provider.confirm.deleteProfileMessage', { name: profile.displayName }),
+      confirmLabel: t('provider.confirm.deleteProfileButton'),
       tone: 'danger',
       onConfirm: async () => {
         const nextProfiles = deleteProviderProfile(providerProfiles, profileId);
@@ -5043,7 +5043,7 @@ export function App() {
         if (desktopRuntime) {
           await deleteProviderSecret(providerProfileSecretId(profileId)).catch(() => undefined);
         }
-        setConfigMessage(`已删除配置：${profile.displayName}`);
+        setConfigMessage(t('provider.message.profileDeleted', { name: profile.displayName }));
       }
     });
   }
@@ -5058,7 +5058,7 @@ export function App() {
       setProviderConfig(profileToProviderConfig(profile));
       setSelectedModel(profile.modelId);
       if (enabled) setSelectedProvider(profile.providerId);
-      setConfigMessage(`${enabled ? '已启用' : '已停用'}：${profile.displayName}。可在 AI 创作台的“配置实例”下拉中选择当前使用哪一个。`);
+      setConfigMessage(t(enabled ? 'provider.message.profileEnabled' : 'provider.message.profileDisabled', { name: profile.displayName }));
     }
   }
 
