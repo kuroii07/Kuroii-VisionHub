@@ -205,7 +205,7 @@ function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error('读取图片失败'));
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read image.'));
     reader.readAsDataURL(file);
   });
 }
@@ -717,11 +717,11 @@ const defaultLibraryDisplaySettings: LibraryDisplaySettings = {
 };
 
 const libraryViewOptions: Array<{ value: LibraryViewMode; label: string }> = [
-  { value: 'masonry', label: '瀑布流' },
-  { value: 'adaptive', label: '自适应' },
-  { value: 'square', label: '正方形' },
-  { value: 'contain', label: '完整宽高比' },
-  { value: 'list', label: '列表视图' }
+  { value: 'masonry', label: 'Masonry' },
+  { value: 'adaptive', label: 'Adaptive' },
+  { value: 'square', label: 'Square' },
+  { value: 'contain', label: 'Full aspect ratio' },
+  { value: 'list', label: 'List view' }
 ];
 
 function loadLocalComfyUIConfig(): LocalComfyUIConfig {
@@ -825,7 +825,7 @@ function readTextFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result ?? ''));
-    reader.onerror = () => reject(reader.error ?? new Error('读取文件失败'));
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file.'));
     reader.readAsText(file, 'utf-8');
   });
 }
@@ -873,7 +873,7 @@ function makeWorkflowNode(id: string, type: string, title: string | undefined, i
     loader: ['lora_name', 'vae_name', 'ckpt_name', 'model_name'],
     other: []
   };
-  const summary = summarizeApiWorkflowInputs(inputs, summaryKeysByRole[role]) || '已识别节点，后续映射时可展开查看完整字段。';
+  const summary = summarizeApiWorkflowInputs(inputs, summaryKeysByRole[role]) || 'Node detected. Expand the full fields later when mapping.';
   return {
     id,
     type,
@@ -932,9 +932,9 @@ function buildComfyUIWorkflowSummary(
     .filter((node) => node.role === 'other')
     .slice(0, 6);
   const warnings: string[] = [];
-  if (!promptNodes.length) warnings.push('未识别到文本提示词节点，后续需要手动指定 Prompt 写入位置。');
-  if (!samplerNodes.length) warnings.push('未识别到采样器节点，后续真实生成前需要手动确认任务入口。');
-  if (!outputNodes.length) warnings.push('未识别到保存或预览图片节点，后续需要确认输出结果读取方式。');
+  if (!promptNodes.length) warnings.push('No text prompt node detected. Manually choose the Prompt target before generation.');
+  if (!samplerNodes.length) warnings.push('No sampler node detected. Confirm the task entry before real generation.');
+  if (!outputNodes.length) warnings.push('No save or preview image node detected. Confirm how output images should be read.');
   return {
     fileName,
     importedAt: new Date().toISOString(),
@@ -956,7 +956,7 @@ function parseComfyUIWorkflow(fileName: string, content: string): LocalComfyUIWo
   const raw = JSON.parse(content) as unknown;
   const record = asRecord(raw);
   if (!record) {
-    throw new Error('workflow JSON 顶层不是对象，无法识别。');
+    throw new Error('Workflow JSON root is not an object and cannot be detected.');
   }
   const apiSummary = parseComfyUIApiWorkflow(fileName, record);
   if (apiSummary) return apiSummary;
@@ -979,80 +979,80 @@ function comfyUIWorkflowRunStatus(preset: LocalComfyUIWorkflowPreset, t: Transla
 }
 
 const librarySortOptions: Array<{ value: LibrarySortMode; label: string }> = [
-  { value: 'newest', label: '最新优先' },
-  { value: 'oldest', label: '最早优先' },
-  { value: 'favorites', label: '收藏优先' },
-  { value: 'provider', label: '平台分组' },
-  { value: 'model', label: '模型分组' },
-  { value: 'duration', label: '生成耗时' },
-  { value: 'size', label: '图片尺寸' },
-  { value: 'filename', label: '文件名' },
-  { value: 'recent-viewed', label: '最近查看' },
-  { value: 'recent-reference', label: '最近设为参考' }
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'favorites', label: 'Favorites first' },
+  { value: 'provider', label: 'Group by provider' },
+  { value: 'model', label: 'Group by model' },
+  { value: 'duration', label: 'Generation duration' },
+  { value: 'size', label: 'Image size' },
+  { value: 'filename', label: 'File name' },
+  { value: 'recent-viewed', label: 'Recently viewed' },
+  { value: 'recent-reference', label: 'Recently used as reference' }
 ];
 
 const libraryQuickFilters: Array<{ value: LibraryQuickFilter; label: string }> = [
-  { value: 'favorites', label: '收藏' },
-  { value: 'recent7d', label: '最近 7 天' },
-  { value: 'references', label: '有参考图' },
-  { value: 'failed', label: '失败记录' },
-  { value: 'local', label: '本地已落盘' }
+  { value: 'favorites', label: 'Favorites' },
+  { value: 'recent7d', label: 'Last 7 days' },
+  { value: 'references', label: 'With references' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'local', label: 'Saved locally' }
 ];
 
 const libraryShapeOptions: Array<{ value: LibraryShapeFilter; label: string }> = [
-  { value: 'all', label: '全部形状' },
-  { value: 'landscape', label: '横图' },
-  { value: 'portrait', label: '竖图' },
-  { value: 'square', label: '方形' },
-  { value: 'wide', label: '细长横图' },
-  { value: 'tall', label: '细长竖图' },
+  { value: 'all', label: 'All shapes' },
+  { value: 'landscape', label: 'Landscape' },
+  { value: 'portrait', label: 'Portrait' },
+  { value: 'square', label: 'Square' },
+  { value: 'wide', label: 'Wide' },
+  { value: 'tall', label: 'Tall' },
   { value: 'four-three', label: '4:3' },
   { value: 'three-four', label: '3:4' },
   { value: 'sixteen-nine', label: '16:9' },
   { value: 'nine-sixteen', label: '9:16' },
-  { value: 'custom', label: '自定义' }
+  { value: 'custom', label: 'Custom ratio' }
 ];
 
 const libraryFormatOptions: Array<{ value: LibraryFormatFilter; label: string }> = [
-  { value: 'all', label: '全部格式' },
+  { value: 'all', label: 'All formats' },
   { value: 'png', label: 'PNG' },
   { value: 'jpg', label: 'JPG' },
   { value: 'webp', label: 'WebP' },
   { value: 'gif', label: 'GIF' },
   { value: 'svg', label: 'SVG' },
-  { value: 'unknown', label: '未知格式' }
+  { value: 'unknown', label: 'Unknown format' }
 ];
 
 const libraryRatingOptions: Array<{ value: LibraryRatingFilter; label: string }> = [
-  { value: 'all', label: '全部评分' },
+  { value: 'all', label: 'All ratings' },
   { value: '5', label: '★★★★★' },
   { value: '4', label: '★★★★☆' },
   { value: '3', label: '★★★☆☆' },
   { value: '2', label: '★★☆☆☆' },
   { value: '1', label: '★☆☆☆☆' },
-  { value: 'unrated', label: '尚未评分' }
+  { value: 'unrated', label: 'Unrated' }
 ];
 
 const libraryRatingValues = [1, 2, 3, 4, 5] as const;
 
 const libraryColorOptions: Array<{ value: LibraryColorFilter; label: string; color: string }> = [
-  { value: 'all', label: '全部颜色', color: '#64748b' },
-  { value: 'red', label: '红色', color: '#ef4444' },
-  { value: 'orange', label: '橙色', color: '#f97316' },
-  { value: 'yellow', label: '黄色', color: '#eab308' },
-  { value: 'green', label: '绿色', color: '#22c55e' },
-  { value: 'cyan', label: '青色', color: '#06b6d4' },
-  { value: 'blue', label: '蓝色', color: '#3b82f6' },
-  { value: 'purple', label: '紫色', color: '#8b5cf6' },
-  { value: 'pink', label: '粉色', color: '#ec4899' },
-  { value: 'mono', label: '黑白', color: '#64748b' }
+  { value: 'all', label: 'All colors', color: '#64748b' },
+  { value: 'red', label: 'Red', color: '#ef4444' },
+  { value: 'orange', label: 'Orange', color: '#f97316' },
+  { value: 'yellow', label: 'Yellow', color: '#eab308' },
+  { value: 'green', label: 'Green', color: '#22c55e' },
+  { value: 'cyan', label: 'Cyan', color: '#06b6d4' },
+  { value: 'blue', label: 'Blue', color: '#3b82f6' },
+  { value: 'purple', label: 'Purple', color: '#8b5cf6' },
+  { value: 'pink', label: 'Pink', color: '#ec4899' },
+  { value: 'mono', label: 'Monochrome', color: '#64748b' }
 ];
 
 const libraryAddActions: Array<{ id: LibraryAddAction; label: string; detail: string }> = [
-  { id: 'folder', label: '新建文件夹', detail: '后续会用于整理本地作品。' },
-  { id: 'collection', label: '新建收藏集', detail: '适合按项目、风格或客户归档。' },
-  { id: 'import-file', label: '导入本地图片', detail: '索引单张或多张本地图片，不移动原文件。' },
-  { id: 'batch-folder', label: '批量导入文件夹', detail: '扫描所选文件夹内图片，不移动原文件。' }
+  { id: 'folder', label: 'New folder', detail: 'Use it to organize local works later.' },
+  { id: 'collection', label: 'New collection', detail: 'Best for projects, styles, or client archives.' },
+  { id: 'import-file', label: 'Import local images', detail: 'Index one or more local images without moving source files.' },
+  { id: 'batch-folder', label: 'Batch import folder', detail: 'Scan images inside the selected folder without moving source files.' }
 ];
 
 const libraryFolderColors = ['#14b8a6', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6', '#22c55e'];
@@ -1090,26 +1090,26 @@ function generationFailureDetails(record: Pick<GenerationRecord, 'status' | 'err
 }
 
 const generationFailureCategoryLabels: Record<GenerationFailureCategory, string> = {
-  auth: '认证',
-  permission: '权限',
-  quota: '额度',
-  'rate-limit': '限流',
-  protocol: '协议',
-  model: '模型',
-  parameter: '参数',
-  'content-safety': '安全',
-  'timeout-background': '后台待核查',
-  server: '服务商',
-  network: '网络',
-  'response-format': '响应格式',
-  'no-image': '无图片',
-  unknown: '待确认'
+  auth: 'Auth',
+  permission: 'Permission',
+  quota: 'Quota',
+  'rate-limit': 'Rate limit',
+  protocol: 'Protocol',
+  model: 'Model',
+  parameter: 'Parameters',
+  'content-safety': 'Safety',
+  'timeout-background': 'Needs check',
+  server: 'Provider',
+  network: 'Network',
+  'response-format': 'Response format',
+  'no-image': 'No image',
+  unknown: 'Unknown'
 };
 
 const generationFailureSeverityLabels: Record<GenerationFailureSeverity, string> = {
-  error: '阻断',
-  warning: '警告',
-  info: '提示'
+  error: 'Blocking',
+  warning: 'Warning',
+  info: 'Info'
 };
 
 function generationFailureCategoryLabel(category: GenerationFailureCategory, t?: Translator) {
@@ -1526,8 +1526,8 @@ function getRecordSizeLabel(record: GenerationRecord, meta?: LibraryMetaEntry) {
   return raw?.size ?? raw?.output?.size ?? raw?.request?.size ?? meta?.imageSize ?? '-';
 }
 
-function formatBytes(bytes?: number) {
-  if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return '未知';
+function formatBytes(bytes?: number, t?: Translator) {
+  if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return t ? t('common.status.unknown') : 'Unknown';
   const units = ['B', 'KB', 'MB', 'GB'];
   let value = bytes;
   let unitIndex = 0;
@@ -1553,7 +1553,7 @@ function getRecordDataUrlBytes(source: string) {
   }
 }
 
-function getRecordFileSizeLabel(record: GenerationRecord) {
+function getRecordFileSizeLabel(record: GenerationRecord, t?: Translator) {
   const raw = record.raw as {
     fileSize?: number;
     file_size?: number;
@@ -1576,21 +1576,21 @@ function getRecordFileSizeLabel(record: GenerationRecord) {
     raw?.output?.size_bytes ??
     raw?.output?.bytes ??
     getRecordDataUrlBytes(record.imageUrls[0] ?? '');
-  return formatBytes(byteSize);
+  return formatBytes(byteSize, t);
 }
 
-function getRecordFormatLabel(record: GenerationRecord) {
+function getRecordFormatLabel(record: GenerationRecord, t?: Translator) {
   const format = getRecordFormat(record);
   const labels: Record<LibraryFormatFilter, string> = {
-    all: '全部',
+    all: 'All',
     png: 'PNG',
     jpg: 'JPG',
     webp: 'WebP',
     gif: 'GIF',
     svg: 'SVG',
-    unknown: '未知'
+    unknown: 'Unknown'
   };
-  return labels[format];
+  return t ? t(`library.format.${format}` as Parameters<Translator>[0]) : labels[format];
 }
 
 function getLibraryColorLabel(color?: LibraryColorFilter) {
@@ -1957,7 +1957,7 @@ function saveBatchQueueTemplates(templates: BatchQueueTemplate[]) {
   );
 }
 
-function createBatchQueueTemplateFromQueue(queue: BatchGenerationQueue, name?: string): BatchQueueTemplate {
+function createBatchQueueTemplateFromQueue(queue: BatchGenerationQueue, name?: string, t?: Translator): BatchQueueTemplate {
   const now = new Date().toISOString();
   const taskTemplates = queue.tasks.map((task): BatchQueueTaskTemplate => ({
     kind: task.kind,
@@ -1978,8 +1978,8 @@ function createBatchQueueTemplateFromQueue(queue: BatchGenerationQueue, name?: s
 
   return normalizeBatchQueueTemplate({
     id: createLocalId('batch-template'),
-    name: name?.trim() || `${queue.name} 模板`,
-    description: `${taskTemplates.length} 个任务 · ${compareGroups.length} 个对比组`,
+    name: name?.trim() || (t ? t('batch.template.defaultName', { name: queue.name }) : `${queue.name} template`),
+    description: t ? t('batch.template.summary', { tasks: taskTemplates.length, groups: compareGroups.length }) : `${taskTemplates.length} tasks ? ${compareGroups.length} compare groups`,
     taskTemplates,
     compareGroups,
     createdAt: now,
@@ -1997,7 +1997,7 @@ function normalizeBatchQueueTemplate(value: Partial<BatchQueueTemplate>): BatchQ
         return {
           kind: task.kind === 'model-compare' ? 'model-compare' : task.kind === 'prompt-size-sweep' ? 'prompt-size-sweep' : 'single',
           compareGroupId: task.compareGroupId,
-          title: task.title?.trim() || task.snapshot.prompt.slice(0, 40) || '未命名任务',
+          title: task.title?.trim() || task.snapshot.prompt.slice(0, 40) || 'Untitled task',
           snapshot: task.snapshot
         };
       })
@@ -2005,7 +2005,7 @@ function normalizeBatchQueueTemplate(value: Partial<BatchQueueTemplate>): BatchQ
     : [];
   return {
     id: value.id || createLocalId('batch-template'),
-    name: value.name?.trim() || '未命名批量模板',
+    name: value.name?.trim() || 'Untitled batch template',
     description: value.description?.trim() || undefined,
     taskTemplates,
     compareGroups: Array.isArray(value.compareGroups)
@@ -2978,7 +2978,7 @@ export function App() {
       });
       const savedRecords: GenerationRecord[] = [];
       for (const record of recordsToSave) {
-        savedRecords.push(await saveGenerationRecord(record, 'ComfyUI / 本地模型'));
+        savedRecords.push(await saveGenerationRecord(record, t('provider.local.comfy.providerName')));
       }
       for (const saved of [...savedRecords].reverse()) {
         addResult(saved);
@@ -2995,7 +2995,7 @@ export function App() {
       const failed: GenerationRecord = {
         id: `comfyui-error-${Date.now()}`,
         providerId: 'comfyui-local',
-        providerName: 'ComfyUI / 本地模型',
+        providerName: t('provider.local.comfy.providerName'),
         modelId: activeWorkflowPreset?.name ?? 'ComfyUI Workflow',
         status: 'failed',
         prompt,
@@ -3241,7 +3241,7 @@ export function App() {
       setConfigMessage(t('batch.message.templateEmptyQueue'));
       return;
     }
-    const template = createBatchQueueTemplateFromQueue(queue);
+    const template = createBatchQueueTemplateFromQueue(queue, undefined, t);
     const nextTemplates = [
       template,
       ...batchQueueTemplates.filter((item) => item.id !== template.id)
@@ -4246,7 +4246,7 @@ export function App() {
             checked += 1;
             if (updated.status === 'succeeded' && updated.imageUrls[0]) recovered += 1;
           } catch {
-            // 自动重查只做轻量恢复尝试，失败仍保留手动诊断入口，避免打扰正常创作。
+            // Automatic recheck is intentionally lightweight; failures still keep the manual diagnostics entry to avoid disrupting normal creation.
           }
         }
         if (!cancelled && (checked || recovered)) {
@@ -9115,7 +9115,7 @@ function SettingsPage(props: {
         : {}),
       ...(configId === currentConfigId && !nextActive
         ? {
-            displayName: '提示词润色专用配置',
+            displayName: props.t('settings.promptPolishConfigPlaceholder'),
             baseUrl: '',
             modelId: '',
             modelOptions: [],
@@ -9485,9 +9485,9 @@ function SettingsPage(props: {
               <div className="settingsPresetRow">
                 <button
                   type="button"
-                  className={promptPolish.displayName === 'DeepSeek 提示词润色' ? 'active' : ''}
+                  className={promptPolish.displayName === props.t('settings.promptPolishPreset.deepseek') ? 'active' : ''}
                   onClick={() => updatePromptPolish({
-                    displayName: 'DeepSeek 提示词润色',
+                    displayName: props.t('settings.promptPolishPreset.deepseek'),
                     baseUrl: 'https://api.deepseek.com',
                     modelId: '',
                     modelOptions: [],
@@ -9498,9 +9498,9 @@ function SettingsPage(props: {
                 </button>
                 <button
                   type="button"
-                  className={promptPolish.displayName === '聚合站文本润色' ? 'active' : ''}
+                  className={promptPolish.displayName === props.t('settings.promptPolishPreset.aggregatorText') ? 'active' : ''}
                   onClick={() => updatePromptPolish({
-                    displayName: '聚合站文本润色',
+                    displayName: props.t('settings.promptPolishPreset.aggregatorText'),
                     baseUrl: '',
                     modelId: '',
                     modelOptions: [],
@@ -9511,9 +9511,9 @@ function SettingsPage(props: {
                 </button>
                 <button
                   type="button"
-                  className={promptPolish.displayName === 'OpenAI 官方文本润色' ? 'active' : ''}
+                  className={promptPolish.displayName === props.t('settings.promptPolishPreset.openaiText') ? 'active' : ''}
                   onClick={() => updatePromptPolish({
-                    displayName: 'OpenAI 官方文本润色',
+                    displayName: props.t('settings.promptPolishPreset.openaiText'),
                     baseUrl: OFFICIAL_OPENAI_BASE_URL,
                     modelId: '',
                     modelOptions: [],
@@ -10690,7 +10690,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   const selectedRecordMeta = selectedRecord ? libraryMeta[selectedRecord.id] : undefined;
   const selectedRecordFileName = selectedRecord ? getRecordFileName(selectedRecord) || selectedRecord.id : '';
   const selectedRecordDetailMeta = selectedRecord
-    ? [selectedRecord.modelId || '-', getRecordSizeLabel(selectedRecord, selectedRecordMeta), getRecordFileSizeLabel(selectedRecord), getRecordFormatLabel(selectedRecord)]
+    ? [selectedRecord.modelId || '-', getRecordSizeLabel(selectedRecord, selectedRecordMeta), getRecordFileSizeLabel(selectedRecord, props.t), getRecordFormatLabel(selectedRecord, props.t)]
     : [];
   const selectedRecordFolder = selectedRecordMeta?.folderId
     ? libraryOrganization.folders.find((folder) => folder.id === selectedRecordMeta.folderId)
@@ -14379,7 +14379,7 @@ function PlaceholderPage(props: { title: string }) {
     <div className="placeholderPage">
       <Sparkles size={42} />
       <h1>{props.title}</h1>
-      <p>这个模块将在生成链路稳定后继续实现。</p>
+      <p>This module will continue after the generation pipeline is stable.</p>
     </div>
   );
 }
