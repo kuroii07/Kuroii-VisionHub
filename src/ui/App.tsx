@@ -8036,7 +8036,7 @@ function ProviderSettingsPage(props: {
       ? pt('provider.generation.usingProfile', { name: generationProfile.displayName })
       : pt('provider.generation.noConfig');
   const usesProviderProfiles = props.isSelectedServiceConfigurable && props.selectedServiceTemplate.platformType !== 'local';
-  const profileFilterOptions = buildProviderProfileFilterOptions(props.providerProfiles);
+  const profileFilterOptions = buildProviderProfileFilterOptions(props.providerProfiles, props.t);
   const filteredProviderProfiles = props.providerProfiles.filter((profile) => matchesProviderProfileFilter(profile, profileFilter));
   const visibleProviderProfiles = usesProviderProfiles ? filteredProviderProfiles : [];
   const readinessItems = buildProviderReadinessItems({
@@ -10126,7 +10126,7 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
   const imageUrl = props.record.imageUrls[0];
   const modeLabel = ct(`library.modeBadge.${(props.record.generationMode ?? 'text-to-image') === 'image-to-image' ? 'image-to-image' : 'text-to-image'}`);
   const referenceCount = props.record.referenceImages?.length ?? 0;
-  const referenceSummary = summarizeReferenceSources(props.record.referenceImages);
+  const referenceSummary = summarizeReferenceSources(props.record.referenceImages, props.t);
   const isFavorite = Boolean(props.meta?.favorite);
   const statusLabel = isPotentialBackgroundCompletion(props.record)
     ? ct('library.generationStatus.pendingRecovery')
@@ -13478,43 +13478,46 @@ function getRecordTimeMs(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function summarizeReferenceSources(references?: ReferenceImage[]) {
+function summarizeReferenceSources(references?: ReferenceImage[], t?: Translator) {
   if (!references?.length) return '';
-  const labels: Record<ReferenceImage['source'], string> = {
-    upload: '\u672c\u5730',
-    'generated-result': '\u4f5c\u54c1',
-    clipboard: '\u526a\u8d34\u677f',
-    'drag-drop': '\u62d6\u62fd',
-    inspiration: '\u7075\u611f'
+  const fallbackLabels: Record<ReferenceImage['source'], string> = {
+    upload: 'Local',
+    'generated-result': 'Gallery work',
+    clipboard: 'Clipboard',
+    'drag-drop': 'Drag drop',
+    inspiration: 'Inspiration'
   };
   const counts = new Map<string, number>();
   for (const reference of references) {
-    const label = labels[reference.source] ?? reference.source;
+    const label = t
+      ? t(`library.referenceSource.${reference.source}` as Parameters<Translator>[0])
+      : fallbackLabels[reference.source] ?? reference.source;
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
-  return Array.from(counts.entries()).map(([label, count]) => `${label} ${count}`).join('\u3001');
+  return Array.from(counts.entries()).map(([label, count]) => `${label} ${count}`).join(t ? ' / ' : ', ');
 }
 
-function referenceRoleLabel(role?: ReferenceImage['role']) {
-  const labels: Record<NonNullable<ReferenceImage['role']>, string> = {
-    auto: '自动',
-    composition: '构图',
-    style: '风格',
-    character: '角色',
-    color: '颜色'
+function referenceRoleLabel(role?: ReferenceImage['role'], t?: Translator) {
+  const fallbackLabels: Record<NonNullable<ReferenceImage['role']>, string> = {
+    auto: 'Auto',
+    composition: 'Composition',
+    style: 'Style',
+    character: 'Character',
+    color: 'Color'
   };
-  return role ? labels[role] ?? role : '自动';
+  if (!role) return t ? t('library.referenceRole.auto') : fallbackLabels.auto;
+  return t ? t(`library.referenceRole.${role}` as Parameters<Translator>[0]) : fallbackLabels[role] ?? role;
 }
 
-function referenceSourceDisplayLabel(source: ReferenceImage['source']) {
-  const labels: Record<ReferenceImage['source'], string> = {
-    upload: '本地',
-    'generated-result': '作品',
-    clipboard: '剪贴板',
-    'drag-drop': '拖拽',
-    inspiration: '灵感'
+function referenceSourceDisplayLabel(source: ReferenceImage['source'], t?: Translator) {
+  const fallbackLabels: Record<ReferenceImage['source'], string> = {
+    upload: 'Local',
+    'generated-result': 'Gallery work',
+    clipboard: 'Clipboard',
+    'drag-drop': 'Drag drop',
+    inspiration: 'Inspiration'
   };
-  return labels[source] ?? source;
+  return t ? t(`library.referenceSource.${source}` as Parameters<Translator>[0]) : fallbackLabels[source] ?? source;
 }
 
 function getReferencePreviewUrl(reference: ReferenceImage) {
@@ -13710,7 +13713,7 @@ function providerGenerationLabel(provider: ReturnType<typeof listProviders>[numb
 
 type ProviderProfileFilter = 'all' | 'enabled' | 'passed' | 'warning' | 'failed' | 'untested';
 
-function buildProviderProfileFilterOptions(profiles: ProviderConnectionProfile[]) {
+function buildProviderProfileFilterOptions(profiles: ProviderConnectionProfile[], t: Translator) {
   const counts: Record<ProviderProfileFilter, number> = {
     all: profiles.length,
     enabled: profiles.filter((profile) => profile.enabled).length,
@@ -13719,17 +13722,10 @@ function buildProviderProfileFilterOptions(profiles: ProviderConnectionProfile[]
     failed: profiles.filter((profile) => profile.lastTestStatus === 'failed').length,
     untested: profiles.filter((profile) => profile.lastTestStatus === 'untested').length
   };
-  const labels: Record<ProviderProfileFilter, string> = {
-    all: '全部',
-    enabled: '已启用',
-    passed: '已验证',
-    warning: '注意',
-    failed: '失败',
-    untested: '未测试'
-  };
-  return (Object.keys(labels) as ProviderProfileFilter[]).map((id) => ({
+  const ids: ProviderProfileFilter[] = ['all', 'enabled', 'passed', 'warning', 'failed', 'untested'];
+  return ids.map((id) => ({
     id,
-    label: labels[id],
+    label: t(`provider.profileFilter.${id}` as Parameters<Translator>[0]),
     count: counts[id]
   }));
 }
@@ -13740,14 +13736,15 @@ function matchesProviderProfileFilter(profile: ProviderConnectionProfile, filter
   return profile.lastTestStatus === filter;
 }
 
-function profileLabel(status: ProviderConnectionProfile['lastTestStatus']) {
-  const labels: Record<ProviderConnectionProfile['lastTestStatus'], string> = {
-    untested: '未测试',
-    passed: '通过',
-    warning: '注意',
-    failed: '失败'
+function profileLabel(status: ProviderConnectionProfile['lastTestStatus'], t?: Translator) {
+  if (t) return t(`provider.profileStatus.${status}` as Parameters<Translator>[0]);
+  const fallbackLabels: Record<ProviderConnectionProfile['lastTestStatus'], string> = {
+    untested: 'Untested',
+    passed: 'Passed',
+    warning: 'Warning',
+    failed: 'Failed'
   };
-  return labels[status] ?? '未测试';
+  return fallbackLabels[status] ?? fallbackLabels.untested;
 }
 
 function protocolLabel(protocol: OpenAICompatibleConfig['protocol'], t?: Translator) {
@@ -13774,15 +13771,16 @@ function imageToImageAdapterLabel(adapter: ImageToImageAdapter, t?: Translator) 
   return labels[adapter];
 }
 
-function imageToImageAdapterDescription(adapter: ImageToImageAdapter) {
-  const descriptions: Record<ImageToImageAdapter, string> = {
-    auto: '按当前平台和协议自动选择，日常优先用这个。',
-    'openai-images-edit': '官方 Images 图生图，使用 multipart 上传参考图。',
-    'responses-input-image': 'Responses 协议，把参考图作为 input_image 发送。',
-    'chat-image-url': '聊天接口包装图生图，把参考图放进 image_url。',
-    'json-image-array': '自定义中转常用，发送 image 首图和 images 数组。'
+function imageToImageAdapterDescription(adapter: ImageToImageAdapter, t?: Translator) {
+  if (t) return t(`provider.i2i.${adapter}.description` as Parameters<Translator>[0]);
+  const fallbackDescriptions: Record<ImageToImageAdapter, string> = {
+    auto: 'Choose the mapping from current platform and protocol.',
+    'openai-images-edit': 'Official Images image-to-image via multipart reference upload.',
+    'responses-input-image': 'Send references as input_image with the Responses protocol.',
+    'chat-image-url': 'Wrap image-to-image through chat messages with image_url.',
+    'json-image-array': 'Common custom-relay shape with image plus images array.'
   };
-  return descriptions[adapter];
+  return fallbackDescriptions[adapter];
 }
 
 function resolveImageToImageAdapterForDisplay(
