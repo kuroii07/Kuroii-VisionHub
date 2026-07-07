@@ -3032,7 +3032,7 @@ export function App() {
     if (activeBatchQueueId && !store.queues.some((queue) => queue.id === activeBatchQueueId)) {
       selectActiveBatchQueue(store.queues[0]?.id ?? '');
     }
-    setConfigMessage('已刷新批量队列本地状态。');
+    setConfigMessage(t('batch.message.refreshed'));
   }
 
   function selectActiveBatchQueue(queueId: string) {
@@ -3051,8 +3051,8 @@ export function App() {
     if (existingQueue) return { queue: existingQueue, exists: true };
     return {
       queue: createBatchQueue({
-        name: '默认批量队列',
-        description: '从 AI 创作台加入的生成任务会先进入这里，执行前仍需二次确认。',
+        name: t('batch.queue.defaultName'),
+        description: t('batch.queue.defaultDescription'),
         status: 'ready'
       }),
       exists: false
@@ -3062,7 +3062,7 @@ export function App() {
   function requestCreateBatchQueue() {
     setBatchQueueNameDialog({
       mode: 'create',
-      defaultName: '新的批量队列'
+      defaultName: t('batch.queue.newDefaultName')
     });
   }
 
@@ -3081,27 +3081,27 @@ export function App() {
       }
       if (nextName === queue.name) {
         setBatchQueueNameDialog(null);
-        setConfigMessage('队列名称未变化。');
+        setConfigMessage(t('batch.message.queueNameUnchanged'));
         return;
       }
       const nextStore = upsertBatchQueue({ ...queue, name: nextName }, store);
       setBatchQueueStore(nextStore);
       selectActiveBatchQueue(queue.id);
       setBatchQueueNameDialog(null);
-      setConfigMessage(`已重命名队列：${nextName}`);
+      setConfigMessage(t('batch.message.queueRenamed', { name: nextName }));
       return;
     }
 
     const queue = createBatchQueue({
       name: nextName,
-      description: '自定义队列：可用于不同项目、模型或比例测试。',
+      description: t('batch.queue.customDescription'),
       status: 'ready'
     });
     const nextStore = upsertBatchQueue(queue, store);
     setBatchQueueStore(nextStore);
     selectActiveBatchQueue(queue.id);
     setBatchQueueNameDialog(null);
-    setConfigMessage(`已新建队列：${queue.name}`);
+    setConfigMessage(t('batch.message.queueCreated', { name: queue.name }));
   }
 
   function requestRenameBatchQueue(queueId: string) {
@@ -3114,7 +3114,7 @@ export function App() {
     }
     const summary = summarizeBatchQueue(queue);
     if (runningBatchQueueId === queue.id || summary.running > 0) {
-      setConfigMessage('这个队列正在执行，暂时不能重命名。请先停止并等待当前任务完成。');
+      setConfigMessage(t('batch.message.queueRenameRunning'));
       return;
     }
     setBatchQueueNameDialog({
@@ -3133,24 +3133,24 @@ export function App() {
       return;
     }
     if (store.queues.length <= 1) {
-      setConfigMessage('至少保留 1 个队列；如需清理，可删除失败或已取消的单个任务。');
+      setConfigMessage(t('batch.message.queueKeepOne'));
       return;
     }
     const summary = summarizeBatchQueue(queue);
     if (runningBatchQueueId === queue.id || summary.running > 0) {
-      setConfigMessage('这个队列正在执行，不能删除。请先停止并等待当前任务完成。');
+      setConfigMessage(t('batch.message.queueDeleteRunning'));
       return;
     }
     requestConfirm({
-      title: '删除这个队列？',
+      title: t('batch.confirm.deleteQueueTitle'),
       message: [
-        `将从本地批量队列中删除“${queue.name}”。`,
-        `包含 ${summary.total} 个任务快照：${summary.pending} 个待执行、${summary.succeeded} 个成功、${summary.failed} 个失败、${summary.cancelled} 个已取消。`,
-        `包含 ${queue.compareGroups?.length ?? 0} 个对比组。`,
-        '这不会删除作品画廊记录，也不会删除磁盘图片文件。'
+        t('batch.confirm.deleteQueueIntro', { name: queue.name }),
+        t('batch.confirm.deleteQueueSummary', { total: summary.total, pending: summary.pending, succeeded: summary.succeeded, failed: summary.failed, cancelled: summary.cancelled }),
+        t('batch.confirm.deleteQueueGroups', { groups: queue.compareGroups?.length ?? 0 }),
+        t('batch.confirm.deleteQueueSafe')
       ].join('\n'),
-      confirmLabel: '删除队列',
-      cancelLabel: '取消',
+      confirmLabel: t('batch.confirm.deleteQueue'),
+      cancelLabel: t('batch.confirm.cancel'),
       tone: 'danger',
       onConfirm: () => {
         const latestStore = loadBatchQueueStore();
@@ -3164,7 +3164,7 @@ export function App() {
         setBatchQueueStore(nextStore);
         const nextActiveId = nextQueues[0]?.id ?? '';
         selectActiveBatchQueue(nextActiveId);
-        setConfigMessage(`已删除队列：${queue.name}`);
+        setConfigMessage(t('batch.message.queueDeleted', { name: queue.name }));
       }
     });
   }
@@ -3233,11 +3233,11 @@ export function App() {
     }
     const summary = summarizeBatchQueue(queue);
     if (runningBatchQueueId === queue.id || summary.running > 0) {
-      setConfigMessage('这个队列正在执行，暂时不能保存为模板。');
+      setConfigMessage(t('batch.message.templateSaveRunning'));
       return;
     }
     if (summary.total === 0) {
-      setConfigMessage('空队列不能保存为模板。');
+      setConfigMessage(t('batch.message.templateEmptyQueue'));
       return;
     }
     const template = createBatchQueueTemplateFromQueue(queue);
@@ -3247,19 +3247,19 @@ export function App() {
     ].slice(0, MAX_BATCH_QUEUE_TEMPLATES);
     saveBatchQueueTemplates(nextTemplates);
     setBatchQueueTemplates(nextTemplates);
-    setConfigMessage(`已保存批量模板：${template.name}，包含 ${template.taskTemplates.length} 个任务。`);
+    setConfigMessage(t('batch.message.templateSaved', { name: template.name, count: template.taskTemplates.length }));
   }
 
   function requestApplyBatchQueueTemplate(templateId: string) {
     const template = batchQueueTemplates.find((item) => item.id === templateId);
     if (!template) {
-      setConfigMessage('批量模板不存在，请刷新后重试。');
+      setConfigMessage(t('batch.message.templateNotFound'));
       return;
     }
     const { queue, exists } = resolveTargetBatchQueue(loadBatchQueueStore());
     const { tasks, compareGroups } = createTasksFromBatchQueueTemplate(template, queue.id);
     if (!tasks.length) {
-      setConfigMessage('这个批量模板没有可追加的任务。');
+      setConfigMessage(t('batch.message.templateNoAppend'));
       return;
     }
     const nextStore = exists
@@ -3274,30 +3274,30 @@ export function App() {
     setBatchQueueTemplates(nextTemplates);
     setBatchQueueStore(nextStore);
     selectActiveBatchQueue(queue.id);
-    setConfigMessage(`已套用批量模板「${template.name}」：追加 ${tasks.length} 个待执行任务。`);
+    setConfigMessage(t('batch.message.templateApplied', { name: template.name, count: tasks.length }));
     navigateTo('batch');
   }
 
   function requestDeleteBatchQueueTemplate(templateId: string) {
     const template = batchQueueTemplates.find((item) => item.id === templateId);
     if (!template) {
-      setConfigMessage('批量模板不存在，请刷新后重试。');
+      setConfigMessage(t('batch.message.templateNotFound'));
       return;
     }
     requestConfirm({
-      title: '删除这个批量模板？',
+      title: t('batch.confirm.deleteTemplateTitle'),
       message: [
-        `将删除模板“${template.name}”。`,
-        '这只删除模板，不会删除队列任务、作品画廊记录或磁盘图片。'
+        t('batch.confirm.deleteTemplateIntro', { name: template.name }),
+        t('batch.confirm.deleteTemplateSafe')
       ].join('\n'),
-      confirmLabel: '删除模板',
-      cancelLabel: '保留模板',
+      confirmLabel: t('batch.confirm.deleteTemplate'),
+      cancelLabel: t('batch.confirm.keepTemplate'),
       tone: 'danger',
       onConfirm: () => {
         const nextTemplates = batchQueueTemplates.filter((item) => item.id !== template.id);
         saveBatchQueueTemplates(nextTemplates);
         setBatchQueueTemplates(nextTemplates);
-        setConfigMessage(`已删除批量模板：${template.name}`);
+        setConfigMessage(t('batch.message.templateDeleted', { name: template.name }));
       }
     });
   }
@@ -3793,16 +3793,16 @@ export function App() {
       return;
     }
     requestConfirm({
-      title: '开始连续执行队列？',
+      title: t('batch.confirm.startQueueTitle'),
       message: [
-        `将按顺序执行 ${pendingTasks.length} 个待执行任务，预计请求 ${pendingImages} 张图片。`,
-        '执行过程中会真实调用接口，可能消耗中转站或官方 API 额度。',
-        '点击“停止执行”只会在当前任务完成后停止，不会强行中断已发出的请求。'
+        t('batch.confirm.startQueueSummary', { tasks: pendingTasks.length, images: pendingImages }),
+        t('batch.confirm.startQueueCost'),
+        t('batch.confirm.startQueueStopHint')
       ].join('\n'),
-      confirmLabel: '开始执行',
-      cancelLabel: '先不执行',
+      confirmLabel: t('batch.confirm.startQueue'),
+      cancelLabel: t('batch.confirm.skipRun'),
       onConfirm: () => {
-        setConfigMessage('已开始连续执行队列，可继续操作其他页面；当前任务完成后会自动执行下一个待执行任务。');
+        setConfigMessage(t('batch.message.startQueueConfirmed'));
         void executeBatchQueueSequentially(queueId);
       }
     });
@@ -3810,12 +3810,12 @@ export function App() {
 
   function requestStopBatchQueue(queueId: string) {
     if (runningBatchQueueId !== queueId) {
-      setConfigMessage('当前没有正在连续执行的这个队列。');
+      setConfigMessage(t('batch.message.noRunningQueue'));
       return;
     }
     batchQueueStopRequestedRef.current = true;
     updateBatchQueueRunProgress(queueId, { pauseRequested: true });
-    setConfigMessage('已请求暂停连续执行：当前任务完成后会暂停，不会再开始下一个任务。');
+    setConfigMessage(t('batch.message.stopRequested'));
   }
 
   function requestDeleteBatchQueueTask(queueId: string, taskId: string) {
@@ -3824,26 +3824,26 @@ export function App() {
     const task = queue?.tasks.find((item) => item.id === taskId);
     if (!queue || !task) {
       setBatchQueueStore(store);
-      setConfigMessage('队列任务不存在，请刷新后重试。');
+      setConfigMessage(t('batch.message.taskMissing'));
       return;
     }
     if (task.status !== 'failed' && task.status !== 'cancelled') {
-      setConfigMessage('只有失败或已取消的队列任务可以删除。');
+      setConfigMessage(t('batch.message.taskDeleteOnlyFailedCancelled'));
       return;
     }
     requestConfirm({
-      title: '删除这个队列任务？',
+      title: t('batch.confirm.deleteTaskTitle'),
       message: [
-        `将从本地批量队列中删除“${task.title}”。`,
-        '这只删除队列任务快照，不会删除作品画廊记录，也不会删除磁盘图片文件。'
+        t('batch.confirm.deleteTaskIntro', { title: task.title }),
+        t('batch.confirm.deleteTaskSafe')
       ].join('\n'),
-      confirmLabel: '删除任务',
-      cancelLabel: '保留任务',
+      confirmLabel: t('batch.confirm.deleteTask'),
+      cancelLabel: t('batch.confirm.keepTask'),
       tone: 'danger',
       onConfirm: () => {
         const nextStore = removeBatchQueueTask(queueId, taskId, loadBatchQueueStore());
         setBatchQueueStore(nextStore);
-        setConfigMessage('已删除队列任务；作品画廊记录和磁盘图片未受影响。');
+        setConfigMessage(t('batch.message.taskDeleted'));
       }
     });
   }
@@ -3852,21 +3852,21 @@ export function App() {
     const queue = batchQueueStore.queues.find((item) => item.id === queueId);
     const task = queue?.tasks.find((item) => item.id === taskId);
     if (!queue || !task) {
-      setConfigMessage('队列任务不存在，请刷新批量队列后重试。');
+      setConfigMessage(t('batch.message.taskMissingRefresh'));
       return;
     }
     const omittedReferenceCount = task.snapshot.referencePolicy?.omittedReferenceIds.length ?? 0;
     requestConfirm({
-      title: '执行这个队列任务？',
+      title: t('batch.confirm.executeTaskTitle'),
       message: [
-        `将使用 ${task.snapshot.providerName ?? task.snapshot.providerId} / ${task.snapshot.profileName ?? '当前快照配置'} / ${task.snapshot.modelId} 生成 ${task.snapshot.count} 张图片。`,
-        `模式：${task.snapshot.generationMode === 'image-to-image' ? '图生图' : '文生图'}，尺寸：${task.snapshot.size}。`,
-        omittedReferenceCount > 0 ? `注意：有 ${omittedReferenceCount} 张参考图未完整持久化，可能会执行失败；建议重新加入带参考图的任务。` : '确认后会真实调用接口，可能消耗中转站或官方 API 额度。'
+        t('batch.confirm.executeTaskSummary', { provider: task.snapshot.providerName ?? task.snapshot.providerId, profile: task.snapshot.profileName ?? t('batch.profileSnapshot'), model: task.snapshot.modelId, count: task.snapshot.count }),
+        t('batch.confirm.executeTaskMeta', { mode: task.snapshot.generationMode === 'image-to-image' ? t('batch.mode.imageToImage') : t('batch.mode.textToImage'), size: task.snapshot.size }),
+        omittedReferenceCount > 0 ? t('batch.confirm.executeTaskOmitted', { count: omittedReferenceCount }) : t('batch.confirm.executeTaskCost')
       ].join('\n'),
-      confirmLabel: '确认执行',
-      cancelLabel: '先不执行',
+      confirmLabel: t('batch.confirm.executeTask'),
+      cancelLabel: t('batch.confirm.skipRun'),
       onConfirm: () => {
-        setConfigMessage('已开始执行队列任务，可继续操作其他页面；任务状态会在批量队列中更新。');
+        setConfigMessage(t('batch.message.taskExecuteStarted'));
         void executeBatchQueueTaskNow(queueId, taskId);
       }
     });
@@ -3877,10 +3877,10 @@ export function App() {
     const task = queue?.tasks.find((item) => item.id === taskId);
     if (!queue || !task) return;
     requestConfirm({
-      title: '取消这个队列任务？',
-      message: '取消只会把这个本地队列任务标记为已取消，不会删除作品画廊记录，也不会删除任何磁盘图片。',
-      confirmLabel: '标记取消',
-      cancelLabel: '保留任务',
+      title: t('batch.confirm.cancelTaskTitle'),
+      message: t('batch.confirm.cancelTaskMessage'),
+      confirmLabel: t('batch.confirm.markCancelled'),
+      cancelLabel: t('batch.confirm.keepTask'),
       tone: 'danger',
       onConfirm: () => {
         setBatchTaskState(queueId, taskId, {
@@ -3888,7 +3888,7 @@ export function App() {
           error: task.error,
           finishedAt: new Date().toISOString()
         });
-        setConfigMessage('已将队列任务标记为取消。');
+        setConfigMessage(t('batch.message.taskCancelledMarked'));
       }
     });
   }
@@ -3914,7 +3914,7 @@ export function App() {
       queueId,
       snapshot: retrySnapshot,
       kind: task.kind,
-      title: `重试 · ${task.title}`,
+      title: t('batch.message.retryTitle', { title: task.title }),
       status: 'pending'
     });
   }
@@ -3924,28 +3924,28 @@ export function App() {
     const queue = store.queues.find((item) => item.id === queueId);
     const task = queue?.tasks.find((item) => item.id === taskId);
     if (!queue || !task) {
-      setConfigMessage('队列任务不存在，请刷新批量队列后重试。');
+      setConfigMessage(t('batch.message.taskMissingRefresh'));
       setBatchQueueStore(store);
       return;
     }
     if (task.status !== 'failed') {
-      setConfigMessage('只有失败任务可以重新入队；待执行任务请直接执行。');
+      setConfigMessage(t('batch.message.requeueOnlyFailed'));
       return;
     }
     requestConfirm({
-      title: '重新入队这个失败任务？',
+      title: t('batch.confirm.requeueTaskTitle'),
       message: [
-        '将复制原任务的 Prompt、模型、配置实例、尺寸和参考图快照，创建一个新的待执行任务。',
-        '原失败任务和作品画廊里的失败记录都会保留，不会被覆盖。',
-        task.error ? `上次错误：${task.error}` : ''
+        t('batch.confirm.requeueTaskCopy'),
+        t('batch.confirm.requeueTaskKeep'),
+        task.error ? t('batch.confirm.requeueTaskLastError', { message: task.error }) : ''
       ].filter(Boolean).join('\n'),
-      confirmLabel: '重新入队',
-      cancelLabel: '先不重试',
+      confirmLabel: t('batch.confirm.requeue'),
+      cancelLabel: t('batch.confirm.skipRetry'),
       onConfirm: () => {
         const retryTask = createRetryBatchQueueTask(queue.id, task);
         const nextStore = appendBatchQueueTasks(queue.id, [retryTask], loadBatchQueueStore());
         setBatchQueueStore(nextStore);
-        setConfigMessage('已创建新的重试任务，原失败任务已保留。');
+        setConfigMessage(t('batch.message.retryCreated'));
       }
     });
   }
@@ -3960,23 +3960,23 @@ export function App() {
     }
     const summary = summarizeBatchQueue(queue);
     if (runningBatchQueueId === queue.id || summary.running > 0 || executingBatchTaskId) {
-      setConfigMessage('当前还有队列任务正在执行，不能批量重新入队。');
+      setConfigMessage(t('batch.message.bulkRequeueRunning'));
       return;
     }
     const failedTasks = queue.tasks.filter((task) => task.status === 'failed');
     if (!failedTasks.length) {
-      setConfigMessage('当前队列没有失败任务需要重新入队。');
+      setConfigMessage(t('batch.message.noFailedToRequeue'));
       return;
     }
     requestConfirm({
-      title: '批量重新入队失败任务？',
+      title: t('batch.confirm.bulkRequeueTitle'),
       message: [
-        `将复制队列“${queue.name}”里的 ${failedTasks.length} 个失败任务，创建同等数量的新待执行任务。`,
-        '原失败任务和作品画廊里的失败记录都会保留，不会被覆盖。',
-        '新任务会排在当前队列末尾，仍需手动点击“执行全部待处理”。'
+        t('batch.confirm.bulkRequeueIntro', { queue: queue.name, count: failedTasks.length }),
+        t('batch.confirm.bulkRequeueKeep'),
+        t('batch.confirm.bulkRequeueTail')
       ].join('\n'),
-      confirmLabel: '批量重新入队',
-      cancelLabel: '先不重试',
+      confirmLabel: t('batch.confirm.bulkRequeue'),
+      cancelLabel: t('batch.confirm.skipRetry'),
       onConfirm: () => {
         const latestStore = loadBatchQueueStore();
         const latestQueue = latestStore.queues.find((item) => item.id === queue.id);
@@ -3988,14 +3988,14 @@ export function App() {
         const latestFailedTasks = latestQueue.tasks.filter((task) => task.status === 'failed');
         if (!latestFailedTasks.length) {
           setBatchQueueStore(latestStore);
-          setConfigMessage('当前队列没有失败任务需要重新入队。');
+          setConfigMessage(t('batch.message.noFailedToRequeue'));
           return;
         }
         const retryTasks = latestFailedTasks.map((task) => createRetryBatchQueueTask(latestQueue.id, task));
         const nextStore = appendBatchQueueTasks(latestQueue.id, retryTasks, latestStore);
         setBatchQueueStore(nextStore);
         selectActiveBatchQueue(latestQueue.id);
-        setConfigMessage(`已批量重新入队 ${retryTasks.length} 个失败任务，原失败任务已保留。`);
+        setConfigMessage(t('batch.message.bulkRequeued', { count: retryTasks.length }));
       }
     });
   }
