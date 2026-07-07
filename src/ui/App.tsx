@@ -5219,19 +5219,19 @@ export function App() {
       return;
     }
     if (!desktopRuntime) {
-      setConfigMessage('请在 Tauri 桌面端刷新模型列表。');
+      setConfigMessage(t('provider.message.refreshModelsDesktopRequired'));
       return;
     }
     if (!secretAvailable) {
       const savedSecret = await saveActiveProviderSecret();
       if (!savedSecret) {
-        setConfigMessage('请先保存 API Key，再刷新模型列表。');
+        setConfigMessage(t('provider.message.refreshModelsKeyRequired'));
         return;
       }
     }
 
     setIsRefreshingModels(true);
-    setConfigMessage('正在刷新模型列表…');
+    setConfigMessage(t('provider.message.refreshModelsRunning'));
     const startedAt = performance.now();
     try {
       const models = await listOpenAICompatibleModels(
@@ -5279,7 +5279,10 @@ export function App() {
         );
       }
       setSelectedModel(nextModelId);
-      setConfigMessage(`已刷新 ${modelOptions.length} 个模型。${modelProbe.available ? '' : ' 当前模型未在列表中，已保留手动选择。'}`);
+      setConfigMessage(t('provider.message.refreshModelsDone', {
+        count: modelOptions.length,
+        suffix: modelProbe.available ? '' : t('provider.message.refreshModelsCurrentMissingSuffix')
+      }));
     } catch (error) {
       if (isModelListUnavailableError(error)) {
         const nextConfig = ensureManualModelOption(providerConfig);
@@ -5353,23 +5356,23 @@ export function App() {
       return;
     }
     if (!desktopRuntime) {
-      setConfigMessage('请在 Tauri 桌面端探测模型。');
+      setConfigMessage(t('provider.message.probeModelDesktopRequired'));
       return;
     }
     if (!providerConfig.modelId.trim()) {
-      setConfigMessage('请先填写模型 ID。');
+      setConfigMessage(t('provider.message.probeModelIdRequired'));
       return;
     }
     if (!secretAvailable) {
       const savedSecret = await saveActiveProviderSecret();
       if (!savedSecret) {
-        setConfigMessage('请先保存 API Key，再探测模型。');
+        setConfigMessage(t('provider.message.probeModelKeyRequired'));
         return;
       }
     }
 
     setIsProbingModel(true);
-    setConfigMessage(`正在探测模型：${providerConfig.modelId.trim()}…`);
+    setConfigMessage(t('provider.message.probeModelRunning', { model: providerConfig.modelId.trim() }));
     const startedAt = performance.now();
     try {
       const models = await listOpenAICompatibleModels(
