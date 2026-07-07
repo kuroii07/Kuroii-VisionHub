@@ -4931,7 +4931,7 @@ export function App() {
     });
     new URL(normalizedConfig.baseUrl);
     if (!normalizedConfig.endpointPath.startsWith('/')) {
-      throw new Error('接口路径必须以 / 开头。');
+      throw new Error(t('provider.error.endpointPathSlash'));
     }
 
     const existing = selectedProfileId
@@ -5849,7 +5849,7 @@ export function App() {
     setSelectedProfileId(profile.id);
     setProviderConfig(profileToProviderConfig(profile));
     setSelectedModel(profile.modelId);
-    setConfigMessage(`正在测试连接延迟：${profile.displayName}…`);
+    setConfigMessage(t('provider.message.testingLatency', { name: profile.displayName }));
     await runProviderDiagnostics(profile);
   }
 
@@ -5859,30 +5859,30 @@ export function App() {
       return;
     }
     if (!supportsOpenAICompatible) {
-      setConfigMessage('当前平台还没有真实图片生成适配器，暂不能测试生成。');
+      setConfigMessage(t('provider.message.testGenerationAdapterUnsupported'));
       return;
     }
     if (!desktopRuntime) {
-      setConfigMessage('测试生成需要 Tauri 桌面端运行时。');
+      setConfigMessage(t('provider.message.testGenerationDesktopRequired'));
       return;
     }
     if (!secretAvailable) {
       const savedSecret = await saveActiveProviderSecret();
       if (!savedSecret) {
-        setConfigMessage('请先保存 API Key，再执行测试生成。');
+        setConfigMessage(t('provider.message.testGenerationKeyRequired'));
         return;
       }
     }
 
     setIsRunningTestGeneration(true);
-    setConfigMessage('正在调用真实接口生成 1 张测试小样…');
+    setConfigMessage(t('provider.message.testGenerationRunning'));
     const startedAt = performance.now();
     try {
       const normalizedConfig = normalizeProviderConfig(providerConfig);
       new URL(normalizedConfig.baseUrl);
       const extraHeaders = parseExtraHeaders(normalizedConfig.extraHeadersJson);
       if (!normalizedConfig.endpointPath.startsWith('/')) {
-        throw new Error('接口路径必须以 / 开头。');
+        throw new Error(t('provider.error.endpointPathSlash'));
       }
 
       saveProviderConfig(selectedProvider.id, normalizedConfig);
@@ -5908,13 +5908,13 @@ export function App() {
       addResult(saved);
 
       if (saved.status === 'succeeded' && saved.imageUrls[0]) {
-        updateProviderProfileTestState(selectedProfileId, 'passed', Math.round(performance.now() - startedAt), '测试生成成功');
+        updateProviderProfileTestState(selectedProfileId, 'passed', Math.round(performance.now() - startedAt), t('provider.message.testGenerationSucceededState'));
         setPage('providers');
         setGeneratePreviewUrl(null);
         setLibraryPreview(null);
-        setConfigMessage('测试生成成功：已生成 1 张小样图，并自动保存到作品画廊。');
+        setConfigMessage(t('provider.message.testGenerationSucceeded'));
       } else if (isPotentialBackgroundCompletion(saved)) {
-        const message = '测试生成待核查：同步连接先超时，但中转后台可能仍会继续生成。已写入作品画廊，稍后可重载历史或查看中转后台。';
+        const message = t('provider.message.testGenerationBackgroundPending');
         updateProviderProfileTestState(selectedProfileId, 'warning', Math.round(performance.now() - startedAt), message);
         setConfigMessage(message);
       } else {
