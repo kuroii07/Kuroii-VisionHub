@@ -4400,12 +4400,12 @@ export function App() {
 
   async function openLibraryDirectory() {
     if (!desktopRuntime) {
-      setSettingsMessage('请在 Tauri 桌面端打开作品画廊目录。');
+      setSettingsMessage(t('settings.message.openLibraryDesktop'));
       return;
     }
     try {
       await revealLibraryDir();
-      setSettingsMessage('已打开作品画廊目录。');
+      setSettingsMessage(t('settings.message.openLibraryDone'));
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     }
@@ -4413,12 +4413,12 @@ export function App() {
 
   async function openInspirationDirectory() {
     if (!desktopRuntime) {
-      setSettingsMessage('请在 Tauri 桌面端打开图片收藏目录。');
+      setSettingsMessage(t('settings.message.openInspirationDesktop'));
       return;
     }
     try {
       await revealInspirationDir();
-      setSettingsMessage('已打开图片收藏目录。');
+      setSettingsMessage(t('settings.message.openInspirationDone'));
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     }
@@ -4426,12 +4426,12 @@ export function App() {
 
   async function openAppDataDirectory() {
     if (!desktopRuntime) {
-      setSettingsMessage('请在 Tauri 桌面端打开数据目录。');
+      setSettingsMessage(t('settings.message.openAppDataDesktop'));
       return;
     }
     try {
       await revealAppDataDir();
-      setSettingsMessage('已打开应用数据目录。');
+      setSettingsMessage(t('settings.message.openAppDataDone'));
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     }
@@ -4439,12 +4439,12 @@ export function App() {
 
   async function openBackupsDirectory() {
     if (!desktopRuntime) {
-      setSettingsMessage('请在 Tauri 桌面端打开备份目录。');
+      setSettingsMessage(t('settings.message.openBackupsDesktop'));
       return;
     }
     try {
       await revealBackupsDir();
-      setSettingsMessage('已打开备份目录。');
+      setSettingsMessage(t('settings.message.openBackupsDone'));
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     }
@@ -4452,17 +4452,17 @@ export function App() {
 
   async function selectLibraryDirectory() {
     if (!desktopRuntime) {
-      setSettingsMessage('请在 Tauri 桌面端修改本地图库路径。');
+      setSettingsMessage(t('settings.message.selectLibraryDesktop'));
       return;
     }
     try {
       const nextSettings = await chooseLibraryDir();
       if (!nextSettings) {
-        setSettingsMessage('已取消选择图库目录。');
+        setSettingsMessage(t('settings.message.selectLibraryCancelled'));
         return;
       }
       setStorageSettings(nextSettings);
-      setSettingsMessage(`图库目录已切换：${nextSettings.resolved_library_dir}`);
+      setSettingsMessage(t('settings.message.selectLibraryDone', { path: nextSettings.resolved_library_dir }));
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     }
@@ -4470,7 +4470,7 @@ export function App() {
 
   async function resetLibraryDirectoryOverride() {
     if (!desktopRuntime) {
-      setSettingsMessage('请在 Tauri 桌面端修改本地图库路径。');
+      setSettingsMessage(t('settings.message.selectLibraryDesktop'));
       return;
     }
     try {
@@ -4479,7 +4479,7 @@ export function App() {
         inspirationDirOverride: storageSettings?.inspiration_dir_override ?? undefined
       });
       setStorageSettings(nextSettings);
-      setSettingsMessage(`已恢复默认图库目录：${nextSettings.resolved_library_dir}`);
+      setSettingsMessage(t('settings.message.resetLibraryDone', { path: nextSettings.resolved_library_dir }));
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     }
@@ -4487,17 +4487,17 @@ export function App() {
 
   async function selectInspirationDirectory() {
     if (!desktopRuntime) {
-      setSettingsMessage('请在 Tauri 桌面端修改图片收藏目录。');
+      setSettingsMessage(t('settings.message.selectInspirationDesktop'));
       return;
     }
     try {
       const nextSettings = await chooseInspirationDir();
       if (!nextSettings) {
-        setSettingsMessage('已取消选择图片收藏目录。');
+        setSettingsMessage(t('settings.message.selectInspirationCancelled'));
         return;
       }
       setStorageSettings(nextSettings);
-      setSettingsMessage(`图片收藏目录已切换：${nextSettings.resolved_inspiration_dir}`);
+      setSettingsMessage(t('settings.message.selectInspirationDone', { path: nextSettings.resolved_inspiration_dir }));
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     }
@@ -4505,7 +4505,7 @@ export function App() {
 
   async function resetInspirationDirectoryOverride() {
     if (!desktopRuntime) {
-      setSettingsMessage('请在 Tauri 桌面端修改图片收藏目录。');
+      setSettingsMessage(t('settings.message.selectInspirationDesktop'));
       return;
     }
     try {
@@ -4514,7 +4514,7 @@ export function App() {
         inspirationDirOverride: null
       });
       setStorageSettings(nextSettings);
-      setSettingsMessage(`已恢复默认图片收藏目录：${nextSettings.resolved_inspiration_dir}`);
+      setSettingsMessage(t('settings.message.resetInspirationDone', { path: nextSettings.resolved_inspiration_dir }));
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     }
@@ -4522,7 +4522,7 @@ export function App() {
 
   async function exportCurrentSettingsBackup() {
     if (!desktopRuntime) {
-      setSettingsMessage('请在 Tauri 桌面端导出设置备份。');
+      setSettingsMessage(t('settings.message.exportBackupDesktop'));
       return;
     }
     try {
@@ -4536,7 +4536,7 @@ export function App() {
           }))
         }
       });
-      setSettingsMessage(`已导出设置备份：${result.path}`);
+      setSettingsMessage(t('settings.message.exportBackupDone', { path: result.path }));
       await revealGenerationFile(result.path);
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
@@ -4545,7 +4545,7 @@ export function App() {
 
   async function exportMigrationGuide() {
     if (!desktopRuntime) {
-      setSettingsMessage('请在 Tauri 桌面端导出迁移说明。');
+      setSettingsMessage(t('settings.message.exportMigrationDesktop'));
       return;
     }
     try {
@@ -4630,10 +4630,10 @@ export function App() {
       const suggestedFileName = `visionhub-migration-guide-${Date.now()}.md`;
       const result = await saveTextFileWithDialog({ suggestedFileName, content });
       if (!result.saved || !result.path) {
-        setSettingsMessage('已取消导出迁移说明。');
+        setSettingsMessage(t('settings.message.exportMigrationCancelled'));
         return;
       }
-      setSettingsMessage(`已导出迁移说明：${result.path}`);
+      setSettingsMessage(t('settings.message.exportMigrationDone', { path: result.path }));
       await revealGenerationFile(result.path);
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
