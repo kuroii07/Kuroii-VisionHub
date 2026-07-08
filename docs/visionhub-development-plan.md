@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.3`
+- Current app version: `0.5.5`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.3` Kuroii VisionHub naming polish: restore localized zh-CN brand subtitle, produce a user-facing `Kuroii VisionHub.exe` portable copy after Tauri builds, and keep internal AppData / credential compatibility names unchanged.
+- Current focus: `0.5.5` gallery thumbnail performance hotfix: keep the 0.5.4 history compaction baseline, then prevent the gallery from auto-rendering and color-analyzing too many full-size local images at once.
 
 ## 2. 后续开发前必读
 
@@ -110,6 +110,8 @@
 | `0.5.1` | Kuroii VisionHub brand integration | Product display name, approved Kuroii icon assets, restrained Kuroii Cat asset preparation, and compatibility documentation | Brand build validation |
 | `0.5.2` | WebView2 white-screen hotfix | Windows release paint stability, boot fallback branding, validation, and rebuilt installers | Hotfix validation |
 | `0.5.3` | Kuroii VisionHub naming polish | Localized zh-CN subtitle and user-facing portable exe copy while retaining internal compatibility ids | Naming hotfix validation |
+| `0.5.4` | Startup performance hotfix | Compact oversized history JSON reference images and stop startup base64 hydration for local generated images | Performance hotfix validation |
+| `0.5.5` | Gallery thumbnail performance hotfix | Incremental gallery thumbnail rendering and idle-time color analysis for large local PNG libraries | Performance hotfix validation |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -895,7 +897,43 @@ Acceptance:
 - [x] Direct `Kuroii VisionHub.exe` launch smoke confirms the friendly exe starts as process `Kuroii VisionHub`.
 - Chinese UI shows `AI 图片工作流工作台`; English UI still shows `AI Image Workflow Studio`.
 
-### 5.31 `v1.0 pre` Release and migration preparation
+### 5.31 `0.5.4` startup performance hotfix
+
+Status 2026-07-08: validated with `npm.cmd run verify`, `npm.cmd run tauri:build`, release launch smoke, and history compaction evidence. Local diagnosis found `generation-history.json` at about 202MB for only 94 records because `reference_images` contained large `data:image` payloads. Startup also returned local generated images as base64 data URLs through `load_generation_history`, amplifying WebView2 IPC and React render cost.
+
+Objectives:
+
+- Compact persisted `reference_images` by removing large `data_url` / `preview_url` fields after preserving `local_path`; cache embedded references to AppData only when no local path exists.
+- Stop `load_generation_history` from hydrating every local image path into base64 on startup.
+- Use Tauri `convertFileSrc` in the frontend for local image display.
+- Keep reference-image generation working by letting backend requests read `local_path` when data URL is not present.
+- Preserve user history, gallery images, profile ids, AppData identifier, and credential channels.
+
+Acceptance:
+
+- [x] `npm.cmd run verify` passes.
+- [x] `npm.cmd run tauri:build` produces `Kuroii VisionHub_0.5.4` installers and `Kuroii VisionHub.exe`.
+- [x] Launching the release build rewrites the oversized history file from 202.08MB to 0.28MB while keeping 94 records and without deleting image files.
+
+### 5.32 `0.5.5` gallery thumbnail performance hotfix
+
+Status 2026-07-08: validated with `npm.cmd run verify`, `npm.cmd run tauri:build`, release launch smoke, history/base64 recheck, and artifact SHA256 recording. After 0.5.4 compacted startup history from 202MB to 0.28MB, the remaining lag was traced to gallery thumbnail rendering: the local library contains 78 existing generated images totaling about 243MB, with several PNG files between 8MB and 11.64MB, while the gallery auto-expanded from 48 initial items to the full list on the next animation frames and ran color analysis from image load handlers.
+
+Objectives:
+
+- Keep the 0.5.4 data compaction behavior unchanged.
+- Reduce initial gallery thumbnail rendering from 48 to 18 items.
+- Replace automatic next-frame full-list expansion with scroll/manual incremental loading.
+- Move gallery color analysis to browser idle time so image load and click handling stay responsive.
+- Preserve user history, gallery images, AppData, profile ids, and credential channels.
+
+Acceptance:
+
+- [x] `npm.cmd run verify` passes.
+- [x] `npm.cmd run tauri:build` produces `Kuroii VisionHub_0.5.5` installers and `Kuroii VisionHub.exe`.
+- [x] Release build launch smoke confirms the app stays stable with the existing 94-record / 243MB local image library; 14-second process sample showed CPU 1.19 and working set 71.39MB, while history remained 0.28MB with 0 `data:image` / 0 `;base64,` markers.
+
+### 5.33 `v1.0 pre` Release and migration preparation
 
 目标：
 
@@ -979,4 +1017,4 @@ Acceptance:
 
 ## 9. 下一步推荐
 
-Next formal development should finish `0.5.3` naming polish validation, then continue optional screenshot-based visual QA and installer install / uninstall QA before any public Release Asset upload.
+Next formal development should finish `0.5.5` gallery thumbnail performance validation, then continue optional screenshot-based visual QA and installer install / uninstall QA before any public Release Asset upload.

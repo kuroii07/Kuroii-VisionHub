@@ -10554,6 +10554,32 @@ body {
   gap: 10px;
 }
 
+.appShell .libraryLoadMore {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 0 128px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.appShell .libraryLoadMore button {
+  border: 1px solid var(--app-line);
+  border-radius: 999px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.appShell .libraryLoadMore button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--app-accent-strong) 38%, var(--app-line));
+  background: color-mix(in srgb, var(--app-accent-strong) 9%, var(--app-surface));
+}
+
 .appShell .libraryCardV2 {
   position: relative;
   height: auto;

@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.3` Kuroii VisionHub naming polish. `0.5.2` WebView2 white-screen hotfix remains the current stability baseline.
+Current checkpoint: `0.5.5` gallery thumbnail performance hotfix. `0.5.4` startup history compaction remains the current data-loading baseline.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,22 @@ Current checkpoint: `0.5.3` Kuroii VisionHub naming polish. `0.5.2` WebView2 whi
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.5 gallery thumbnail performance hotfix
+
+- App version is now `0.5.5`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Fixed the second lag source found after history compaction: the gallery rendered 48 thumbnails first and then auto-expanded the rest on the next animation frames, causing WebView2 to decode many 5–11MB local PNGs as thumbnails.
+- The gallery now starts with a small 18-item thumbnail window and loads additional thumbnails incrementally when the user scrolls near the bottom or clicks the load-more control.
+- Thumbnail color analysis now runs during browser idle time instead of directly in the image `onLoad` hot path.
+- Existing AppData, gallery records, image files, Provider profiles, and credentials are preserved.
+
+### v0.5.4 startup performance hotfix
+
+- App version is now `0.5.4`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Fixed the real lag source found on the test machine: `generation-history.json` had grown to about 202MB because reference images were persisted as `data:image` base64 inside `reference_images`.
+- History load and save now compact reference images for storage, cache embedded reference images only when no local path exists, and stop returning local generated images as huge base64 strings during startup.
+- Frontend display now maps local image paths through Tauri `convertFileSrc`, while backend generation requests still read `local_path` when a history/gallery image is reused as a reference.
+- Existing AppData, gallery records, image files, Provider profiles, and credentials are preserved; local validation compacted `generation-history.json` from 202.08MB to 0.28MB while keeping 94 records.
 
 ### v0.5.3 Kuroii VisionHub naming polish
 

@@ -181,7 +181,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
-const APP_VERSION = '0.5.3';
+const APP_VERSION = '0.5.5';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -1800,8 +1800,8 @@ function sortLibraryRecords(records: GenerationRecord[], sortMode: LibrarySortMo
   });
 }
 
-const LIBRARY_INITIAL_RENDER_COUNT = 48;
-const LIBRARY_RENDER_BATCH_SIZE = 72;
+const LIBRARY_INITIAL_RENDER_COUNT = 18;
+const LIBRARY_RENDER_BATCH_SIZE = 18;
 
 function useStableEvent<T extends (...args: any[]) => unknown>(handler: T): T {
   const handlerRef = useRef(handler);
@@ -10030,6 +10030,7 @@ const CachedLibraryPage = memo(function CachedLibraryPage(props: {
         providers={props.providers}
         results={props.results}
         isHistoryLoaded={props.isHistoryLoaded}
+        isActive={props.isActive}
         onAddResult={props.onAddResult}
         onPreview={props.onPreview}
         onUseAsReference={props.onUseAsReference}
@@ -10230,6 +10231,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   providers: ReturnType<typeof listProviders>;
   results: ReturnType<typeof useStudioStore.getState>['results'];
   isHistoryLoaded: boolean;
+  isActive: boolean;
   onAddResult: (record: GenerationRecord) => void;
   onPreview: (imageUrl: string, navigation?: ImagePreviewNavigation) => void;
   onUseAsReference: (record: GenerationRecord) => void;
@@ -10295,11 +10297,13 @@ const LibraryPage = memo(function LibraryPage(props: {
   const [copyMessage, setCopyMessage] = useState('');
   const [recheckingRecordId, setRecheckingRecordId] = useState<string | null>(null);
   const dockRef = useRef<HTMLElement | null>(null);
+  const loadMoreRef = useRef<HTMLButtonElement | null>(null);
   const colorFilterRef = useRef<HTMLLabelElement | null>(null);
   const quickFilterEditorRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const libraryDataHydratedRef = useRef(!isTauriRuntime());
   const pendingImageMetaPatchesRef = useRef<Record<string, Partial<LibraryMetaEntry>>>({});
+  const pendingColorAnalysisRef = useRef<Set<string>>(new Set());
   const imageMetaFlushRef = useRef<{ timerId: number | null; idleId: number | null }>({ timerId: null, idleId: null });
   useToastMessage(copyMessage, setCopyMessage);
 
@@ -10650,6 +10654,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     () => filteredItems.slice(0, Math.min(renderedItemCount, filteredItems.length)),
     [filteredItems, renderedItemCount]
   );
+  const canRenderMoreLibraryItems = renderedItemCount < filteredItems.length;
   const selectedRecord = selectedRecordId ? libraryRecordMap.get(selectedRecordId) ?? null : null;
   const diagnosticRecord = diagnosticRecordId ? libraryRecordMap.get(diagnosticRecordId) ?? null : null;
   const selectedRecords = useMemo(
@@ -10738,26 +10743,21 @@ const LibraryPage = memo(function LibraryPage(props: {
     const total = filteredItems.length;
     const initialCount = Math.min(LIBRARY_INITIAL_RENDER_COUNT, total);
     setRenderedItemCount(initialCount);
-    if (total <= initialCount) return;
-
-    let cancelled = false;
-    let frameId = 0;
-    let nextCount = initialCount;
-    const renderNextBatch = () => {
-      frameId = window.requestAnimationFrame(() => {
-        if (cancelled) return;
-        nextCount = Math.min(nextCount + LIBRARY_RENDER_BATCH_SIZE, total);
-        setRenderedItemCount(nextCount);
-        if (nextCount < total) renderNextBatch();
-      });
-    };
-
-    renderNextBatch();
-    return () => {
-      cancelled = true;
-      if (frameId) window.cancelAnimationFrame(frameId);
-    };
   }, [filteredIdsSignature, filteredItems.length]);
+
+  useEffect(() => {
+    if (!props.isActive || !canRenderMoreLibraryItems) return;
+    const target = loadMoreRef.current;
+    if (!target || !('IntersectionObserver' in window)) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      setRenderedItemCount((current) => Math.min(current + LIBRARY_RENDER_BATCH_SIZE, filteredItems.length));
+    }, { root: null, rootMargin: '420px 0px' });
+    observer.observe(target);
+    return () => {
+      observer.disconnect();
+    };
+  }, [canRenderMoreLibraryItems, filteredIdsSignature, filteredItems.length, props.isActive]);
 
   useEffect(() => {
     function focusSearch() {
@@ -10880,7 +10880,7 @@ const LibraryPage = memo(function LibraryPage(props: {
     updateLibraryMeta(recordId, { rating: currentRating === rating ? undefined : rating });
   }
 
-  function analyzeRecordColors(recordId: string, image: HTMLImageElement) {
+  function runRecordColorAnalysis(recordId: string, image: HTMLImageElement) {
     const current = libraryMeta[recordId];
     const pending = pendingImageMetaPatchesRef.current[recordId];
     if (pending?.colorPalette?.length || pending?.colorAnalysisFailed) return;
@@ -10906,6 +10906,20 @@ const LibraryPage = memo(function LibraryPage(props: {
     } catch {
       queueImageMetaPatch(recordId, { colorAnalysisFailed: true });
     }
+  }
+
+  function analyzeRecordColors(recordId: string, image: HTMLImageElement) {
+    if (pendingColorAnalysisRef.current.has(recordId)) return;
+    pendingColorAnalysisRef.current.add(recordId);
+    const run = () => {
+      pendingColorAnalysisRef.current.delete(recordId);
+      runRecordColorAnalysis(recordId, image);
+    };
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(run, { timeout: 2200 });
+      return;
+    }
+    globalThis.setTimeout(run, 320);
   }
 
   function setRecordsFavorite(recordIds: string[], favorite: boolean) {
@@ -11939,6 +11953,18 @@ const LibraryPage = memo(function LibraryPage(props: {
               ))}
             </section>
           )}
+          {props.isHistoryLoaded && canRenderMoreLibraryItems ? (
+            <div className="libraryLoadMore">
+              <button
+                ref={loadMoreRef}
+                type="button"
+                onClick={() => setRenderedItemCount((current) => Math.min(current + LIBRARY_RENDER_BATCH_SIZE, filteredItems.length))}
+              >
+                {lt('library.performance.loadMore', { shown: visibleLibraryItems.length, total: filteredItems.length })}
+              </button>
+              <span>{lt('library.performance.loadedHint', { shown: visibleLibraryItems.length, total: filteredItems.length })}</span>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -14383,4 +14409,3 @@ function PlaceholderPage(props: { title: string }) {
     </div>
   );
 }
-

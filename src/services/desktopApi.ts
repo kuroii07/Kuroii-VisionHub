@@ -1,4 +1,4 @@
-﻿import { invoke } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { GenerationMode, GenerationRecord, ImageGenerationRequest, ImageGenerationResult, ReferenceImage } from '../domain/providerTypes';
 import type { AppSettings, PromptPolishSettings } from './appSettings';
 
@@ -196,9 +196,9 @@ function mapReferenceToBackend(reference: ReferenceImage): BackendReferenceImage
     id: reference.id,
     name: reference.name,
     mime_type: reference.mimeType,
-    data_url: reference.dataUrl,
+    data_url: isInlineImageUrl(reference.dataUrl) ? reference.dataUrl : undefined,
     local_path: reference.localPath,
-    preview_url: reference.previewUrl,
+    preview_url: isBackendSafeImageUrl(reference.previewUrl) ? reference.previewUrl : undefined,
     source: reference.source,
     source_generation_id: reference.sourceGenerationId,
     role: reference.role,
@@ -207,13 +207,17 @@ function mapReferenceToBackend(reference: ReferenceImage): BackendReferenceImage
 }
 
 function mapBackendReference(reference: BackendReferenceImage): ReferenceImage {
+  const previewUrl =
+    reference.preview_url ??
+    reference.data_url ??
+    localPathToDisplayUrl(reference.local_path);
   return {
     id: reference.id,
     name: reference.name,
     mimeType: reference.mime_type,
     dataUrl: reference.data_url,
     localPath: reference.local_path,
-    previewUrl: reference.preview_url,
+    previewUrl,
     source: reference.source,
     sourceGenerationId: reference.source_generation_id,
     role: reference.role,
@@ -223,13 +227,16 @@ function mapBackendReference(reference: BackendReferenceImage): ReferenceImage {
 
 function mapBackendResult(result: BackendImageGenerationResult): ImageGenerationResult {
   const localPaths = result.local_image_paths ?? [];
+  const displayImageUrls = localPaths.length
+    ? localPaths.map(localPathToDisplayUrl).filter((url): url is string => Boolean(url))
+    : result.image_urls.map(imageUrlToDisplayUrl);
   return {
     id: result.id,
     providerId: result.provider_id,
     modelId: result.model_id,
     status: result.status,
     prompt: result.prompt,
-    imageUrls: result.image_urls,
+    imageUrls: displayImageUrls,
     localImagePaths: localPaths,
     costHint: result.cost_hint,
     durationMs: result.duration_ms,
@@ -239,6 +246,33 @@ function mapBackendResult(result: BackendImageGenerationResult): ImageGeneration
     generationMode: result.generation_mode ?? 'text-to-image',
     referenceImages: (result.reference_images ?? []).map(mapBackendReference)
   };
+}
+
+function isInlineImageUrl(value?: string) {
+  return Boolean(value?.startsWith('data:image/'));
+}
+
+function isHttpImageUrl(value?: string) {
+  return Boolean(value && /^https?:\/\//i.test(value));
+}
+
+function isAssetImageUrl(value?: string) {
+  return Boolean(value && /^(asset|tauri):\/\//i.test(value));
+}
+
+function isBackendSafeImageUrl(value?: string) {
+  return isInlineImageUrl(value) || isHttpImageUrl(value);
+}
+
+function localPathToDisplayUrl(path?: string) {
+  if (!path) return undefined;
+  if (isInlineImageUrl(path) || isHttpImageUrl(path) || isAssetImageUrl(path)) return path;
+  if (!isTauriRuntime()) return path;
+  return convertFileSrc(path);
+}
+
+function imageUrlToDisplayUrl(value: string) {
+  return localPathToDisplayUrl(value) ?? value;
 }
 
 function mapBackendRecord(record: BackendGenerationRecord): GenerationRecord {

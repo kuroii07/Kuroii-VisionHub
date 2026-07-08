@@ -624,7 +624,7 @@ async fn generate_openai_image(
         let form = build_openai_images_edit_form(&client, &request, &reference_images, &api_size).await?;
         builder = builder.multipart(form);
     } else {
-        let payload = build_openai_compatible_payload(&request, protocol.as_str(), &api_size, &protocol_mapping);
+        let payload = build_openai_compatible_payload(&client, &request, protocol.as_str(), &api_size, &protocol_mapping).await?;
         responses_background_requested = protocol == "responses";
         request_payload = Some(payload.clone());
         builder = builder.json(&payload);
@@ -1726,21 +1726,7 @@ async fn upload_comfyui_reference_image(
     reference: &ReferenceImage,
     index: usize,
 ) -> Result<String, String> {
-    let image_url = reference
-        .data_url
-        .as_deref()
-        .or(reference.preview_url.as_deref());
-    let (bytes, extension) = if let Some(image_url) = image_url {
-        if image_url.starts_with("data:image/") {
-            decode_data_url_image(image_url)?
-        } else if image_url.starts_with("http://") || image_url.starts_with("https://") {
-            download_remote_image(client, image_url).await?
-        } else {
-            return Err("参考图格式不受支持，请重新选择本地图片或图库图片。".to_string());
-        }
-    } else {
-        return Err("参考图没有可上传的图片数据，请重新添加本地图片或从图库转换为参考图。".to_string());
-    };
+    let (bytes, extension) = reference_image_to_bytes(client, reference, "ComfyUI reference image").await?;
 
     let raw_name = reference
         .name
@@ -2697,7 +2683,7 @@ fn load_generation_history(app: tauri::AppHandle) -> Result<Vec<GenerationRecord
     let mut changed = false;
     for record in &mut records {
         changed |= sanitize_generation_record_raw(record);
-        changed |= hydrate_record_image_urls(&app, record);
+        changed |= compact_generation_record_for_history(&app, record)?;
     }
     if changed {
         write_generation_history(&app, &records)?;
@@ -2816,12 +2802,12 @@ fn save_generation_record(
         record.image_urls.retain(|url| !url.starts_with("data:image/"));
     }
     sanitize_generation_record_raw(&mut record);
+    compact_generation_record_for_history(&app, &mut record)?;
     records.retain(|item| item.id != record.id);
     records.insert(0, record.clone());
     records.truncate(500);
     write_generation_history(&app, &records)?;
 
-    hydrate_record_image_urls(&app, &mut record);
     Ok(record)
 }
 
@@ -4775,9 +4761,7 @@ fn write_generation_history(
     let tmp_path = path.with_extension("json.tmp");
     let mut storage_records = records.to_vec();
     for record in &mut storage_records {
-        if !record.local_image_paths.is_empty() {
-            record.image_urls.retain(|url| !url.starts_with("data:image/"));
-        }
+        compact_generation_record_for_history(app, record)?;
     }
     let text = serde_json::to_string_pretty(&storage_records)
         .map_err(|error| format!("Cannot serialize generation history: {error}"))?;
@@ -4786,6 +4770,99 @@ fn write_generation_history(
     std::fs::rename(&tmp_path, &path)
         .map_err(|error| format!("Cannot replace generation history: {error}"))?;
     Ok(())
+}
+
+fn compact_generation_record_for_history(
+    app: &tauri::AppHandle,
+    record: &mut GenerationRecord,
+) -> Result<bool, String> {
+    let mut changed = false;
+    if !record.local_image_paths.is_empty() {
+        let before = record.image_urls.len();
+        record.image_urls.retain(|url| !url.starts_with("data:image/"));
+        changed |= before != record.image_urls.len();
+    }
+
+    let record_id = record.id.clone();
+    if let Some(references) = record.reference_images.as_mut() {
+        for (index, reference) in references.iter_mut().enumerate() {
+            changed |= compact_reference_image_for_history(app, &record_id, index, reference)?;
+        }
+    }
+    Ok(changed)
+}
+
+fn compact_reference_image_for_history(
+    app: &tauri::AppHandle,
+    record_id: &str,
+    index: usize,
+    reference: &mut ReferenceImage,
+) -> Result<bool, String> {
+    let mut changed = false;
+    let has_local_path = reference
+        .local_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_some();
+
+    if !has_local_path {
+        if let Some(data_url) = reference
+            .data_url
+            .as_deref()
+            .or(reference.preview_url.as_deref())
+            .filter(|url| url.starts_with("data:image/"))
+        {
+            if let Ok(path) = persist_reference_data_url(app, record_id, index, data_url) {
+                reference.local_path = Some(path);
+                changed = true;
+            }
+        }
+    }
+
+    if reference
+        .data_url
+        .as_deref()
+        .is_some_and(|url| url.starts_with("data:image/"))
+    {
+        reference.data_url = None;
+        changed = true;
+    }
+
+    if reference
+        .preview_url
+        .as_deref()
+        .is_some_and(|url| url.starts_with("data:image/") || url.starts_with("asset://") || url.starts_with("tauri://"))
+    {
+        reference.preview_url = None;
+        changed = true;
+    }
+
+    Ok(changed)
+}
+
+fn reference_image_cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app_data_dir(app)?.join("reference-images");
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("Cannot create reference image cache: {error}"))?;
+    Ok(dir)
+}
+
+fn persist_reference_data_url(
+    app: &tauri::AppHandle,
+    record_id: &str,
+    index: usize,
+    data_url: &str,
+) -> Result<String, String> {
+    let (bytes, extension) = decode_data_url_image(data_url)?;
+    let safe_record = sanitize_filename(record_id);
+    let file_name = format!("{}-reference-{}.{}", safe_record, index + 1, extension);
+    let path = reference_image_cache_dir(app)?.join(file_name);
+    if !path.exists() {
+        std::fs::write(&path, bytes)
+            .map_err(|error| format!("Cannot write reference image cache: {error}"))?;
+    }
+    Ok(path_to_user_string(&path))
 }
 
 fn read_inspiration_sources(app: &tauri::AppHandle) -> Result<Vec<InspirationSource>, String> {
@@ -5493,6 +5570,86 @@ fn normalize_endpoint_path(custom_path: Option<&str>, protocol: &str) -> Result<
     })
 }
 
+
+async fn reference_image_to_request_url(
+    client: &reqwest::Client,
+    reference: &ReferenceImage,
+    context: &str,
+) -> Result<Option<String>, String> {
+    if let Some(url) = reference
+        .data_url
+        .as_deref()
+        .or(reference.preview_url.as_deref())
+        .filter(|url| url.starts_with("data:image/") || url.starts_with("http://") || url.starts_with("https://"))
+    {
+        if url.starts_with("http://") || url.starts_with("https://") {
+            return Ok(Some(url.to_string()));
+        }
+        let (bytes, extension) = decode_data_url_image(url)?;
+        return Ok(Some(format!(
+            "data:{};base64,{}",
+            mime_from_extension(&extension),
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        )));
+    }
+
+    if let Some(local_path) = reference.local_path.as_deref().filter(|value| !value.trim().is_empty()) {
+        let path = PathBuf::from(local_path);
+        if path.is_file() && is_supported_reference_image_path(&path) {
+            return image_path_to_data_url(&path, context).map(Some);
+        }
+    }
+
+    if let Some(remote) = reference
+        .preview_url
+        .as_deref()
+        .filter(|url| url.starts_with("http://") || url.starts_with("https://"))
+    {
+        let (bytes, extension) = download_remote_image(client, remote).await?;
+        return Ok(Some(format!(
+            "data:{};base64,{}",
+            mime_from_extension(&extension),
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        )));
+    }
+
+    Ok(None)
+}
+
+async fn reference_image_to_bytes(
+    client: &reqwest::Client,
+    reference: &ReferenceImage,
+    context: &str,
+) -> Result<(Vec<u8>, String), String> {
+    if let Some(url) = reference
+        .data_url
+        .as_deref()
+        .or(reference.preview_url.as_deref())
+        .filter(|url| url.starts_with("data:image/") || url.starts_with("http://") || url.starts_with("https://"))
+    {
+        if url.starts_with("data:image/") {
+            return decode_data_url_image(url);
+        }
+        return download_remote_image(client, url).await;
+    }
+
+    if let Some(local_path) = reference.local_path.as_deref().filter(|value| !value.trim().is_empty()) {
+        let path = PathBuf::from(local_path);
+        if path.is_file() && is_supported_reference_image_path(&path) {
+            let bytes = std::fs::read(&path)
+                .map_err(|error| format!("Cannot read {context}: {error}"))?;
+            let extension = path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .map(|extension| extension.to_ascii_lowercase())
+                .unwrap_or_else(|| "png".to_string());
+            return Ok((bytes, extension));
+        }
+    }
+
+    Err("Reference image is missing a data URL, local path, or remote URL. Please add the reference image again.".to_string())
+}
+
 async fn build_openai_images_edit_form(
     client: &reqwest::Client,
     request: &OpenAIImageRequest,
@@ -5513,18 +5670,7 @@ async fn build_openai_images_edit_form(
         form = form.text("quality", quality.clone());
     }
     for (index, reference) in references.iter().enumerate() {
-        let image_url = reference
-            .data_url
-            .as_deref()
-            .or(reference.preview_url.as_deref())
-            .ok_or_else(|| "参考图没有可用的图片数据。".to_string())?;
-        let (bytes, extension) = if image_url.starts_with("data:image/") {
-            decode_data_url_image(image_url)?
-        } else if image_url.starts_with("http://") || image_url.starts_with("https://") {
-            download_remote_image(client, image_url).await?
-        } else {
-            return Err("参考图格式不受支持，请重新选择本地图片。".to_string());
-        };
+        let (bytes, extension) = reference_image_to_bytes(client, reference, "OpenAI Images edit reference").await?;
         let file_name = reference
             .name
             .clone()
@@ -5589,33 +5735,25 @@ fn apply_advanced_request_options(mut payload: Value, request: &OpenAIImageReque
     payload
 }
 
-fn build_openai_compatible_payload(
+async fn build_openai_compatible_payload(
+    client: &reqwest::Client,
     request: &OpenAIImageRequest,
     protocol: &str,
     api_size: &str,
     mapping: &ImageToImageProtocolMapping,
-) -> Value {
-    let reference_data_urls: Vec<String> = request
-        .reference_images
-        .as_ref()
-        .map(|references| {
-            references
-                .iter()
-                .filter_map(|reference| {
-                    reference
-                        .data_url
-                        .as_deref()
-                        .or(reference.preview_url.as_deref())
-                        .filter(|url| url.starts_with("data:image/") || url.starts_with("http://") || url.starts_with("https://"))
-                        .map(|url| url.to_string())
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+) -> Result<Value, String> {
+    let mut reference_data_urls: Vec<String> = Vec::new();
+    if let Some(references) = request.reference_images.as_ref() {
+        for reference in references {
+            if let Some(url) = reference_image_to_request_url(client, reference, "OpenAI-compatible reference image").await? {
+                reference_data_urls.push(url);
+            }
+        }
+    }
     let is_image_to_image = mapping.is_image_to_image && !reference_data_urls.is_empty();
 
     if is_image_to_image {
-        return apply_advanced_request_options(match mapping.image_to_image_adapter.as_str() {
+        return Ok(apply_advanced_request_options(match mapping.image_to_image_adapter.as_str() {
             "responses-input-image" => {
                 let mut content = vec![serde_json::json!({
                     "type": "input_text",
@@ -5664,10 +5802,10 @@ fn build_openai_compatible_payload(
                 "quality": request.quality.clone().unwrap_or_else(|| "auto".to_string()),
                 "n": request.count.max(1).min(4)
             }),
-        }, request);
+        }, request));
     }
 
-    apply_advanced_request_options(match protocol {
+    Ok(apply_advanced_request_options(match protocol {
         "images-minimal" => {
             serde_json::json!({
                 "model": request.model_id,
@@ -5707,7 +5845,7 @@ fn build_openai_compatible_payload(
                 "n": request.count.max(1).min(4)
             })
         }
-    }, request)
+    }, request))
 }
 
 fn extract_image_urls(raw: &Value, output_format: Option<&str>) -> Vec<String> {

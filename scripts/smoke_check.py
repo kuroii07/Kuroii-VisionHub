@@ -65,6 +65,17 @@ for term in ui_terms:
     assert term in app_src or term in i18n_src, f"UI term missing: {term}"
 assert "AI 图片工作流工作台" in i18n_src, "Chinese brand subtitle should stay localized"
 assert "AI Image Workflow Studio" in i18n_src, "English brand subtitle should stay localized"
+
+assert "convertFileSrc" in (ROOT / "src/services/desktopApi.ts").read_text(encoding="utf-8"), "Local image display should use Tauri file URLs instead of startup base64 hydration"
+main_rs = (ROOT / "src-tauri/src/main.rs").read_text(encoding="utf-8")
+assert "compact_generation_record_for_history" in main_rs, "History records should be compacted before persistence"
+assert "changed |= hydrate_record_image_urls(&app, record)" not in main_rs, "History load should not hydrate every local image into base64 at startup"
+assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in app_src, "Library initial render should stay small for large local image galleries"
+assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in app_src, "Library thumbnail batches should stay incremental"
+library_perf_block = app_src[app_src.find("const LIBRARY_INITIAL_RENDER_COUNT"):app_src.find("function analyzeRecordColors")]
+assert "requestAnimationFrame" not in library_perf_block, "Library should not auto-expand all records on the next animation frames"
+assert "IntersectionObserver" in app_src and "library.performance.loadMore" in app_src, "Library needs scroll/manual incremental thumbnail loading"
+assert "requestIdleCallback(run" in app_src, "Library color analysis should run during idle time instead of thumbnail load hot path"
 assert "createTranslator(appSettings.language)" in app_src, "App shell should use the shared i18n translator"
 for term in [
     "loadAppSettings",
