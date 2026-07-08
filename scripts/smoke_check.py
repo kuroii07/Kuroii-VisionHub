@@ -63,7 +63,8 @@ i18n_src = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
 ui_terms = ["\u5e73\u53f0\u63a5\u5165", "AI \u521b\u4f5c", "Base URL", "API Key"]
 for term in ui_terms:
     assert term in app_src or term in i18n_src, f"UI term missing: {term}"
-assert i18n_src.count("AI Image Workflow Studio") >= 2, "Brand subtitle should support zh/en i18n labels"
+assert "AI 图片工作流工作台" in i18n_src, "Chinese brand subtitle should stay localized"
+assert "AI Image Workflow Studio" in i18n_src, "English brand subtitle should stay localized"
 assert "createTranslator(appSettings.language)" in app_src, "App shell should use the shared i18n translator"
 for term in [
     "loadAppSettings",

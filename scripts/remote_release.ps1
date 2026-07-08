@@ -5,7 +5,10 @@ $ErrorActionPreference = "Stop"
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $reportDir = Join-Path $projectRoot "docs\run-reports"
 $reportPath = Join-Path $reportDir "latest-run.md"
-$releaseExe = Join-Path $projectRoot "src-tauri\target\release\visionhub-studio.exe"
+$releaseDir = Join-Path $projectRoot "src-tauri\target\release"
+$friendlyExe = Join-Path $releaseDir "Kuroii VisionHub.exe"
+$canonicalExe = Join-Path $releaseDir "visionhub-studio.exe"
+$releaseExe = $friendlyExe
 $startedAt = Get-Date
 $steps = New-Object System.Collections.Generic.List[string]
 
@@ -72,21 +75,21 @@ try {
 
   Start-Process -FilePath $releaseExe -WorkingDirectory (Split-Path $releaseExe -Parent)
   Start-Sleep -Seconds 4
-  $app = Get-Process -Name "visionhub-studio" -ErrorAction SilentlyContinue | Sort-Object StartTime -Descending | Select-Object -First 1
+  $app = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.Equals($releaseExe, [System.StringComparison]::OrdinalIgnoreCase) } | Sort-Object StartTime -Descending | Select-Object -First 1
 
   if ($app) {
     Add-Step "Start release app" "OK" "PID $($app.Id)"
   } else {
     Add-Step "Start release app" "FAILED" "process not found after launch"
-    throw "VisionHub Studio process not found after launch."
+    throw "Kuroii VisionHub process not found after launch."
   }
 
   $appVersion = (Get-Content -LiteralPath (Join-Path $projectRoot "package.json") -Raw | ConvertFrom-Json).version
-  $nsisInstaller = Join-Path $projectRoot "src-tauri\target\release\bundle\nsis\VisionHub Studio_$($appVersion)_x64-setup.exe"
-  $msiInstaller = Join-Path $projectRoot "src-tauri\target\release\bundle\msi\VisionHub Studio_$($appVersion)_x64_en-US.msi"
+  $nsisInstaller = Join-Path $projectRoot "src-tauri\target\release\bundle\nsis\Kuroii VisionHub_$($appVersion)_x64-setup.exe"
+  $msiInstaller = Join-Path $projectRoot "src-tauri\target\release\bundle\msi\Kuroii VisionHub_$($appVersion)_x64_en-US.msi"
   $finishedAt = Get-Date
   $content = @(
-    "# VisionHub Studio remote run report",
+    "# Kuroii VisionHub remote run report",
     "",
     "- Started: $($startedAt.ToString('yyyy-MM-dd HH:mm:ss'))",
     "- Finished: $($finishedAt.ToString('yyyy-MM-dd HH:mm:ss'))",
@@ -113,7 +116,7 @@ try {
 } catch {
   $finishedAt = Get-Date
   $content = @(
-    "# VisionHub Studio remote run report",
+    "# Kuroii VisionHub remote run report",
     "",
     "- Started: $($startedAt.ToString('yyyy-MM-dd HH:mm:ss'))",
     "- Failed: $($finishedAt.ToString('yyyy-MM-dd HH:mm:ss'))",

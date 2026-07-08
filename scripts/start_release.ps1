@@ -1,11 +1,14 @@
 $ErrorActionPreference = "Stop"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$releaseExe = Join-Path $projectRoot "src-tauri\target\release\visionhub-studio.exe"
+$releaseDir = Join-Path $projectRoot "src-tauri\target\release"
+$friendlyExe = Join-Path $releaseDir "Kuroii VisionHub.exe"
+$canonicalExe = Join-Path $releaseDir "visionhub-studio.exe"
+$releaseExe = if (Test-Path -LiteralPath $friendlyExe) { $friendlyExe } else { $canonicalExe }
 $reportDir = Join-Path $projectRoot "docs\run-reports"
 $reportPath = Join-Path $reportDir "latest-start.md"
 
-if (-not (Test-Path $releaseExe)) {
+if (-not (Test-Path -LiteralPath $releaseExe)) {
   throw "Release exe not found: $releaseExe. Please run npm.cmd run tauri:build first."
 }
 
@@ -15,18 +18,20 @@ New-Item -ItemType Directory -Path $reportDir -Force | Out-Null
 Start-Process -FilePath $releaseExe -WorkingDirectory (Split-Path $releaseExe -Parent)
 Start-Sleep -Seconds 3
 
-$app = Get-Process -Name "visionhub-studio" -ErrorAction SilentlyContinue | Sort-Object StartTime -Descending | Select-Object -First 1
+$app = Get-Process -ErrorAction SilentlyContinue | Where-Object {
+  $_.Path -and $_.Path.Equals($releaseExe, [System.StringComparison]::OrdinalIgnoreCase)
+} | Sort-Object StartTime -Descending | Select-Object -First 1
 
 if (-not $app) {
-  throw "VisionHub Studio process not found after launch."
+  throw "Kuroii VisionHub process not found after launch."
 }
 
 Set-Content -Path $reportPath -Encoding UTF8 -Value @(
-  "# VisionHub Studio start report",
+  "# Kuroii VisionHub start report",
   "",
   "- Time: $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))",
   "- Release exe: $releaseExe",
   "- Active PID: $($app.Id)"
 )
 
-Write-Host "VisionHub Studio started. PID: $($app.Id)" -ForegroundColor Green
+Write-Host "Kuroii VisionHub started. PID: $($app.Id)" -ForegroundColor Green

@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.2` WebView2 white-screen hotfix. `0.5.1` Kuroii VisionHub brand integration remains the current brand baseline.
+Current checkpoint: `0.5.3` Kuroii VisionHub naming polish. `0.5.2` WebView2 white-screen hotfix remains the current stability baseline.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -174,6 +174,13 @@ Current checkpoint: `0.5.2` WebView2 white-screen hotfix. `0.5.1` Kuroii VisionH
 
 ## 近期更新记录
 
+### v0.5.3 Kuroii VisionHub naming polish
+
+- App version is now `0.5.3`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Restored the zh-CN sidebar subtitle to `AI 图片工作流工作台` while keeping en-US as `AI Image Workflow Studio`.
+- `npm.cmd run tauri:build` now also creates a user-facing portable copy at `src-tauri/target/release/Kuroii VisionHub.exe`; the internal Cargo package binary `visionhub-studio.exe`, Tauri identifier `studio.visionhub.app`, and keyring service `visionhub-studio` stay unchanged for AppData and credential compatibility.
+- `npm.cmd run verify`, `npm.cmd run tauri:build`, and direct `Kuroii VisionHub.exe` launch smoke have passed; 0.5.3 artifact hashes are recorded in `docs/release-notes/0.5.3-draft.md`.
+
 ### v0.5.2 WebView2 white-screen hotfix
 
 - App version is now `0.5.2`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
@@ -185,7 +192,7 @@ Current checkpoint: `0.5.2` WebView2 white-screen hotfix. `0.5.1` Kuroii VisionH
 ### v0.5.1 Kuroii VisionHub brand integration
 
 - App version is now `0.5.1`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
-- Product display name changed to `Kuroii VisionHub` with subtitle `AI Image Workflow Studio`; internal package name `visionhub-studio` and Tauri identifier `studio.visionhub.app` are intentionally retained for AppData, gallery, profile, and credential compatibility.
+- Product display name changed to `Kuroii VisionHub`; zh-CN subtitle is `AI 图片工作流工作台`, en-US subtitle is `AI Image Workflow Studio`; internal package name `visionhub-studio` and Tauri identifier `studio.visionhub.app` are intentionally retained for AppData, gallery, profile, and credential compatibility.
 - Desktop/Tauri icons and sidebar brand mark now use approved Kuroii app icon assets, with source mapping recorded in `docs/kuroii-brand-asset-map.md`.
 - Added Kuroii Cat expression/pose assets for future empty-state, welcome, and update-page usage; this pass keeps the main AI Create Desk restrained and does not place mascot art in Provider keys, raw diagnostics, or dangerous actions.
 - Validation completed: `npm.cmd run verify`, `python .\scripts\smoke_check.py`, and `npm.cmd run tauri:build`; release exe stayed alive for 8 seconds, and MSI / NSIS hashes are recorded in `docs/release-notes/0.5.1-draft.md`.
@@ -583,9 +590,10 @@ powershell -ExecutionPolicy Bypass -Command ". '.\scripts\use_portable_toolchain
 构建成功后主要产物：
 
 ```text
-src-tauri/target/release/visionhub-studio.exe
-src-tauri/target/release/bundle/msi/*.msi
-src-tauri/target/release/bundle/nsis/*setup.exe
+src-tauri/target/release/Kuroii VisionHub.exe
+src-tauri/target/release/visionhub-studio.exe  # internal Cargo build output
+src-tauri/target/release/bundle/msi/Kuroii VisionHub_*_x64_en-US.msi
+src-tauri/target/release/bundle/nsis/Kuroii VisionHub_*_x64-setup.exe
 ```
 
 这些构建产物不提交到 Git；需要时在本机重新构建。

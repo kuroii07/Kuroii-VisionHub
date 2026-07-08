@@ -1,14 +1,14 @@
 {
   "name": "visionhub-studio",
   "private": true,
-  "version": "0.5.2",
+  "version": "0.5.3",
   "type": "module",
   "description": "Kuroii-branded desktop AI image workflow studio for local-first provider, gallery, prompt, and inspiration workflows.",
   "scripts": {
     "dev": "vite",
     "tauri:dev": "tauri dev",
     "build": "tsc && vite build",
-    "tauri:build": "tauri build",
+    "tauri:build": "tauri build && powershell -ExecutionPolicy Bypass -File .\\scripts\\copy_release_exe.ps1",
     "smoke": "python scripts/smoke_check.py",
     "verify": "powershell -ExecutionPolicy Bypass -File .\\scripts\\run_checks.ps1"
   },

@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.2`
+- Current app version: `0.5.3`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.2` WebView2 white-screen hotfix: release-window paint stability after Kuroii branding, boot fallback branding, validation, and rebuilt installers while keeping AppData compatibility.
+- Current focus: `0.5.3` Kuroii VisionHub naming polish: restore localized zh-CN brand subtitle, produce a user-facing `Kuroii VisionHub.exe` portable copy after Tauri builds, and keep internal AppData / credential compatibility names unchanged.
 
 ## 2. 后续开发前必读
 
@@ -109,6 +109,7 @@
 | `0.5.0` | Release-candidate preparation | Version consistency, validation scripts, migration docs, release notes draft, green release validation, artifact SHA256 recording, and enhanced repository hygiene review | RC hygiene validated |
 | `0.5.1` | Kuroii VisionHub brand integration | Product display name, approved Kuroii icon assets, restrained Kuroii Cat asset preparation, and compatibility documentation | Brand build validation |
 | `0.5.2` | WebView2 white-screen hotfix | Windows release paint stability, boot fallback branding, validation, and rebuilt installers | Hotfix validation |
+| `0.5.3` | Kuroii VisionHub naming polish | Localized zh-CN subtitle and user-facing portable exe copy while retaining internal compatibility ids | Naming hotfix validation |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -876,7 +877,25 @@ Acceptance:
 - `npm.cmd run tauri:build` produces `Kuroii VisionHub_0.5.2` installers.
 - Release exe launch is checked with WebView2 DOM / screenshot evidence and a live window smoke check.
 
-### 5.30 `v1.0 pre` Release and migration preparation
+### 5.30 `0.5.3` Kuroii VisionHub naming polish
+
+Status 2026-07-08: hotfix validated with `npm.cmd run verify`, `npm.cmd run tauri:build`, direct `Kuroii VisionHub.exe` launch smoke, and MSI / NSIS SHA256 recording for two user-visible branding regressions: the zh-CN sidebar subtitle must remain Chinese, and release builds should provide a user-facing `Kuroii VisionHub.exe` copy in addition to the internal Cargo binary `visionhub-studio.exe`. The Cargo package name, Tauri identifier `studio.visionhub.app`, and keyring service `visionhub-studio` remain unchanged to preserve existing AppData, gallery/history, Provider profiles, and system credential bindings.
+
+Objectives:
+
+- Restore zh-CN `app.subtitle` to `AI 图片工作流工作台` while keeping en-US `AI Image Workflow Studio`.
+- Keep `visionhub-studio.exe` as the canonical internal Cargo build output, but create `src-tauri/target/release/Kuroii VisionHub.exe` after successful Tauri builds for direct manual launch.
+- Rebuild MSI / NSIS bundles with `Kuroii VisionHub_0.5.3` names.
+- Preserve AppData, generated history, provider profile ids, and credential secret ids.
+
+Acceptance:
+
+- [x] `npm.cmd run verify` passes.
+- [x] `npm.cmd run tauri:build` produces the friendly portable exe copy plus `Kuroii VisionHub_0.5.3` installers.
+- [x] Direct `Kuroii VisionHub.exe` launch smoke confirms the friendly exe starts as process `Kuroii VisionHub`.
+- Chinese UI shows `AI 图片工作流工作台`; English UI still shows `AI Image Workflow Studio`.
+
+### 5.31 `v1.0 pre` Release and migration preparation
 
 目标：
 
@@ -960,4 +979,4 @@ Acceptance:
 
 ## 9. 下一步推荐
 
-Next formal development should continue `0.5.2` WebView2 white-screen hotfix validation, then optional screenshot-based visual QA and installer install / uninstall QA before any public Release Asset upload.
+Next formal development should finish `0.5.3` naming polish validation, then continue optional screenshot-based visual QA and installer install / uninstall QA before any public Release Asset upload.

@@ -1,6 +1,6 @@
 # Kuroii VisionHub 品牌资产映射
 
-Status: v0.5.1 brand integration baseline
+Status: v0.5.3 brand naming baseline
 Date: 2026-07-08
 
 ## 产品归属
