@@ -1,14 +1,14 @@
-# VisionHub Studio 后续开发总控计划
+# Kuroii VisionHub 后续开发总控计划
 
 > 本文档是 VisionHub Studio 后续计划开发的入口文档。后续进入较大优化、版本开发、发布构建或 GitHub 推送前，先读 `AGENTS.md`，再读本文档，最后按具体模块补读专项文档。
 
 ## 1. 当前基线
 
-- Current app version: `0.5.0`
+- Current app version: `0.5.1`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.0` release-candidate preparation: version consistency, validation scripts, release notes draft, green release exe validation, artifact SHA256 recording, and enhanced repository hygiene review. `0.4.6` i18n V1 is closed.
+- Current focus: `0.5.1` Kuroii VisionHub brand integration: product display name, Kuroii-approved icon assets, restrained brand layer, data-compatibility notes, and validation after the 0.5.0 RC baseline.
 
 ## 2. 后续开发前必读
 
@@ -107,6 +107,7 @@
 | ~~`0.4.5`~~ | Global experience and performance QA | First QA baseline implemented | no release |
 | ~~`0.4.6`~~ | Chinese / English Internationalization V1 | Closed final 0.4.x baseline | no release |
 | `0.5.0` | Release-candidate preparation | Version consistency, validation scripts, migration docs, release notes draft, green release validation, artifact SHA256 recording, and enhanced repository hygiene review | RC hygiene validated |
+| `0.5.1` | Kuroii VisionHub brand integration | Product display name, approved Kuroii icon assets, restrained Kuroii Cat asset preparation, and compatibility documentation | Brand build validation |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -838,7 +839,26 @@ Status 2026-07-07: RC build validated. Version consistency has moved to `0.5.0`;
 - release exe 能启动并进入主要页面。
 - 版本号、产品名、安装包名和 README 当前状态一致。
 
-### 5.28 `v1.0 pre` Release and migration preparation
+
+### 5.28 `0.5.1` Kuroii VisionHub brand integration
+
+Status 2026-07-08: first Kuroii brand integration pass validated with `npm.cmd run verify`, `python .\scripts\smoke_check.py`, `npm.cmd run tauri:build`, release exe 8-second launch smoke, and MSI / NSIS SHA256 recording. Product display name moves from `VisionHub Studio` to `Kuroii VisionHub` while retaining internal package name `visionhub-studio` and Tauri identifier `studio.visionhub.app` to keep existing AppData, gallery/history, Provider profiles, and system credential bindings available.
+
+Objectives:
+
+- Bring the app into the Kuroii Tools product line with unified desktop icon, sidebar brand mark, product name, and documentation.
+- Use confirmed Kuroii app icon, Kuroii Cat expression, and Kuroii Cat pose assets instead of temporary replacement drawings.
+- Keep the AI Create Desk low-noise; do not place mascot art in API Key, raw diagnostics, batch danger, or dense parameter areas.
+- Clarify that existing history on this computer comes from local AppData; fresh installs elsewhere will not include it unless the user migrates data manually.
+
+Acceptance:
+
+- `npm.cmd run verify` passes.
+- Release build can generate Windows bundles named `Kuroii VisionHub`.
+- Provider profile ids, credential secret ids, generation history structure, and AppData identifier are unchanged.
+- AppData, generated images, API Keys, installers, and build outputs are not committed.
+
+### 5.29 `v1.0 pre` Release and migration preparation
 
 目标：
 
@@ -922,4 +942,4 @@ Status 2026-07-07: RC build validated. Version consistency has moved to `0.5.0`;
 
 ## 9. 下一步推荐
 
-Next formal development should continue `0.5.0` release-candidate preparation with optional screenshot-based visual QA and installer install / uninstall QA before any public Release Asset upload.
+Next formal development should continue `0.5.1` Kuroii VisionHub brand integration validation, then optional screenshot-based visual QA and installer install / uninstall QA before any public Release Asset upload.

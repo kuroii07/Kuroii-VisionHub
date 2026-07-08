@@ -63,7 +63,7 @@ i18n_src = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
 ui_terms = ["\u5e73\u53f0\u63a5\u5165", "AI \u521b\u4f5c", "Base URL", "API Key"]
 for term in ui_terms:
     assert term in app_src or term in i18n_src, f"UI term missing: {term}"
-assert "AI \u751f\u56fe\u5de5\u4f5c\u53f0" in i18n_src and "AI image workspace" in i18n_src, "Brand subtitle should support zh/en i18n labels"
+assert i18n_src.count("AI Image Workflow Studio") >= 2, "Brand subtitle should support zh/en i18n labels"
 assert "createTranslator(appSettings.language)" in app_src, "App shell should use the shared i18n translator"
 for term in [
     "loadAppSettings",
@@ -532,4 +532,4 @@ for term in ["removeBatchQueueTask", "批量队列不存在，无法删除任务
 
 svg = (ROOT / "planning/product-overview.svg").read_text(encoding="utf-8")
 assert re.search(r"VisionHub Studio", svg)
-print("Smoke check passed: VisionHub Studio scaffold is complete.")
+print("Smoke check passed: Kuroii VisionHub scaffold is complete.")

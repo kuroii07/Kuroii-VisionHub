@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Release-candidate consistency checks for VisionHub Studio.
+"""Release-candidate consistency checks for Kuroii VisionHub.
 
 This script is intentionally read-only. It verifies version consistency and
 repository hygiene before a release-candidate build without touching AppData,

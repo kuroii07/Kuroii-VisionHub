@@ -1,9 +1,9 @@
 {
   "name": "visionhub-studio",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.5.1",
   "type": "module",
-  "description": "Desktop-first multi-provider AI image generation workspace.",
+  "description": "Kuroii-branded desktop AI image workflow studio for local-first provider, gallery, prompt, and inspiration workflows.",
   "scripts": {
     "dev": "vite",
     "tauri:dev": "tauri dev",

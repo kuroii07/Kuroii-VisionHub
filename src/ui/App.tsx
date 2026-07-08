@@ -181,7 +181,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
-const APP_VERSION = '0.5.0';
+const APP_VERSION = '0.5.1';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -1165,7 +1165,7 @@ function generationFailureCopyText(record: GenerationRecord, providerName?: stri
   const mode = generationModeCopyLabel(record.generationMode, t);
   const actionsText = diagnosis.actions.map((action, index) => `${index + 1}. ${action}`).join('\n');
   return [
-    translateOrFallback(t, 'library.copy.failureReportTitle', 'VisionHub generation failure diagnosis'),
+    translateOrFallback(t, 'library.copy.failureReportTitle', 'Kuroii VisionHub generation failure diagnosis'),
     translateOrFallback(t, 'library.copy.field.diagnosis', `Diagnosis: ${diagnosis.title}`, { value: diagnosis.title }),
     translateOrFallback(t, 'library.copy.field.summary', `Summary: ${diagnosis.summary}`, { value: diagnosis.summary }),
     translateOrFallback(t, 'library.copy.field.category', `Category: ${categoryLabel} / ${severityLabel}`, { category: categoryLabel, severity: severityLabel }),
@@ -1195,7 +1195,7 @@ function generationRequestSummaryCopyText(record: GenerationRecord, providerName
   const mode = generationModeCopyLabel(record.generationMode, t);
   const clippedRawText = rawText ? clipDiagnosticText(rawText, 1800, t) : '';
   return [
-    translateOrFallback(t, 'library.copy.requestSummaryTitle', 'VisionHub request summary'),
+    translateOrFallback(t, 'library.copy.requestSummaryTitle', 'Kuroii VisionHub request summary'),
     translateOrFallback(t, 'library.copy.field.recordId', `Record ID: ${record.id}`, { id: record.id }),
     translateOrFallback(t, 'library.copy.field.status', `Status: ${statusLabel} (${record.status})`, { status: statusLabel, raw: record.status }),
     translateOrFallback(t, 'library.copy.field.provider', `Provider: ${providerName ?? record.providerName ?? record.providerId}`, { provider: providerName ?? record.providerName ?? record.providerId }),
@@ -5896,7 +5896,7 @@ export function App() {
         providerId: selectedProvider.id,
         modelId: normalizedConfig.modelId,
         prompt:
-          'VisionHub Studio provider test image, a clean minimal glowing glass cube on a dark desk, soft studio light, square composition, no text',
+          'Kuroii VisionHub provider test image, a clean minimal glowing glass cube on a dark desk, soft studio light, square composition, no text',
         count: 1,
         size: '1024x1024',
         quality: 'auto',
@@ -5972,10 +5972,10 @@ export function App() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brandMark" aria-hidden="true">
-            <span className="brandGlyph">VH</span>
+            <span className="brandGlyph">Kuroii</span>
           </div>
           <div className="brandText">
-            <strong>VisionHub Studio</strong>
+            <strong>Kuroii VisionHub</strong>
             <span>{t('app.subtitle')}</span>
           </div>
           

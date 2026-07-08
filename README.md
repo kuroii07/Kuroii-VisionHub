@@ -1,6 +1,6 @@
-# VisionHub Studio
+# Kuroii VisionHub
 
-VisionHub Studio 是一个桌面优先的多平台 AI 图片创作工作台，当前以 Tauri + React + TypeScript + Vite 实现。项目优先服务中转站 / 聚合 API 工作流，同时保留官方 API 和本地模型路线，目标是把 OpenAI-compatible 中转、OpenAI 官方、后续 Nano Banana / Grok / Seedream / 即梦 / 豆包 / 可灵等在线生图能力统一到一个本地软件里。
+Kuroii VisionHub 是一个桌面优先的多平台 AI 图片创作工作台，当前以 Tauri + React + TypeScript + Vite 实现。项目优先服务中转站 / 聚合 API 工作流，同时保留官方 API 和本地模型路线，目标是把 OpenAI-compatible 中转、OpenAI 官方、后续 Nano Banana / Grok / Seedream / 即梦 / 豆包 / 可灵等在线生图能力统一到一个本地软件里。
 
 > 说明：本仓库只保存源码、配置、脚本和文档；不会提交 API Key、生成图片、个人 AppData 数据、`node_modules`、`dist` 或 `src-tauri/target` 构建产物。
 > 临时迁移说明：生成图片仍不进入 main 源码分支；如需一次性同步参考图，使用独立 `reference-packs/*` 分支或 GitHub Release Asset，不包含 API Key、raw 响应或 AppData 配置。
@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.0` release-candidate preparation. `0.4.6` Chinese / English internationalization V1 has been closed as the final 0.4.x baseline.
+Current checkpoint: `0.5.1` Kuroii VisionHub brand integration. `0.5.0` release-candidate preparation remains the current validated packaging baseline.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,14 @@ Current checkpoint: `0.5.0` release-candidate preparation. `0.4.6` Chinese / Eng
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.1 Kuroii VisionHub brand integration
+
+- App version is now `0.5.1`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Product display name changed to `Kuroii VisionHub` with subtitle `AI Image Workflow Studio`; internal package name `visionhub-studio` and Tauri identifier `studio.visionhub.app` are intentionally retained for AppData, gallery, profile, and credential compatibility.
+- Desktop/Tauri icons and sidebar brand mark now use approved Kuroii app icon assets, with source mapping recorded in `docs/kuroii-brand-asset-map.md`.
+- Added Kuroii Cat expression/pose assets for future empty-state, welcome, and update-page usage; this pass keeps the main AI Create Desk restrained and does not place mascot art in Provider keys, raw diagnostics, or dangerous actions.
+- Validation completed: `npm.cmd run verify`, `python .\scripts\smoke_check.py`, and `npm.cmd run tauri:build`; release exe stayed alive for 8 seconds, and MSI / NSIS hashes are recorded in `docs/release-notes/0.5.1-draft.md`.
 
 ### v0.5.0 Release-candidate preparation
 
@@ -592,7 +600,7 @@ git pull --rebase
 powershell -ExecutionPolicy Bypass -File ".\scripts\run_checks.ps1"
 git add .
 git status
-git commit -m "feat: sync latest VisionHub Studio work"
+git commit -m "feat: sync latest Kuroii VisionHub work"
 git push
 ```
 
@@ -700,7 +708,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 后续路线
 
-详细执行计划、版本号节奏和验收规则见 [VisionHub Studio 后续开发总控计划](docs/visionhub-development-plan.md)。后续计划性开发先读 `AGENTS.md` 和该文档，再进入对应专项文档。
+详细执行计划、版本号节奏和验收规则见 [Kuroii VisionHub 后续开发总控计划](docs/visionhub-development-plan.md)。后续计划性开发先读 `AGENTS.md` 和该文档，再进入对应专项文档。
 
 ### 路线维护规则
 
