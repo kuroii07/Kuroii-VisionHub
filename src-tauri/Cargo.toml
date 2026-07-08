@@ -1,6 +1,6 @@
 [package]
 name = "visionhub-studio"
-version = "0.5.1"
+version = "0.5.2"
 description = "Kuroii-branded desktop AI image workflow studio"
 authors = ["Kuroii"]
 license = "MIT"

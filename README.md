@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.1` Kuroii VisionHub brand integration. `0.5.0` release-candidate preparation remains the current validated packaging baseline.
+Current checkpoint: `0.5.2` WebView2 white-screen hotfix. `0.5.1` Kuroii VisionHub brand integration remains the current brand baseline.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,14 @@ Current checkpoint: `0.5.1` Kuroii VisionHub brand integration. `0.5.0` release-
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.2 WebView2 white-screen hotfix
+
+- App version is now `0.5.2`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Added a Windows WebView2 GPU-compositor workaround for release builds where the DOM is mounted but the native window paints as a blank white surface.
+- Updated the boot HTML title and startup fallback from the old VisionHub Studio label to `Kuroii VisionHub`.
+- Kept Tauri identifier `studio.visionhub.app` unchanged, so existing AppData, gallery/history, Provider profiles, and credentials remain available.
+- Validation completed: `npm.cmd run verify`, `npm.cmd run tauri:build`, release exe 12-second live smoke, and WebView2 DOM/CDP screenshot smoke; 0.5.2 MSI / NSIS hashes are recorded in `docs/release-notes/0.5.2-draft.md`.
 
 ### v0.5.1 Kuroii VisionHub brand integration
 

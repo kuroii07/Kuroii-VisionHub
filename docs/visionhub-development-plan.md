@@ -1,14 +1,14 @@
 # Kuroii VisionHub 后续开发总控计划
 
-> 本文档是 VisionHub Studio 后续计划开发的入口文档。后续进入较大优化、版本开发、发布构建或 GitHub 推送前，先读 `AGENTS.md`，再读本文档，最后按具体模块补读专项文档。
+> 本文档是 Kuroii VisionHub 后续计划开发的入口文档。后续进入较大优化、版本开发、发布构建或 GitHub 推送前，先读 `AGENTS.md`，再读本文档，最后按具体模块补读专项文档。
 
 ## 1. 当前基线
 
-- Current app version: `0.5.1`
+- Current app version: `0.5.2`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.1` Kuroii VisionHub brand integration: product display name, Kuroii-approved icon assets, restrained brand layer, data-compatibility notes, and validation after the 0.5.0 RC baseline.
+- Current focus: `0.5.2` WebView2 white-screen hotfix: release-window paint stability after Kuroii branding, boot fallback branding, validation, and rebuilt installers while keeping AppData compatibility.
 
 ## 2. 后续开发前必读
 
@@ -108,6 +108,7 @@
 | ~~`0.4.6`~~ | Chinese / English Internationalization V1 | Closed final 0.4.x baseline | no release |
 | `0.5.0` | Release-candidate preparation | Version consistency, validation scripts, migration docs, release notes draft, green release validation, artifact SHA256 recording, and enhanced repository hygiene review | RC hygiene validated |
 | `0.5.1` | Kuroii VisionHub brand integration | Product display name, approved Kuroii icon assets, restrained Kuroii Cat asset preparation, and compatibility documentation | Brand build validation |
+| `0.5.2` | WebView2 white-screen hotfix | Windows release paint stability, boot fallback branding, validation, and rebuilt installers | Hotfix validation |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -858,7 +859,24 @@ Acceptance:
 - Provider profile ids, credential secret ids, generation history structure, and AppData identifier are unchanged.
 - AppData, generated images, API Keys, installers, and build outputs are not committed.
 
-### 5.29 `v1.0 pre` Release and migration preparation
+
+### 5.29 `0.5.2` WebView2 white-screen hotfix
+
+Status 2026-07-08: hotfix validated with `npm.cmd run verify`, `npm.cmd run tauri:build`, release exe 12-second live smoke, and WebView2 DOM/CDP screenshot smoke for Windows release windows where the DOM is mounted but the native window can paint as a blank white surface after startup or click interactions on some WebView2/GPU driver combinations.
+
+Objectives:
+
+- Prefer a stable software-composited WebView2 surface over release-build GPU compositor white screens.
+- Keep the boot HTML fallback branded as `Kuroii VisionHub` so startup failures never show the old product name.
+- Preserve `studio.visionhub.app`, Provider profile ids, credential channels, generation history, and AppData paths.
+
+Acceptance:
+
+- `npm.cmd run verify` passes.
+- `npm.cmd run tauri:build` produces `Kuroii VisionHub_0.5.2` installers.
+- Release exe launch is checked with WebView2 DOM / screenshot evidence and a live window smoke check.
+
+### 5.30 `v1.0 pre` Release and migration preparation
 
 目标：
 
@@ -942,4 +960,4 @@ Acceptance:
 
 ## 9. 下一步推荐
 
-Next formal development should continue `0.5.1` Kuroii VisionHub brand integration validation, then optional screenshot-based visual QA and installer install / uninstall QA before any public Release Asset upload.
+Next formal development should continue `0.5.2` WebView2 white-screen hotfix validation, then optional screenshot-based visual QA and installer install / uninstall QA before any public Release Asset upload.

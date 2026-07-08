@@ -15,6 +15,37 @@ use tauri::Manager;
 
 const KEYRING_SERVICE: &str = "visionhub-studio";
 
+
+#[cfg(target_os = "windows")]
+fn configure_windows_webview_workarounds() {
+    // Some Windows/WebView2 + GPU driver combinations can keep the DOM alive
+    // while the native window paints a blank white surface. This app is a
+    // productivity workstation rather than a GPU-heavy canvas app, so prefer a
+    // stable software-composited WebView over occasional release-build
+    // compositor white screens.
+    const REQUIRED_ARGS: [&str; 3] = [
+        "--disable-gpu",
+        "--disable-gpu-compositing",
+        "--disable-accelerated-2d-canvas",
+    ];
+    const ENV_KEY: &str = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS";
+
+    let existing = std::env::var(ENV_KEY).unwrap_or_default();
+    let mut args = existing
+        .split_whitespace()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    for required in REQUIRED_ARGS {
+        if !args.iter().any(|item| item == required) {
+            args.push(required.to_string());
+        }
+    }
+    std::env::set_var(ENV_KEY, args.join(" "));
+}
+
+#[cfg(not(target_os = "windows"))]
+fn configure_windows_webview_workarounds() {}
+
 #[derive(Debug, Deserialize)]
 struct SaveSecretRequest {
     provider_id: String,
@@ -4290,7 +4321,7 @@ fn pick_folder_with_system_dialog(initial_dir: &Path) -> Result<Option<PathBuf>,
         }
 
         let mut display_name = [0u16; 260];
-        let title: Vec<u16> = "选择 VisionHub Studio 本地图库目录\0"
+        let title: Vec<u16> = "选择 Kuroii VisionHub 本地图库目录\0"
             .encode_utf16()
             .collect();
         let mut browse_info = BrowseInfoW {
@@ -6179,6 +6210,8 @@ fn chrono_like_timestamp() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    configure_windows_webview_workarounds();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
@@ -6228,7 +6261,7 @@ pub fn run() {
             save_text_file_with_dialog
         ])
         .run(tauri::generate_context!())
-        .expect("error while running VisionHub Studio");
+        .expect("error while running Kuroii VisionHub");
 }
 
 fn main() {
