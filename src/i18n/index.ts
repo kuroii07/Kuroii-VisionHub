@@ -2,7 +2,7 @@ import type { AppLanguage } from '../services/appSettings';
 
 export const messages = {
   'zh-CN': {
-    'app.subtitle': 'AI 图片工作流工作台',
+    'app.subtitle': 'AI 图片工作台',
     'common.close': '关闭',
     'common.closeNotification': '关闭通知',
     'common.cancel': '取消',

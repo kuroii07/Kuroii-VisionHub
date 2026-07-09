@@ -86,6 +86,35 @@ import {
 } from '../services/desktopApi';
 import { diagnoseGenerationFailure, type GenerationFailureCategory, type GenerationFailureSeverity } from '../services/generationErrorDiagnostics';
 import {
+  buildGeminiManualModelProbe,
+  buildMiniMaxManualModelProbe,
+  defaultBaseUrlPlaceholder,
+  defaultEndpointPlaceholder,
+  imageToImageAdapterDiagnosticDetail,
+  imageToImageAdapterLabel,
+  isGeminiProvider,
+  isMiniMaxProvider,
+  modelListUnsupportedMessage,
+  officialFixedModelOptions,
+  protocolLabel,
+  providerEndpointPreview,
+  providerEndpointHint,
+  providerSupportsOpenAICompatibleModelList,
+  providerUsesConfig,
+  resolveImageToImageAdapterForDisplay
+} from '../services/providerDisplay';
+import {
+  buildOfflineDiagnosticSummary,
+  buildGenerationUsageReadinessItem,
+  buildProviderReadinessItems,
+  buildProviderStabilityDiagnosticItems,
+  formatModelListFallbackMessage,
+  isModelListUnavailableError,
+  mapProviderErrorMessage,
+  type ProviderDiagnosticLevel,
+  type ProviderDiagnosticItem
+} from '../services/providerDiagnostics';
+import {
   defaultEndpointForProtocol,
   defaultOpenAICompatibleConfig,
   IMAGE_TO_IMAGE_ADAPTERS,
@@ -185,7 +214,6 @@ const APP_VERSION = '0.5.5';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
-type ProviderDiagnosticLevel = 'pass' | 'warn' | 'fail' | 'info';
 type ProviderPlatformType = 'aggregator' | 'official' | 'local';
 type ProviderServiceTemplateStatus = 'connected' | 'configurable' | 'planned' | 'local-plan';
 type ProviderServiceRegion = 'domestic' | 'overseas' | 'local' | 'custom';
@@ -240,12 +268,6 @@ type LibraryFormatFilter = 'all' | 'png' | 'jpg' | 'gif' | 'webp' | 'svg' | 'unk
 type LibraryRatingFilter = 'all' | 'unrated' | '1' | '2' | '3' | '4' | '5';
 type LibraryColorFilter = 'all' | 'red' | 'orange' | 'yellow' | 'green' | 'cyan' | 'blue' | 'purple' | 'pink' | 'mono';
 type LibraryModeFilter = 'all' | 'text-to-image' | 'image-to-image' | 'with-references';
-type ProviderDiagnosticItem = {
-  id: string;
-  label: string;
-  detail: string;
-  level: ProviderDiagnosticLevel;
-};
 type ProviderDiagnosticsReportContext = {
   platformLabel: string;
   serviceLabel: string;
@@ -2932,7 +2954,12 @@ export function App() {
     }
 
     if (selectedProviderId !== 'comfyui-local') {
+      const previousFirstResultId = useStudioStore.getState().results[0]?.id;
       await generate(options);
+      const latestResult = useStudioStore.getState().results[0];
+      if (latestResult && latestResult.id !== previousFirstResultId && latestResult.status === 'failed') {
+        setConfigMessage(mapProviderErrorMessage(latestResult.error ?? t('provider.error.noImageReturned'), t));
+      }
       return;
     }
 
@@ -7074,12 +7101,6 @@ function WorkspaceHomePage(props: {
     { page: 'templates', label: props.t('nav.templates'), detail: props.t('home.quick.templatesDetail'), icon: <Layers size={16} /> },
     { page: 'providers', label: props.t('nav.providers'), detail: props.t('home.quick.providersDetail'), icon: <Database size={16} /> }
   ];
-  const roadmapItems = [
-    { title: props.t('home.route.gallery'), state: props.t('home.route.next'), page: 'library' as Page },
-    { title: props.t('home.route.batch'), state: props.t('home.route.canCreate'), page: 'batch' as Page },
-    { title: props.t('home.route.compare'), state: props.t('home.route.planned'), page: 'providers' as Page }
-  ];
-
   function useRecordAsReferenceAndCreate(record: GenerationRecord) {
     props.onUseRecordAsReference(record);
     props.onNavigate('generate');
@@ -7258,15 +7279,6 @@ function WorkspaceHomePage(props: {
         ))}
       </section> : null}
 
-      {props.homeModules.roadmap ? <section className="workspaceRouteStrip" aria-label={props.t('home.route.aria')}>
-        <span className="workspaceDockLabel">{props.t('home.route.label')}</span>
-        {roadmapItems.map((item) => (
-          <button type="button" key={item.title} className="workspaceRouteItem" onClick={() => props.onNavigate(item.page)}>
-            <strong>{item.title}</strong>
-            <small>{item.state}</small>
-          </button>
-        ))}
-      </section> : null}
     </section>
   );
 }
@@ -9293,7 +9305,6 @@ function SettingsPage(props: {
             <button className={homeModules.attention ? 'active' : ''} onClick={() => updateHomeModules({ attention: !homeModules.attention })}>{props.t('settings.home.attention')}</button>
             <button className={homeModules.materials ? 'active' : ''} onClick={() => updateHomeModules({ materials: !homeModules.materials })}>{props.t('settings.home.materials')}</button>
             <button className={homeModules.quickActions ? 'active' : ''} onClick={() => updateHomeModules({ quickActions: !homeModules.quickActions })}>{props.t('settings.home.quickActions')}</button>
-            <button className={homeModules.roadmap ? 'active' : ''} onClick={() => updateHomeModules({ roadmap: !homeModules.roadmap })}>{props.t('settings.home.roadmap')}</button>
           </div>
         </div>
       </article>
@@ -13595,122 +13606,6 @@ function isProviderServiceTemplateConfigurable(template: ProviderServiceTemplate
   return Boolean(template.providerId) && (template.status === 'connected' || template.status === 'configurable');
 }
 
-function providerUsesConfig(providerId: string) {
-  return providerId === 'openai-gpt-image' || providerId === 'custom-http-provider' || providerId === 'minimax-image' || providerId === 'gemini-image';
-}
-
-function providerSupportsOpenAICompatibleModelList(providerId: string) {
-  return providerId === 'openai-gpt-image' || providerId === 'custom-http-provider';
-}
-
-function isMiniMaxProvider(providerId: string) {
-  return providerId === 'minimax-image';
-}
-
-function isGeminiProvider(providerId: string) {
-  return providerId === 'gemini-image';
-}
-
-function minimaxModelOptions() {
-  return ['image-01', 'image-01-live'];
-}
-
-function geminiModelOptions() {
-  return ['gemini-2.5-flash-image'];
-}
-
-function officialFixedModelOptions(providerId: string) {
-  if (isMiniMaxProvider(providerId)) return minimaxModelOptions();
-  if (isGeminiProvider(providerId)) return geminiModelOptions();
-  return [];
-}
-
-function buildMiniMaxManualModelProbe(modelId: string, source: string, t?: Translator) {
-  const normalizedModelId = modelId.trim();
-  const options = minimaxModelOptions();
-  const available = Boolean(normalizedModelId) && options.includes(normalizedModelId);
-  const fallbackModel = normalizedModelId || (t ? t('provider.diagnostics.value.notFilled') : 'not filled');
-  return {
-    modelId: normalizedModelId,
-    available,
-    checkedAt: new Date().toISOString(),
-    message: available
-      ? t
-        ? t('provider.diagnostics.detail.minimaxModelProbeAvailable', { model: normalizedModelId, source })
-        : `MiniMax official template includes model "${normalizedModelId}". ${source}`
-      : t
-        ? t('provider.diagnostics.detail.minimaxModelProbeMissing', { options: options.join(' / '), model: fallbackModel, source })
-        : `MiniMax currently recommends ${options.join(' / ')}; "${fallbackModel}" is not built in. ${source}`
-  };
-}
-
-function buildGeminiManualModelProbe(modelId: string, source: string, t?: Translator) {
-  const normalizedModelId = modelId.trim();
-  const options = geminiModelOptions();
-  const available = Boolean(normalizedModelId) && options.includes(normalizedModelId);
-  const fallbackModel = normalizedModelId || (t ? t('provider.diagnostics.value.notFilled') : 'not filled');
-  return {
-    modelId: normalizedModelId,
-    available,
-    checkedAt: new Date().toISOString(),
-    message: available
-      ? t
-        ? t('provider.diagnostics.detail.geminiModelProbeAvailable', { model: normalizedModelId, source })
-        : `Gemini official template includes model "${normalizedModelId}". ${source}`
-      : t
-        ? t('provider.diagnostics.detail.geminiModelProbeMissing', { options: options.join(' / '), model: fallbackModel, source })
-        : `Gemini currently recommends ${options.join(' / ')}; "${fallbackModel}" is not built in. ${source}`
-  };
-}
-
-function modelListUnsupportedMessage(providerId: string, modelId: string, t?: Translator) {
-  if (isMiniMaxProvider(providerId)) {
-    const source = t
-      ? t('provider.diagnostics.detail.minimaxFixedModelListSource')
-      : 'MiniMax official image API uses fixed model IDs and does not read OpenAI-compatible /v1/models.';
-    const modelProbe = buildMiniMaxManualModelProbe(modelId, source, t);
-    return modelProbe.message;
-  }
-  if (isGeminiProvider(providerId)) {
-    const source = t
-      ? t('provider.diagnostics.detail.geminiFixedModelListSource')
-      : 'Gemini official image API uses fixed model IDs and does not read OpenAI-compatible /v1/models.';
-    return buildGeminiManualModelProbe(modelId, source, t).message;
-  }
-  return t
-    ? t('provider.diagnostics.detail.officialModelListUnsupported')
-    : 'The current official API does not provide an OpenAI-compatible model list. Built-in template models and manual model IDs are kept for real test generation.';
-}
-
-function defaultBaseUrlPlaceholder(providerId: string, t?: Translator) {
-  if (providerId === 'openai-gpt-image') return OFFICIAL_OPENAI_BASE_URL;
-  if (providerId === 'minimax-image') return 'https://api.minimaxi.com';
-  if (providerId === 'gemini-image') return 'https://generativelanguage.googleapis.com';
-  return t ? t('provider.placeholder.baseUrlRelay') : 'https://your-relay.example.com';
-}
-
-function defaultEndpointPlaceholder(providerId: string, t?: Translator) {
-  if (providerId === 'minimax-image') return '/v1/image_generation';
-  if (providerId === 'gemini-image') return '/v1beta/models/{model}:generateContent';
-  return t ? t('provider.placeholder.endpointPath') : '/v1/images/generations';
-}
-
-function providerEndpointHint(providerId: string, t?: Translator) {
-  if (providerId === 'minimax-image') {
-    return t
-      ? t('provider.endpointHint.minimax')
-      : 'MiniMax official text-to-image uses /v1/image_generation by default. This is the official image API path, not OpenAI-compatible /v1/images/generations.';
-  }
-  if (providerId === 'gemini-image') {
-    return t
-      ? t('provider.endpointHint.gemini')
-      : 'Gemini official image API uses /v1beta/models/{model}:generateContent. After saving, the backend replaces {model} with the current model ID.';
-  }
-  return t
-    ? t('provider.endpointHint.default')
-    : 'Follow relay docs, for example /images/generations, /v1/images/generations, or /v1/responses. Saved requests use this path.';
-}
-
 function getDefaultProviderServiceTemplateForProvider(providerId: string) {
   if (providerId === 'custom-http-provider') return getProviderServiceTemplate('aggregator-openai-compatible');
   if (providerId === 'openai-gpt-image') return getProviderServiceTemplate('official-openai');
@@ -13773,65 +13668,6 @@ function profileLabel(status: ProviderConnectionProfile['lastTestStatus'], t?: T
   return fallbackLabels[status] ?? fallbackLabels.untested;
 }
 
-function protocolLabel(protocol: OpenAICompatibleConfig['protocol'], t?: Translator) {
-  if (t) return t(`provider.protocol.${protocol}.label` as Parameters<Translator>[0]);
-  const labels: Record<OpenAICompatibleConfig['protocol'], string> = {
-    images: 'Images',
-    'images-minimal': 'Images minimal',
-    responses: 'Responses',
-    'chat-completions': 'Chat',
-    'custom-images': 'Custom'
-  };
-  return labels[protocol];
-}
-
-function imageToImageAdapterLabel(adapter: ImageToImageAdapter, t?: Translator) {
-  if (t) return t(`provider.i2i.${adapter}.label` as Parameters<Translator>[0]);
-  const labels: Record<ImageToImageAdapter, string> = {
-    auto: 'Auto',
-    'openai-images-edit': 'OpenAI Images edits',
-    'responses-input-image': 'Responses input_image',
-    'chat-image-url': 'Chat image_url',
-    'json-image-array': 'JSON image/images'
-  };
-  return labels[adapter];
-}
-
-function imageToImageAdapterDescription(adapter: ImageToImageAdapter, t?: Translator) {
-  if (t) return t(`provider.i2i.${adapter}.description` as Parameters<Translator>[0]);
-  const fallbackDescriptions: Record<ImageToImageAdapter, string> = {
-    auto: 'Choose the mapping from current platform and protocol.',
-    'openai-images-edit': 'Official Images image-to-image via multipart reference upload.',
-    'responses-input-image': 'Send references as input_image with the Responses protocol.',
-    'chat-image-url': 'Wrap image-to-image through chat messages with image_url.',
-    'json-image-array': 'Common custom-relay shape with image plus images array.'
-  };
-  return fallbackDescriptions[adapter];
-}
-
-function resolveImageToImageAdapterForDisplay(
-  config: OpenAICompatibleConfig,
-  providerId: string
-): Exclude<ImageToImageAdapter, 'auto'> {
-  if (config.imageToImageAdapter !== 'auto') return config.imageToImageAdapter;
-  if (providerId === 'openai-gpt-image' && config.protocol === 'images') return 'openai-images-edit';
-  if (config.protocol === 'responses') return 'responses-input-image';
-  if (config.protocol === 'chat-completions') return 'chat-image-url';
-  return 'json-image-array';
-}
-
-function imageToImageAdapterDiagnosticDetail(config: OpenAICompatibleConfig, providerId: string, t: Translator) {
-  const resolved = resolveImageToImageAdapterForDisplay(config, providerId);
-  const adapterLabel = t(`provider.i2i.${resolved}.label` as Parameters<Translator>[0]);
-  const prefix = config.imageToImageAdapter === 'auto'
-    ? t('provider.i2i.autoPrefix', { adapter: adapterLabel })
-    : t('provider.i2i.fixedPrefix', { adapter: adapterLabel });
-  return t('provider.i2i.diagnosticText', {
-    prefix,
-    field: t(`provider.i2i.${resolved}.field` as Parameters<Translator>[0])
-  });
-}
-
 function safeProviderConfigText(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -13840,151 +13676,6 @@ function isProviderConnectionProfileLike(value: unknown): value is ProviderConne
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const candidate = value as Partial<ProviderConnectionProfile>;
   return typeof candidate.id === 'string' && typeof candidate.providerId === 'string';
-}
-
-function providerEndpointPreview(config: Partial<OpenAICompatibleConfig>) {
-  const protocol = config.protocol ?? 'images';
-  const endpointPath = safeProviderConfigText(config.endpointPath);
-  const normalizedPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath || defaultEndpointForProtocol(protocol)}`;
-  const modelPath = normalizedPath.replace('{model}', encodeURIComponent(safeProviderConfigText(config.modelId) || '{model}'));
-  try {
-    const baseUrl = new URL(safeProviderConfigText(config.baseUrl));
-    const originAndPath = `${baseUrl.origin}${baseUrl.pathname.replace(/\/+$/, '')}`;
-    return `${originAndPath}${modelPath}`;
-  } catch {
-    return modelPath;
-  }
-}
-
-function endpointRiskHint(config: Partial<OpenAICompatibleConfig>, providerId: string, t?: Translator) {
-  const protocol = config.protocol ?? 'images';
-  const endpointPath = safeProviderConfigText(config.endpointPath);
-  const expectedEndpointPath = isGeminiProvider(providerId)
-    ? '/v1beta/models/{model}:generateContent'
-    : isMiniMaxProvider(providerId)
-      ? '/v1/image_generation'
-      : defaultEndpointForProtocol(protocol);
-  if (!endpointPath.startsWith('/')) {
-    return t
-      ? t('provider.stability.detail.endpointPathSuggestion', { path: expectedEndpointPath })
-      : `Endpoint path should start with /. The default for this protocol is ${expectedEndpointPath}.`;
-  }
-  if (endpointPath !== expectedEndpointPath) {
-    return t
-      ? t('provider.stability.detail.endpointCustomPath', { path: endpointPath })
-      : `Using custom path ${endpointPath}. Confirm provider docs and avoid duplicating Base URL and endpoint path.`;
-  }
-  return t
-    ? t('provider.stability.detail.endpointDefaultPath', { path: expectedEndpointPath })
-    : `Using the default path for this protocol: ${expectedEndpointPath}.`;
-}
-
-function referenceSubmissionHint(config: OpenAICompatibleConfig, providerId: string, template?: ProviderServiceTemplate, t?: Translator) {
-  const resolved = resolveImageToImageAdapterForDisplay(config, providerId);
-  if (template?.supportsImageToImage === false) {
-    return t
-      ? t('provider.stability.detail.referenceUnsupported')
-      : 'This service template is marked as not supporting image-to-image. AI Create should not treat reference images as a real capability promise.';
-  }
-  if (isGeminiProvider(providerId)) {
-    return t
-      ? t('provider.stability.detail.referenceGemini')
-      : 'Gemini official submits reference images as inlineData parts. Multi-image editing requires real reference-image testing.';
-  }
-  if (isMiniMaxProvider(providerId)) {
-    return t
-      ? t('provider.stability.detail.referenceMinimax')
-      : 'MiniMax official currently submits only the first reference image as subject_reference.character; multiple references are not sent.';
-  }
-  const hintKeys: Record<Exclude<ImageToImageAdapter, 'auto'>, Parameters<Translator>[0]> = {
-    'openai-images-edit': 'provider.stability.detail.referenceOpenAIImagesEdit',
-    'responses-input-image': 'provider.stability.detail.referenceResponsesInputImage',
-    'chat-image-url': 'provider.stability.detail.referenceChatImageUrl',
-    'json-image-array': 'provider.stability.detail.referenceJsonImageArray'
-  };
-  const fallbackHints: Record<Exclude<ImageToImageAdapter, 'auto'>, string> = {
-    'openai-images-edit': 'Uses multipart upload for reference images, suitable for official Images edits.',
-    'responses-input-image': 'Puts reference images into Responses input_image content blocks.',
-    'chat-image-url': 'Puts reference images into Chat Completions image_url content blocks.',
-    'json-image-array': 'Submits image as the first image and images as an array for custom relays. Field names must follow provider docs.'
-  };
-  return t ? t(hintKeys[resolved]) : fallbackHints[resolved];
-}
-
-function providerCostRiskHint(config: OpenAICompatibleConfig, template: ProviderServiceTemplate | undefined, t?: Translator) {
-  const parts = [t
-    ? t('provider.stability.detail.costNoConsume')
-    : 'Config self-check does not submit generation requests or consume quota. Only Real test generation, AI Create generation, or batch queue execution calls the API.'];
-  if (config.protocol === 'responses' || template?.requiresPolling) {
-    parts.push(t
-      ? t('provider.stability.detail.costAsyncPolling')
-      : 'This route may use async tasks or background polling. A sync timeout does not always mean no charge; check background tasks before retrying after a failure.');
-  }
-  if (template?.status === 'planned' || template?.status === 'local-plan') {
-    parts.push(t
-      ? t('provider.stability.detail.costPlannedTemplate')
-      : 'This service template is still in planning state and should not expose save, enable, or real test generation.');
-  }
-  return parts.join(' ');
-}
-
-function buildProviderStabilityDiagnosticItems(input: {
-  config: OpenAICompatibleConfig;
-  providerId: string;
-  template?: ProviderServiceTemplate;
-  supportsModelList: boolean;
-  t: Translator;
-}): ProviderDiagnosticItem[] {
-  const t = input.t;
-  const resolvedAdapter = resolveImageToImageAdapterForDisplay(input.config, input.providerId);
-  const template = input.template;
-  const endpointPreview = providerEndpointPreview(input.config);
-  const endpointHint = endpointRiskHint(input.config, input.providerId, t);
-  const adapterLabel = imageToImageAdapterLabel(resolvedAdapter, t);
-  return [
-    {
-      id: 'endpoint-preview',
-      label: t('provider.stability.item.endpointPreview'),
-      level: safeProviderConfigText(input.config.baseUrl) && safeProviderConfigText(input.config.endpointPath) ? 'pass' : 'warn',
-      detail: t('provider.stability.detail.endpointPreview', { endpoint: endpointPreview, hint: endpointHint })
-    },
-    {
-      id: 'capability-boundary',
-      label: t('provider.stability.item.capabilityBoundary'),
-      level: template?.status === 'planned' || template?.status === 'local-plan' ? 'info' : 'pass',
-      detail: template
-        ? t('provider.stability.detail.capabilityBoundary', {
-            status: t(`provider.status.${template.status}` as Parameters<Translator>[0]),
-            textToImage: template.supportsTextToImage === false ? t('provider.stability.value.uncommitted') : t('provider.stability.value.canCheck'),
-            imageToImage: template.supportsImageToImage === false ? t('provider.stability.value.uncommitted') : t('provider.stability.value.canCheck'),
-            polling: template.requiresPolling ? t('provider.stability.value.asyncPossible') : t('provider.stability.value.asyncNotMarked')
-          })
-        : t('provider.stability.detail.capabilityBoundaryNoTemplate')
-    },
-    {
-      id: 'reference-submission',
-      label: t('provider.stability.item.referenceSubmission'),
-      level: template?.supportsImageToImage === false ? 'warn' : 'info',
-      detail: t('provider.stability.detail.referenceSubmission', {
-        adapter: adapterLabel,
-        hint: referenceSubmissionHint(input.config, input.providerId, template, t)
-      })
-    },
-    {
-      id: 'cost-risk-boundary',
-      label: t('provider.stability.item.costRiskBoundary'),
-      level: 'info',
-      detail: providerCostRiskHint(input.config, template, t)
-    },
-    {
-      id: 'model-list-boundary',
-      label: t('provider.stability.item.modelListBoundary'),
-      level: input.supportsModelList ? 'info' : 'pass',
-      detail: input.supportsModelList
-        ? t('provider.stability.detail.modelListSupported')
-        : t('provider.stability.detail.modelListManualOfficial')
-    }
-  ];
 }
 
 function formatTime(value: string) {
@@ -14033,371 +13724,6 @@ function buildModelProbe(modelId: string, modelOptions: string[], source: string
           ? t('provider.diagnostics.detail.modelProbeEmpty', { model: fallbackModel, source })
           : `Model list is empty. Kept current manual model "${fallbackModel}". ${source}`
   };
-}
-
-function buildProviderReadinessItems(input: {
-  profile: ProviderConnectionProfile | null;
-  config: OpenAICompatibleConfig;
-  providerId: string;
-  desktopRuntime: boolean;
-  secretAvailable: boolean;
-  serviceConfigurable: boolean;
-  supportsOpenAICompatible: boolean;
-  t: Translator;
-}): ProviderDiagnosticItem[] {
-  const t = input.t;
-  if (!input.serviceConfigurable || !input.supportsOpenAICompatible) {
-    return [{
-      id: 'route',
-      label: t('provider.readiness.item.route'),
-      level: 'info',
-      detail: t('provider.readiness.detail.routePlanned')
-    }];
-  }
-
-  const modelId = input.config.modelId.trim();
-  const hasBaseUrl = Boolean(input.config.baseUrl.trim());
-  const hasEndpointPath = input.config.endpointPath.trim().startsWith('/');
-  const modelCount = input.profile?.lastModelCount;
-  const modelProbe = input.profile?.lastModelProbe;
-  const generationVerified = Boolean(input.profile?.lastMessage?.includes('\u6d4b\u8bd5\u751f\u6210\u6210\u529f'));
-  const resolvedAdapter = resolveImageToImageAdapterForDisplay(input.config, input.providerId);
-  const adapterLabel = imageToImageAdapterLabel(resolvedAdapter, t);
-  const protocolLabelText = protocolLabel(input.config.protocol, t);
-  const isMiniMax = isMiniMaxProvider(input.providerId);
-  const isGemini = isGeminiProvider(input.providerId);
-  const readyForGeneration = hasBaseUrl && modelId && hasEndpointPath && input.secretAvailable && input.desktopRuntime;
-
-  if (isMiniMax) {
-    const miniMaxProbe = buildMiniMaxManualModelProbe(
-      modelId,
-      t('provider.readiness.detail.minimaxFixedModelSource'),
-      t
-    );
-    return [
-      {
-        id: 'config-profile',
-        label: t('provider.readiness.item.configProfile'),
-        level: input.profile ? 'pass' : 'info',
-        detail: input.profile
-          ? t('provider.readiness.detail.minimaxProfileSaved')
-          : t('provider.readiness.detail.minimaxProfileDraft')
-      },
-      {
-        id: 'model-list',
-        label: t('provider.readiness.item.modelList'),
-        level: 'info',
-        detail: t('provider.readiness.detail.minimaxModelList')
-      },
-      {
-        id: 'model-probe',
-        label: t('provider.readiness.item.currentModel'),
-        level: miniMaxProbe.available ? 'pass' : 'warn',
-        detail: miniMaxProbe.message
-      },
-      {
-        id: 'text-to-image',
-        label: t('provider.readiness.item.textToImage'),
-        level: generationVerified
-          ? 'pass'
-          : readyForGeneration
-            ? 'info'
-            : 'warn',
-        detail: generationVerified
-          ? t('provider.readiness.detail.minimaxTextToImageVerified')
-          : readyForGeneration
-            ? t('provider.readiness.detail.minimaxTextToImageReady')
-            : t('provider.readiness.detail.minimaxTextToImageMissing')
-      },
-      {
-        id: 'image-to-image',
-        label: t('provider.readiness.item.imageToImage'),
-        level: readyForGeneration ? 'info' : 'warn',
-        detail: readyForGeneration
-          ? t('provider.readiness.detail.minimaxImageToImageReady')
-          : t('provider.readiness.detail.minimaxImageToImageMissing')
-      },
-      {
-        id: 'multi-reference',
-        label: t('provider.readiness.item.multiReference'),
-        level: 'info',
-        detail: t('provider.readiness.detail.minimaxMultiReference')
-      }
-    ];
-  }
-
-  if (isGemini) {
-    const geminiProbe = buildGeminiManualModelProbe(
-      modelId,
-      t('provider.readiness.detail.geminiFixedModelSource'),
-      t
-    );
-    return [
-      {
-        id: 'config-profile',
-        label: t('provider.readiness.item.configProfile'),
-        level: input.profile ? 'pass' : 'info',
-        detail: input.profile
-          ? t('provider.readiness.detail.geminiProfileSaved')
-          : t('provider.readiness.detail.geminiProfileDraft')
-      },
-      {
-        id: 'model-list',
-        label: t('provider.readiness.item.modelList'),
-        level: 'info',
-        detail: t('provider.readiness.detail.geminiModelList')
-      },
-      {
-        id: 'model-probe',
-        label: t('provider.readiness.item.currentModel'),
-        level: geminiProbe.available ? 'pass' : 'warn',
-        detail: geminiProbe.message
-      },
-      {
-        id: 'text-to-image',
-        label: t('provider.readiness.item.textToImage'),
-        level: generationVerified
-          ? 'pass'
-          : readyForGeneration
-            ? 'info'
-            : 'warn',
-        detail: generationVerified
-          ? t('provider.readiness.detail.geminiTextToImageVerified')
-          : readyForGeneration
-            ? t('provider.readiness.detail.geminiTextToImageReady')
-            : t('provider.readiness.detail.geminiTextToImageMissing')
-      },
-      {
-        id: 'image-to-image',
-        label: t('provider.readiness.item.imageToImageEdit'),
-        level: readyForGeneration ? 'info' : 'warn',
-        detail: readyForGeneration
-          ? t('provider.readiness.detail.geminiImageToImageReady')
-          : t('provider.readiness.detail.geminiImageToImageMissing')
-      },
-      {
-        id: 'multi-reference',
-        label: t('provider.readiness.item.multiReference'),
-        level: 'info',
-        detail: t('provider.readiness.detail.geminiMultiReference')
-      }
-    ];
-  }
-
-  return [
-    {
-      id: 'config-profile',
-      label: t('provider.readiness.item.configProfile'),
-      level: input.profile ? 'pass' : 'info',
-      detail: input.profile
-        ? t('provider.readiness.detail.profileSaved')
-        : t('provider.readiness.detail.profileDraft')
-    },
-    {
-      id: 'model-list',
-      label: t('provider.readiness.item.modelList'),
-      level: typeof modelCount === 'number' ? (modelCount > 0 ? 'pass' : 'warn') : 'info',
-      detail: typeof modelCount === 'number'
-        ? t('provider.readiness.detail.modelListCount', { count: modelCount, imageCount: input.profile?.lastImageModelCount ?? 0 })
-        : t('provider.readiness.detail.modelListNotRefreshed')
-    },
-    {
-      id: 'model-probe',
-      label: t('provider.readiness.item.currentModel'),
-      level: modelProbe ? (modelProbe.available ? 'pass' : 'warn') : (modelId ? 'info' : 'fail'),
-      detail: modelProbe?.message ?? (modelId ? t('provider.readiness.detail.currentModelNotProbed', { model: modelId }) : t('provider.readiness.detail.currentModelEmpty'))
-    },
-    {
-      id: 'text-to-image',
-      label: t('provider.readiness.item.textToImage'),
-      level: generationVerified
-        ? 'pass'
-        : readyForGeneration
-          ? 'info'
-          : 'warn',
-      detail: generationVerified
-        ? t('provider.readiness.detail.textToImageVerified')
-        : readyForGeneration
-          ? t('provider.readiness.detail.textToImageReady', { protocol: protocolLabelText })
-          : t('provider.readiness.detail.textToImageMissing')
-    },
-    {
-      id: 'image-to-image',
-      label: t('provider.readiness.item.imageToImage'),
-      level: hasEndpointPath && modelId ? 'info' : 'warn',
-      detail: hasEndpointPath && modelId
-        ? t('provider.readiness.detail.imageToImageMapped', { adapter: adapterLabel })
-        : t('provider.readiness.detail.imageToImageMissing')
-    },
-    {
-      id: 'multi-reference',
-      label: t('provider.readiness.item.multiReference'),
-      level: ['openai-images-edit', 'responses-input-image', 'chat-image-url', 'json-image-array'].includes(resolvedAdapter) ? 'info' : 'warn',
-      detail: t('provider.readiness.detail.multiReferenceMapped', { adapter: adapterLabel })
-    }
-  ];
-}
-
-function buildGenerationUsageReadinessItem(input: {
-  profile: ProviderConnectionProfile | null;
-  generationProfile: ProviderConnectionProfile | null;
-  selectedProviderId: string;
-  generationProviderId: string;
-  t: Translator;
-}): ProviderDiagnosticItem {
-  const t = input.t;
-  if (input.selectedProviderId !== input.generationProviderId) {
-    return {
-      id: 'generation-usage',
-      label: t('provider.readiness.item.generationUsage'),
-      level: 'info',
-      detail: t('provider.readiness.detail.generationUsageOtherPlatform')
-    };
-  }
-  if (!input.profile) {
-    return {
-      id: 'generation-usage',
-      label: t('provider.readiness.item.generationUsage'),
-      level: 'warn',
-      detail: t('provider.readiness.detail.generationUsageDraft')
-    };
-  }
-  if (input.generationProfile?.id === input.profile.id) {
-    return {
-      id: 'generation-usage',
-      label: t('provider.readiness.item.generationUsage'),
-      level: 'pass',
-      detail: t('provider.readiness.detail.generationUsageActive', { name: input.profile.displayName })
-    };
-  }
-  return {
-    id: 'generation-usage',
-    label: t('provider.readiness.item.generationUsage'),
-    level: 'warn',
-    detail: input.generationProfile
-      ? t('provider.readiness.detail.generationUsageMismatch', { active: input.generationProfile.displayName, editing: input.profile.displayName })
-      : t('provider.readiness.detail.generationUsageMissing')
-  };
-}
-
-function buildOfflineDiagnosticSummary(input: {
-  profile: ProviderConnectionProfile | null;
-  config: OpenAICompatibleConfig;
-  desktopRuntime: boolean;
-  secretAvailable: boolean;
-  generationProfile: ProviderConnectionProfile | null;
-  selectedProviderId: string;
-  generationProviderId: string;
-  t: Translator;
-}) {
-  const t = input.t;
-  const modelId = input.config.modelId.trim();
-  const hasBaseUrl = Boolean(input.config.baseUrl.trim());
-  const hasEndpointPath = input.config.endpointPath.trim().startsWith('/');
-  const modelProbe = input.profile?.lastModelProbe;
-  const generationMatches =
-    input.selectedProviderId === input.generationProviderId &&
-    Boolean(input.profile && input.generationProfile?.id === input.profile.id);
-  const missing: string[] = [];
-  if (!input.profile) missing.push(t('provider.offlineSummary.missing.profile'));
-  if (!input.desktopRuntime) missing.push(t('provider.offlineSummary.missing.desktopRuntime'));
-  if (!input.secretAvailable) missing.push(t('provider.offlineSummary.missing.secret'));
-  if (!hasBaseUrl) missing.push(t('provider.offlineSummary.missing.baseUrl'));
-  if (!modelId) missing.push(t('provider.offlineSummary.missing.model'));
-  if (!hasEndpointPath) missing.push(t('provider.offlineSummary.missing.endpointPath'));
-  if (!generationMatches) missing.push(t('provider.offlineSummary.missing.generationUsage'));
-  const modelState = modelProbe
-    ? modelProbe.available
-      ? t('provider.offlineSummary.chip.modelMatched')
-      : t('provider.offlineSummary.chip.modelMissing')
-    : t('provider.offlineSummary.chip.modelUnchecked');
-  const title = missing.length === 0
-    ? t('provider.offlineSummary.title.ready')
-    : t('provider.offlineSummary.title.pending', { count: missing.length });
-  const detail = missing.length === 0
-    ? t('provider.offlineSummary.detail.ready')
-    : t('provider.offlineSummary.detail.pending', {
-        items: missing.slice(0, 3).join(' / '),
-        more: missing.length > 3 ? t('provider.offlineSummary.detail.more') : ''
-      });
-  return {
-    title,
-    detail,
-    chips: [
-      { label: input.profile ? t('provider.offlineSummary.chip.profileSaved') : t('provider.offlineSummary.chip.profileDraft'), level: input.profile ? 'pass' : 'warn' },
-      { label: input.secretAvailable ? t('provider.offlineSummary.chip.secretSaved') : t('provider.offlineSummary.chip.secretMissing'), level: input.secretAvailable ? 'pass' : 'warn' },
-      { label: modelState, level: modelProbe?.available ? 'pass' : modelProbe ? 'warn' : 'info' },
-      { label: generationMatches ? t('provider.offlineSummary.chip.generationActive') : t('provider.offlineSummary.chip.generationInactive'), level: generationMatches ? 'pass' : 'info' }
-    ] as Array<{ label: string; level: ProviderDiagnosticLevel }>
-  };
-}
-
-function providerErrorText(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function isModelListUnavailableError(error: unknown) {
-  const lower = providerErrorText(error).toLowerCase();
-  return [
-    'model list',
-    '/v1/models',
-    'http 403',
-    '403 forbidden',
-    'cannot parse',
-    'body preview',
-    '<!doctype html',
-    'just a moment',
-    'challenges.cloudflare.com',
-    'cloudflare',
-    'does not contain data array'
-  ].some((hint) => lower.includes(hint));
-}
-
-function formatModelListFallbackMessage(error: unknown, modelId: string, t: Translator) {
-  const mapped = mapProviderErrorMessage(error, t);
-  const modelLabel = modelId.trim() || t('provider.error.currentManualModelId');
-  return t('provider.error.modelListFallback', { model: modelLabel, message: mapped });
-}
-
-function mapProviderErrorMessage(error: unknown, t: Translator) {
-  const message = providerErrorText(error);
-  const lower = message.toLowerCase();
-
-  if (
-    lower.includes('model list') &&
-    (lower.includes('<!doctype html') ||
-      lower.includes('just a moment') ||
-      lower.includes('challenges.cloudflare.com') ||
-      lower.includes('cloudflare'))
-  ) {
-    return t('provider.error.modelListHtml');
-  }
-
-  if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('invalid api key')) {
-    return t('provider.error.unauthorized', { message });
-  }
-  if (lower.includes('403') || lower.includes('forbidden')) {
-    return t('provider.error.forbidden', { message });
-  }
-  if (lower.includes('404') || lower.includes('not found')) {
-    return t('provider.error.notFound', { message });
-  }
-  if (lower.includes('billing hard limit')) {
-    return t('provider.error.billingHardLimit', { message });
-  }
-  if (lower.includes('429') || lower.includes('rate limit') || lower.includes('quota')) {
-    return t('provider.error.rateLimit', { message });
-  }
-  if (lower.includes('timeout') || lower.includes('timed out')) {
-    return t('provider.error.timeout', { message });
-  }
-  if (lower.includes('failed to fetch') || lower.includes('dns') || lower.includes('connection')) {
-    return t('provider.error.network', { message });
-  }
-  if (lower.includes('json')) {
-    return t('provider.error.json', { message });
-  }
-  return message;
 }
 
 function PlaceholderPage(props: { title: string }) {

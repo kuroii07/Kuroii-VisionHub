@@ -635,6 +635,7 @@ export function ModernGeneratePage(props: {
   const queueMenuPanelRef = useRef<HTMLDivElement | null>(null);
   const referenceNoticeTimerRef = useRef<number | null>(null);
   const draftNoticeTimerRef = useRef<number | null>(null);
+  const activeGeneratingModeRef = useRef<GenerationMode | null>(null);
   const modelOptions = props.supportsOpenAICompatible
     ? props.providerConfig.modelOptions.length > 0
       ? props.providerConfig.modelOptions
@@ -799,7 +800,8 @@ export function ModernGeneratePage(props: {
   const canvasPreviewTotal = canvasPreviewItems.length;
   const canvasPreviewPosition = activeCanvasPreviewItem ? safeCanvasPreviewIndex + 1 : 0;
   const latestCurrentModeResult = currentModeSessionResults[0];
-  const isCurrentModeGenerating = props.isGenerating && activeGeneratingMode === currentGenerationMode;
+  const effectiveActiveGeneratingMode = activeGeneratingMode ?? activeGeneratingModeRef.current;
+  const isCurrentModeGenerating = props.isGenerating && effectiveActiveGeneratingMode === currentGenerationMode;
   const generateButtonLabel = isCurrentModeGenerating
     ? t('generate.action.rendering')
     : props.isGenerating
@@ -835,6 +837,7 @@ export function ModernGeneratePage(props: {
 
   useEffect(() => {
     if (!props.isGenerating) {
+      activeGeneratingModeRef.current = null;
       setActiveGeneratingMode(null);
     }
   }, [props.isGenerating]);
@@ -1547,11 +1550,13 @@ export function ModernGeneratePage(props: {
     if (!isCurrentSizeSupportedByModel()) return;
     const generationOptions = buildCurrentGenerationOptions();
     if (mode === 'image') {
+      activeGeneratingModeRef.current = 'image-to-image';
       setActiveGeneratingMode('image-to-image');
       props.onGenerate(generationOptions);
       updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', t('generate.draft.labelSubmittedImage'))));
       return;
     }
+    activeGeneratingModeRef.current = 'text-to-image';
     setActiveGeneratingMode('text-to-image');
     props.onGenerate(generationOptions);
     updatePromptDrafts(mergePromptDraft(promptDrafts, buildPromptDraft(props.prompt, 'retry', t('generate.draft.labelSubmittedText'))));

@@ -3549,7 +3549,7 @@ fn resolve_image_to_image_protocol_mapping(
         "text-to-image".to_string()
     } else if requested_adapter != "auto" && is_supported_image_to_image_adapter(requested_adapter) {
         requested_adapter.to_string()
-    } else if request.provider_id == "openai-gpt-image" && protocol == "images" {
+    } else if protocol == "images" {
         "openai-images-edit".to_string()
     } else {
         match protocol {
@@ -5576,15 +5576,8 @@ async fn reference_image_to_request_url(
     reference: &ReferenceImage,
     context: &str,
 ) -> Result<Option<String>, String> {
-    if let Some(url) = reference
-        .data_url
-        .as_deref()
-        .or(reference.preview_url.as_deref())
-        .filter(|url| url.starts_with("data:image/") || url.starts_with("http://") || url.starts_with("https://"))
+    if let Some(url) = reference.data_url.as_deref().filter(|url| url.starts_with("data:image/"))
     {
-        if url.starts_with("http://") || url.starts_with("https://") {
-            return Ok(Some(url.to_string()));
-        }
         let (bytes, extension) = decode_data_url_image(url)?;
         return Ok(Some(format!(
             "data:{};base64,{}",
@@ -5603,7 +5596,7 @@ async fn reference_image_to_request_url(
     if let Some(remote) = reference
         .preview_url
         .as_deref()
-        .filter(|url| url.starts_with("http://") || url.starts_with("https://"))
+        .filter(|url| is_external_image_url(url))
     {
         let (bytes, extension) = download_remote_image(client, remote).await?;
         return Ok(Some(format!(
@@ -5621,16 +5614,8 @@ async fn reference_image_to_bytes(
     reference: &ReferenceImage,
     context: &str,
 ) -> Result<(Vec<u8>, String), String> {
-    if let Some(url) = reference
-        .data_url
-        .as_deref()
-        .or(reference.preview_url.as_deref())
-        .filter(|url| url.starts_with("data:image/") || url.starts_with("http://") || url.starts_with("https://"))
-    {
-        if url.starts_with("data:image/") {
-            return decode_data_url_image(url);
-        }
-        return download_remote_image(client, url).await;
+    if let Some(url) = reference.data_url.as_deref().filter(|url| url.starts_with("data:image/")) {
+        return decode_data_url_image(url);
     }
 
     if let Some(local_path) = reference.local_path.as_deref().filter(|value| !value.trim().is_empty()) {
@@ -5647,7 +5632,22 @@ async fn reference_image_to_bytes(
         }
     }
 
+    if let Some(remote) = reference
+        .preview_url
+        .as_deref()
+        .filter(|url| is_external_image_url(url))
+    {
+        return download_remote_image(client, remote).await;
+    }
+
     Err("Reference image is missing a data URL, local path, or remote URL. Please add the reference image again.".to_string())
+}
+
+fn is_external_image_url(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    (lower.starts_with("http://") || lower.starts_with("https://"))
+        && !lower.starts_with("http://asset.localhost/")
+        && !lower.starts_with("https://asset.localhost/")
 }
 
 async fn build_openai_images_edit_form(
@@ -6405,4 +6405,3 @@ pub fn run() {
 fn main() {
     run();
 }
-

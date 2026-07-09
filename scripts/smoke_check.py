@@ -4,6 +4,15 @@ import re
 import runpy
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def source_between(source: str, start_marker: str, end_marker: str, label: str) -> str:
+    start = source.find(start_marker)
+    end = source.find(end_marker, start)
+    assert start >= 0 and end > start, f"{label} source block should be present"
+    return source[start:end]
+
+
 required = [
     "package.json",
     "index.html",
@@ -14,6 +23,8 @@ required = [
     "src/services/promptAssist.ts",
     "src/services/promptTemplates.ts",
     "src/services/freePlatforms.ts",
+    "src/services/providerDiagnostics.ts",
+    "src/services/providerDisplay.ts",
     "src/domain/batchQueueTypes.ts",
     "src/domain/providerTypes.ts",
     "src/services/batchQueue.ts",
@@ -60,16 +71,79 @@ for term in ["promptPolish", "textModels", "gpt-4o-mini", "中转站文本模型
 
 app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
 i18n_src = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
+provider_display_src = (ROOT / "src/services/providerDisplay.ts").read_text(encoding="utf-8")
+provider_diagnostics_src = (ROOT / "src/services/providerDiagnostics.ts").read_text(encoding="utf-8")
 ui_terms = ["\u5e73\u53f0\u63a5\u5165", "AI \u521b\u4f5c", "Base URL", "API Key"]
 for term in ui_terms:
     assert term in app_src or term in i18n_src, f"UI term missing: {term}"
-assert "AI 图片工作流工作台" in i18n_src, "Chinese brand subtitle should stay localized"
+assert "AI 图片工作台" in i18n_src, "Chinese brand subtitle should stay localized"
 assert "AI Image Workflow Studio" in i18n_src, "English brand subtitle should stay localized"
+home_page_src = source_between(app_src, "function WorkspaceHomePage", "function PromptTemplatesPage", "Workspace home page")
+assert "props.homeModules.roadmap" not in home_page_src, "Workspace home should not re-render the removed roadmap module"
+assert "home.route.label" not in home_page_src, "Workspace home should not show the removed roadmap strip"
 
 assert "convertFileSrc" in (ROOT / "src/services/desktopApi.ts").read_text(encoding="utf-8"), "Local image display should use Tauri file URLs instead of startup base64 hydration"
 main_rs = (ROOT / "src-tauri/src/main.rs").read_text(encoding="utf-8")
 assert "compact_generation_record_for_history" in main_rs, "History records should be compacted before persistence"
 assert "changed |= hydrate_record_image_urls(&app, record)" not in main_rs, "History load should not hydrate every local image into base64 at startup"
+assert "fn is_external_image_url" in main_rs and "asset.localhost" in main_rs, "Reference submission must not treat Tauri asset.localhost preview URLs as external images"
+request_url_source = source_between(
+    main_rs,
+    "async fn reference_image_to_request_url",
+    "async fn reference_image_to_bytes",
+    "Reference URL conversion function",
+)
+assert request_url_source.find("reference.local_path") < request_url_source.find(".preview_url"), "Reference URL conversion should prefer local_path over preview_url"
+assert ".filter(|url| is_external_image_url(url))" in request_url_source, "Reference URL conversion should only download real external preview URLs"
+bytes_source = source_between(
+    main_rs,
+    "async fn reference_image_to_bytes",
+    "fn is_external_image_url",
+    "Reference byte conversion function",
+)
+assert bytes_source.find("reference.local_path") < bytes_source.find(".preview_url"), "Reference byte conversion should prefer local_path over preview_url"
+assert ".filter(|url| is_external_image_url(url))" in bytes_source, "Reference byte conversion should only download real external preview URLs"
+assert 'else if protocol == "images"' in main_rs and '"openai-images-edit".to_string()' in main_rs, "Images protocol auto image-to-image should use OpenAI Images edits instead of JSON image/images"
+assert "if (config.protocol === 'images') return 'openai-images-edit';" in provider_display_src, "Provider UI should show the same Images auto image-to-image mapping as the backend"
+for helper in [
+    "function providerUsesConfig",
+    "function providerSupportsOpenAICompatibleModelList",
+    "function officialFixedModelOptions",
+    "function buildMiniMaxManualModelProbe",
+    "function buildGeminiManualModelProbe",
+    "function modelListUnsupportedMessage",
+    "function defaultBaseUrlPlaceholder",
+    "function defaultEndpointPlaceholder",
+    "function providerEndpointHint",
+    "function protocolLabel",
+    "function imageToImageAdapterLabel",
+    "function providerEndpointPreview",
+    "function endpointRiskHint",
+    "function referenceSubmissionHint",
+]:
+    assert helper in provider_display_src, f"Provider display helper should live in providerDisplay.ts: {helper}"
+    assert helper not in app_src, f"Provider display helper should not be redefined in App.tsx: {helper}"
+for helper in [
+    "function buildProviderReadinessItems",
+    "function buildGenerationUsageReadinessItem",
+    "function buildOfflineDiagnosticSummary",
+    "function providerErrorText",
+    "function isModelListUnavailableError",
+    "function formatModelListFallbackMessage",
+    "function mapProviderErrorMessage",
+    "function buildProviderStabilityDiagnosticItems",
+    "function providerCostRiskHint",
+]:
+    assert helper in provider_diagnostics_src, f"Provider diagnostics helper should live in providerDiagnostics.ts: {helper}"
+    assert helper not in app_src, f"Provider diagnostics helper should not be redefined in App.tsx: {helper}"
+generate_src = (ROOT / "src/ui/GeneratePage.tsx").read_text(encoding="utf-8")
+generate_label_src = source_between(generate_src, "const effectiveActiveGeneratingMode", "const failedLatest", "Generate button label")
+assert "activeGeneratingMode ?? activeGeneratingModeRef.current" in generate_label_src, "Generate button label should use the synchronous active mode fallback"
+assert "props.isGenerating && effectiveActiveGeneratingMode === currentGenerationMode" in generate_label_src, "Generate button should compare against the current panel mode"
+generate_run_src = source_between(generate_src, "function runGenerate()", "function addToBatchQueue()", "Generate submit handler")
+assert "activeGeneratingModeRef.current = 'image-to-image';" in generate_run_src, "Image-to-image submit should set active mode before generation starts"
+assert "activeGeneratingModeRef.current = 'text-to-image';" in generate_run_src, "Text-to-image submit should set active mode before generation starts"
+assert "activeGeneratingModeRef.current = null;" in generate_src, "Generate button active mode should reset after generation finishes"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in app_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in app_src, "Library thumbnail batches should stay incremental"
 library_perf_block = app_src[app_src.find("const LIBRARY_INITIAL_RENDER_COUNT"):app_src.find("function analyzeRecordColors")]

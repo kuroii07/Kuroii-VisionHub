@@ -16,6 +16,7 @@ src-tauri/gen/
 # Local runtime reports
 # These are generated when launching or validating locally and differ per machine.
 docs/run-reports/
+backups/
 
 # Local / migration-only reference packs
 # Keep generated images out of the main source branch. If a one-off transfer is
