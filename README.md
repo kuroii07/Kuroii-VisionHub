@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.10` free generation module extraction. The web platform helper now lives in a dedicated module while its current UI, platform data, local preferences, callbacks, and import workflow remain unchanged.
+Current checkpoint: `0.5.11` settings module extraction. The preferences page now lives in a dedicated module while its current UI, settings data, credential channels, directory actions, and persistence behavior remain unchanged.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,16 @@ Current checkpoint: `0.5.10` free generation module extraction. The web platform
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.11 settings module extraction
+
+- App version is now `0.5.11`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Moved the existing `SettingsPage` implementation from the oversized `src/ui/App.tsx` into `src/ui/SettingsPage.tsx`.
+- Appearance, language, generation defaults, Prompt history, Prompt polish, image reverse, save preferences, storage paths, backup/migration, update controls, and developer mode remain unchanged.
+- `APP_VERSION` remains owned by `App.tsx` for release consistency checks and is passed to the extracted page through a read-only `appVersion` prop.
+- Smoke and UI QA checks now follow the extracted settings module while guarding the real App mount, version mapping, accessibility names, prompt-tool separation, and one-way module boundary.
+- `npm.cmd run verify` passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
+- The `0.5.11` user-facing release EXE passed a 12-second launch smoke: 17,462,272 bytes (16.65 MB), SHA256 `E755CA1B44E3C378C39D767BC1E496CD3BAAB3D5A7AC3A62602DBB925E524121`.
 
 ### v0.5.10 free generation module extraction
 
@@ -782,7 +792,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.10
+- 版本：0.5.11
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

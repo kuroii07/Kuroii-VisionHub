@@ -9,6 +9,7 @@ CORE_FILES = [
     ROOT / "src/ui/GeneratePage.tsx",
     ROOT / "src/ui/ImagePreviewModal.tsx",
     ROOT / "src/ui/InspirationPage.tsx",
+    ROOT / "src/ui/SettingsPage.tsx",
     ROOT / "src/ui/library/LibraryPage.tsx",
     ROOT / "src/ui/library/libraryModel.ts",
     ROOT / "src/ui/styles.css",
@@ -19,6 +20,7 @@ BUTTON_FILES = [
     ROOT / "src/ui/GeneratePage.tsx",
     ROOT / "src/ui/ImagePreviewModal.tsx",
     ROOT / "src/ui/InspirationPage.tsx",
+    ROOT / "src/ui/SettingsPage.tsx",
     ROOT / "src/ui/library/LibraryPage.tsx",
 ]
 ICON_BUTTON_CLASS_RE = re.compile(
@@ -121,19 +123,19 @@ def assert_large_data_surface_guards() -> None:
 
 
 def assert_prompt_tool_settings_are_separated() -> None:
-    app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
-    history_idx = app.find("settings.promptHistory")
-    tool_group_idx = app.find('className="settingsGroupCard promptToolsGroup"')
-    polish_idx = app.find('prompt-polish-tool-title')
-    reverse_idx = app.find('image-reverse-tool-title')
+    settings = (ROOT / "src/ui/SettingsPage.tsx").read_text(encoding="utf-8")
+    history_idx = settings.find("settings.promptHistory")
+    tool_group_idx = settings.find('className="settingsGroupCard promptToolsGroup"')
+    polish_idx = settings.find('prompt-polish-tool-title')
+    reverse_idx = settings.find('image-reverse-tool-title')
     checks = {
         "history section exists": history_idx >= 0,
         "prompt tool group exists": tool_group_idx >= 0,
         "prompt tool group follows history": history_idx >= 0 and tool_group_idx > history_idx,
         "polish card inside tool group": tool_group_idx >= 0 and polish_idx > tool_group_idx,
         "image reverse card inside tool group": tool_group_idx >= 0 and reverse_idx > tool_group_idx,
-        "independent polish credential badge": "prompt-polish:default" in app,
-        "independent image reverse credential badge": "image-reverse:default" in app,
+        "independent polish credential badge": "prompt-polish:default" in settings,
+        "independent image reverse credential badge": "image-reverse:default" in settings,
     }
     missing = [name for name, ok in checks.items() if not ok]
     if missing:
@@ -142,6 +144,7 @@ def assert_prompt_tool_settings_are_separated() -> None:
 
 def assert_i18n_baseline() -> None:
     app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
+    settings = (ROOT / "src/ui/SettingsPage.tsx").read_text(encoding="utf-8")
     i18n = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8").lower()
     checks = {
@@ -150,7 +153,7 @@ def assert_i18n_baseline() -> None:
         "app shell uses translator": "createTranslator(appSettings.language)" in app,
         "navigation uses i18n keys": "t('nav.home')" in app and "t('nav.settings')" in app,
         "workspace home uses translator prop": "function WorkspaceHomePage(props" in app and "t: Translator" in app and "props.t('home.title')" in app,
-        "settings entry uses translator prop": "function SettingsPage(props" in app and "props.t('settings.title')" in app,
+        "settings entry uses translator prop": "export function SettingsPage(props" in settings and "props.t('settings.title')" in settings,
         "inspiration page receives translator": "<InspirationPage" in app and "t={props.t}" in app,
         "inspiration source i18n migrated": "inspiration.source.searchLabel" in i18n and "inspiration.source.editorEditTitle" in i18n,
         "inspiration asset i18n migrated": "inspiration.asset.searchLabel" in i18n and "inspiration.asset.reverseConfigNote" in i18n,

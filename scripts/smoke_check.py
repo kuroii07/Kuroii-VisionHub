@@ -21,6 +21,7 @@ required = [
     "src/ui/FreeGenerationPage.tsx",
     "src/ui/ImagePreviewModal.tsx",
     "src/ui/PromptTemplatesPage.tsx",
+    "src/ui/SettingsPage.tsx",
     "src/ui/generationRecordPresentation.ts",
     "src/ui/library/LibraryPage.tsx",
     "src/ui/library/libraryModel.ts",
@@ -80,6 +81,7 @@ app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
+settings_page_src = (ROOT / "src/ui/SettingsPage.tsx").read_text(encoding="utf-8")
 library_page_src = (ROOT / "src/ui/library/LibraryPage.tsx").read_text(encoding="utf-8")
 library_model_src = (ROOT / "src/ui/library/libraryModel.ts").read_text(encoding="utf-8")
 library_src = f"{library_model_src}\n{library_page_src}"
@@ -172,7 +174,39 @@ assert "import { FreeGenerationPage } from './FreeGenerationPage';" in app_src, 
 assert "<FreeGenerationPage" in app_src, "App shell should render the extracted free generation page"
 assert "function FreeGenerationPage" not in app_src and "export function FreeGenerationPage" in free_generation_src, "Free generation page should live outside App.tsx"
 assert not re.search(r"from\s+['\"].*App['\"]", free_generation_src), "Free generation page must not import App.tsx"
-assert len(app_src.splitlines()) < 9000, "App.tsx should stay below the post-free-generation-extraction size guard"
+assert "import { SettingsPage } from './SettingsPage';" in app_src, "App shell should mount the extracted settings page"
+assert "<SettingsPage" in app_src and "appVersion={APP_VERSION}" in app_src, "App shell should render settings with the shared app version"
+assert "function SettingsPage" not in app_src and "export function SettingsPage" in settings_page_src, "Settings page should live outside App.tsx"
+assert "appVersion: string;" in settings_page_src and "{props.appVersion}" in settings_page_src, "Settings page should receive the App-owned version"
+assert not re.search(r"from\s+['\"].*App['\"]", settings_page_src), "Settings page must not import App.tsx"
+assert len(app_src.splitlines()) < 8000, "App.tsx should stay below the post-settings-extraction size guard"
+settings_mount_src = source_between(app_src, "<SettingsPage", "/>", "Settings page mount")
+for mapping in [
+    "appVersion={APP_VERSION}",
+    "onSettingsChange={updateAppSettings}",
+    "onPromptPolishDraftChange={updatePromptPolishDraft}",
+    "onSavePromptPolishConfig={savePromptPolishConfig}",
+    "onRefreshPromptPolishModels={refreshPromptPolishModels}",
+    "onPromptPolishSecretDraftChange={setPromptPolishSecretDraft}",
+    "onSavePromptPolishSecret={savePromptPolishSecret}",
+    "onImageReverseDraftChange={updateImageReverseDraft}",
+    "onSaveImageReverseConfig={saveImageReverseConfig}",
+    "onRefreshImageReverseModels={refreshImageReverseModels}",
+    "onImageReverseSecretDraftChange={setImageReverseSecretDraft}",
+    "onSaveImageReverseSecret={saveImageReverseSecret}",
+    "onSelectLibraryPath={selectLibraryDirectory}",
+    "onResetLibraryPath={resetLibraryDirectoryOverride}",
+    "onOpenLibraryDirectory={openLibraryDirectory}",
+    "onSelectInspirationPath={selectInspirationDirectory}",
+    "onResetInspirationPath={resetInspirationDirectoryOverride}",
+    "onOpenInspirationDirectory={openInspirationDirectory}",
+    "onOpenAppDataDirectory={openAppDataDirectory}",
+    "onOpenBackupsDirectory={openBackupsDirectory}",
+    "onExportSettingsBackup={exportCurrentSettingsBackup}",
+    "onExportMigrationGuide={exportMigrationGuide}",
+    "onCheckUpdates={checkForUpdates}",
+]:
+    assert mapping in settings_mount_src, f"Settings page App callback mapping missing: {mapping}"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"
@@ -187,6 +221,28 @@ assert "createTranslator(appSettings.language)" in app_src, "App shell should us
 for term in [
     "loadAppSettings",
     "saveAppSettings",
+    "PROMPT_POLISH_SECRET_ID",
+    "IMAGE_PROMPT_REVERSE_SECRET_ID",
+    "function updateAppSettings",
+    "function refreshPromptPolishModels",
+    "function savePromptPolishSecret",
+    "function refreshImageReverseModels",
+    "function saveImageReverseSecret",
+    "function selectLibraryDirectory",
+    "function resetLibraryDirectoryOverride",
+    "function openLibraryDirectory",
+    "function selectInspirationDirectory",
+    "function resetInspirationDirectoryOverride",
+    "function openInspirationDirectory",
+    "function openAppDataDirectory",
+    "function openBackupsDirectory",
+    "function exportCurrentSettingsBackup",
+    "function exportMigrationGuide",
+    "settingsMessage",
+]:
+    assert term in app_src, f"App-owned settings responsibility missing: {term}"
+
+for term in [
     "PRIMARY_ACCENT_OPTIONS",
     "GENERATOR_ACCENT_OPTIONS",
     "DEFAULT_SIZE_OPTIONS",
@@ -194,7 +250,6 @@ for term in [
     "OUTPUT_FORMAT_OPTIONS",
     "PROMPT_HISTORY_LIMIT_OPTIONS",
     "PROMPT_POLISH_ENGINE_OPTIONS",
-    "PROMPT_POLISH_SECRET_ID",
     "PROMPT_POLISH_LANGUAGE_OPTIONS",
     "PROMPT_POLISH_STRENGTH_OPTIONS",
     "PROMPT_POLISH_PROTOCOL_OPTIONS",
@@ -204,7 +259,7 @@ for term in [
     "DEFAULT_REFERENCE_ROLE_OPTIONS",
     "FILE_NAMING_RULE_OPTIONS",
     "settings.startupPage",
-    "settings.refreshIntervalSeconds",
+    "refreshIntervalSeconds",
     "settings.sidebarCollapsed",
     "settings.compactMode",
     "settings.language",
@@ -223,22 +278,48 @@ for term in [
     "settings.defaultPolishMode",
     "settings.promptPolishEngine",
     "settings.promptPolishProviderProfile",
-    "DeepSeek",
     "settings.savePolishConfig",
-    "refreshPromptPolishModels",
     "modelOptions",
     "settings.languageStrengthProtocol",
     "updatePromptPolish",
-    "savePromptPolishSecret",
     "getPolishModesForEngine",
-    "onOpenLibraryDirectory",
-    "onOpenAppDataDirectory",
-    "onOpenBackupsDirectory",
-    "onExportMigrationGuide",
-    "onExportSettingsBackup",
-    "settingsMessage",
+    "onClick={props.onRefreshPromptPolishModels}",
+    "onClick={props.onSavePromptPolishSecret}",
+    "onClick={props.onSavePromptPolishConfig}",
+    "onClick={props.onRefreshImageReverseModels}",
+    "onClick={props.onSaveImageReverseSecret}",
+    "onClick={props.onSaveImageReverseConfig}",
+    "onClick={props.onOpenLibraryDirectory}",
+    "onClick={props.onOpenInspirationDirectory}",
+    "onClick={props.onOpenAppDataDirectory}",
+    "onClick={props.onOpenBackupsDirectory}",
+    "onClick={props.onExportSettingsBackup}",
+    "onClick={props.onExportMigrationGuide}",
+]:
+    assert term in settings_page_src, f"Settings page interaction missing: {term}"
+
+for key in [
+    "settings.startupPage",
+    "settings.sidebarCollapsed",
+    "settings.compactMode",
+    "settings.language",
+    "settings.savePreferences",
+    "settings.homeModules",
+    "settings.defaultMode",
+    "settings.defaultReferenceRole",
+    "settings.defaultProviderModel",
+    "settings.reuseHistoryPolicy",
+    "settings.defaultPolishMode",
+    "settings.promptPolishEngine",
+    "settings.promptPolishProviderProfile",
+    "settings.savePolishConfig",
+    "settings.languageStrengthProtocol",
+]:
+    assert key in settings_page_src, f"Settings page translation usage missing: {key}"
+    assert key in i18n_src, f"Settings translation fixture missing: {key}"
+
+for term in [
     "BatchQueuePage",
-    "batch.title",
     "handleAddCurrentGenerationToBatchQueue",
     "createQueuedGenerationSnapshot",
     "loadBatchQueueStore",
@@ -260,13 +341,17 @@ for term in [
     "batch-variants",
     "visionhub_model_compare",
     "visionhub_queue_retry",
-    "batch.task.execute",
+]:
+    assert term in app_src, f"Batch queue interaction missing: {term}"
+
+for key in [
+    "batch.title",
     "batch.task.execute",
     "batch.task.requeue",
     "batch.task.delete",
     "batch.action.pauseTitle",
 ]:
-    assert term in app_src or term in i18n_src, f"Settings interaction missing: {term}"
+    assert key in i18n_src, f"Batch queue translation fixture missing: {key}"
 
 for term in [
     "libraryGridV2",
