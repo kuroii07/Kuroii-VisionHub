@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.9`
+- Current app version: `0.5.10`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.9` prompt templates module extraction: move the existing `PromptTemplatesPage` out of the oversized app shell while preserving its UI, template storage, interactions, Provider boundaries, and generation behavior.
+- Current focus: `0.5.10` free generation module extraction: move the existing `FreeGenerationPage` out of the oversized app shell while preserving its UI, platform data, local preferences, callback bridge, and imported-result workflow.
 
 ## 2. 后续开发前必读
 
@@ -116,6 +116,7 @@
 | `0.5.7` | Library module extraction | Extract active gallery UI/model and shared leaf helpers from App.tsx without changing UI, data, Provider, or generation behavior | Structural refactor validation |
 | `0.5.8` | Legacy UI cleanup | Remove unmounted predecessor generation/gallery components and guard the active ModernGeneratePage path | Dead-code cleanup validation |
 | `0.5.9` | Prompt templates module extraction | Extract PromptTemplatesPage from App.tsx without changing UI, template storage, Provider, or generation behavior | Structural refactor validation |
+| `0.5.10` | Free generation module extraction | Extract FreeGenerationPage from App.tsx without changing UI, platform data, local preferences, callbacks, or import behavior | Structural refactor validation |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -1017,7 +1018,27 @@ Acceptance:
 - [x] Unified verification passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` built at 17,462,272 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `A36D41FC0CA9BEDC6018C68FD19E1DE4A7270D95478A023DBA309979D8EEEBD2`.
 
-### 5.37 `v1.0 pre` Release and migration preparation
+### 5.37 `0.5.10` free generation module extraction
+
+Status 2026-07-10: completed and release-launch validated. The existing web platform helper has been moved out of the oversized app shell without changing its visible UI, platform list, local preference keys, logo cache, callbacks, or imported-result workflow.
+
+Objectives:
+
+- Move `FreeGenerationPage` into `src/ui/FreeGenerationPage.tsx` by preserving the existing component implementation.
+- Keep prompt adaptation, clipboard/open behavior, imported-result persistence, and inspiration refresh orchestration in `App.tsx`.
+- Preserve platform filters, card/list modes, favorites, status, notes, logo fallback caching, detail drawer, prompt copy/open, and web-result import behavior.
+- Add smoke guards requiring the extracted module, its actual JSX mount, the App callback bridge, and no reverse imports into `App.tsx`.
+
+Acceptance:
+
+- [x] The extracted component matches the backed-up implementation after newline normalization.
+- [x] `src/ui/App.tsx` is reduced below 9,000 lines and no longer defines `FreeGenerationPage`.
+- [x] The free generation module does not import `App.tsx`.
+- [x] Frontend production build, smoke checks, and UI QA pass after extraction.
+- [x] Unified verification passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` built at 17,462,272 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `259DD27C786074195938D826BF6D9BFF0D3DB4DD11BD539EAD035B6DFAF2E010`.
+
+### 5.38 `v1.0 pre` Release and migration preparation
 
 目标：
 

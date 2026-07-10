@@ -18,6 +18,7 @@ required = [
     "index.html",
     "src/main.tsx",
     "src/ui/App.tsx",
+    "src/ui/FreeGenerationPage.tsx",
     "src/ui/ImagePreviewModal.tsx",
     "src/ui/PromptTemplatesPage.tsx",
     "src/ui/generationRecordPresentation.ts",
@@ -76,6 +77,7 @@ for term in ["promptPolish", "textModels", "gpt-4o-mini", "中转站文本模型
     assert term in manifest_src, f"Provider prompt polish capability missing: {term}"
 
 app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
+free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
 library_page_src = (ROOT / "src/ui/library/LibraryPage.tsx").read_text(encoding="utf-8")
@@ -89,7 +91,7 @@ for term in ui_terms:
     assert term in app_src or term in i18n_src, f"UI term missing: {term}"
 assert "AI 图片工作台" in i18n_src, "Chinese brand subtitle should stay localized"
 assert "AI Image Workflow Studio" in i18n_src, "English brand subtitle should stay localized"
-home_page_src = source_between(app_src, "function WorkspaceHomePage", "function FreeGenerationPage", "Workspace home page")
+home_page_src = source_between(app_src, "function WorkspaceHomePage", "function WorkspaceHomeEmpty", "Workspace home page")
 assert "props.homeModules.roadmap" not in home_page_src, "Workspace home should not re-render the removed roadmap module"
 assert "home.route.label" not in home_page_src, "Workspace home should not show the removed roadmap strip"
 
@@ -166,7 +168,11 @@ assert "import { PromptTemplatesPage } from './PromptTemplatesPage';" in app_src
 assert "<PromptTemplatesPage" in app_src, "App shell should render the extracted prompt templates page"
 assert "function PromptTemplatesPage" not in app_src and "export function PromptTemplatesPage" in prompt_templates_src, "Prompt templates page should live outside App.tsx"
 assert not re.search(r"from\s+['\"].*App['\"]", prompt_templates_src), "Prompt templates page must not import App.tsx"
-assert len(app_src.splitlines()) < 9500, "App.tsx should stay below the post-prompt-templates-extraction size guard"
+assert "import { FreeGenerationPage } from './FreeGenerationPage';" in app_src, "App shell should mount the extracted free generation page"
+assert "<FreeGenerationPage" in app_src, "App shell should render the extracted free generation page"
+assert "function FreeGenerationPage" not in app_src and "export function FreeGenerationPage" in free_generation_src, "Free generation page should live outside App.tsx"
+assert not re.search(r"from\s+['\"].*App['\"]", free_generation_src), "Free generation page must not import App.tsx"
+assert len(app_src.splitlines()) < 9000, "App.tsx should stay below the post-free-generation-extraction size guard"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"
@@ -384,14 +390,42 @@ for term in ["loadPromptTemplates", "savePromptTemplates", "createPromptTemplate
 assert "onUseTemplate=" in app_src, "App shell should keep the prompt-template apply callback"
 
 for term in [
-    "FreeGenerationPage",
     "FREE_PLATFORMS",
-    "free.import.tag.freePlatform",
+    "FREE_PLATFORM_PREFS_KEY",
+    "FREE_PLATFORM_LOGO_CACHE_KEY",
+    "toggleFavorite",
+    "startImportWebResult",
     "onCopyPromptAndOpen",
+]:
+    assert term in free_generation_src, f"Extracted free generation interaction missing: {term}"
+for term in [
+    "free.import.tag.freePlatform",
     "openExternalUrl(platform.url)",
     "freePlatformMessage",
 ]:
-    assert term in app_src, f"Free generation studio missing: {term}"
+    assert term in app_src, f"App free generation bridge missing: {term}"
+free_generation_bridge_src = source_between(
+    app_src,
+    "async function copyPromptAndOpenPlatform",
+    "async function refreshModels",
+    "Free generation App bridge",
+)
+for term in [
+    "buildFreePlatformPrompt(platform, prompt)",
+    "navigator.clipboard?.writeText",
+    "openExternalUrl(platform.url)",
+    "importInspirationAsset({",
+    "setIsInspirationPageMounted(true)",
+    "setInspirationImportVersion((version) => version + 1)",
+]:
+    assert term in free_generation_bridge_src, f"Free generation App bridge responsibility missing: {term}"
+for callback in [
+    "onCopyPrompt={copyPromptForPlatform}",
+    "onOpenPlatform={openPlatform}",
+    "onCopyPromptAndOpen={copyPromptAndOpenPlatform}",
+    "onImportWebResult={importWebResultFromPlatform}",
+]:
+    assert callback in app_src, f"App shell free generation callback mapping missing: {callback}"
 
 for term in [
     "ProviderDiagnosticItem",

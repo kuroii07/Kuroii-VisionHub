@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.9` prompt templates module extraction. The prompt library page now lives in a dedicated module while its current UI, interactions, storage, Provider boundaries, and generation behavior remain unchanged.
+Current checkpoint: `0.5.10` free generation module extraction. The web platform helper now lives in a dedicated module while its current UI, platform data, local preferences, callbacks, and import workflow remain unchanged.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,16 @@ Current checkpoint: `0.5.9` prompt templates module extraction. The prompt libra
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.10 free generation module extraction
+
+- App version is now `0.5.10`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Moved the existing `FreeGenerationPage` implementation from the oversized `src/ui/App.tsx` into `src/ui/FreeGenerationPage.tsx` without rewriting its JSX or interaction logic.
+- Platform filters, card/list views, favorites, usage status, notes, logo fallback cache, platform details, prompt copying, web opening, and result import behavior remain unchanged.
+- `App.tsx` continues to own prompt adaptation, clipboard/open callbacks, imported-result persistence, and inspiration refresh while mounting the extracted page through a one-way import.
+- Smoke checks now require the extracted module, its actual JSX mount, the App callback bridge, and the absence of reverse imports into `App.tsx`.
+- `npm.cmd run verify` passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
+- The `0.5.10` user-facing release EXE passed a 12-second launch smoke: 17,462,272 bytes (16.65 MB), SHA256 `259DD27C786074195938D826BF6D9BFF0D3DB4DD11BD539EAD035B6DFAF2E010`.
 
 ### v0.5.9 prompt templates module extraction
 
@@ -772,7 +782,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.9
+- 版本：0.5.10
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。
