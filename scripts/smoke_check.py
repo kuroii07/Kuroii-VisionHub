@@ -18,6 +18,11 @@ required = [
     "index.html",
     "src/main.tsx",
     "src/ui/App.tsx",
+    "src/ui/ImagePreviewModal.tsx",
+    "src/ui/generationRecordPresentation.ts",
+    "src/ui/library/LibraryPage.tsx",
+    "src/ui/library/libraryModel.ts",
+    "src/ui/urlSearch.ts",
     "src/ui/styles.css",
     "src/services/appSettings.ts",
     "src/services/promptAssist.ts",
@@ -70,6 +75,10 @@ for term in ["promptPolish", "textModels", "gpt-4o-mini", "中转站文本模型
     assert term in manifest_src, f"Provider prompt polish capability missing: {term}"
 
 app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
+image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
+library_page_src = (ROOT / "src/ui/library/LibraryPage.tsx").read_text(encoding="utf-8")
+library_model_src = (ROOT / "src/ui/library/libraryModel.ts").read_text(encoding="utf-8")
+library_src = f"{library_model_src}\n{library_page_src}"
 i18n_src = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
 provider_display_src = (ROOT / "src/services/providerDisplay.ts").read_text(encoding="utf-8")
 provider_diagnostics_src = (ROOT / "src/services/providerDiagnostics.ts").read_text(encoding="utf-8")
@@ -144,18 +153,21 @@ generate_run_src = source_between(generate_src, "function runGenerate()", "funct
 assert "activeGeneratingModeRef.current = 'image-to-image';" in generate_run_src, "Image-to-image submit should set active mode before generation starts"
 assert "activeGeneratingModeRef.current = 'text-to-image';" in generate_run_src, "Text-to-image submit should set active mode before generation starts"
 assert "activeGeneratingModeRef.current = null;" in generate_src, "Generate button active mode should reset after generation finishes"
-assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in app_src, "Library initial render should stay small for large local image galleries"
-assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in app_src, "Library thumbnail batches should stay incremental"
-library_perf_block = app_src[app_src.find("const LIBRARY_INITIAL_RENDER_COUNT"):app_src.find("function analyzeRecordColors")]
-assert "requestAnimationFrame" not in library_perf_block, "Library should not auto-expand all records on the next animation frames"
-assert "IntersectionObserver" in app_src and "library.performance.loadMore" in app_src, "Library needs scroll/manual incremental thumbnail loading"
-assert "requestIdleCallback(run" in app_src, "Library color analysis should run during idle time instead of thumbnail load hot path"
+assert "import { CachedLibraryPage } from './library/LibraryPage';" in app_src, "App shell should mount the extracted library module"
+assert "const LibraryPage" not in app_src and "const LibraryPage" in library_page_src, "Library page should live outside App.tsx"
+assert "const ImagePreviewModal" not in app_src and "const ImagePreviewModal" in image_preview_src, "Shared image preview should live outside App.tsx"
+assert not re.search(r"from\s+['\"].*App['\"]", library_src), "Library modules must not import App.tsx"
+assert len(app_src.splitlines()) < 11000, "App.tsx should stay below the post-extraction size guard"
+assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
+assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
+assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"
+assert "requestIdleCallback(run" in library_page_src, "Library color analysis should run during idle time instead of thumbnail load hot path"
 assert "prepare_library_thumbnails" in main_rs and "library-thumbnails-v1" in main_rs, "Library should generate real cached thumbnails in AppData"
 assert "is_allowed_library_image_path(app, &source)" in main_rs, "Thumbnail generation must stay inside the configured library scope"
 assert "file_name.starts_with(\"thumb-\")" in main_rs and "LIBRARY_THUMBNAIL_CACHE_MAX_FILES" in main_rs, "Thumbnail cleanup must be limited to dedicated cache files"
 assert "prepareLibraryThumbnails" in (ROOT / "src/services/desktopApi.ts").read_text(encoding="utf-8"), "Desktop API should expose typed thumbnail preparation"
-assert "props.thumbnailPending ? undefined : props.thumbnail?.thumbnailUrl ?? imageUrl" in app_src, "Gallery cards should wait for cached thumbnails before falling back to original images"
-assert "props.onPreview(props.record, imageUrl)" in app_src, "Gallery preview must continue opening the original image"
+assert "props.thumbnailPending ? undefined : props.thumbnail?.thumbnailUrl ?? imageUrl" in library_page_src, "Gallery cards should wait for cached thumbnails before falling back to original images"
+assert "props.onPreview(props.record, imageUrl)" in library_page_src, "Gallery preview must continue opening the original image"
 assert "createTranslator(appSettings.language)" in app_src, "App shell should use the shared i18n translator"
 for term in [
     "loadAppSettings",
@@ -258,7 +270,7 @@ for term in [
     "copyText",
     "revealGenerationFile",
 ]:
-    assert term in app_src, f"Library v2 interaction missing: {term}"
+    assert term in library_src, f"Library v2 interaction missing: {term}"
 
 generate_src = (ROOT / "src/ui/GeneratePage.tsx").read_text(encoding="utf-8")
 i18n_src = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")

@@ -111,7 +111,7 @@ visionhub-studio/
 │  ├─ providers/           # Provider registry / adapter
 │  ├─ services/            # 桌面 API、配置、模板、设置
 │  ├─ store/               # Zustand store
-│  └─ ui/                  # 页面和样式
+│  └─ ui/                  # 页面、共享预览和独立画廊模块
 ├─ src-tauri/              # Tauri 后端与打包配置
 │  ├─ src/main.rs          # 桌面命令、生成请求、历史记录
 │  ├─ Cargo.toml
@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.6` real gallery thumbnail cache. `0.5.4` history compaction and `0.5.5` incremental gallery rendering remain the performance baseline.
+Current checkpoint: `0.5.7` library module extraction. The `0.5.4` history compaction, `0.5.5` incremental rendering, and `0.5.6` thumbnail cache remain unchanged.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,16 @@ Current checkpoint: `0.5.6` real gallery thumbnail cache. `0.5.4` history compac
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.7 library module extraction
+
+- App version is now `0.5.7`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Extracted the active gallery page, gallery data model, shared image preview, generation-record presentation helpers, and URL search helpers from the oversized `src/ui/App.tsx`.
+- `App.tsx` now mounts the gallery through `src/ui/library/LibraryPage.tsx`; the gallery module receives the Provider display label through a callback and does not import `App.tsx`.
+- Existing gallery JSX, filters, metadata keys, localStorage keys, thumbnail behavior, preview behavior, Provider profiles, generation protocols, user history, gallery files, and credentials remain unchanged.
+- Smoke and UI QA scripts now guard the module boundary, prevent a reverse `App.tsx` import, and keep the gallery performance checks attached to the extracted files.
+- `npm.cmd run verify` passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
+- The `0.5.7` user-facing release EXE passed a 12-second launch smoke: 17,461,760 bytes (16.65 MB), SHA256 `DBFFB8964961684296A99D42238AD92FC70D61D4D0AC9607F13173BA81602CE6`.
 
 ### v0.5.6 real gallery thumbnail cache
 
@@ -742,7 +752,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.6
+- 版本：0.5.7
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

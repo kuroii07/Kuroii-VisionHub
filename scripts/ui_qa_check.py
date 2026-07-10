@@ -7,14 +7,19 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE_FILES = [
     ROOT / "src/ui/App.tsx",
     ROOT / "src/ui/GeneratePage.tsx",
+    ROOT / "src/ui/ImagePreviewModal.tsx",
     ROOT / "src/ui/InspirationPage.tsx",
+    ROOT / "src/ui/library/LibraryPage.tsx",
+    ROOT / "src/ui/library/libraryModel.ts",
     ROOT / "src/ui/styles.css",
     ROOT / "src/i18n/index.ts",
 ]
 BUTTON_FILES = [
     ROOT / "src/ui/App.tsx",
     ROOT / "src/ui/GeneratePage.tsx",
+    ROOT / "src/ui/ImagePreviewModal.tsx",
     ROOT / "src/ui/InspirationPage.tsx",
+    ROOT / "src/ui/library/LibraryPage.tsx",
 ]
 ICON_BUTTON_CLASS_RE = re.compile(
     r'className=\{?`?[^\n>]*(?:iconButton|iconMiniButton|workspaceIconAction|promptAssistClose|dangerMiniButton|imagePreviewNav|imagePreviewClose)[^\n>]*',
@@ -100,10 +105,11 @@ def assert_incremental_rendering_guards() -> None:
 def assert_large_data_surface_guards() -> None:
     app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
     inspiration = (ROOT / "src/ui/InspirationPage.tsx").read_text(encoding="utf-8")
+    library = (ROOT / "src/ui/library/LibraryPage.tsx").read_text(encoding="utf-8")
     checks = {
         "lazy mount gallery and inspiration pages": "isLibraryPageMounted" in app and "isInspirationPageMounted" in app,
-        "library memoized record map": "const libraryRecordMap = useMemo" in app,
-        "library memoized filtering": "const filteredItems = useMemo" in app,
+        "library memoized record map": "const libraryRecordMap = useMemo" in library,
+        "library memoized filtering": "const filteredItems = useMemo" in library,
         "inspiration asset visible slice": "visibleAssets" in inspiration and "setRenderedAssetCount" in inspiration,
         "inspiration excerpt visible slice": "visibleExcerpts" in inspiration and "setRenderedExcerptCount" in inspiration,
         "prompt excerpt search index": "excerptSearchIndex" in inspiration,
@@ -197,8 +203,9 @@ def assert_empty_and_error_states_exist() -> None:
     app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
     generate = (ROOT / "src/ui/GeneratePage.tsx").read_text(encoding="utf-8")
     inspiration = (ROOT / "src/ui/InspirationPage.tsx").read_text(encoding="utf-8")
+    library = (ROOT / "src/ui/library/LibraryPage.tsx").read_text(encoding="utf-8")
     checks = {
-        "library empty state": "libraryEmpty" in app and "library.empty.noImagesTitle" in app and "library.empty.noMatchesTitle" in app,
+        "library empty state": "libraryEmpty" in library and "library.empty.noImagesTitle" in library and "library.empty.noMatchesTitle" in library,
         "batch queue empty state": "batch.emptyQueueTitle" in app and "batch.emptyTitle" in app,
         "provider profile empty state": "provider.noProfilesTitle" in app and "provider.noProfilesHint" in app,
         "generation failure diagnostics": "diagnoseGenerationFailure" in generate,
