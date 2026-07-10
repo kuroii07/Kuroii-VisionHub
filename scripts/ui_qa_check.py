@@ -11,6 +11,7 @@ CORE_FILES = [
     ROOT / "src/ui/ImagePreviewModal.tsx",
     ROOT / "src/ui/InspirationPage.tsx",
     ROOT / "src/ui/SettingsPage.tsx",
+    ROOT / "src/ui/WorkspaceHomePage.tsx",
     ROOT / "src/ui/library/LibraryPage.tsx",
     ROOT / "src/ui/library/libraryModel.ts",
     ROOT / "src/ui/styles.css",
@@ -23,6 +24,7 @@ BUTTON_FILES = [
     ROOT / "src/ui/ImagePreviewModal.tsx",
     ROOT / "src/ui/InspirationPage.tsx",
     ROOT / "src/ui/SettingsPage.tsx",
+    ROOT / "src/ui/WorkspaceHomePage.tsx",
     ROOT / "src/ui/library/LibraryPage.tsx",
 ]
 ICON_BUTTON_CLASS_RE = re.compile(
@@ -147,6 +149,7 @@ def assert_prompt_tool_settings_are_separated() -> None:
 def assert_i18n_baseline() -> None:
     app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
     settings = (ROOT / "src/ui/SettingsPage.tsx").read_text(encoding="utf-8")
+    workspace_home = (ROOT / "src/ui/WorkspaceHomePage.tsx").read_text(encoding="utf-8")
     i18n = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8").lower()
     checks = {
@@ -154,7 +157,7 @@ def assert_i18n_baseline() -> None:
         "typed translator exists": "export type Translator" in i18n and "createTranslator" in i18n,
         "app shell uses translator": "createTranslator(appSettings.language)" in app,
         "navigation uses i18n keys": "t('nav.home')" in app and "t('nav.settings')" in app,
-        "workspace home uses translator prop": "function WorkspaceHomePage(props" in app and "t: Translator" in app and "props.t('home.title')" in app,
+        "workspace home uses translator prop": "export function WorkspaceHomePage(props" in workspace_home and "t: Translator" in workspace_home and "props.t('home.title')" in workspace_home,
         "settings entry uses translator prop": "export function SettingsPage(props" in settings and "props.t('settings.title')" in settings,
         "inspiration page receives translator": "<InspirationPage" in app and "t={props.t}" in app,
         "inspiration source i18n migrated": "inspiration.source.searchLabel" in i18n and "inspiration.source.editorEditTitle" in i18n,

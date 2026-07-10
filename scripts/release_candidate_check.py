@@ -20,6 +20,7 @@ REQUIRED_TRACKED_FILES = {
     "src/ui/FreeGenerationPage.tsx",
     "src/ui/PromptTemplatesPage.tsx",
     "src/ui/SettingsPage.tsx",
+    "src/ui/WorkspaceHomePage.tsx",
     "src/ui/library/LibraryPage.tsx",
 }
 
@@ -88,6 +89,53 @@ def git_ls_files() -> list[str]:
     return [line.strip().replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
 
 
+def run_git_diff(args: list[str], label: str) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            ["git", "diff", *args],
+            cwd=ROOT,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError as exc:
+        fail(f"git diff {label} failed: {exc}")
+
+
+def check_git_snapshot() -> None:
+    staged = run_git_diff(["--cached", "--quiet"], "staged snapshot")
+    unstaged = run_git_diff(["--quiet"], "working tree snapshot")
+    require(staged.returncode in (0, 1), f"git diff staged snapshot failed: {staged.stderr.strip()}")
+    require(unstaged.returncode in (0, 1), f"git diff working tree snapshot failed: {unstaged.stderr.strip()}")
+    require(
+        not (staged.returncode == 1 and unstaged.returncode == 1),
+        "mixed staged and unstaged tracked changes; stage all changes or unstage all changes before release-candidate validation",
+    )
+
+
+def check_git_whitespace() -> None:
+    for label, args in (
+        ("working tree", ["--check"]),
+        ("staged changes", ["--cached", "--check"]),
+    ):
+        result = run_git_diff(args, label)
+        if result.returncode != 0:
+            output = (result.stdout or result.stderr).splitlines()
+            diagnostics: list[str] = []
+            for line in output:
+                match = re.match(
+                    r"^(.+):(\d+): (trailing whitespace\.|space before tab in indent\.|new blank line at EOF\.)$",
+                    line,
+                )
+                if match:
+                    diagnostics.append(f"{match.group(1)}:{match.group(2)}: {match.group(3)}")
+            details = "; ".join(diagnostics)
+            if not details:
+                details = "git reported a whitespace error"
+            fail(f"{label} whitespace check failed: {details}")
+
+
 
 TEXT_SCAN_SUFFIXES = {
     ".css",
@@ -137,6 +185,8 @@ def check_no_tracked_secret_literals(tracked: list[str]) -> None:
 
 def check_repository_hygiene() -> None:
     tracked = git_ls_files()
+    check_git_snapshot()
+    check_git_whitespace()
     missing_tracked = sorted(REQUIRED_TRACKED_FILES.difference(tracked))
     require(not missing_tracked, "required source files are not tracked: " + ", ".join(missing_tracked))
     forbidden_prefixes = (

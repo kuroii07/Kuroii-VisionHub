@@ -33,6 +33,7 @@ required = [
     "src/ui/ImagePreviewModal.tsx",
     "src/ui/PromptTemplatesPage.tsx",
     "src/ui/SettingsPage.tsx",
+    "src/ui/WorkspaceHomePage.tsx",
     "src/ui/generationRecordPresentation.ts",
     "src/ui/library/LibraryPage.tsx",
     "src/ui/library/libraryModel.ts",
@@ -94,6 +95,7 @@ free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encodin
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
 settings_page_src = (ROOT / "src/ui/SettingsPage.tsx").read_text(encoding="utf-8")
+workspace_home_page_src = (ROOT / "src/ui/WorkspaceHomePage.tsx").read_text(encoding="utf-8")
 library_page_src = (ROOT / "src/ui/library/LibraryPage.tsx").read_text(encoding="utf-8")
 library_model_src = (ROOT / "src/ui/library/libraryModel.ts").read_text(encoding="utf-8")
 library_src = f"{library_model_src}\n{library_page_src}"
@@ -105,7 +107,7 @@ for term in ui_terms:
     assert term in app_src or term in i18n_src, f"UI term missing: {term}"
 assert "AI 图片工作台" in i18n_src, "Chinese brand subtitle should stay localized"
 assert "AI Image Workflow Studio" in i18n_src, "English brand subtitle should stay localized"
-home_page_src = source_between(app_src, "function WorkspaceHomePage", "function WorkspaceHomeEmpty", "Workspace home page")
+home_page_src = workspace_home_page_src
 assert "props.homeModules.roadmap" not in home_page_src, "Workspace home should not re-render the removed roadmap module"
 assert "home.route.label" not in home_page_src, "Workspace home should not show the removed roadmap strip"
 
@@ -253,6 +255,53 @@ for mapping in [
     "onDeleteTemplate={requestDeleteBatchQueueTemplate}",
 ]:
     assert mapping in batch_queue_mount_src, f"Batch queue App callback mapping missing: {mapping}"
+assert "import { WorkspaceHomePage } from './WorkspaceHomePage';" in app_src, "App shell should import the extracted workspace home page"
+assert "<WorkspaceHomePage" in app_src, "App shell should render the extracted workspace home page"
+assert "function WorkspaceHomePage" not in app_src and "export function WorkspaceHomePage" in workspace_home_page_src, "Workspace home page should live outside App.tsx"
+assert not re.search(r"from\s+['\"].*App['\"]", workspace_home_page_src), "Workspace home page must not import App.tsx"
+assert len(app_src.splitlines()) < 6900, "App.tsx should stay below the post-workspace-home-extraction size guard"
+workspace_home_mount_src = source_between(app_src, "<WorkspaceHomePage", "/>", "Workspace home page mount")
+for mapping in [
+    "providerName={generationSelectedProvider.name}",
+    "providerProfileName={activeGenerationProfile?.displayName ?? t('home.provider.noSavedProfile')}",
+    "providerModelId={activeGenerationConfig.modelId || selectedModelId || t('home.provider.noModel')}",
+    "selectedProviderId={selectedProviderId}",
+    "isRealProviderReady={isRealProviderReady}",
+    "secretAvailable={generationSecretAvailable}",
+    "desktopRuntime={desktopRuntime}",
+    "localComfyUIDiagnostic={localComfyUIDiagnostic}",
+    "localComfyUIWorkflowStore={localComfyUIWorkflowStore}",
+    "activeComfyUIWorkflowPreset={activeComfyUIWorkflowPreset}",
+    "resultSummary={homeResultSummary}",
+    "recentSuccessRecords={homeRecentSuccessRecords}",
+    "recentFailureRecords={homeRecentFailureRecords}",
+    "favoriteRecords={homeFavoriteRecords}",
+    "referenceRecords={homeReferenceRecords}",
+    "providerNameMap={homeProviderNameMap}",
+    "homeModules={appSettings.homeModules}",
+    "t={t}",
+    "onNavigate={navigateTo}",
+    "onUseRecordAsReference={useRecordAsReference}",
+    "onOpenComfyUIWorkflowManager={() => setIsComfyUIWorkflowManagerOpen(true)}",
+]:
+    assert mapping in workspace_home_mount_src, f"Workspace home App callback mapping missing: {mapping}"
+for term in [
+    "export function WorkspaceHomePage",
+    "mergeWorkspaceRecords",
+    "WorkspaceHomeEmpty",
+    "formatWorkspaceHomeTime",
+    "home.resume.emptyTitle",
+    "home.attention.emptyTitle",
+    "home.materials.emptyTitle",
+    "diagnoseGenerationFailure",
+    "generationStatusClass",
+    "generationStatusLabel",
+    "generationFailureCategoryLabel",
+    "props.onUseRecordAsReference(record)",
+    "props.onNavigate('generate')",
+    "props.onOpenComfyUIWorkflowManager",
+]:
+    assert term in workspace_home_page_src, f"Workspace home interaction missing: {term}"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"

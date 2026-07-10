@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.12`
+- Current app version: `0.5.13`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.12` batch queue module extraction: move the existing `BatchQueuePage` out of the oversized app shell while preserving its visible UI, queue controls, templates, comparisons, task actions, execution bridge, and local persistence behavior.
+- Current focus: `0.5.13` workspace home module extraction: move the existing `WorkspaceHomePage` out of the oversized app shell while preserving its visible UI, Provider/local status summaries, recent work, attention items, material strip, quick actions, and navigation behavior.
 
 ## 2. 后续开发前必读
 
@@ -119,6 +119,7 @@
 | `0.5.10` | Free generation module extraction | Extract FreeGenerationPage from App.tsx without changing UI, platform data, local preferences, callbacks, or import behavior | Structural refactor validation |
 | `0.5.11` | Settings module extraction | Extract SettingsPage from App.tsx while keeping APP_VERSION App-owned and preserving settings UI, credentials, paths, and persistence | Structural refactor validation |
 | ~~`0.5.12`~~ | Batch queue module extraction | Extract BatchQueuePage from App.tsx while preserving queue UI, templates, comparisons, task actions, execution callbacks, and persistence | Completed and release-launch validated |
+| ~~`0.5.13`~~ | Workspace home module extraction | Extract WorkspaceHomePage from App.tsx while preserving status summaries, recent work, attention items, materials, quick actions, and navigation | Completed and release-launch validated |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -1080,7 +1081,27 @@ Acceptance:
 - [x] Unified verification passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` built at 17,462,784 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `E3A0357DE90FFF945200C2DD19F4DFD5DB152D95B6617C9B51F255B8D388807F`.
 
-### 5.40 `v1.0 pre` Release and migration preparation
+### 5.40 `0.5.13` workspace home module extraction
+
+Status 2026-07-10: completed and release-launch validated. The workspace home page has been moved out of the oversized app shell without changing its visible UI, Provider/local status summaries, recent work, attention items, material strip, quick actions, or navigation behavior.
+
+Objectives:
+
+- Move `WorkspaceHomePage` into `src/ui/WorkspaceHomePage.tsx` while preserving the existing JSX and page-specific helper implementation.
+- Keep Provider selection, generation records, library metadata, ComfyUI state, navigation state, and all storage/management behavior owned by `App.tsx`.
+- Give the page only the minimal read-only ComfyUI display shapes it needs, without importing `App.tsx` or moving Provider/local model persistence.
+- Move workspace-home i18n and accessibility QA checks to the extracted module and guard every critical App prop mapping.
+
+Acceptance:
+
+- [x] The extracted component and page-specific helpers match the backed-up implementation after applying only the declared export and `AppPage` type transformations.
+- [x] `src/ui/App.tsx` is reduced below 6,900 lines and no longer defines `WorkspaceHomePage`.
+- [x] The workspace home module does not import `App.tsx`; Provider, record, local model, and navigation state remain App-owned.
+- [x] Frontend production build, smoke checks, and UI QA pass after extraction.
+- [x] Unified verification passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` version `0.5.13` built at 17,462,784 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `18DCBE47816EED340ACCDB1936CA4AE740ABD84B6A77B9AF90080CEAA35E9AFB`.
+
+### 5.41 `v1.0 pre` Release and migration preparation
 
 目标：
 
@@ -1164,4 +1185,4 @@ Acceptance:
 
 ## 9. 下一步推荐
 
-Next formal development should cautiously split the smaller `WorkspaceHomePage` out of the oversized `src/ui/App.tsx` without changing UI or behavior. Keep the higher-risk `ProviderSettingsPage` in App until the lower-dependency modules are complete, then continue optional screenshot-based visual QA and installer install / uninstall QA before any public Release Asset upload.
+Next formal development should reassess the remaining `App.tsx` boundaries before touching the higher-risk `ProviderSettingsPage`. Prefer extracting low-risk shared dialogs or pure presentation helpers first; Provider protocol/configuration UI should only move with strict callback and persistence guards.

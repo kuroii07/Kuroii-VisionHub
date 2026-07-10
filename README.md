@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.12` batch queue module extraction. The batch queue page now lives in a dedicated module while its current UI, queue controls, templates, comparisons, task actions, execution bridge, and persistence behavior remain unchanged.
+Current checkpoint: `0.5.13` workspace home module extraction. The workspace home page now lives in a dedicated module while its current UI, Provider/local status summaries, recent work, attention items, material strip, quick actions, and navigation behavior remain unchanged.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,16 @@ Current checkpoint: `0.5.12` batch queue module extraction. The batch queue page
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.13 workspace home module extraction
+
+- App version is now `0.5.13`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Moved the existing `WorkspaceHomePage` implementation and its page-specific empty-state, record merge, and relative-time helpers from `src/ui/App.tsx` into `src/ui/WorkspaceHomePage.tsx`.
+- Provider readiness, ComfyUI status, recent work, attention items, recent/favorite/reference materials, quick actions, diagnostics, and navigation behavior remain unchanged.
+- `App.tsx` continues to own Provider selection, generation records, library metadata, ComfyUI storage/management, navigation state, and every mutating callback.
+- Smoke and UI QA checks now follow the extracted module and guard the real App mount, all critical prop mappings, i18n usage, accessibility names, and the one-way module boundary.
+- `run_checks.ps1` passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- The `0.5.13` user-facing release EXE passed a 12-second launch smoke: version `0.5.13`, 17,462,784 bytes (16.65 MB), SHA256 `18DCBE47816EED340ACCDB1936CA4AE740ABD84B6A77B9AF90080CEAA35E9AFB`.
 
 ### v0.5.12 batch queue module extraction
 
@@ -802,7 +812,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.12
+- 版本：0.5.13
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。
