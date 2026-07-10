@@ -13,8 +13,10 @@ Copy-Item -LiteralPath $canonicalExe -Destination $friendlyExe -Force
 
 $item = Get-Item -LiteralPath $friendlyExe
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $friendlyExe).Hash
+$sizeMb = [Math]::Round($item.Length / 1MB, 2)
 
 Write-Host "Copied user-facing release exe:" -ForegroundColor Green
 Write-Host "  $friendlyExe"
-Write-Host "  $($item.Length) bytes"
+Write-Host "  Built $($item.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
+Write-Host "  $($item.Length) bytes ($sizeMb MB)"
 Write-Host "  SHA256 $hash"

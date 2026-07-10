@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.5`
+- Current app version: `0.5.6`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.5` gallery thumbnail performance hotfix: keep the 0.5.4 history compaction baseline, then prevent the gallery from auto-rendering and color-analyzing too many full-size local images at once.
+- Current focus: `0.5.6` real gallery thumbnail cache: keep the 0.5.4 history compaction and 0.5.5 incremental-rendering baseline, then render gallery cards from dedicated 512px cached WebP files while preserving original-image preview and fallback.
 
 ## 2. 后续开发前必读
 
@@ -112,6 +112,7 @@
 | `0.5.3` | Kuroii VisionHub naming polish | Localized zh-CN subtitle and user-facing portable exe copy while retaining internal compatibility ids | Naming hotfix validation |
 | `0.5.4` | Startup performance hotfix | Compact oversized history JSON reference images and stop startup base64 hydration for local generated images | Performance hotfix validation |
 | `0.5.5` | Gallery thumbnail performance hotfix | Incremental gallery thumbnail rendering and idle-time color analysis for large local PNG libraries | Performance hotfix validation |
+| `0.5.6` | Real gallery thumbnail cache | Dedicated AppData WebP thumbnail cache, original-image fallback, bounded cleanup, and automated Rust coverage | Performance cache validation |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -933,7 +934,27 @@ Acceptance:
 - [x] `npm.cmd run tauri:build` produces `Kuroii VisionHub_0.5.5` installers and `Kuroii VisionHub.exe`.
 - [x] Release build launch smoke confirms the app stays stable with the existing 94-record / 243MB local image library; 14-second process sample showed CPU 1.19 and working set 71.39MB, while history remained 0.28MB with 0 `data:image` / 0 `;base64,` markers.
 
-### 5.33 `v1.0 pre` Release and migration preparation
+### 5.33 `0.5.6` real gallery thumbnail cache
+
+Status 2026-07-10: completed and live-validated. Gallery cards now request dedicated lossless WebP thumbnails from the Tauri backend instead of decoding full-size local images in WebView2. The `0.5.6` release EXE generated 88 valid cache files totaling 17.99MB; all files were dedicated `thumb-*.webp` entries with a maximum edge of 512px, while `generation-history.json` remained byte-for-byte unchanged.
+
+Objectives:
+
+- Generate up to 512px gallery thumbnails in the dedicated AppData `library-thumbnails-v1` directory.
+- Keep card thumbnails separate from full-screen preview, details, reference reuse, and original image files.
+- Avoid starting original-image decoding while a local thumbnail is being prepared; fall back to the original only if thumbnail preparation or display fails.
+- Invalidate cache entries when source path, size, modified time, or requested maximum edge changes.
+- Limit each request batch, expire old cache files, cap total cache files, and only clean dedicated `thumb-*.webp` files.
+- Cover Provider service behavior and Rust thumbnail behavior through the unified `npm.cmd run verify` command.
+
+Acceptance:
+
+- [x] Frontend build, smoke checks, Provider unit tests, Rust thumbnail unit tests, Cargo check, and diff checks are part of the verification path.
+- [x] Gallery card thumbnails use cached files while preview continues opening the original image.
+- [x] Thumbnail errors do not block the gallery and do not modify or delete original images.
+- [x] Release EXE launch and live AppData cache inspection completed: 88/88 WebP files decoded successfully, 0 oversized files, 0 unexpected cache files, and generation history SHA256 remained unchanged.
+
+### 5.34 `v1.0 pre` Release and migration preparation
 
 目标：
 
@@ -1017,4 +1038,4 @@ Acceptance:
 
 ## 9. 下一步推荐
 
-Next formal development should finish `0.5.5` gallery thumbnail performance validation, then continue optional screenshot-based visual QA and installer install / uninstall QA before any public Release Asset upload.
+Next formal development should cautiously split the gallery module out of the oversized `src/ui/App.tsx` without changing UI or behavior, then continue optional screenshot-based visual QA and installer install / uninstall QA before any public Release Asset upload.

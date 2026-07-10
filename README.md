@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.5` gallery thumbnail performance hotfix. `0.5.4` startup history compaction remains the current data-loading baseline.
+Current checkpoint: `0.5.6` real gallery thumbnail cache. `0.5.4` history compaction and `0.5.5` incremental gallery rendering remain the performance baseline.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,15 @@ Current checkpoint: `0.5.5` gallery thumbnail performance hotfix. `0.5.4` startu
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.6 real gallery thumbnail cache
+
+- App version is now `0.5.6`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Gallery cards now use lossless WebP thumbnails cached under the app's dedicated `library-thumbnails-v1` AppData directory, with a maximum edge of 512px.
+- Cold-cache cards wait for thumbnail preparation instead of starting full-size PNG decoding in WebView2; thumbnail failures still fall back to the original image.
+- Full-screen preview, details, reference reuse, user history, gallery images, Provider profiles, and credentials continue to use their existing data and original-image paths.
+- Cache keys track source path, file size, modified time, and thumbnail size. Cleanup is limited to dedicated `thumb-*.webp` files and never touches gallery originals.
+- The unified verification command now runs Provider unit tests and Rust thumbnail unit tests in addition to smoke, build, Cargo check, and diff checks.
 
 ### v0.5.5 gallery thumbnail performance hotfix
 
@@ -733,7 +742,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.4.1
+- 版本：0.5.6
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

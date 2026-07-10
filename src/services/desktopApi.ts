@@ -36,6 +36,15 @@ interface BackendImportLibraryImagesResult {
   skipped_unsupported?: number;
 }
 
+interface BackendLibraryThumbnailResult {
+  source_path: string;
+  thumbnail_path?: string;
+  width?: number;
+  height?: number;
+  cache_hit: boolean;
+  error?: string;
+}
+
 interface BackendReferenceImage {
   id: string;
   name?: string;
@@ -185,6 +194,16 @@ export interface LibraryDataPayload {
   display_settings?: unknown;
   custom_quick_filters?: unknown;
   updated_at?: string | null;
+}
+
+export interface LibraryThumbnail {
+  sourcePath: string;
+  thumbnailPath?: string;
+  thumbnailUrl?: string;
+  width?: number;
+  height?: number;
+  cacheHit: boolean;
+  error?: string;
 }
 
 export function isTauriRuntime() {
@@ -503,6 +522,25 @@ export async function saveLibraryData(data: LibraryDataPayload) {
   return invoke<LibraryDataPayload>('save_library_data', { data });
 }
 
+export async function prepareLibraryThumbnails(paths: string[], maxEdge = 512): Promise<LibraryThumbnail[]> {
+  if (!isTauriRuntime() || paths.length === 0) return [];
+  const results = await invoke<BackendLibraryThumbnailResult[]>('prepare_library_thumbnails', {
+    request: {
+      paths,
+      max_edge: maxEdge
+    }
+  });
+  return results.map((result) => ({
+    sourcePath: result.source_path,
+    thumbnailPath: result.thumbnail_path,
+    thumbnailUrl: localPathToDisplayUrl(result.thumbnail_path),
+    width: result.width,
+    height: result.height,
+    cacheHit: result.cache_hit,
+    error: result.error
+  }));
+}
+
 export async function saveGenerationRecord(record: ImageGenerationResult, providerName?: string) {
   if (!isTauriRuntime()) return record;
   const hasLocalImages = (record.localImagePaths ?? []).length > 0;
@@ -663,4 +701,3 @@ export async function saveTextFileWithDialog(request: { suggestedFileName: strin
     }
   });
 }
-

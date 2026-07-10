@@ -150,6 +150,12 @@ library_perf_block = app_src[app_src.find("const LIBRARY_INITIAL_RENDER_COUNT"):
 assert "requestAnimationFrame" not in library_perf_block, "Library should not auto-expand all records on the next animation frames"
 assert "IntersectionObserver" in app_src and "library.performance.loadMore" in app_src, "Library needs scroll/manual incremental thumbnail loading"
 assert "requestIdleCallback(run" in app_src, "Library color analysis should run during idle time instead of thumbnail load hot path"
+assert "prepare_library_thumbnails" in main_rs and "library-thumbnails-v1" in main_rs, "Library should generate real cached thumbnails in AppData"
+assert "is_allowed_library_image_path(app, &source)" in main_rs, "Thumbnail generation must stay inside the configured library scope"
+assert "file_name.starts_with(\"thumb-\")" in main_rs and "LIBRARY_THUMBNAIL_CACHE_MAX_FILES" in main_rs, "Thumbnail cleanup must be limited to dedicated cache files"
+assert "prepareLibraryThumbnails" in (ROOT / "src/services/desktopApi.ts").read_text(encoding="utf-8"), "Desktop API should expose typed thumbnail preparation"
+assert "props.thumbnailPending ? undefined : props.thumbnail?.thumbnailUrl ?? imageUrl" in app_src, "Gallery cards should wait for cached thumbnails before falling back to original images"
+assert "props.onPreview(props.record, imageUrl)" in app_src, "Gallery preview must continue opening the original image"
 assert "createTranslator(appSettings.language)" in app_src, "App shell should use the shared i18n translator"
 for term in [
     "loadAppSettings",

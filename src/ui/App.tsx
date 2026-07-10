@@ -70,6 +70,7 @@ import {
   isTauriRuntime,
   listOpenAICompatibleModels,
   openExternalUrl,
+  prepareLibraryThumbnails,
   revealGenerationFile,
   revealInspirationDir,
   revealLibraryDir,
@@ -80,6 +81,7 @@ import {
   saveTextFileWithDialog,
   saveStorageSettings,
   type LibraryDataPayload,
+  type LibraryThumbnail,
   type ComfyUIDiagnosisResult,
   type SdWebUIDiagnosisResult,
   type StorageSettings
@@ -210,7 +212,7 @@ import { StudioSelect } from './StudioSelect';
 import type { ConfirmDialogRequest } from './confirmDialog';
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 
-const APP_VERSION = '0.5.5';
+const APP_VERSION = '0.5.6';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -10117,11 +10119,13 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
   isSelected: boolean;
   viewMode: LibraryViewMode;
   displaySettings: LibraryDisplaySettings;
+  thumbnail?: LibraryThumbnail;
+  thumbnailPending: boolean;
   isCurrentScopeRemovable: boolean;
   onSelect: (recordId: string, event?: MouseEvent<HTMLElement>) => void;
   onOpenContextMenu: (recordId: string, event: MouseEvent<HTMLElement>) => void;
   onPreview: (record: GenerationRecord, imageUrl?: string) => void;
-  onAnalyzeColors: (recordId: string, image: HTMLImageElement) => void;
+  onAnalyzeColors: (recordId: string, image: HTMLImageElement, imageSizeOverride?: string) => void;
   onToggleFavorite: (recordId: string) => void;
   onOpenDetails: (record: GenerationRecord) => void;
   onOpenDiagnostics: (record: GenerationRecord) => void;
@@ -10136,6 +10140,10 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
 }) {
   const ct = (key: string, params?: Record<string, string | number>) => props.t(key as Parameters<Translator>[0], params);
   const imageUrl = props.record.imageUrls[0];
+  const cardImageUrl = props.thumbnailPending ? undefined : props.thumbnail?.thumbnailUrl ?? imageUrl;
+  const originalImageSize = props.thumbnail?.width && props.thumbnail.height
+    ? `${props.thumbnail.width}x${props.thumbnail.height}`
+    : undefined;
   const modeLabel = ct(`library.modeBadge.${(props.record.generationMode ?? 'text-to-image') === 'image-to-image' ? 'image-to-image' : 'text-to-image'}`);
   const referenceCount = props.record.referenceImages?.length ?? 0;
   const referenceSummary = summarizeReferenceSources(props.record.referenceImages, props.t);
@@ -10166,7 +10174,9 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
       >
         <span />
       </button>
-      {imageUrl ? (
+      {props.thumbnailPending ? (
+        <div className="libraryFailedThumb" aria-busy="true">{ct('common.loading')}</div>
+      ) : cardImageUrl ? (
         <button
           className="libraryThumb"
           onClick={(event) => {
@@ -10178,11 +10188,17 @@ const LibraryRecordCard = memo(function LibraryRecordCard(props: {
           }}
         >
           <img
-            src={imageUrl}
+            src={cardImageUrl}
             alt={props.record.prompt}
             loading="lazy"
             decoding="async"
-            onLoad={(event) => props.onAnalyzeColors(props.record.id, event.currentTarget)}
+            onLoad={(event) => props.onAnalyzeColors(props.record.id, event.currentTarget, originalImageSize)}
+            onError={(event) => {
+              if (imageUrl && event.currentTarget.dataset.originalFallback !== 'true') {
+                event.currentTarget.dataset.originalFallback = 'true';
+                event.currentTarget.src = imageUrl;
+              }
+            }}
           />
           <span><Maximize2 size={15} /> {ct('library.action.preview')}</span>
         </button>
@@ -10305,6 +10321,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   const [libraryMeta, setLibraryMeta] = useState<LibraryMetaMap>(() => loadLibraryMeta());
   const [displaySettings, setDisplaySettings] = useState<LibraryDisplaySettings>(() => loadLibraryDisplaySettings());
   const [renderedItemCount, setRenderedItemCount] = useState(LIBRARY_INITIAL_RENDER_COUNT);
+  const [libraryThumbnails, setLibraryThumbnails] = useState<Record<string, LibraryThumbnail>>({});
   const [copyMessage, setCopyMessage] = useState('');
   const [recheckingRecordId, setRecheckingRecordId] = useState<string | null>(null);
   const dockRef = useRef<HTMLElement | null>(null);
@@ -10315,6 +10332,7 @@ const LibraryPage = memo(function LibraryPage(props: {
   const libraryDataHydratedRef = useRef(!isTauriRuntime());
   const pendingImageMetaPatchesRef = useRef<Record<string, Partial<LibraryMetaEntry>>>({});
   const pendingColorAnalysisRef = useRef<Set<string>>(new Set());
+  const thumbnailRequestsInFlightRef = useRef<Set<string>>(new Set());
   const imageMetaFlushRef = useRef<{ timerId: number | null; idleId: number | null }>({ timerId: null, idleId: null });
   useToastMessage(copyMessage, setCopyMessage);
 
@@ -10665,6 +10683,34 @@ const LibraryPage = memo(function LibraryPage(props: {
     () => filteredItems.slice(0, Math.min(renderedItemCount, filteredItems.length)),
     [filteredItems, renderedItemCount]
   );
+  useEffect(() => {
+    if (!props.isActive || !props.isHistoryLoaded || !isTauriRuntime()) return;
+    const paths = Array.from(new Set(
+      visibleLibraryItems
+        .map((record) => record.localImagePaths?.[0]?.trim())
+        .filter((path): path is string => Boolean(path))
+    )).filter((path) => !libraryThumbnails[path] && !thumbnailRequestsInFlightRef.current.has(path));
+    if (!paths.length) return;
+
+    paths.forEach((path) => thumbnailRequestsInFlightRef.current.add(path));
+    void prepareLibraryThumbnails(paths)
+      .then((results) => {
+        if (!results.length) return;
+        setLibraryThumbnails((current) => {
+          const next = { ...current };
+          results.forEach((result) => {
+            next[result.sourcePath] = result;
+          });
+          return next;
+        });
+      })
+      .catch((error) => {
+        console.warn('[VisionHub] library thumbnail preparation failed; original images remain available', error);
+      })
+      .finally(() => {
+        paths.forEach((path) => thumbnailRequestsInFlightRef.current.delete(path));
+      });
+  }, [libraryThumbnails, props.isActive, props.isHistoryLoaded, visibleLibraryItems]);
   const canRenderMoreLibraryItems = renderedItemCount < filteredItems.length;
   const selectedRecord = selectedRecordId ? libraryRecordMap.get(selectedRecordId) ?? null : null;
   const diagnosticRecord = diagnosticRecordId ? libraryRecordMap.get(diagnosticRecordId) ?? null : null;
@@ -10891,11 +10937,11 @@ const LibraryPage = memo(function LibraryPage(props: {
     updateLibraryMeta(recordId, { rating: currentRating === rating ? undefined : rating });
   }
 
-  function runRecordColorAnalysis(recordId: string, image: HTMLImageElement) {
+  function runRecordColorAnalysis(recordId: string, image: HTMLImageElement, imageSizeOverride?: string) {
     const current = libraryMeta[recordId];
     const pending = pendingImageMetaPatchesRef.current[recordId];
     if (pending?.colorPalette?.length || pending?.colorAnalysisFailed) return;
-    const imageSize = image.naturalWidth && image.naturalHeight ? `${image.naturalWidth}x${image.naturalHeight}` : undefined;
+    const imageSize = imageSizeOverride ?? (image.naturalWidth && image.naturalHeight ? `${image.naturalWidth}x${image.naturalHeight}` : undefined);
     const shouldAnalyzeColors = !current?.colorPalette?.length || current.colorPalette.length < 10 || current.colorAnalysisFailed;
     if (!shouldAnalyzeColors) {
       if (imageSize && current?.imageSize !== imageSize) queueImageMetaPatch(recordId, { imageSize });
@@ -10919,12 +10965,12 @@ const LibraryPage = memo(function LibraryPage(props: {
     }
   }
 
-  function analyzeRecordColors(recordId: string, image: HTMLImageElement) {
+  function analyzeRecordColors(recordId: string, image: HTMLImageElement, imageSizeOverride?: string) {
     if (pendingColorAnalysisRef.current.has(recordId)) return;
     pendingColorAnalysisRef.current.add(recordId);
     const run = () => {
       pendingColorAnalysisRef.current.delete(recordId);
-      runRecordColorAnalysis(recordId, image);
+      runRecordColorAnalysis(recordId, image, imageSizeOverride);
     };
     if ('requestIdleCallback' in window) {
       window.requestIdleCallback(run, { timeout: 2200 });
@@ -11939,6 +11985,12 @@ const LibraryPage = memo(function LibraryPage(props: {
                   key={result.id}
                   t={props.t}
                   record={result}
+                  thumbnail={result.localImagePaths?.[0] ? libraryThumbnails[result.localImagePaths[0]] : undefined}
+                  thumbnailPending={Boolean(
+                    isTauriRuntime()
+                    && result.localImagePaths?.[0]
+                    && !libraryThumbnails[result.localImagePaths[0]]
+                  )}
                   providerName={providerNameMap.get(result.providerId) ?? result.providerName ?? result.providerId}
                   meta={libraryMeta[result.id]}
                   isSelected={selectedIdSet.has(result.id)}

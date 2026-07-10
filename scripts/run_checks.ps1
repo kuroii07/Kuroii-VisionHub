@@ -20,9 +20,11 @@ function Invoke-NativeCommand {
 }
 
 Invoke-NativeCommand { python scripts/release_candidate_check.py } "release candidate consistency check"
+Invoke-NativeCommand { npm.cmd run test } "provider unit tests"
 Invoke-NativeCommand { python scripts/smoke_check.py } "smoke check"
 Invoke-NativeCommand { npm.cmd run build } "npm run build"
 Invoke-NativeCommand { cargo.exe check --manifest-path src-tauri/Cargo.toml } "cargo check"
+Invoke-NativeCommand { cargo.exe test --manifest-path src-tauri/Cargo.toml } "cargo unit tests"
 Invoke-NativeCommand { git -c safe.directory="$projectRoot" diff --check } "git diff --check"
 
 Write-Host "VisionHub checks passed." -ForegroundColor Green

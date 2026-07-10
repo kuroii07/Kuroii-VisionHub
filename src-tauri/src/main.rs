@@ -4,16 +4,22 @@ use base64::Engine;
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::PngEncoder;
 use image::codecs::webp::WebPEncoder;
-use image::{ColorType, ImageEncoder};
+use image::{ColorType, GenericImageView, ImageEncoder};
 use keyring::Entry;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::{hash_map::DefaultHasher, HashSet};
 use std::ffi::c_void;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
 const KEYRING_SERVICE: &str = "visionhub-studio";
+const LIBRARY_THUMBNAIL_DEFAULT_MAX_EDGE: u32 = 512;
+const LIBRARY_THUMBNAIL_MAX_BATCH: usize = 96;
+const LIBRARY_THUMBNAIL_CACHE_MAX_FILES: usize = 2048;
+const LIBRARY_THUMBNAIL_CACHE_MAX_AGE: Duration = Duration::from_secs(60 * 60 * 24 * 45);
 
 
 #[cfg(target_os = "windows")]
@@ -308,6 +314,22 @@ struct ImportLibraryImagesResult {
     records: Vec<GenerationRecord>,
     skipped_duplicates: usize,
     skipped_unsupported: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct PrepareLibraryThumbnailsRequest {
+    paths: Vec<String>,
+    max_edge: Option<u32>,
+}
+
+#[derive(Debug, Serialize)]
+struct LibraryThumbnailResult {
+    source_path: String,
+    thumbnail_path: Option<String>,
+    width: Option<u32>,
+    height: Option<u32>,
+    cache_hit: bool,
+    error: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -2726,6 +2748,63 @@ fn save_library_data(
     Ok(data)
 }
 
+#[tauri::command]
+async fn prepare_library_thumbnails(
+    app: tauri::AppHandle,
+    request: PrepareLibraryThumbnailsRequest,
+) -> Result<Vec<LibraryThumbnailResult>, String> {
+    let max_edge = request
+        .max_edge
+        .unwrap_or(LIBRARY_THUMBNAIL_DEFAULT_MAX_EDGE)
+        .clamp(256, 768);
+    let mut seen = HashSet::new();
+    let paths = request
+        .paths
+        .into_iter()
+        .filter_map(|path| {
+            let trimmed = path.trim().to_string();
+            if trimmed.is_empty() || !seen.insert(trimmed.clone()) {
+                None
+            } else {
+                Some(trimmed)
+            }
+        })
+        .take(LIBRARY_THUMBNAIL_MAX_BATCH)
+        .collect::<Vec<_>>();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        if let Err(error) = prune_library_thumbnail_cache(&app, &HashSet::new()) {
+            eprintln!("[VisionHub] thumbnail cache pre-prune skipped: {error}");
+        }
+        let results = paths
+            .into_iter()
+            .map(|source_path| match prepare_library_thumbnail(&app, &source_path, max_edge) {
+                Ok(result) => result,
+                Err(error) => LibraryThumbnailResult {
+                    source_path,
+                    thumbnail_path: None,
+                    width: None,
+                    height: None,
+                    cache_hit: false,
+                    error: Some(error),
+                },
+            })
+            .collect::<Vec<_>>();
+
+        let protected_paths = results
+            .iter()
+            .filter_map(|result| result.thumbnail_path.as_deref())
+            .map(PathBuf::from)
+            .collect::<HashSet<_>>();
+        if let Err(error) = prune_library_thumbnail_cache(&app, &protected_paths) {
+            eprintln!("[VisionHub] thumbnail cache post-prune skipped: {error}");
+        }
+        results
+    })
+    .await
+    .map_err(|error| format!("Thumbnail worker failed: {error}"))
+}
+
 fn read_library_data(app: &tauri::AppHandle) -> Result<LibraryData, String> {
     let path = library_meta_file_path(app)?;
     if !path.exists() {
@@ -4147,6 +4226,13 @@ fn library_meta_file_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir(app)?.join("library-meta.json"))
 }
 
+fn library_thumbnail_cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app_data_dir(app)?.join("library-thumbnails-v1");
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("Cannot create library thumbnail cache: {error}"))?;
+    Ok(dir)
+}
+
 fn inspirations_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app_data_dir(app)?.join("inspirations");
     std::fs::create_dir_all(&dir)
@@ -5300,6 +5386,193 @@ fn is_allowed_library_image_path(app: &tauri::AppHandle, path: &Path) -> Result<
     Ok(false)
 }
 
+fn prepare_library_thumbnail(
+    app: &tauri::AppHandle,
+    source_path: &str,
+    max_edge: u32,
+) -> Result<LibraryThumbnailResult, String> {
+    let source = PathBuf::from(source_path);
+    if !is_allowed_library_image_path(app, &source)? {
+        return Err("Image path is outside the current VisionHub library scope.".to_string());
+    }
+    let canonical = source
+        .canonicalize()
+        .map_err(|error| format!("Cannot resolve library image for thumbnail: {error}"))?;
+    if !is_supported_reference_image_path(&canonical) {
+        return Err("Thumbnail cache currently supports PNG, JPEG, and WebP images.".to_string());
+    }
+
+    let metadata = std::fs::metadata(&canonical)
+        .map_err(|error| format!("Cannot read library image metadata: {error}"))?;
+    let (width, height) = image::image_dimensions(&canonical)
+        .map_err(|error| format!("Cannot read library image dimensions: {error}"))?;
+    let modified_nanos = metadata
+        .modified()
+        .ok()
+        .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+        .map(|value| value.as_nanos())
+        .unwrap_or(0);
+    let file_name = library_thumbnail_cache_file_name(
+        &path_to_user_string(&canonical),
+        metadata.len(),
+        modified_nanos,
+        max_edge,
+    );
+    let cache_path = library_thumbnail_cache_dir(app)?.join(file_name);
+
+    if cache_path.is_file() && image::image_dimensions(&cache_path).is_ok() {
+        return Ok(LibraryThumbnailResult {
+            source_path: source_path.to_string(),
+            thumbnail_path: Some(path_to_user_string(&cache_path)),
+            width: Some(width),
+            height: Some(height),
+            cache_hit: true,
+            error: None,
+        });
+    }
+    if cache_path.exists() {
+        let _ = std::fs::remove_file(&cache_path);
+    }
+
+    create_library_thumbnail_file(&canonical, &cache_path, max_edge)?;
+    Ok(LibraryThumbnailResult {
+        source_path: source_path.to_string(),
+        thumbnail_path: Some(path_to_user_string(&cache_path)),
+        width: Some(width),
+        height: Some(height),
+        cache_hit: false,
+        error: None,
+    })
+}
+
+fn library_thumbnail_cache_file_name(
+    source_path: &str,
+    source_len: u64,
+    modified_nanos: u128,
+    max_edge: u32,
+) -> String {
+    let normalized_path = if cfg!(target_os = "windows") {
+        source_path.to_ascii_lowercase()
+    } else {
+        source_path.to_string()
+    };
+    let mut hasher = DefaultHasher::new();
+    normalized_path.hash(&mut hasher);
+    source_len.hash(&mut hasher);
+    modified_nanos.hash(&mut hasher);
+    max_edge.hash(&mut hasher);
+    format!("thumb-{:016x}-{max_edge}.webp", hasher.finish())
+}
+
+fn create_library_thumbnail_file(
+    source_path: &Path,
+    cache_path: &Path,
+    max_edge: u32,
+) -> Result<(u32, u32), String> {
+    let image = image::open(source_path)
+        .map_err(|error| format!("Cannot decode library image for thumbnail: {error}"))?;
+    let thumbnail = image.thumbnail(max_edge, max_edge);
+    let (thumbnail_width, thumbnail_height) = thumbnail.dimensions();
+    let rgba = thumbnail.to_rgba8();
+    let mut bytes = Vec::new();
+    WebPEncoder::new_lossless(&mut bytes)
+        .encode(
+            &rgba,
+            thumbnail_width,
+            thumbnail_height,
+            ColorType::Rgba8.into(),
+        )
+        .map_err(|error| format!("Cannot encode library thumbnail: {error}"))?;
+
+    let cache_name = cache_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("thumbnail.webp");
+    let temp_path = cache_path.with_file_name(format!(
+        ".{cache_name}.{}.{}.tmp",
+        std::process::id(),
+        chrono_like_timestamp_millis()
+    ));
+    std::fs::write(&temp_path, bytes)
+        .map_err(|error| format!("Cannot write temporary library thumbnail: {error}"))?;
+    match std::fs::rename(&temp_path, cache_path) {
+        Ok(()) => {}
+        Err(error) if cache_path.is_file() => {
+            let _ = std::fs::remove_file(&temp_path);
+            if image::image_dimensions(cache_path).is_err() {
+                return Err(format!("Cannot replace invalid library thumbnail: {error}"));
+            }
+        }
+        Err(error) => {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(format!("Cannot finalize library thumbnail: {error}"));
+        }
+    }
+    Ok((thumbnail_width, thumbnail_height))
+}
+
+fn prune_library_thumbnail_cache(
+    app: &tauri::AppHandle,
+    protected_paths: &HashSet<PathBuf>,
+) -> Result<(), String> {
+    let cache_dir = library_thumbnail_cache_dir(app)?;
+    let now = SystemTime::now();
+    let mut retained = Vec::new();
+    for entry in std::fs::read_dir(&cache_dir)
+        .map_err(|error| format!("Cannot inspect library thumbnail cache: {error}"))?
+    {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => continue,
+        };
+        let path = entry.path();
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        if !path.is_file()
+            || !file_name.starts_with("thumb-")
+            || path.extension().and_then(|value| value.to_str()) != Some("webp")
+        {
+            continue;
+        }
+        let modified = entry
+            .metadata()
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .unwrap_or(UNIX_EPOCH);
+        if !protected_paths.contains(&path)
+            && now
+            .duration_since(modified)
+            .map(|age| age > LIBRARY_THUMBNAIL_CACHE_MAX_AGE)
+            .unwrap_or(false)
+        {
+            let _ = std::fs::remove_file(&path);
+            continue;
+        }
+        retained.push((path, modified));
+    }
+
+    retained.sort_by(|left, right| right.1.cmp(&left.1));
+    let protected_count = retained
+        .iter()
+        .filter(|(path, _)| protected_paths.contains(path))
+        .count()
+        .min(LIBRARY_THUMBNAIL_CACHE_MAX_FILES);
+    let mut remaining_unprotected = LIBRARY_THUMBNAIL_CACHE_MAX_FILES - protected_count;
+    for (path, _) in retained {
+        if protected_paths.contains(&path) {
+            continue;
+        }
+        if remaining_unprotected > 0 {
+            remaining_unprotected -= 1;
+        } else {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+    Ok(())
+}
+
 fn image_mime_from_path(path: &Path) -> &'static str {
     match path
         .extension()
@@ -6367,6 +6640,7 @@ pub fn run() {
             load_generation_history,
             load_library_data,
             save_library_data,
+            prepare_library_thumbnails,
             save_generation_record,
             recheck_background_generation,
             delete_generation_record,
@@ -6404,4 +6678,50 @@ pub fn run() {
 
 fn main() {
     run();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn thumbnail_cache_file_name_tracks_source_version() {
+        let first = library_thumbnail_cache_file_name("D:\\library\\image.png", 100, 10, 512);
+        let same = library_thumbnail_cache_file_name("D:\\library\\image.png", 100, 10, 512);
+        let changed_size = library_thumbnail_cache_file_name("D:\\library\\image.png", 101, 10, 512);
+        let changed_time = library_thumbnail_cache_file_name("D:\\library\\image.png", 100, 11, 512);
+        let changed_edge = library_thumbnail_cache_file_name("D:\\library\\image.png", 100, 10, 480);
+
+        assert_eq!(first, same);
+        assert_ne!(first, changed_size);
+        assert_ne!(first, changed_time);
+        assert_ne!(first, changed_edge);
+        assert!(first.starts_with("thumb-"));
+        assert!(first.ends_with("-512.webp"));
+    }
+
+    #[test]
+    fn thumbnail_writer_preserves_aspect_ratio_and_bounds() {
+        let test_dir = std::env::temp_dir().join(format!(
+            "visionhub-thumbnail-test-{}-{}",
+            std::process::id(),
+            chrono_like_timestamp_millis()
+        ));
+        std::fs::create_dir_all(&test_dir).expect("create thumbnail test directory");
+        let source_path = test_dir.join("source.png");
+        let cache_path = test_dir.join("thumb.webp");
+        image::DynamicImage::new_rgba8(1200, 600)
+            .save_with_format(&source_path, image::ImageFormat::Png)
+            .expect("write thumbnail source");
+
+        let dimensions = create_library_thumbnail_file(&source_path, &cache_path, 512)
+            .expect("create thumbnail");
+        assert_eq!(dimensions, (512, 256));
+        assert_eq!(
+            image::image_dimensions(&cache_path).expect("read thumbnail dimensions"),
+            (512, 256)
+        );
+
+        let _ = std::fs::remove_dir_all(test_dir);
+    }
 }
