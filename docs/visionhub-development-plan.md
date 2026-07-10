@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.8`
+- Current app version: `0.5.9`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.8` legacy UI cleanup: remove the unmounted predecessor `GeneratePage` / `Gallery` implementation and its exclusive helper while preserving the active `ModernGeneratePage`, extracted gallery, UI, Provider, and generation behavior.
+- Current focus: `0.5.9` prompt templates module extraction: move the existing `PromptTemplatesPage` out of the oversized app shell while preserving its UI, template storage, interactions, Provider boundaries, and generation behavior.
 
 ## 2. 后续开发前必读
 
@@ -115,6 +115,7 @@
 | `0.5.6` | Real gallery thumbnail cache | Dedicated AppData WebP thumbnail cache, original-image fallback, bounded cleanup, and automated Rust coverage | Performance cache validation |
 | `0.5.7` | Library module extraction | Extract active gallery UI/model and shared leaf helpers from App.tsx without changing UI, data, Provider, or generation behavior | Structural refactor validation |
 | `0.5.8` | Legacy UI cleanup | Remove unmounted predecessor generation/gallery components and guard the active ModernGeneratePage path | Dead-code cleanup validation |
+| `0.5.9` | Prompt templates module extraction | Extract PromptTemplatesPage from App.tsx without changing UI, template storage, Provider, or generation behavior | Structural refactor validation |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -996,7 +997,27 @@ Acceptance:
 - [x] Unified verification passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` built at 17,461,760 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `EA4869663E216F8868038ED05E2DC30C13898612D6347D24DB8AC1AA083EC49B`.
 
-### 5.36 `v1.0 pre` Release and migration preparation
+### 5.36 `0.5.9` prompt templates module extraction
+
+Status 2026-07-10: completed and release-launch validated. The existing prompt library page has been moved out of the oversized app shell without changing its visible UI, storage service, filters, template editing, Provider boundaries, or generation behavior.
+
+Objectives:
+
+- Move `PromptTemplatesPage` into `src/ui/PromptTemplatesPage.tsx` by preserving the existing component implementation.
+- Keep the inspiration-to-template bridge and shared app orchestration in `App.tsx`.
+- Preserve prompt-template storage, category values, custom-template behavior, favorites, recent usage, variable substitution, clipboard handling, and prompt application.
+- Add smoke guards requiring the extracted module, rejecting reverse imports into `App.tsx`, and keeping the active page mounted.
+
+Acceptance:
+
+- [x] The extracted component matches the backed-up implementation after newline normalization.
+- [x] `src/ui/App.tsx` is reduced below 9,500 lines and no longer defines `PromptTemplatesPage`.
+- [x] The prompt templates module does not import `App.tsx`.
+- [x] Frontend production build, smoke checks, and UI QA pass after extraction.
+- [x] Unified verification passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` built at 17,462,272 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `A36D41FC0CA9BEDC6018C68FD19E1DE4A7270D95478A023DBA309979D8EEEBD2`.
+
+### 5.37 `v1.0 pre` Release and migration preparation
 
 目标：
 

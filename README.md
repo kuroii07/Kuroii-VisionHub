@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.8` legacy UI cleanup. The active `ModernGeneratePage` and extracted gallery module remain unchanged while unmounted predecessor components are removed from the app shell.
+Current checkpoint: `0.5.9` prompt templates module extraction. The prompt library page now lives in a dedicated module while its current UI, interactions, storage, Provider boundaries, and generation behavior remain unchanged.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,16 @@ Current checkpoint: `0.5.8` legacy UI cleanup. The active `ModernGeneratePage` a
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.9 prompt templates module extraction
+
+- App version is now `0.5.9`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Moved the existing `PromptTemplatesPage` implementation from the oversized `src/ui/App.tsx` into `src/ui/PromptTemplatesPage.tsx` without rewriting its JSX or interaction logic.
+- Template categories, filtering, favorites, recent usage, variables, custom-template editing, clipboard behavior, and the existing prompt-template storage service remain unchanged.
+- `App.tsx` continues to own the inspiration-to-template bridge and mounts the extracted page through a one-way import; the new module does not import `App.tsx`.
+- Smoke checks now guard the module boundary and keep the prompt templates V2 behavior checks attached to the extracted source.
+- `npm.cmd run verify` passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
+- The `0.5.9` user-facing release EXE passed a 12-second launch smoke: 17,462,272 bytes (16.65 MB), SHA256 `A36D41FC0CA9BEDC6018C68FD19E1DE4A7270D95478A023DBA309979D8EEEBD2`.
 
 ### v0.5.8 legacy UI cleanup
 
@@ -762,7 +772,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.8
+- 版本：0.5.9
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

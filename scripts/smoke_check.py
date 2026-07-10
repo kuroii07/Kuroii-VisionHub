@@ -19,6 +19,7 @@ required = [
     "src/main.tsx",
     "src/ui/App.tsx",
     "src/ui/ImagePreviewModal.tsx",
+    "src/ui/PromptTemplatesPage.tsx",
     "src/ui/generationRecordPresentation.ts",
     "src/ui/library/LibraryPage.tsx",
     "src/ui/library/libraryModel.ts",
@@ -76,6 +77,7 @@ for term in ["promptPolish", "textModels", "gpt-4o-mini", "中转站文本模型
 
 app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
+prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
 library_page_src = (ROOT / "src/ui/library/LibraryPage.tsx").read_text(encoding="utf-8")
 library_model_src = (ROOT / "src/ui/library/libraryModel.ts").read_text(encoding="utf-8")
 library_src = f"{library_model_src}\n{library_page_src}"
@@ -87,7 +89,7 @@ for term in ui_terms:
     assert term in app_src or term in i18n_src, f"UI term missing: {term}"
 assert "AI 图片工作台" in i18n_src, "Chinese brand subtitle should stay localized"
 assert "AI Image Workflow Studio" in i18n_src, "English brand subtitle should stay localized"
-home_page_src = source_between(app_src, "function WorkspaceHomePage", "function PromptTemplatesPage", "Workspace home page")
+home_page_src = source_between(app_src, "function WorkspaceHomePage", "function FreeGenerationPage", "Workspace home page")
 assert "props.homeModules.roadmap" not in home_page_src, "Workspace home should not re-render the removed roadmap module"
 assert "home.route.label" not in home_page_src, "Workspace home should not show the removed roadmap strip"
 
@@ -160,7 +162,11 @@ assert not re.search(r"from\s+['\"].*App['\"]", library_src), "Library modules m
 assert "function GeneratePage(" not in app_src and "function Gallery(" not in app_src, "Unmounted legacy generation/gallery UI should stay removed"
 assert "generationFailureHint" not in app_src, "Legacy-only generation failure helper should stay removed"
 assert "ModernGeneratePage" in app_src and "export function ModernGeneratePage" in generate_src, "Current generation workspace must stay mounted"
-assert len(app_src.splitlines()) < 10000, "App.tsx should stay below the post-legacy-cleanup size guard"
+assert "import { PromptTemplatesPage } from './PromptTemplatesPage';" in app_src, "App shell should mount the extracted prompt templates page"
+assert "<PromptTemplatesPage" in app_src, "App shell should render the extracted prompt templates page"
+assert "function PromptTemplatesPage" not in app_src and "export function PromptTemplatesPage" in prompt_templates_src, "Prompt templates page should live outside App.tsx"
+assert not re.search(r"from\s+['\"].*App['\"]", prompt_templates_src), "Prompt templates page must not import App.tsx"
+assert len(app_src.splitlines()) < 9500, "App.tsx should stay below the post-prompt-templates-extraction size guard"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"
@@ -364,8 +370,6 @@ for term in [
     assert term in generate_page_src, f"Generate page prompt polish sync missing: {term}"
 
 for term in [
-    "PromptTemplatesPage",
-    "loadPromptTemplates",
     "PROMPT_TEMPLATE_CATEGORIES",
     "templateToolbar",
     "promptLibraryLayout",
@@ -373,9 +377,11 @@ for term in [
     "toggleTemplateFavorite",
     "markTemplateUsed",
     "copyTemplate",
-    "onUseTemplate",
 ]:
-    assert term in app_src, f"Prompt templates v2 interaction missing: {term}"
+    assert term in prompt_templates_src, f"Extracted prompt templates interaction missing: {term}"
+for term in ["loadPromptTemplates", "savePromptTemplates", "createPromptTemplateFromInspiration"]:
+    assert term in app_src, f"App prompt-template bridge missing: {term}"
+assert "onUseTemplate=" in app_src, "App shell should keep the prompt-template apply callback"
 
 for term in [
     "FreeGenerationPage",
@@ -424,7 +430,7 @@ for term in [
     "/v1beta/models/{model}:generateContent",
     "小米 MiMo 官方",
     "图像理解",
-    "providerServiceRegionLabel",
+    "providerServiceRegionText",
     "sortRank",
     "serviceTemplateMeta",
     "本地规划",
