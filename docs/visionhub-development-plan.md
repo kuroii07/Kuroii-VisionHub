@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.7`
+- Current app version: `0.5.8`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.7` library module extraction: reduce the oversized app shell by moving the active gallery UI, gallery model, shared preview, record presentation, and URL helpers into dependency-safe modules without changing the confirmed UI or workflows.
+- Current focus: `0.5.8` legacy UI cleanup: remove the unmounted predecessor `GeneratePage` / `Gallery` implementation and its exclusive helper while preserving the active `ModernGeneratePage`, extracted gallery, UI, Provider, and generation behavior.
 
 ## 2. 后续开发前必读
 
@@ -114,6 +114,7 @@
 | `0.5.5` | Gallery thumbnail performance hotfix | Incremental gallery thumbnail rendering and idle-time color analysis for large local PNG libraries | Performance hotfix validation |
 | `0.5.6` | Real gallery thumbnail cache | Dedicated AppData WebP thumbnail cache, original-image fallback, bounded cleanup, and automated Rust coverage | Performance cache validation |
 | `0.5.7` | Library module extraction | Extract active gallery UI/model and shared leaf helpers from App.tsx without changing UI, data, Provider, or generation behavior | Structural refactor validation |
+| `0.5.8` | Legacy UI cleanup | Remove unmounted predecessor generation/gallery components and guard the active ModernGeneratePage path | Dead-code cleanup validation |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -975,7 +976,27 @@ Acceptance:
 - [x] Unified verification passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` built at 17,461,760 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `DBFFB8964961684296A99D42238AD92FC70D61D4D0AC9607F13173BA81602CE6`.
 
-### 5.35 `v1.0 pre` Release and migration preparation
+### 5.35 `0.5.8` legacy UI cleanup
+
+Status 2026-07-10: completed and release-launch validated. The old `GeneratePage`, nested legacy `Gallery`, and their exclusive `generationFailureHint` helper were confirmed to have no live callers before removal.
+
+Objectives:
+
+- Prove the predecessor `GeneratePage` and `Gallery` are not mounted by the current app.
+- Delete only declarations whose complete incoming reference set belongs to the dead legacy closure.
+- Keep `ModernGeneratePage`, the extracted gallery module, shared preview, Provider paths, generation protocols, and local data untouched.
+- Add source-level smoke guards that require the current generation workspace and reject the removed legacy declarations.
+
+Acceptance:
+
+- [x] The legacy dependency closure contains only `GeneratePage`, `Gallery`, and `generationFailureHint`.
+- [x] Frontend production build, smoke checks, and UI QA pass after deletion.
+- [x] `src/ui/App.tsx` stays below 10,000 lines and continues mounting `ModernGeneratePage`.
+- [x] The production bundle size remains unchanged, confirming this is maintenance cleanup rather than a runtime feature change.
+- [x] Unified verification passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` built at 17,461,760 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `EA4869663E216F8868038ED05E2DC30C13898612D6347D24DB8AC1AA083EC49B`.
+
+### 5.36 `v1.0 pre` Release and migration preparation
 
 目标：
 

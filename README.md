@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.7` library module extraction. The `0.5.4` history compaction, `0.5.5` incremental rendering, and `0.5.6` thumbnail cache remain unchanged.
+Current checkpoint: `0.5.8` legacy UI cleanup. The active `ModernGeneratePage` and extracted gallery module remain unchanged while unmounted predecessor components are removed from the app shell.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,16 @@ Current checkpoint: `0.5.7` library module extraction. The `0.5.4` history compa
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.8 legacy UI cleanup
+
+- App version is now `0.5.8`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Removed the unmounted legacy `GeneratePage`, its nested legacy `Gallery`, and their exclusive `generationFailureHint` helper from `src/ui/App.tsx`.
+- The active `ModernGeneratePage`, extracted gallery module, current UI, Provider configuration, generation protocols, history, gallery files, AppData, profile ids, and credential channels are unchanged.
+- A source-level smoke guard now prevents the legacy components from being restored accidentally while requiring the current generation workspace to remain mounted.
+- The production bundle size stayed unchanged after deletion, confirming the legacy components were already excluded by tree-shaking; this cleanup reduces source maintenance risk rather than changing runtime behavior.
+- `npm.cmd run verify` passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit` reported 0 vulnerabilities.
+- The `0.5.8` user-facing release EXE passed a 12-second launch smoke: 17,461,760 bytes (16.65 MB), SHA256 `EA4869663E216F8868038ED05E2DC30C13898612D6347D24DB8AC1AA083EC49B`.
 
 ### v0.5.7 library module extraction
 
@@ -752,7 +762,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.7
+- 版本：0.5.8
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

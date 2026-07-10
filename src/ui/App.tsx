@@ -18,7 +18,6 @@ import {
   Keyboard,
   Layers,
   ListChecks,
-  Maximize2,
   Monitor,
   Pause,
   Pencil,
@@ -203,12 +202,10 @@ import {
   type ImagePreviewState
 } from './ImagePreviewModal';
 import {
-  formatTime,
   generationFailureCategoryLabel,
   generationStatusClass,
   generationStatusLabel,
   getRecordFileName,
-  getRecordRevealPath,
   getRecordTimeMs,
   isPotentialBackgroundCompletion
 } from './generationRecordPresentation';
@@ -227,7 +224,7 @@ import {
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 import { readUrlSearchParam } from './urlSearch';
 
-const APP_VERSION = '0.5.7';
+const APP_VERSION = '0.5.8';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -890,13 +887,6 @@ function comfyUIWorkflowRunStatus(preset: LocalComfyUIWorkflowPreset, t: Transla
   if (preset.summary.format === 'api') return t('provider.workflow.status.legacyReimport');
   if (preset.summary.format === 'ui') return t('provider.workflow.status.exportApi');
   return t('provider.workflow.status.unavailable');
-}
-
-function generationFailureHint(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>, t?: Translator) {
-  const diagnosis = diagnoseGenerationFailure(record, t);
-  return t
-    ? t('library.copy.inlineFailureHint', { title: diagnosis.title, summary: diagnosis.summary })
-    : `${diagnosis.title}: ${diagnosis.summary}`;
 }
 
 function buildProviderDiagnosticsReport(checks: ProviderDiagnosticItem[], context: ProviderDiagnosticsReportContext, t: Translator) {
@@ -6411,141 +6401,6 @@ function formatWorkspaceHomeTime(value: string, t: Translator) {
   return new Date(time).toLocaleDateString(t('common.locale'), { month: '2-digit', day: '2-digit' });
 }
 
-function GeneratePage(props: {
-  providers: ReturnType<typeof listProviders>;
-  selectedProvider: ReturnType<typeof listProviders>[number];
-  selectedProviderId: string;
-  supportsOpenAICompatible: boolean;
-  isRealProviderReady: boolean;
-  providerConfig: OpenAICompatibleConfig;
-  selectedModelId: string;
-  prompt: string;
-  count: number;
-  size: string;
-  quality: string;
-  isGenerating: boolean;
-  isHistoryLoaded: boolean;
-  results: ReturnType<typeof useStudioStore.getState>['results'];
-  onProviderChange: (providerId: string) => void;
-  onModelChange: (modelId: string) => void;
-  onPromptChange: (prompt: string) => void;
-  onCountChange: (count: number) => void;
-  onSizeChange: (size: string) => void;
-  onQualityChange: (quality: string) => void;
-  onGenerate: () => void;
-  onPreview: (imageUrl: string) => void;
-  t?: Translator;
-}) {
-  const t = props.t ?? createTranslator('zh-CN');
-  const modelOptions = props.supportsOpenAICompatible
-    ? props.providerConfig.modelOptions.length > 0
-      ? props.providerConfig.modelOptions
-      : [props.providerConfig.modelId]
-    : props.selectedProvider.models.map((model) => model.id);
-  const modelValue = props.supportsOpenAICompatible ? props.providerConfig.modelId : props.selectedModelId;
-
-  return (
-    <>
-      <header className="topbar">
-        <div>
-          <p className="eyebrow">{t('generate.legacy.eyebrow')}</p>
-          <h1>{t('generate.legacy.subtitle')}</h1>
-        </div>
-        <div className="statusPills">
-          <span>
-            <ShieldCheck size={15} /> {props.isRealProviderReady ? t('generate.provider.connectionReady') : t('generate.provider.demoMode')}
-          </span>
-          <span>
-            <Gauge size={15} /> {t('generate.legacy.currentProvider', { provider: props.selectedProvider.name })}
-          </span>
-        </div>
-      </header>
-
-      <section className="generationLayout">
-        <div className="composerCard">
-          <div className="cardHeader">
-            <div>
-              <span className="badge">{t('generate.legacy.createBadge')}</span>
-              <h2>{t('generate.legacy.consoleTitle')}</h2>
-            </div>
-            <StudioSelect
-              value={props.selectedProviderId}
-              onChange={props.onProviderChange}
-              options={props.providers.map((provider) => ({ value: provider.id, label: provider.name }))}
-            />
-          </div>
-
-          <textarea
-            className="promptInput"
-            value={props.prompt}
-            onChange={(event) => props.onPromptChange(event.target.value)}
-            placeholder={t('generate.legacy.promptPlaceholder')}
-          />
-
-          <div className="generationControls">
-            <label>
-              {t('generate.legacy.modelLabel')}
-              <StudioSelect
-                value={modelValue}
-                onChange={props.onModelChange}
-                options={modelOptions.map((modelId) => ({ value: modelId, label: modelId }))}
-              />
-            </label>
-            <label>
-              {t('generate.legacy.sizeLabel')}
-              <StudioSelect
-                value={props.size}
-                onChange={props.onSizeChange}
-                options={[
-                  { value: '1024x1024', label: '1:1 · 1024x1024' },
-                  { value: '1024x1536', label: '2:3 · 1024x1536' },
-                  { value: '1536x1024', label: '3:2 · 1536x1024' }
-                ]}
-              />
-            </label>
-            <label>
-              {t('generate.legacy.qualityLabel')}
-              <StudioSelect
-                value={props.quality}
-                onChange={props.onQualityChange}
-                options={[
-                  { value: 'auto', label: 'Auto' },
-                  { value: 'standard', label: 'Standard' },
-                  { value: 'high', label: 'High' }
-                ]}
-              />
-            </label>
-            <label>
-              {t('generate.legacy.countLabel')}
-              <input
-                type="number"
-                min={1}
-                max={4}
-                value={props.count}
-                onChange={(event) => props.onCountChange(Number(event.target.value))}
-              />
-            </label>
-          </div>
-
-          <button className="generateButton" onClick={props.onGenerate} disabled={props.isGenerating || !props.prompt.trim()}>
-            <Sparkles size={18} /> {props.isGenerating ? t('generate.legacy.generating') : props.isRealProviderReady ? t('generate.legacy.generateLive') : t('generate.legacy.generateDemo')}
-          </button>
-          <p className="modeHint">
-            {t('generate.legacy.modeHint')}
-          </p>
-        </div>
-      </section>
-
-      <Gallery
-        providers={props.providers}
-        results={props.results}
-        isHistoryLoaded={props.isHistoryLoaded}
-        onPreview={props.onPreview}
-      />
-    </>
-  );
-}
-
 function FreeGenerationPage(props: {
   t: Translator;
   prompt: string;
@@ -9023,89 +8878,6 @@ function SettingsPage(props: {
         </div> : null}
       </article>
     </section>
-  );
-}
-
-function Gallery(props: {
-  providers: ReturnType<typeof listProviders>;
-  results: ReturnType<typeof useStudioStore.getState>['results'];
-  isHistoryLoaded: boolean;
-  onPreview: (imageUrl: string) => void;
-  t?: Translator;
-}) {
-  const t = props.t ?? createTranslator('zh-CN');
-  const successCount = props.results.filter((result) => result.status === 'succeeded').length;
-  const latest = props.results[0];
-
-  return (
-    <>
-      <section className="galleryHeader">
-        <div>
-          <h2>{t('library.legacy.title')}</h2>
-          <p>
-            {props.isHistoryLoaded ? t('library.legacy.historyLoaded', { count: props.results.length, success: successCount }) : t('library.legacy.loading')}
-            {latest ? t('library.legacy.latest', { time: formatTime(latest.createdAt) }) : ''}
-          </p>
-        </div>
-        <button className="ghostButton" disabled>
-          <Download size={16} /> {t('library.legacy.batchExport')}
-        </button>
-      </section>
-      <section className="gallery">
-        {props.results.length === 0 ? (
-          <div className="emptyState">
-            <Sparkles size={42} />
-            <h3>{t('library.legacy.emptyTitle')}</h3>
-            <p>{t('library.legacy.emptyHint')}</p>
-          </div>
-        ) : (
-          props.results.map((result) => (
-            <article className={`resultCard ${result.status === 'failed' ? 'failed' : ''}`} key={result.id}>
-              {result.imageUrls[0] ? (
-                <button className="imageButton" onClick={() => props.onPreview(result.imageUrls[0])}>
-                  <img src={result.imageUrls[0]} alt={result.prompt} />
-                  <span>
-                    <Maximize2 size={15} /> {t('library.action.preview')}
-                  </span>
-                </button>
-              ) : (
-                <div className="failedPreview">{t('library.action.failedThumb')}</div>
-              )}
-              <div className="resultBody">
-                <div className="resultTitleRow">
-                  <strong>{result.providerName ?? props.providers.find((provider) => provider.id === result.providerId)?.name}</strong>
-                  <span className={`statusBadge ${generationStatusClass(result)}`}>{generationStatusLabel(result, t)}</span>
-                </div>
-                <p title={result.prompt}>{result.prompt}</p>
-                <div className="metadataRow">
-                  <span>{result.modelId}</span>
-                  <span>
-                    <Clock3 size={12} /> {formatTime(result.createdAt)}
-                  </span>
-                  <span>{result.durationMs ?? '-'}ms</span>
-                </div>
-                {result.error ? <small className="errorText">{generationFailureHint(result, t)}</small> : <small>{result.costHint}</small>}
-                <div className="cardActions">
-                  <button className="miniButton" onClick={() => void navigator.clipboard?.writeText(result.prompt)}>
-                    <Copy size={13} /> Prompt
-                  </button>
-                  <button
-                    className="miniButton"
-                    disabled={!getRecordRevealPath(result)}
-                    onClick={() => {
-                      const path = getRecordRevealPath(result);
-                      if (path) void revealGenerationFile(path);
-                    }}
-                  >
-                    <FolderOpen size={13} /> {t('library.action.folder')}
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))
-        )}
-      </section>
-    </>
   );
 }
 
