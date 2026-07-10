@@ -92,6 +92,43 @@ export interface BatchQueueStore {
   updatedAt: string;
 }
 
+export interface BatchQueueRunProgress {
+  queueId: string;
+  initialPendingCount: number;
+  completedThisRun: number;
+  failedThisRun: number;
+  currentTaskId?: string;
+  currentTaskTitle?: string;
+  startedAt: string;
+  pauseRequested?: boolean;
+}
+
+export interface BatchQueueTaskTemplate {
+  kind: BatchQueueTask['kind'];
+  compareGroupId?: string;
+  title: string;
+  snapshot: BatchQueueTask['snapshot'];
+}
+
+export interface BatchQueueCompareGroupTemplate {
+  id: string;
+  prompt: string;
+  profileIds: string[];
+  taskIndexes: number[];
+}
+
+export interface BatchQueueTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  taskTemplates: BatchQueueTaskTemplate[];
+  compareGroups: BatchQueueCompareGroupTemplate[];
+  createdAt: string;
+  updatedAt: string;
+  lastUsedAt?: string;
+  usedCount?: number;
+}
+
 export interface QueuedGenerationExecutionResult {
   task: BatchQueueTask;
   records: GenerationRecord[];

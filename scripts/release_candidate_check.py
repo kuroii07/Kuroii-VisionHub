@@ -14,6 +14,14 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+REQUIRED_TRACKED_FILES = {
+    "src/ui/App.tsx",
+    "src/ui/BatchQueuePage.tsx",
+    "src/ui/FreeGenerationPage.tsx",
+    "src/ui/PromptTemplatesPage.tsx",
+    "src/ui/SettingsPage.tsx",
+    "src/ui/library/LibraryPage.tsx",
+}
 
 
 def read_text(path: str) -> str:
@@ -129,6 +137,8 @@ def check_no_tracked_secret_literals(tracked: list[str]) -> None:
 
 def check_repository_hygiene() -> None:
     tracked = git_ls_files()
+    missing_tracked = sorted(REQUIRED_TRACKED_FILES.difference(tracked))
+    require(not missing_tracked, "required source files are not tracked: " + ", ".join(missing_tracked))
     forbidden_prefixes = (
         "node_modules/",
         "dist/",

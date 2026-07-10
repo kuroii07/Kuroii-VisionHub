@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CORE_FILES = [
     ROOT / "src/ui/App.tsx",
+    ROOT / "src/ui/BatchQueuePage.tsx",
     ROOT / "src/ui/GeneratePage.tsx",
     ROOT / "src/ui/ImagePreviewModal.tsx",
     ROOT / "src/ui/InspirationPage.tsx",
@@ -17,6 +18,7 @@ CORE_FILES = [
 ]
 BUTTON_FILES = [
     ROOT / "src/ui/App.tsx",
+    ROOT / "src/ui/BatchQueuePage.tsx",
     ROOT / "src/ui/GeneratePage.tsx",
     ROOT / "src/ui/ImagePreviewModal.tsx",
     ROOT / "src/ui/InspirationPage.tsx",
@@ -204,12 +206,13 @@ def assert_english_i18n_layout_guards() -> None:
 
 def assert_empty_and_error_states_exist() -> None:
     app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
+    batch_queue = (ROOT / "src/ui/BatchQueuePage.tsx").read_text(encoding="utf-8")
     generate = (ROOT / "src/ui/GeneratePage.tsx").read_text(encoding="utf-8")
     inspiration = (ROOT / "src/ui/InspirationPage.tsx").read_text(encoding="utf-8")
     library = (ROOT / "src/ui/library/LibraryPage.tsx").read_text(encoding="utf-8")
     checks = {
         "library empty state": "libraryEmpty" in library and "library.empty.noImagesTitle" in library and "library.empty.noMatchesTitle" in library,
-        "batch queue empty state": "batch.emptyQueueTitle" in app and "batch.emptyTitle" in app,
+        "batch queue empty state": "batch.emptyQueueTitle" in batch_queue and "batch.emptyTitle" in batch_queue,
         "provider profile empty state": "provider.noProfilesTitle" in app and "provider.noProfilesHint" in app,
         "generation failure diagnostics": "diagnoseGenerationFailure" in generate,
         "inspiration empty state": "empty" in inspiration.lower() and ("inspiration.source.emptyTitle" in inspiration or "inspiration.asset.emptyTitle" in inspiration or "inspiration.excerpt.emptyTitle" in inspiration),

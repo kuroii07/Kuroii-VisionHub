@@ -13,11 +13,22 @@ def source_between(source: str, start_marker: str, end_marker: str, label: str) 
     return source[start:end]
 
 
+def button_source_with_marker(source: str, marker: str, label: str) -> str:
+    matches = [
+        match.group(0)
+        for match in re.finditer(r"<button\b[^>]*>.*?</button>", source, re.DOTALL | re.IGNORECASE)
+        if marker in match.group(0)
+    ]
+    assert len(matches) == 1, f"{label} should resolve to exactly one button, found {len(matches)}"
+    return matches[0]
+
+
 required = [
     "package.json",
     "index.html",
     "src/main.tsx",
     "src/ui/App.tsx",
+    "src/ui/BatchQueuePage.tsx",
     "src/ui/FreeGenerationPage.tsx",
     "src/ui/ImagePreviewModal.tsx",
     "src/ui/PromptTemplatesPage.tsx",
@@ -78,6 +89,7 @@ for term in ["promptPolish", "textModels", "gpt-4o-mini", "中转站文本模型
     assert term in manifest_src, f"Provider prompt polish capability missing: {term}"
 
 app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
+batch_queue_page_src = (ROOT / "src/ui/BatchQueuePage.tsx").read_text(encoding="utf-8")
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
@@ -207,6 +219,40 @@ for mapping in [
     "onCheckUpdates={checkForUpdates}",
 ]:
     assert mapping in settings_mount_src, f"Settings page App callback mapping missing: {mapping}"
+assert re.search(r"import\s*\{[^}]*\bBatchQueuePage\b[^}]*\}\s*from './BatchQueuePage';", app_src), "App shell should import the extracted batch queue page"
+assert "<BatchQueuePage" in app_src, "App shell should render the extracted batch queue page"
+assert "function BatchQueuePage" not in app_src and "export function BatchQueuePage" in batch_queue_page_src, "Batch queue page should live outside App.tsx"
+assert not re.search(r"from\s+['\"].*App['\"]", batch_queue_page_src), "Batch queue page must not import App.tsx"
+assert len(app_src.splitlines()) < 7300, "App.tsx should stay below the post-batch-queue-extraction size guard"
+batch_queue_mount_src = source_between(app_src, "<BatchQueuePage", "/>", "Batch queue page mount")
+for mapping in [
+    "t={t}",
+    "queues={batchQueueStore.queues}",
+    "results={results}",
+    "templates={batchQueueTemplates}",
+    "activeQueueId={activeBatchQueueId}",
+    "executingTaskId={executingBatchTaskId}",
+    "runningQueueId={runningBatchQueueId}",
+    "runProgress={batchQueueRunProgress}",
+    "onPreview={openLibraryPreview}",
+    "onNavigate={navigateTo}",
+    "onSelectQueue={selectActiveBatchQueue}",
+    "onCreateQueue={requestCreateBatchQueue}",
+    "onRenameQueue={requestRenameBatchQueue}",
+    "onDeleteQueue={requestDeleteBatchQueue}",
+    "onRefresh={refreshBatchQueueStore}",
+    "onStartQueue={requestStartBatchQueue}",
+    "onStopQueue={requestStopBatchQueue}",
+    "onExecuteTask={requestExecuteBatchQueueTask}",
+    "onCancelTask={requestCancelBatchQueueTask}",
+    "onRequeueTask={requestRequeueBatchQueueTask}",
+    "onRequeueFailedTasks={requestRequeueFailedBatchQueueTasks}",
+    "onDeleteTask={requestDeleteBatchQueueTask}",
+    "onSaveTemplate={requestSaveActiveBatchQueueTemplate}",
+    "onApplyTemplate={requestApplyBatchQueueTemplate}",
+    "onDeleteTemplate={requestDeleteBatchQueueTemplate}",
+]:
+    assert mapping in batch_queue_mount_src, f"Batch queue App callback mapping missing: {mapping}"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"
@@ -319,12 +365,10 @@ for key in [
     assert key in i18n_src, f"Settings translation fixture missing: {key}"
 
 for term in [
-    "BatchQueuePage",
     "handleAddCurrentGenerationToBatchQueue",
     "createQueuedGenerationSnapshot",
     "loadBatchQueueStore",
     "summarizeBatchQueue",
-    "onRefresh={refreshBatchQueueStore}",
     "executeQueuedGenerationTask",
     "requestExecuteBatchQueueTask",
     "executeBatchQueueTaskNow",
@@ -342,7 +386,34 @@ for term in [
     "visionhub_model_compare",
     "visionhub_queue_retry",
 ]:
-    assert term in app_src, f"Batch queue interaction missing: {term}"
+    assert term in app_src, f"App-owned batch queue responsibility missing: {term}"
+
+for term in [
+    "export function BatchQueuePage",
+    "summarizeBatchQueue",
+    "summarizeBatchVariantGroups",
+    "BatchQueueStat",
+    "batch.emptyQueueTitle",
+    "batch.emptyTitle",
+]:
+    assert term in batch_queue_page_src, f"Batch queue page interaction missing: {term}"
+
+assert "const selectQueue = () => props.onSelectQueue(queue.id);" in batch_queue_page_src, "Batch queue selection callback binding missing"
+for marker, binding, label in [
+    ("batch.queue.renameTitle", "props.onRenameQueue(queue.id);", "Batch queue rename button"),
+    ("batch.queue.deleteTitle", "props.onDeleteQueue(queue.id);", "Batch queue delete button"),
+    ("batch.action.pauseTitle", "isActiveQueueRunning ? props.onStopQueue(activeQueue.id) : props.onStartQueue(activeQueue.id)", "Batch queue run/pause button"),
+    ("batch.action.retryFailedTitle", "props.onRequeueFailedTasks(activeQueue.id)", "Batch queue retry-failed button"),
+    ("batch.action.saveTemplateTitle", "props.onSaveTemplate(activeQueue.id)", "Batch queue save-template button"),
+    ("batch.template.applyTitle", "props.onApplyTemplate(template.id)", "Batch queue apply-template button"),
+    ("batch.template.deleteTitle", "props.onDeleteTemplate(template.id)", "Batch queue delete-template button"),
+    ("batch.task.requeueTitle", "props.onRequeueTask(task.queueId, task.id)", "Batch queue task requeue button"),
+    ("batch.task.executeTitle", "props.onExecuteTask(task.queueId, task.id)", "Batch queue task execute button"),
+    ("batch.task.cancelTitle", "props.onCancelTask(task.queueId, task.id)", "Batch queue task cancel button"),
+    ("batch.task.deleteTitle", "props.onDeleteTask(task.queueId, task.id)", "Batch queue task delete button"),
+]:
+    button_src = button_source_with_marker(batch_queue_page_src, marker, label)
+    assert binding in button_src, f"{label} callback binding missing: {binding}"
 
 for key in [
     "batch.title",
