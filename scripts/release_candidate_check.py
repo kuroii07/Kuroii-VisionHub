@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_TRACKED_FILES = {
     "src/ui/App.tsx",
+    "src/ui/AppDialogs.tsx",
     "src/ui/BatchQueuePage.tsx",
     "src/ui/FreeGenerationPage.tsx",
     "src/ui/PromptTemplatesPage.tsx",

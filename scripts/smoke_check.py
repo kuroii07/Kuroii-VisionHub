@@ -28,6 +28,7 @@ required = [
     "index.html",
     "src/main.tsx",
     "src/ui/App.tsx",
+    "src/ui/AppDialogs.tsx",
     "src/ui/BatchQueuePage.tsx",
     "src/ui/FreeGenerationPage.tsx",
     "src/ui/ImagePreviewModal.tsx",
@@ -90,6 +91,7 @@ for term in ["promptPolish", "textModels", "gpt-4o-mini", "中转站文本模型
     assert term in manifest_src, f"Provider prompt polish capability missing: {term}"
 
 app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
+app_dialogs_src = (ROOT / "src/ui/AppDialogs.tsx").read_text(encoding="utf-8")
 batch_queue_page_src = (ROOT / "src/ui/BatchQueuePage.tsx").read_text(encoding="utf-8")
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
@@ -302,6 +304,98 @@ for term in [
     "props.onOpenComfyUIWorkflowManager",
 ]:
     assert term in workspace_home_page_src, f"Workspace home interaction missing: {term}"
+app_dialogs_import = re.search(r"import\s*\{(?P<bindings>[^}]*)\}\s*from './AppDialogs';", app_src, re.DOTALL)
+assert app_dialogs_import, "App shell should import the extracted app dialogs"
+for binding in [
+    "BatchQueueNameDialog",
+    "ConfirmDialog",
+    "ShortcutsModal",
+    "SystemInfoModal",
+    "UtilityModalShell",
+    "BatchQueueNameDialogState",
+    "ConfirmDialogState",
+]:
+    assert re.search(rf"\b{binding}\b", app_dialogs_import.group("bindings")), f"AppDialogs import missing: {binding}"
+for component in [
+    "BatchQueueNameDialog",
+    "ConfirmDialog",
+    "UtilityModalShell",
+    "ShortcutsModal",
+    "SystemInfoModal",
+]:
+    assert f"function {component}" not in app_src, f"{component} should not remain defined in App.tsx"
+    assert f"export function {component}" in app_dialogs_src, f"{component} should be exported from AppDialogs.tsx"
+for type_name in ["ConfirmDialogState", "BatchQueueNameDialogState"]:
+    assert not re.search(rf"^type {type_name}\b", app_src, re.MULTILINE), f"{type_name} should not remain defined in App.tsx"
+    assert re.search(rf"^export type {type_name}\b", app_dialogs_src, re.MULTILINE), f"{type_name} should be exported from AppDialogs.tsx"
+assert "const shortcutGroups" not in app_src and "const shortcutGroups" in app_dialogs_src, "Shortcut presentation definitions should live with the shortcuts modal"
+assert not re.search(r"from\s+['\"].*App['\"]", app_dialogs_src), "App dialogs must not import App.tsx"
+assert "appVersion: string;" in app_dialogs_src and "value: props.appVersion" in app_dialogs_src, "System info should receive the App-owned version"
+assert len(app_src.splitlines()) < 6650, "App.tsx should stay below the post-app-dialogs-extraction size guard"
+shortcuts_mount_src = source_between(app_src, "<ShortcutsModal", "/>", "Shortcuts modal mount")
+for mapping in [
+    "t={t}",
+    "onClose={() => setActiveUtilityModal(null)}",
+]:
+    assert mapping in shortcuts_mount_src, f"Shortcuts modal App prop mapping missing: {mapping}"
+for shortcut_entry in [
+    "{ keys: ['Ctrl', '/'], actionKey: 'shortcut.action.openShortcuts' }",
+    "{ keys: ['Ctrl', 'B'], actionKey: 'shortcut.action.toggleSidebar' }",
+    "{ keys: ['Ctrl', ','], actionKey: 'shortcut.action.openProviders' }",
+    "{ keys: ['Ctrl', '0'], actionKey: 'shortcut.action.openHome' }",
+    "{ keys: ['Ctrl', '1'], actionKey: 'shortcut.action.openGenerate' }",
+    "{ keys: ['Ctrl', '2'], actionKey: 'shortcut.action.openFree' }",
+    "{ keys: ['Ctrl', '3'], actionKey: 'shortcut.action.openLibrary' }",
+    "{ keys: ['Ctrl', '4'], actionKey: 'shortcut.action.openInspiration' }",
+    "{ keys: ['Ctrl', '5'], actionKey: 'shortcut.action.openTemplates' }",
+    "{ keys: ['Ctrl', '6'], actionKey: 'shortcut.action.openProviders' }",
+    "{ keys: ['Ctrl', '7'], actionKey: 'shortcut.action.openSettings' }",
+    "{ keys: ['Ctrl', '8'], actionKey: 'shortcut.action.openBatch' }",
+    "{ keys: ['Esc'], actionKey: 'shortcut.action.closeOverlay' }",
+    "{ keys: ['Ctrl', 'Enter'], actionKey: 'shortcut.action.submitGenerate' }",
+    "{ keys: ['Ctrl', 'K'], actionKey: 'shortcut.action.focusPrompt' }",
+    "{ keys: ['Ctrl', 'Shift', 'R'], actionKey: 'shortcut.action.addReference' }",
+    "{ keys: ['Ctrl', 'Shift', 'C'], actionKey: 'shortcut.action.clearReferences' }",
+    "{ keys: ['Ctrl', 'Shift', 'I'], actionKey: 'shortcut.action.modeImage' }",
+    "{ keys: ['Ctrl', 'Shift', 'T'], actionKey: 'shortcut.action.modeText' }",
+    "{ keys: ['Ctrl', 'F'], actionKey: 'shortcut.action.focusLibrarySearch' }",
+    "{ keys: ['Ctrl', 'O'], actionKey: 'shortcut.action.openLibraryDir' }",
+    "{ keys: ['Ctrl', 'E'], actionKey: 'shortcut.action.exportSettingsBackup' }",
+    "{ keys: ['+'], actionKey: 'shortcut.action.zoomInPreview' }",
+    "{ keys: ['-'], actionKey: 'shortcut.action.zoomOutPreview' }",
+    "{ keys: ['0'], actionKey: 'shortcut.action.resetPreview' }",
+    "{ keys: ['Space'], actionKey: 'shortcut.action.resetPreview' }",
+    "{ keys: ['Esc'], actionKey: 'shortcut.action.closePreview' }",
+]:
+    assert shortcut_entry in app_dialogs_src, f"Shortcuts modal entry missing: {shortcut_entry}"
+system_info_mount_src = source_between(app_src, "<SystemInfoModal", "/>", "System info modal mount")
+for mapping in [
+    "t={t}",
+    "appVersion={APP_VERSION}",
+    "desktopRuntime={desktopRuntime}",
+    "storageSettings={storageSettings}",
+    "settingsMessage={settingsMessage}",
+    "onClose={() => setActiveUtilityModal(null)}",
+]:
+    assert mapping in system_info_mount_src, f"System info modal App prop mapping missing: {mapping}"
+confirm_dialog_mount_src = source_between(app_src, "<ConfirmDialog\n", "/>", "Confirm dialog mount")
+for mapping in [
+    "t={t}",
+    "request={confirmDialog}",
+    "onClose={() => setConfirmDialog(null)}",
+    "onError={(error) => setConfirmDialog((current) => (current ? { ...current, error } : current))}",
+]:
+    assert mapping in confirm_dialog_mount_src, f"Confirm dialog App prop mapping missing: {mapping}"
+batch_name_mount_src = source_between(app_src, "<BatchQueueNameDialog\n", "/>", "Batch queue name dialog mount")
+for mapping in [
+    "t={t}",
+    "mode={batchQueueNameDialog.mode}",
+    "defaultName={batchQueueNameDialog.defaultName}",
+    "onClose={() => setBatchQueueNameDialog(null)}",
+    "onSubmit={(name) => submitBatchQueueName(batchQueueNameDialog, name)}",
+]:
+    assert mapping in batch_name_mount_src, f"Batch queue name dialog App prop mapping missing: {mapping}"
+assert "function ComfyUIWorkflowManagerModal" in app_src and "<UtilityModalShell" in app_src, "ComfyUI workflow manager should remain App-owned while reusing the extracted shell"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"

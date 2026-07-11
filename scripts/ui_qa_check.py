@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CORE_FILES = [
     ROOT / "src/ui/App.tsx",
+    ROOT / "src/ui/AppDialogs.tsx",
     ROOT / "src/ui/BatchQueuePage.tsx",
     ROOT / "src/ui/GeneratePage.tsx",
     ROOT / "src/ui/ImagePreviewModal.tsx",
@@ -19,6 +20,7 @@ CORE_FILES = [
 ]
 BUTTON_FILES = [
     ROOT / "src/ui/App.tsx",
+    ROOT / "src/ui/AppDialogs.tsx",
     ROOT / "src/ui/BatchQueuePage.tsx",
     ROOT / "src/ui/GeneratePage.tsx",
     ROOT / "src/ui/ImagePreviewModal.tsx",
