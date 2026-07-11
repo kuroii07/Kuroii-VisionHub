@@ -30,6 +30,7 @@ required = [
     "src/ui/App.tsx",
     "src/ui/AppDialogs.tsx",
     "src/ui/BatchQueuePage.tsx",
+    "src/ui/CachedInspirationPage.tsx",
     "src/ui/FreeGenerationPage.tsx",
     "src/ui/ImagePreviewModal.tsx",
     "src/ui/PromptTemplatesPage.tsx",
@@ -93,6 +94,7 @@ for term in ["promptPolish", "textModels", "gpt-4o-mini", "中转站文本模型
 app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
 app_dialogs_src = (ROOT / "src/ui/AppDialogs.tsx").read_text(encoding="utf-8")
 batch_queue_page_src = (ROOT / "src/ui/BatchQueuePage.tsx").read_text(encoding="utf-8")
+cached_inspiration_page_src = (ROOT / "src/ui/CachedInspirationPage.tsx").read_text(encoding="utf-8")
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
@@ -331,7 +333,51 @@ for type_name in ["ConfirmDialogState", "BatchQueueNameDialogState"]:
 assert "const shortcutGroups" not in app_src and "const shortcutGroups" in app_dialogs_src, "Shortcut presentation definitions should live with the shortcuts modal"
 assert not re.search(r"from\s+['\"].*App['\"]", app_dialogs_src), "App dialogs must not import App.tsx"
 assert "appVersion: string;" in app_dialogs_src and "value: props.appVersion" in app_dialogs_src, "System info should receive the App-owned version"
-assert len(app_src.splitlines()) < 6650, "App.tsx should stay below the post-app-dialogs-extraction size guard"
+assert "import { CachedInspirationPage } from './CachedInspirationPage';" in app_src, "App shell should import the cached inspiration page"
+assert "<CachedInspirationPage" in app_src, "App shell should mount the cached inspiration page"
+assert "const CachedInspirationPage" not in app_src, "Cached inspiration page should not remain defined in App.tsx"
+assert "export const CachedInspirationPage = memo(" in cached_inspiration_page_src, "Cached inspiration page should be exported from its own module"
+assert not re.search(r"from\s+['\"].*App['\"]", cached_inspiration_page_src), "Cached inspiration page must not import App.tsx"
+assert "props.isActive && props.preview" in cached_inspiration_page_src, "Inspiration preview should only render while its cached page is active"
+assert len(app_src.splitlines()) < 6600, "App.tsx should stay below the post-cached-inspiration-extraction size guard"
+cached_inspiration_mount_src = source_between(app_src, "<CachedInspirationPage", "/>", "Cached inspiration page mount")
+for mapping in [
+    "t={t}",
+    "isActive={page === 'inspiration'}",
+    "preview={inspirationPreview}",
+    "onPreview={openInspirationPreview}",
+    "onNavigatePreview={navigateInspirationPreview}",
+    "onClosePreview={closeInspirationPreview}",
+    "onUseAsReference={useInspirationAssetAsReference}",
+    "onUsePrompt={useInspirationPrompt}",
+    "onCreateTemplate={createPromptTemplateFromInspiration}",
+    "onRequestConfirm={requestConfirm}",
+    "imagePromptReverse={appSettings.imagePromptReverse}",
+    "imagePromptReverseSecretAvailable={imageReverseSecretAvailable}",
+    "onOpenSettings={() => navigateTo('settings')}",
+    "importVersion={inspirationImportVersion}",
+]:
+    assert mapping in cached_inspiration_mount_src, f"Cached inspiration App prop mapping missing: {mapping}"
+for mapping in [
+    "t={props.t}",
+    "onPreview={props.onPreview}",
+    "onUseAsReference={props.onUseAsReference}",
+    "onUsePrompt={props.onUsePrompt}",
+    "onCreateTemplate={props.onCreateTemplate}",
+    "onRequestConfirm={props.onRequestConfirm}",
+    "imagePromptReverse={props.imagePromptReverse}",
+    "imagePromptReverseSecretAvailable={props.imagePromptReverseSecretAvailable}",
+    "onOpenSettings={props.onOpenSettings}",
+    "importVersion={props.importVersion}",
+]:
+    assert mapping in cached_inspiration_page_src, f"Cached inspiration page prop forwarding missing: {mapping}"
+for mapping in [
+    "imageUrl={props.preview.imageUrl}",
+    "navigation={props.preview.navigation}",
+    "onNavigate={props.onNavigatePreview}",
+    "onClose={props.onClosePreview}",
+]:
+    assert mapping in cached_inspiration_page_src, f"Cached inspiration preview mapping missing: {mapping}"
 shortcuts_mount_src = source_between(app_src, "<ShortcutsModal", "/>", "Shortcuts modal mount")
 for mapping in [
     "t={t}",

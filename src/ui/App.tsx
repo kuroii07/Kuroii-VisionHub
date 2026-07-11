@@ -27,7 +27,7 @@ import {
   Wand2,
   X
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type {
   BatchGenerationQueue,
   BatchQueueCompareGroupTemplate,
@@ -171,9 +171,9 @@ import {
   type ConfirmDialogState
 } from './AppDialogs';
 import { BatchQueuePage } from './BatchQueuePage';
+import { CachedInspirationPage } from './CachedInspirationPage';
 import { ModernGeneratePage } from './GeneratePage';
 import { FreeGenerationPage } from './FreeGenerationPage';
-import { InspirationPage } from './InspirationPage';
 import { PromptTemplatesPage } from './PromptTemplatesPage';
 import { SettingsPage } from './SettingsPage';
 import { WorkspaceHomePage } from './WorkspaceHomePage';
@@ -200,7 +200,7 @@ import {
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 import { readUrlSearchParam } from './urlSearch';
 
-const APP_VERSION = '0.5.14';
+const APP_VERSION = '0.5.15';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -6355,52 +6355,6 @@ function ComfyUIWorkflowManagerModal(props: {
     </UtilityModalShell>
   );
 }
-
-const CachedInspirationPage = memo(function CachedInspirationPage(props: {
-  t: Translator;
-  isActive: boolean;
-  preview: ImagePreviewState | null;
-  onPreview: (imageUrl: string, navigation?: ImagePreviewNavigation) => void;
-  onNavigatePreview: (item: ImagePreviewNavigationItem) => void;
-  onClosePreview: () => void;
-  onUseAsReference: (asset: InspirationAsset) => void;
-  onUsePrompt: (prompt: string) => void;
-  onCreateTemplate: (title: string, prompt: string, tags: string[]) => string;
-  onRequestConfirm: (request: ConfirmDialogRequest) => void;
-  imagePromptReverse: ImagePromptReverseSettings;
-  imagePromptReverseSecretAvailable: boolean;
-  onOpenSettings: () => void;
-  importVersion: number;
-}) {
-  return (
-    <section
-      className={`workspacePage cachedInspirationPage ${props.isActive ? 'active' : 'inactive'}`}
-      aria-hidden={!props.isActive}
-    >
-      <InspirationPage
-        t={props.t}
-        onPreview={props.onPreview}
-        onUseAsReference={props.onUseAsReference}
-        onUsePrompt={props.onUsePrompt}
-        onCreateTemplate={props.onCreateTemplate}
-        onRequestConfirm={props.onRequestConfirm}
-        imagePromptReverse={props.imagePromptReverse}
-        imagePromptReverseSecretAvailable={props.imagePromptReverseSecretAvailable}
-        onOpenSettings={props.onOpenSettings}
-        importVersion={props.importVersion}
-      />
-      {props.isActive && props.preview ? (
-        <ImagePreviewModal
-          t={props.t}
-          imageUrl={props.preview.imageUrl}
-          navigation={props.preview.navigation}
-          onNavigate={props.onNavigatePreview}
-          onClose={props.onClosePreview}
-        />
-      ) : null}
-    </section>
-  );
-});
 
 function providerServiceTemplateDisplayName(template: ProviderServiceTemplate, t?: Translator) {
   return t

@@ -8,6 +8,7 @@ CORE_FILES = [
     ROOT / "src/ui/App.tsx",
     ROOT / "src/ui/AppDialogs.tsx",
     ROOT / "src/ui/BatchQueuePage.tsx",
+    ROOT / "src/ui/CachedInspirationPage.tsx",
     ROOT / "src/ui/GeneratePage.tsx",
     ROOT / "src/ui/ImagePreviewModal.tsx",
     ROOT / "src/ui/InspirationPage.tsx",
@@ -150,6 +151,7 @@ def assert_prompt_tool_settings_are_separated() -> None:
 
 def assert_i18n_baseline() -> None:
     app = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
+    cached_inspiration = (ROOT / "src/ui/CachedInspirationPage.tsx").read_text(encoding="utf-8")
     settings = (ROOT / "src/ui/SettingsPage.tsx").read_text(encoding="utf-8")
     workspace_home = (ROOT / "src/ui/WorkspaceHomePage.tsx").read_text(encoding="utf-8")
     i18n = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
@@ -161,7 +163,7 @@ def assert_i18n_baseline() -> None:
         "navigation uses i18n keys": "t('nav.home')" in app and "t('nav.settings')" in app,
         "workspace home uses translator prop": "export function WorkspaceHomePage(props" in workspace_home and "t: Translator" in workspace_home and "props.t('home.title')" in workspace_home,
         "settings entry uses translator prop": "export function SettingsPage(props" in settings and "props.t('settings.title')" in settings,
-        "inspiration page receives translator": "<InspirationPage" in app and "t={props.t}" in app,
+        "inspiration page receives translator": "<CachedInspirationPage" in app and "<InspirationPage" in cached_inspiration and "t={props.t}" in cached_inspiration,
         "inspiration source i18n migrated": "inspiration.source.searchLabel" in i18n and "inspiration.source.editorEditTitle" in i18n,
         "inspiration asset i18n migrated": "inspiration.asset.searchLabel" in i18n and "inspiration.asset.reverseConfigNote" in i18n,
         "user content translation boundary documented": "user prompts" in readme or "?? prompt" in readme,
