@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.17` ComfyUI workflow service extraction. Workflow types, API/UI JSON parsing, legacy-store normalization, preset creation, file reading, and local storage helpers now live in a dedicated service while App retains UI state, import/clear messaging, Provider diagnostics, generation, and all mutating orchestration.
+Current checkpoint: `0.5.18` Provider presentation module extraction. Service metadata, readiness results, the capability matrix, and diagnostics result lists now live in a read-only presentation module while App retains toggles, actions, Provider calculations, configuration, credentials, generation, and persistence.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,16 @@ Current checkpoint: `0.5.17` ComfyUI workflow service extraction. Workflow types
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.18 Provider presentation module extraction
+
+- App version is now `0.5.18`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Moved the existing service-template metadata, readiness result panel, Provider capability matrix, and diagnostics result summary/list from `src/ui/App.tsx` into `src/ui/ProviderPresentation.tsx`.
+- `App.tsx` continues to own panel toggles, template selection, capability/readiness calculations, self-check, report copy, real test generation, API Key handling, model refresh/probe, local-provider state, Provider protocol behavior, and persistence.
+- No CSS or i18n resources changed; the extracted components reuse the existing class names, translation keys, rows, items, selected template id, and callback mappings.
+- Smoke, UI QA, and release-candidate checks now guard the one-way presentation boundary, exact mounts, App-owned actions, forbidden sensitive responsibilities, and reduced App size.
+- `run_checks.ps1` passed with 43/43 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- The `0.5.18` user-facing release EXE passed a 12-second launch smoke: file/product version `0.5.18`, 17,463,296 bytes (16.65 MB), SHA256 `5E738C27C5A04921960534CABBA8EAAC6923508D3DEA5C526C3771466C7CA704`.
 
 ### v0.5.17 ComfyUI workflow service extraction
 
@@ -851,7 +861,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.17
+- 版本：0.5.18
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

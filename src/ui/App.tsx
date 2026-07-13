@@ -187,6 +187,12 @@ import {
 import { ModernGeneratePage } from './GeneratePage';
 import { FreeGenerationPage } from './FreeGenerationPage';
 import { PromptTemplatesPage } from './PromptTemplatesPage';
+import {
+  ProviderCapabilityMatrixPanel,
+  ProviderDiagnosticsResults,
+  ProviderReadinessPanel,
+  ServiceTemplateMeta
+} from './ProviderPresentation';
 import { SettingsPage } from './SettingsPage';
 import { WorkspaceHomePage } from './WorkspaceHomePage';
 import {
@@ -212,7 +218,7 @@ import {
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 import { readUrlSearchParam } from './urlSearch';
 
-const APP_VERSION = '0.5.17';
+const APP_VERSION = '0.5.18';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -5172,12 +5178,6 @@ function ProviderSettingsPage(props: {
   diagnostics: ProviderDiagnosticItem[];
 }) {
   const [profileFilter, setProfileFilter] = useState<ProviderProfileFilter>('all');
-  const diagnosticsSummary = {
-    pass: props.diagnostics.filter((item) => item.level === 'pass').length,
-    warn: props.diagnostics.filter((item) => item.level === 'warn').length,
-    fail: props.diagnostics.filter((item) => item.level === 'fail').length,
-    info: props.diagnostics.filter((item) => item.level === 'info').length
-  };
   const pt = (key: string, params?: Record<string, string | number>) => props.t(key as Parameters<Translator>[0], params);
   const providerPlatformLabel = (platformType: ProviderPlatformType) => pt(`provider.platform.${platformType}.label`);
   const providerPlatformDescription = (platformType: ProviderPlatformType) => pt(`provider.platform.${platformType}.description`);
@@ -5186,16 +5186,8 @@ function ProviderSettingsPage(props: {
   const providerServiceTemplateNotes = (template: ProviderServiceTemplate) => template.notes.map((_, index) => pt(`provider.service.${template.id}.note${index}`));
   const providerServiceStatusText = (status: ProviderServiceTemplateStatus) => pt(`provider.status.${status}`);
   const providerServiceRegionText = (region: ProviderServiceRegion) => pt(`provider.region.${region}`);
-  const providerMatrixStatusText = (status: ProviderMatrixStatus) => pt(`provider.matrixStatus.${status}`);
   const providerMatrixColumnLabel = (key: ProviderMatrixCapabilityKey) => pt(`provider.matrixColumn.${key}`);
-  const providerMatrixStatusDetail = (template: ProviderServiceTemplate, status: ProviderMatrixStatus, columnLabel: string) => {
-    if (status === 'unsupported') {
-      return pt('provider.matrixDetail.unsupported', { service: providerServiceTemplateLabel(template), column: columnLabel });
-    }
-    return pt(`provider.matrixDetail.${status}`, { column: columnLabel });
-  };
   const providerProfileFilterLabel = (filter: ProviderProfileFilter) => pt(`provider.profileFilter.${filter}`);
-  const providerDiagnosticLevelLabel = (level: ProviderDiagnosticLevel) => pt(`provider.diagnosticLevel.${level}`);
   const selectedPlatform = props.platformOptions.find((item) => item.id === props.selectedPlatformType);
   const serviceTemplateOptions = props.serviceTemplates.map((template) => ({
     value: template.id,
@@ -5833,77 +5825,16 @@ function ProviderSettingsPage(props: {
                 </button>
               </div>
               {isReadinessOpen ? (
-                <section className="providerReadinessPanel" aria-label={pt('provider.readiness.aria')}>
-                  <div className="providerReadinessHeader">
-                    <strong>{pt('provider.readiness.title')}</strong>
-                    <small>{pt('provider.readiness.hint')}</small>
-                  </div>
-                  <div className="providerReadinessGrid">
-                    {offlineDiagnosticItems.map((item) => (
-                      <div className={`providerReadinessItem ${item.level}`} key={item.id}>
-                        <div>
-                          <div className="providerReadinessTitleRow">
-                            <strong>{item.label}</strong>
-                            <span>{providerDiagnosticLevelLabel(item.level)}</span>
-                          </div>
-                          <small>{item.detail}</small>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+                <ProviderReadinessPanel items={offlineDiagnosticItems} t={props.t} />
               ) : null}
               {isCapabilityMatrixOpen ? (
-                <section className="providerCapabilityPanel expanded" aria-label={pt('provider.matrix.aria')}>
-                  <div className="providerCapabilityHeaderBlock">
-                    <div>
-                      <strong>{pt('provider.matrix.title')}</strong>
-                      <small>{pt('provider.matrix.hint')}</small>
-                    </div>
-                    <div className="providerCapabilityLegend" aria-label={pt('provider.matrix.legendAria')}>
-                      {(['live', 'configurable', 'partial', 'planned', 'localPlan'] as ProviderMatrixStatus[]).map((status) => (
-                        <span className={`capabilityCell ${status}`} key={status}>{providerMatrixStatusText(status)}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="providerCapabilityScroll">
-                    <div className="providerCapabilityGrid providerCapabilityTableHead" role="row">
-                      <span>{pt('provider.serviceTemplate')}</span>
-                      {localizedMatrixColumns.map((column) => (
-                        <span key={column.key}>{column.label}</span>
-                      ))}
-                    </div>
-                    <div className="providerCapabilityRows">
-                      {providerMatrixRows.map((row) => (
-                        <button
-                          type="button"
-                          className={`providerCapabilityGrid providerCapabilityRow ${row.template.id === props.selectedServiceTemplate.id ? 'selected' : ''}`}
-                          key={row.template.id}
-                          onClick={() => props.onServiceTemplateChange(row.template.id)}
-                          aria-pressed={row.template.id === props.selectedServiceTemplate.id}
-                        >
-                          <span className="providerCapabilityService">
-                            <strong>{providerServiceTemplateLabel(row.template)}</strong>
-                            <small>{providerServiceRegionText(row.template.region)} · {providerServiceStatusText(row.template.status)} · {providerServiceTemplateDescription(row.template)}</small>
-                          </span>
-                          {row.cells.map((cell, index) => (
-                            <span
-                              className={`capabilityCell ${cell.status}`}
-                              title={pt('provider.matrix.cellTitle', {
-                                column: localizedMatrixColumns[index].label,
-                                status: providerMatrixStatusText(cell.status),
-                                detail: providerMatrixStatusDetail(row.template, cell.status, localizedMatrixColumns[index].label)
-                              })}
-                              key={localizedMatrixColumns[index].key}
-                            >
-                              {providerMatrixStatusText(cell.status)}
-                            </span>
-                          ))}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </section>
+                <ProviderCapabilityMatrixPanel
+                  columns={localizedMatrixColumns}
+                  rows={providerMatrixRows}
+                  selectedTemplateId={props.selectedServiceTemplate.id}
+                  onSelectTemplate={props.onServiceTemplateChange}
+                  t={props.t}
+                />
               ) : null}
               <div className="providerDiagnostics">
                 <div className="diagnosticsHeader">
@@ -5934,29 +5865,7 @@ function ProviderSettingsPage(props: {
                     </button>
                   </div>
                 </div>
-                {props.diagnostics.length === 0 ? (
-                  <p className="diagnosticsHint">{pt('provider.diagnostics.emptyHint')}</p>
-                ) : (
-                  <>
-                    <div className="diagnosticsSummary">
-                      <span className="pass">{pt('provider.summary.pass', { count: diagnosticsSummary.pass })}</span>
-                      <span className="warn">{pt('provider.summary.warn', { count: diagnosticsSummary.warn })}</span>
-                      <span className="fail">{pt('provider.summary.fail', { count: diagnosticsSummary.fail })}</span>
-                      <span className="info">{pt('provider.summary.info', { count: diagnosticsSummary.info })}</span>
-                    </div>
-                    <div className="diagnosticsList">
-                      {props.diagnostics.map((item) => (
-                        <div className={`diagnosticsItem ${item.level}`} key={item.id}>
-                          <span>{providerDiagnosticLevelLabel(item.level)}</span>
-                          <div>
-                            <strong>{item.label}</strong>
-                            <small>{item.detail}</small>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
+                <ProviderDiagnosticsResults diagnostics={props.diagnostics} t={props.t} />
               </div>
             </div>
           ) : (
@@ -5974,26 +5883,6 @@ function ProviderSettingsPage(props: {
         </div>
       </section>
     </>
-  );
-}
-
-function ServiceTemplateMeta({ template, t }: { template: ProviderServiceTemplate; t: Translator }) {
-  const pt = (key: string, params?: Record<string, string | number>) => t(key as Parameters<Translator>[0], params);
-  const capabilityLabels = [
-    template.supportsTextToImage ? pt('provider.capability.textToImage') : null,
-    template.supportsImageToImage ? pt('provider.capability.imageToImage') : null,
-    template.requiresPolling ? pt('provider.capability.asyncTask') : null
-  ].filter(Boolean);
-
-  return (
-    <div className="serviceTemplateMeta" aria-label={pt('provider.meta.aria')}>
-      <span className={`regionBadge ${template.region}`}>{pt(`provider.region.${template.region}`)}</span>
-      <span className={`serviceStatusBadge ${template.status}`}>{pt(`provider.status.${template.status}`)}</span>
-      {capabilityLabels.length ? <span>{capabilityLabels.join(' / ')}</span> : <span>{pt('provider.capability.unknown')}</span>}
-      {template.apiDocUrl ? (
-        <span className="serviceDocHint">{pt('provider.meta.docRegistered')}</span>
-      ) : null}
-    </div>
   );
 }
 

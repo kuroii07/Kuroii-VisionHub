@@ -35,6 +35,7 @@ required = [
     "src/ui/FreeGenerationPage.tsx",
     "src/ui/ImagePreviewModal.tsx",
     "src/ui/PromptTemplatesPage.tsx",
+    "src/ui/ProviderPresentation.tsx",
     "src/ui/SettingsPage.tsx",
     "src/ui/WorkspaceHomePage.tsx",
     "src/ui/generationRecordPresentation.ts",
@@ -103,6 +104,7 @@ comfy_workflow_service_src = (ROOT / "src/services/comfyUIWorkflow.ts").read_tex
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
+provider_presentation_src = (ROOT / "src/ui/ProviderPresentation.tsx").read_text(encoding="utf-8")
 settings_page_src = (ROOT / "src/ui/SettingsPage.tsx").read_text(encoding="utf-8")
 workspace_home_page_src = (ROOT / "src/ui/WorkspaceHomePage.tsx").read_text(encoding="utf-8")
 library_page_src = (ROOT / "src/ui/library/LibraryPage.tsx").read_text(encoding="utf-8")
@@ -528,6 +530,56 @@ for presentation_term in [
 ]:
     assert presentation_term in comfy_workflow_presentation_src, f"ComfyUI workflow presentation behavior missing: {presentation_term}"
 assert len(app_src.splitlines()) < 6250, "App.tsx should stay below the post-ComfyUI-workflow-service extraction size guard"
+provider_presentation_import = re.search(
+    r"import\s*\{(?P<bindings>.*?)\}\s*from\s*['\"]\./ProviderPresentation['\"]",
+    app_src,
+    re.DOTALL,
+)
+assert provider_presentation_import, "App should import the extracted Provider presentation module"
+for component in [
+    "ProviderCapabilityMatrixPanel",
+    "ProviderDiagnosticsResults",
+    "ProviderReadinessPanel",
+    "ServiceTemplateMeta",
+]:
+    assert re.search(rf"\b{component}\b", provider_presentation_import.group("bindings")), f"Provider presentation import missing: {component}"
+    assert f"function {component}" not in app_src, f"{component} should not remain defined in App.tsx"
+    assert f"export function {component}" in provider_presentation_src, f"{component} should be exported from ProviderPresentation.tsx"
+assert not re.search(r"from\s+['\"].*App['\"]", provider_presentation_src), "Provider presentation must not import App.tsx"
+assert app_src.count("<ServiceTemplateMeta ") == 4, "Provider service metadata should keep all four existing mounts"
+assert "<ProviderReadinessPanel items={offlineDiagnosticItems} t={props.t} />" in app_src, "Provider readiness rendering should use the extracted panel"
+provider_matrix_mount_src = source_between(app_src, "<ProviderCapabilityMatrixPanel", "/>", "Provider capability matrix mount")
+for mapping in [
+    "columns={localizedMatrixColumns}",
+    "rows={providerMatrixRows}",
+    "selectedTemplateId={props.selectedServiceTemplate.id}",
+    "onSelectTemplate={props.onServiceTemplateChange}",
+    "t={props.t}",
+]:
+    assert mapping in provider_matrix_mount_src, f"Provider capability matrix mapping missing: {mapping}"
+assert "<ProviderDiagnosticsResults diagnostics={props.diagnostics} t={props.t} />" in app_src, "Provider diagnostics results should use the extracted renderer"
+for responsibility in [
+    "getProviderCapabilityMatrixCell(template, column, props.providers)",
+    "buildProviderReadinessItems({",
+    "buildOfflineDiagnosticSummary({",
+    "onClick={props.onRunTestGeneration}",
+    "onClick={props.onCopyDiagnostics}",
+    "void props.onRunDiagnostics();",
+]:
+    assert responsibility in app_src, f"Provider behavior should remain App-owned: {responsibility}"
+for forbidden in [
+    "secretDraft",
+    "onSaveSecret",
+    "onRefreshModels",
+    "onRunDiagnostics",
+    "onCopyDiagnostics",
+    "onRunTestGeneration",
+    "saveProviderConfig",
+    "providerProfileSecretId",
+    "localStorage",
+]:
+    assert forbidden not in provider_presentation_src, f"Provider presentation must stay read-only: {forbidden}"
+assert len(app_src.splitlines()) < 6075, "App.tsx should stay below the post-Provider-presentation extraction size guard"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"
@@ -912,7 +964,7 @@ for term in [
     "LoadImage",
     "referenceCount",
 ]:
-    assert term in app_src or term in i18n_src, f"Provider diagnostics v1 missing: {term}"
+    assert term in app_src or term in provider_presentation_src or term in i18n_src, f"Provider diagnostics v1 missing: {term}"
 brand_block = app_src.split('<div className="brand">', 1)[1].split('<nav className="navGroup">', 1)[0]
 footer_block = app_src.split('<div className="sidebarFooter">', 1)[1].split("</div>", 1)[0]
 assert "sidebarCollapseButton" not in brand_block, "Collapse button should not stay in the brand area"

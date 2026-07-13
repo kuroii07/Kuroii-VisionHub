@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.17`
+- Current app version: `0.5.18`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.17` ComfyUI workflow service extraction: move workflow types, parsing, legacy normalization, preset creation, file reading, and local storage helpers out of the oversized app shell while preserving existing data formats and App-owned UI orchestration, Provider behavior, and generation.
+- Current focus: `0.5.18` Provider presentation module extraction: move only service metadata, readiness results, the capability matrix, and diagnostics result rendering out of the oversized app shell while preserving App-owned toggles, actions, calculations, configuration, credentials, Provider behavior, generation, and persistence.
 
 ## 2. 后续开发前必读
 
@@ -124,6 +124,7 @@
 | ~~`0.5.15`~~ | Cached inspiration page module extraction | Extract the lazy-mounted Inspiration Center wrapper and preview composition while preserving App-owned state, callbacks, navigation, and persistence | Completed and release-launch validated |
 | ~~`0.5.16`~~ | ComfyUI workflow presentation module extraction | Extract workflow display types, labels, summary UI, and manager modal while preserving App-owned parsing, mutations, Provider behavior, generation, and persistence | Completed and release-launch validated |
 | ~~`0.5.17`~~ | ComfyUI workflow service extraction | Extract workflow types, parsing, legacy normalization, file reading, and storage helpers while preserving App-owned UI orchestration, Provider behavior, and generation | Completed and release-launch validated |
+| ~~`0.5.18`~~ | Provider presentation module extraction | Extract read-only Provider metadata, readiness, capability-matrix, and diagnostics-result rendering while preserving App-owned actions, calculations, configuration, credentials, Provider behavior, generation, and persistence | Completed and release-launch validated |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -1185,7 +1186,27 @@ Acceptance:
 - [x] Unified verification passed with 43/43 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities after the safe-storage cleanup fix.
 - [x] `Kuroii VisionHub.exe` version `0.5.17` built from the final source at 17,462,272 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `2FEBC00498A9546C8FEAE3331614CBE014A63BB36CAC00343FAB2DCD2F897857`.
 
-### 5.45 `v1.0 pre` Release and migration preparation
+### 5.45 `0.5.18` Provider presentation module extraction
+
+Status 2026-07-13: completed and release-launch validated. Provider service metadata, readiness results, the capability matrix, and diagnostics result rendering have been moved out of the oversized app shell without changing CSS, translations, visible structure, Provider calculations, configuration, credentials, protocol behavior, generation, or persistence.
+
+Objectives:
+
+- Move `ServiceTemplateMeta`, the readiness result panel, the capability matrix panel, and diagnostics result summary/list into `src/ui/ProviderPresentation.tsx`.
+- Keep expansion toggles, template selection state, capability-matrix calculation, readiness/diagnostic calculation, self-check, report copy, real test generation, API Key handling, model refresh/probe, local-provider state, Provider protocol logic, and persistence owned by `App.tsx`.
+- Preserve the existing class names, translation keys, row/item data, selected template mapping, and service-template selection callback.
+- Extend smoke, UI QA, and release-candidate checks for the exact mounts, one-way dependency boundary, App-owned behavior, forbidden sensitive responsibilities, and reduced App size.
+
+Acceptance:
+
+- [x] The extracted JSX mechanically preserves the existing structure, classes, labels, values, selection callback, and diagnostics content.
+- [x] `src/ui/App.tsx` is reduced below 6,075 lines and no longer defines the four extracted presentation components.
+- [x] `src/ui/ProviderPresentation.tsx` does not import `App.tsx` and contains no API Key, model refresh, diagnostic action, test-generation, configuration-save, secret-id, or localStorage responsibility.
+- [x] Smoke checks, UI QA, and the production frontend build pass after extraction.
+- [x] Unified verification passed with 43/43 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` version `0.5.18` built from the final source at 17,463,296 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `5E738C27C5A04921960534CABBA8EAAC6923508D3DEA5C526C3771466C7CA704`.
+
+### 5.46 `v1.0 pre` Release and migration preparation
 
 目标：
 

@@ -22,6 +22,7 @@ REQUIRED_TRACKED_FILES = {
     "src/ui/ComfyUIWorkflowPresentation.tsx",
     "src/ui/FreeGenerationPage.tsx",
     "src/ui/PromptTemplatesPage.tsx",
+    "src/ui/ProviderPresentation.tsx",
     "src/ui/SettingsPage.tsx",
     "src/ui/WorkspaceHomePage.tsx",
     "src/ui/library/LibraryPage.tsx",
