@@ -31,6 +31,7 @@ required = [
     "src/ui/AppDialogs.tsx",
     "src/ui/BatchQueuePage.tsx",
     "src/ui/CachedInspirationPage.tsx",
+    "src/ui/ComfyUIWorkflowPresentation.tsx",
     "src/ui/FreeGenerationPage.tsx",
     "src/ui/ImagePreviewModal.tsx",
     "src/ui/PromptTemplatesPage.tsx",
@@ -95,6 +96,7 @@ app_src = (ROOT / "src/ui/App.tsx").read_text(encoding="utf-8")
 app_dialogs_src = (ROOT / "src/ui/AppDialogs.tsx").read_text(encoding="utf-8")
 batch_queue_page_src = (ROOT / "src/ui/BatchQueuePage.tsx").read_text(encoding="utf-8")
 cached_inspiration_page_src = (ROOT / "src/ui/CachedInspirationPage.tsx").read_text(encoding="utf-8")
+comfy_workflow_presentation_src = (ROOT / "src/ui/ComfyUIWorkflowPresentation.tsx").read_text(encoding="utf-8")
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
@@ -313,7 +315,6 @@ for binding in [
     "ConfirmDialog",
     "ShortcutsModal",
     "SystemInfoModal",
-    "UtilityModalShell",
     "BatchQueueNameDialogState",
     "ConfirmDialogState",
 ]:
@@ -333,6 +334,7 @@ for type_name in ["ConfirmDialogState", "BatchQueueNameDialogState"]:
 assert "const shortcutGroups" not in app_src and "const shortcutGroups" in app_dialogs_src, "Shortcut presentation definitions should live with the shortcuts modal"
 assert not re.search(r"from\s+['\"].*App['\"]", app_dialogs_src), "App dialogs must not import App.tsx"
 assert "appVersion: string;" in app_dialogs_src and "value: props.appVersion" in app_dialogs_src, "System info should receive the App-owned version"
+assert "import { UtilityModalShell } from './AppDialogs';" in comfy_workflow_presentation_src, "ComfyUI workflow presentation should reuse the shared utility modal shell"
 assert "import { CachedInspirationPage } from './CachedInspirationPage';" in app_src, "App shell should import the cached inspiration page"
 assert "<CachedInspirationPage" in app_src, "App shell should mount the cached inspiration page"
 assert "const CachedInspirationPage" not in app_src, "Cached inspiration page should not remain defined in App.tsx"
@@ -441,7 +443,70 @@ for mapping in [
     "onSubmit={(name) => submitBatchQueueName(batchQueueNameDialog, name)}",
 ]:
     assert mapping in batch_name_mount_src, f"Batch queue name dialog App prop mapping missing: {mapping}"
-assert "function ComfyUIWorkflowManagerModal" in app_src and "<UtilityModalShell" in app_src, "ComfyUI workflow manager should remain App-owned while reusing the extracted shell"
+comfy_workflow_import = re.search(r"import\s*\{(?P<bindings>[^}]*)\}\s*from './ComfyUIWorkflowPresentation';", app_src, re.DOTALL)
+assert comfy_workflow_import, "App shell should import the extracted ComfyUI workflow presentation module"
+for binding in [
+    "ComfyUIWorkflowManagerModal",
+    "ComfyUIWorkflowSummaryPanel",
+    "LocalComfyUIWorkflowFormat",
+    "LocalComfyUIWorkflowNode",
+    "LocalComfyUIWorkflowNodeRole",
+    "LocalComfyUIWorkflowPreset",
+    "LocalComfyUIWorkflowStore",
+    "LocalComfyUIWorkflowSummary",
+]:
+    assert re.search(rf"\b{binding}\b", comfy_workflow_import.group("bindings")), f"ComfyUI workflow presentation import missing: {binding}"
+for component in ["ComfyUIWorkflowManagerModal", "ComfyUIWorkflowSummaryPanel"]:
+    assert f"function {component}" not in app_src, f"{component} should not remain defined in App.tsx"
+    assert f"export function {component}" in comfy_workflow_presentation_src, f"{component} should be exported from the presentation module"
+for type_name in [
+    "LocalComfyUIWorkflowFormat",
+    "LocalComfyUIWorkflowNodeRole",
+    "LocalComfyUIWorkflowNode",
+    "LocalComfyUIWorkflowSummary",
+    "LocalComfyUIWorkflowPreset",
+    "LocalComfyUIWorkflowStore",
+]:
+    assert not re.search(rf"^type {type_name}\b", app_src, re.MULTILINE), f"{type_name} should not remain defined in App.tsx"
+    assert re.search(rf"^export type {type_name}\b", comfy_workflow_presentation_src, re.MULTILINE), f"{type_name} should be exported from the presentation module"
+for helper in ["workflowFormatLabel", "comfyUIWorkflowRunStatus"]:
+    assert f"function {helper}" not in app_src, f"{helper} should not remain defined in App.tsx"
+    assert f"function {helper}" in comfy_workflow_presentation_src, f"{helper} should live in the presentation module"
+assert not re.search(r"from\s+['\"].*App['\"]", comfy_workflow_presentation_src), "ComfyUI workflow presentation must not import App.tsx"
+assert "<UtilityModalShell" in comfy_workflow_presentation_src, "ComfyUI workflow manager should reuse the extracted utility modal shell"
+assert "<ComfyUIWorkflowSummaryPanel preset={activeWorkflowPreset} t={props.t} />" in app_src, "Provider settings should keep the workflow summary panel mount"
+comfy_workflow_manager_mount_src = source_between(app_src, "<ComfyUIWorkflowManagerModal", "/>", "ComfyUI workflow manager mount")
+for mapping in [
+    "t={t}",
+    "store={localComfyUIWorkflowStore}",
+    "onClose={() => setIsComfyUIWorkflowManagerOpen(false)}",
+    "const nextStore = { ...localComfyUIWorkflowStore, activeId: presetId };",
+    "setLocalComfyUIWorkflowStore(nextStore);",
+    "saveLocalComfyUIWorkflowStore(nextStore);",
+    "localComfyUIWorkflowStore.presets.filter((preset: LocalComfyUIWorkflowPreset) => preset.id !== presetId)",
+    "activeId: localComfyUIWorkflowStore.activeId === presetId ? nextPresets[0]?.id ?? null : localComfyUIWorkflowStore.activeId",
+    "presets: nextPresets",
+]:
+    assert mapping in comfy_workflow_manager_mount_src, f"ComfyUI workflow manager App mapping missing: {mapping}"
+for responsibility in [
+    "function parseComfyUIWorkflow",
+    "function importLocalComfyUIWorkflow",
+    "function clearLocalComfyUIWorkflow",
+    "function saveLocalComfyUIWorkflowStore",
+    "async function runLocalComfyUIDiagnostics",
+    "diagnoseComfyUIConnection({",
+    "generateComfyUIImage({",
+    "LOCAL_COMFYUI_WORKFLOW_STORAGE_KEY",
+]:
+    assert responsibility in app_src, f"ComfyUI workflow App responsibility missing: {responsibility}"
+for presentation_term in [
+    "props.store.presets.find((preset) => preset.id === props.store.activeId)",
+    "onClick={() => props.onSelect(preset.id)}",
+    "onClick={() => props.onDelete(activePreset.id)}",
+    "<ComfyUIWorkflowSummaryPanel preset={activePreset} t={props.t} />",
+]:
+    assert presentation_term in comfy_workflow_presentation_src, f"ComfyUI workflow presentation behavior missing: {presentation_term}"
+assert len(app_src.splitlines()) < 6450, "App.tsx should stay below the post-ComfyUI-workflow-presentation extraction size guard"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"

@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.15` cached inspiration page module extraction. The lazy-mounted Inspiration Center wrapper and its preview composition now live in a dedicated module while App retains mount state, preview state, callbacks, image reverse settings, navigation, and all persistence responsibilities.
+Current checkpoint: `0.5.16` ComfyUI workflow presentation module extraction. Workflow presentation types, status labels, summary UI, and the workflow manager modal now live in a dedicated module while App retains parsing, import/clear, selection/deletion state updates, storage, Provider behavior, and generation responsibilities.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,15 @@ Current checkpoint: `0.5.15` cached inspiration page module extraction. The lazy
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.16 ComfyUI workflow presentation module extraction
+
+- App version is now `0.5.16`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Moved the existing ComfyUI workflow display types, format/run-status labels, summary panel, and workflow manager modal from `src/ui/App.tsx` into `src/ui/ComfyUIWorkflowPresentation.tsx`.
+- Workflow JSON parsing, file import, clear action, active preset selection, delete state updates, local storage, Provider diagnostics, ComfyUI generation, and all mutating callbacks remain owned by `App.tsx`.
+- Smoke, UI QA, and release-candidate checks now track the extracted module and guard the exact App mounts, select/delete persistence callbacks, presentation behavior, one-way dependency boundary, and reduced App size.
+- `run_checks.ps1` passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- The `0.5.16` user-facing release EXE passed a 12-second launch smoke: version `0.5.16`, 17,462,784 bytes (16.65 MB), SHA256 `B291482124E1DCA92D415352B0AFBCA4C0137C8F0885373DF1B051F211FFC306`.
 
 ### v0.5.15 cached inspiration page module extraction
 
@@ -831,7 +840,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.15
+- 版本：0.5.16
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

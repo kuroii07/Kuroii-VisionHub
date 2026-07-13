@@ -19,6 +19,7 @@ REQUIRED_TRACKED_FILES = {
     "src/ui/AppDialogs.tsx",
     "src/ui/BatchQueuePage.tsx",
     "src/ui/CachedInspirationPage.tsx",
+    "src/ui/ComfyUIWorkflowPresentation.tsx",
     "src/ui/FreeGenerationPage.tsx",
     "src/ui/PromptTemplatesPage.tsx",
     "src/ui/SettingsPage.tsx",

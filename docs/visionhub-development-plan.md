@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.15`
+- Current app version: `0.5.16`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.15` cached inspiration page module extraction: move the lazy-mounted Inspiration Center wrapper and preview composition out of the oversized app shell while preserving existing UI, lazy mounting, App-owned state/callback behavior, and persistence.
+- Current focus: `0.5.16` ComfyUI workflow presentation module extraction: move workflow presentation types, labels, summary UI, and the manager modal out of the oversized app shell while preserving existing UI and App-owned parsing, mutations, Provider behavior, generation, and persistence.
 
 ## 2. 后续开发前必读
 
@@ -122,6 +122,7 @@
 | ~~`0.5.13`~~ | Workspace home module extraction | Extract WorkspaceHomePage from App.tsx while preserving status summaries, recent work, attention items, materials, quick actions, and navigation | Completed and release-launch validated |
 | ~~`0.5.14`~~ | App dialogs module extraction | Extract shared confirmation, queue naming, shortcuts, system information, and utility modal presentation while preserving App-owned state and callbacks | Completed and release-launch validated |
 | ~~`0.5.15`~~ | Cached inspiration page module extraction | Extract the lazy-mounted Inspiration Center wrapper and preview composition while preserving App-owned state, callbacks, navigation, and persistence | Completed and release-launch validated |
+| ~~`0.5.16`~~ | ComfyUI workflow presentation module extraction | Extract workflow display types, labels, summary UI, and manager modal while preserving App-owned parsing, mutations, Provider behavior, generation, and persistence | Completed and release-launch validated |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -1143,7 +1144,27 @@ Acceptance:
 - [x] Unified verification passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` version `0.5.15` built at 17,462,272 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `092D4CEECF8C01E8D7F6386B86443CD37932436071E67DB02C86436247ABA128`.
 
-### 5.43 `v1.0 pre` Release and migration preparation
+### 5.43 `0.5.16` ComfyUI workflow presentation module extraction
+
+Status 2026-07-13: completed and release-launch validated. ComfyUI workflow presentation types, status labels, the shared summary panel, and the workflow manager modal have been moved out of the oversized app shell without changing visible UI, CSS classes, workflow selection/deletion behavior, Provider behavior, generation behavior, or persistence.
+
+Objectives:
+
+- Move workflow presentation types, `workflowFormatLabel`, `comfyUIWorkflowRunStatus`, `ComfyUIWorkflowSummaryPanel`, and `ComfyUIWorkflowManagerModal` into `src/ui/ComfyUIWorkflowPresentation.tsx`.
+- Keep workflow JSON parsing, import/clear actions, active preset selection, delete state updates, local storage, Provider diagnostics, and ComfyUI generation owned by `App.tsx`.
+- Preserve the Provider settings summary mount and the manager modal's existing select/delete callbacks and shared `UtilityModalShell` composition.
+- Extend smoke, UI QA, and release-candidate tracking checks to cover the extracted module, exact App callback mappings, and one-way dependency boundary.
+
+Acceptance:
+
+- [x] The extracted types, helpers, and components mechanically match the backed-up implementation except for declared exports and imports.
+- [x] `src/ui/App.tsx` is reduced below 6,450 lines and no longer defines ComfyUI workflow presentation types, labels, summary panel, or manager modal.
+- [x] `src/ui/ComfyUIWorkflowPresentation.tsx` does not import `App.tsx`; App retains parsing, mutations, Provider behavior, generation, and persistence responsibilities.
+- [x] Smoke checks and UI QA pass after extraction.
+- [x] Unified verification passed with 34/34 Provider tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` version `0.5.16` built at 17,462,784 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `B291482124E1DCA92D415352B0AFBCA4C0137C8F0885373DF1B051F211FFC306`.
+
+### 5.44 `v1.0 pre` Release and migration preparation
 
 目标：
 
