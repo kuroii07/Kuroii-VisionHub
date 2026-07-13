@@ -20,3 +20,15 @@ export function writeStorageValue(key: string, value: string): boolean {
     return false;
   }
 }
+
+export function removeStorageValue(key: string): boolean {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    window.localStorage.removeItem(key);
+    return true;
+  } catch (error) {
+    console.warn(`[VisionHub] localStorage remove failed for ${key}`, error);
+    return false;
+  }
+}

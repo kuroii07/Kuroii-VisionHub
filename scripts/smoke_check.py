@@ -43,6 +43,8 @@ required = [
     "src/ui/urlSearch.ts",
     "src/ui/styles.css",
     "src/services/appSettings.ts",
+    "src/services/comfyUIWorkflow.ts",
+    "src/services/comfyUIWorkflow.test.ts",
     "src/services/promptAssist.ts",
     "src/services/promptTemplates.ts",
     "src/services/freePlatforms.ts",
@@ -97,6 +99,7 @@ app_dialogs_src = (ROOT / "src/ui/AppDialogs.tsx").read_text(encoding="utf-8")
 batch_queue_page_src = (ROOT / "src/ui/BatchQueuePage.tsx").read_text(encoding="utf-8")
 cached_inspiration_page_src = (ROOT / "src/ui/CachedInspirationPage.tsx").read_text(encoding="utf-8")
 comfy_workflow_presentation_src = (ROOT / "src/ui/ComfyUIWorkflowPresentation.tsx").read_text(encoding="utf-8")
+comfy_workflow_service_src = (ROOT / "src/services/comfyUIWorkflow.ts").read_text(encoding="utf-8")
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
@@ -448,14 +451,20 @@ assert comfy_workflow_import, "App shell should import the extracted ComfyUI wor
 for binding in [
     "ComfyUIWorkflowManagerModal",
     "ComfyUIWorkflowSummaryPanel",
-    "LocalComfyUIWorkflowFormat",
-    "LocalComfyUIWorkflowNode",
-    "LocalComfyUIWorkflowNodeRole",
-    "LocalComfyUIWorkflowPreset",
-    "LocalComfyUIWorkflowStore",
-    "LocalComfyUIWorkflowSummary",
 ]:
     assert re.search(rf"\b{binding}\b", comfy_workflow_import.group("bindings")), f"ComfyUI workflow presentation import missing: {binding}"
+comfy_workflow_service_import = re.search(r"import\s*\{(?P<bindings>[^}]*)\}\s*from '../services/comfyUIWorkflow';", app_src, re.DOTALL)
+assert comfy_workflow_service_import, "App shell should import the extracted ComfyUI workflow service"
+for binding in [
+    "createLocalWorkflowPreset",
+    "loadLocalComfyUIWorkflowStore",
+    "parseComfyUIWorkflow",
+    "readTextFile",
+    "saveLocalComfyUIWorkflowStore",
+    "LocalComfyUIWorkflowPreset",
+    "LocalComfyUIWorkflowStore",
+]:
+    assert re.search(rf"\b{binding}\b", comfy_workflow_service_import.group("bindings")), f"ComfyUI workflow service import missing: {binding}"
 for component in ["ComfyUIWorkflowManagerModal", "ComfyUIWorkflowSummaryPanel"]:
     assert f"function {component}" not in app_src, f"{component} should not remain defined in App.tsx"
     assert f"export function {component}" in comfy_workflow_presentation_src, f"{component} should be exported from the presentation module"
@@ -468,7 +477,8 @@ for type_name in [
     "LocalComfyUIWorkflowStore",
 ]:
     assert not re.search(rf"^type {type_name}\b", app_src, re.MULTILINE), f"{type_name} should not remain defined in App.tsx"
-    assert re.search(rf"^export type {type_name}\b", comfy_workflow_presentation_src, re.MULTILINE), f"{type_name} should be exported from the presentation module"
+    assert re.search(rf"^export type {type_name}\b", comfy_workflow_service_src, re.MULTILINE), f"{type_name} should be exported from the workflow service"
+assert "from '../services/comfyUIWorkflow'" in comfy_workflow_presentation_src, "ComfyUI workflow presentation should import shared workflow types from the service"
 for helper in ["workflowFormatLabel", "comfyUIWorkflowRunStatus"]:
     assert f"function {helper}" not in app_src, f"{helper} should not remain defined in App.tsx"
     assert f"function {helper}" in comfy_workflow_presentation_src, f"{helper} should live in the presentation module"
@@ -489,16 +499,27 @@ for mapping in [
 ]:
     assert mapping in comfy_workflow_manager_mount_src, f"ComfyUI workflow manager App mapping missing: {mapping}"
 for responsibility in [
-    "function parseComfyUIWorkflow",
     "function importLocalComfyUIWorkflow",
     "function clearLocalComfyUIWorkflow",
-    "function saveLocalComfyUIWorkflowStore",
     "async function runLocalComfyUIDiagnostics",
     "diagnoseComfyUIConnection({",
     "generateComfyUIImage({",
-    "LOCAL_COMFYUI_WORKFLOW_STORAGE_KEY",
 ]:
     assert responsibility in app_src, f"ComfyUI workflow App responsibility missing: {responsibility}"
+for helper in [
+    "createLocalWorkflowPreset",
+    "normalizeLocalComfyUIWorkflowStore",
+    "loadLocalComfyUIWorkflowStore",
+    "saveLocalComfyUIWorkflowStore",
+    "readTextFile",
+    "parseComfyUIWorkflow",
+]:
+    assert f"function {helper}" not in app_src, f"{helper} should not remain defined in App.tsx"
+    assert f"function {helper}" in comfy_workflow_service_src, f"{helper} should live in the workflow service"
+assert "LOCAL_COMFYUI_WORKFLOW_STORAGE_KEY = 'visionhub.local.comfyui.workflow.v1'" in comfy_workflow_service_src, "ComfyUI workflow storage key must remain unchanged"
+assert "removeStorageValue(LOCAL_COMFYUI_WORKFLOW_STORAGE_KEY)" in comfy_workflow_service_src, "Empty ComfyUI workflow stores should use safe storage cleanup"
+assert "from '../services/comfyUIWorkflow'" in app_src, "App should import ComfyUI workflow helpers from the service"
+assert not re.search(r"from\s+['\"].*App['\"]", comfy_workflow_service_src), "ComfyUI workflow service must not import App.tsx"
 for presentation_term in [
     "props.store.presets.find((preset) => preset.id === props.store.activeId)",
     "onClick={() => props.onSelect(preset.id)}",
@@ -506,7 +527,7 @@ for presentation_term in [
     "<ComfyUIWorkflowSummaryPanel preset={activePreset} t={props.t} />",
 ]:
     assert presentation_term in comfy_workflow_presentation_src, f"ComfyUI workflow presentation behavior missing: {presentation_term}"
-assert len(app_src.splitlines()) < 6450, "App.tsx should stay below the post-ComfyUI-workflow-presentation extraction size guard"
+assert len(app_src.splitlines()) < 6250, "App.tsx should stay below the post-ComfyUI-workflow-service extraction size guard"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"

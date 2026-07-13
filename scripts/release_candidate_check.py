@@ -25,6 +25,8 @@ REQUIRED_TRACKED_FILES = {
     "src/ui/SettingsPage.tsx",
     "src/ui/WorkspaceHomePage.tsx",
     "src/ui/library/LibraryPage.tsx",
+    "src/services/comfyUIWorkflow.ts",
+    "src/services/comfyUIWorkflow.test.ts",
 }
 
 

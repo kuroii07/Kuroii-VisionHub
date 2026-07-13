@@ -1,43 +1,12 @@
 import { Trash2 } from 'lucide-react';
 import type { Translator } from '../i18n';
+import type {
+  LocalComfyUIWorkflowFormat,
+  LocalComfyUIWorkflowNode,
+  LocalComfyUIWorkflowPreset,
+  LocalComfyUIWorkflowStore
+} from '../services/comfyUIWorkflow';
 import { UtilityModalShell } from './AppDialogs';
-
-export type LocalComfyUIWorkflowFormat = 'api' | 'ui' | 'unknown';
-export type LocalComfyUIWorkflowNodeRole = 'prompt' | 'sampler' | 'checkpoint' | 'size' | 'output' | 'loader' | 'other';
-export type LocalComfyUIWorkflowNode = {
-  id: string;
-  type: string;
-  title?: string;
-  role: LocalComfyUIWorkflowNodeRole;
-  summary: string;
-};
-export type LocalComfyUIWorkflowSummary = {
-  fileName: string;
-  importedAt: string;
-  format: LocalComfyUIWorkflowFormat;
-  nodeCount: number;
-  linkCount: number | null;
-  promptNodes: LocalComfyUIWorkflowNode[];
-  samplerNodes: LocalComfyUIWorkflowNode[];
-  checkpointNodes: LocalComfyUIWorkflowNode[];
-  sizeNodes: LocalComfyUIWorkflowNode[];
-  outputNodes: LocalComfyUIWorkflowNode[];
-  loaderNodes: LocalComfyUIWorkflowNode[];
-  otherKeyNodes: LocalComfyUIWorkflowNode[];
-  warnings: string[];
-};
-export type LocalComfyUIWorkflowPreset = {
-  id: string;
-  name: string;
-  summary: LocalComfyUIWorkflowSummary;
-  rawWorkflow?: unknown;
-  createdAt: string;
-  updatedAt: string;
-};
-export type LocalComfyUIWorkflowStore = {
-  activeId: string | null;
-  presets: LocalComfyUIWorkflowPreset[];
-};
 
 function workflowFormatLabel(format: LocalComfyUIWorkflowFormat, t: Translator) {
   if (format === 'api') return t('provider.workflow.format.api');

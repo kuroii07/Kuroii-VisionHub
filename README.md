@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.16` ComfyUI workflow presentation module extraction. Workflow presentation types, status labels, summary UI, and the workflow manager modal now live in a dedicated module while App retains parsing, import/clear, selection/deletion state updates, storage, Provider behavior, and generation responsibilities.
+Current checkpoint: `0.5.17` ComfyUI workflow service extraction. Workflow types, API/UI JSON parsing, legacy-store normalization, preset creation, file reading, and local storage helpers now live in a dedicated service while App retains UI state, import/clear messaging, Provider diagnostics, generation, and all mutating orchestration.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,17 @@ Current checkpoint: `0.5.16` ComfyUI workflow presentation module extraction. Wo
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.17 ComfyUI workflow service extraction
+
+- App version is now `0.5.17`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Moved ComfyUI workflow types, API/UI JSON parsing, node classification, legacy single-summary migration, active preset normalization, preset creation, file reading, and the established local storage key/read/write helpers from `src/ui/App.tsx` into `src/services/comfyUIWorkflow.ts`.
+- `App.tsx` continues to own file-selection validation, import/clear user messaging, React state updates, workflow selection/deletion orchestration, Provider diagnostics, ComfyUI generation, and every mutating callback.
+- Added focused Vitest coverage for API Format parsing, UI workflow parsing, unknown/invalid input, legacy migration, activeId fallback, save/load, empty-store cleanup, no-window safety, and denied-storage safety.
+- Empty workflow-store cleanup now uses the shared safe-storage boundary, preventing `window` or localStorage access failures from interrupting clear/delete-last workflows.
+- Smoke and release-candidate checks now guard the service boundary, unchanged storage key, App/service imports, one-way dependency direction, and reduced App size.
+- `run_checks.ps1` passed with 43/43 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- The `0.5.17` user-facing release EXE passed a 12-second launch smoke: version `0.5.17`, 17,462,272 bytes (16.65 MB), SHA256 `2FEBC00498A9546C8FEAE3331614CBE014A63BB36CAC00343FAB2DCD2F897857`.
 
 ### v0.5.16 ComfyUI workflow presentation module extraction
 
@@ -840,7 +851,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.16
+- 版本：0.5.17
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。
