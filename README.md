@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.19` Provider capability matrix service extraction. Matrix status types, column order, manifest capability mapping, protocol status mapping, and cell calculation now live in a tested pure service while App retains localization, row composition, UI state, configuration, credentials, Provider actions, generation, and persistence.
+Current checkpoint: `0.5.20` Provider service catalog extraction. The existing platform options, 15 service templates, status sorting, template lookup, configurable-state check, and provider-to-default-template mapping now live in a tested pure catalog while App retains localization, profile ownership, draft configuration, UI state, actions, generation, and persistence.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,16 @@ Current checkpoint: `0.5.19` Provider capability matrix service extraction. Matr
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.20 Provider service catalog extraction
+
+- App version is now `0.5.20`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Moved the existing three platform options, 15 service-template records, catalog types, status sorting, template lookup, configurable-state check, and provider-to-default-template mapping from `src/ui/App.tsx` into `src/services/providerServiceCatalog.ts`.
+- No Provider template was added, removed, enabled, disabled, or rewritten; template ids, order, labels, descriptions, notes, provider ids, docs URLs, capabilities, and ranks remain unchanged.
+- `App.tsx` continues to own localization, profile-to-template ownership, empty draft creation, generation labels, selected state, configuration, credentials, Provider actions, generation, and persistence.
+- Added 14 focused Vitest cases covering platform order, all template ids, duplicate protection, per-platform status/rank sorting, lookup, default Provider mappings, and configurable-state rules.
+- `run_checks.ps1` passed with 84/84 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- The `0.5.20` user-facing release EXE passed a 12-second launch smoke: file/product version `0.5.20`, 17,463,296 bytes (16.65 MB), SHA256 `7D8BD726C0AFF1EDFEE3A4326B9E846E7BE31F0D25B536E193F8313C995AC859`.
 
 ### v0.5.19 Provider capability matrix service extraction
 
@@ -871,7 +881,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.19
+- 版本：0.5.20
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

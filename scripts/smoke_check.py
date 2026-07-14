@@ -48,6 +48,8 @@ required = [
     "src/services/comfyUIWorkflow.test.ts",
     "src/services/providerCapabilityMatrix.ts",
     "src/services/providerCapabilityMatrix.test.ts",
+    "src/services/providerServiceCatalog.ts",
+    "src/services/providerServiceCatalog.test.ts",
     "src/services/promptAssist.ts",
     "src/services/promptTemplates.ts",
     "src/services/freePlatforms.ts",
@@ -104,6 +106,7 @@ cached_inspiration_page_src = (ROOT / "src/ui/CachedInspirationPage.tsx").read_t
 comfy_workflow_presentation_src = (ROOT / "src/ui/ComfyUIWorkflowPresentation.tsx").read_text(encoding="utf-8")
 comfy_workflow_service_src = (ROOT / "src/services/comfyUIWorkflow.ts").read_text(encoding="utf-8")
 provider_capability_matrix_src = (ROOT / "src/services/providerCapabilityMatrix.ts").read_text(encoding="utf-8")
+provider_service_catalog_src = (ROOT / "src/services/providerServiceCatalog.ts").read_text(encoding="utf-8")
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
@@ -627,6 +630,65 @@ for forbidden in [
 ]:
     assert forbidden not in provider_capability_matrix_src, f"Provider capability matrix service must stay pure: {forbidden}"
 assert len(app_src.splitlines()) < 5960, "App.tsx should stay below the post-Provider-capability-matrix extraction size guard"
+provider_service_catalog_import = re.search(
+    r"import\s*\{(?P<bindings>.*?)\}\s*from\s*['\"]\.\./services/providerServiceCatalog['\"]",
+    app_src,
+    re.DOTALL,
+)
+assert provider_service_catalog_import, "App should import the extracted Provider service catalog"
+for binding in [
+    "getDefaultProviderServiceTemplateForProvider",
+    "getProviderServiceTemplate",
+    "getProviderServiceTemplatesForPlatform",
+    "isProviderServiceTemplateConfigurable",
+    "providerPlatformOptions",
+    "providerServiceTemplates",
+    "ProviderPlatformOption",
+    "ProviderPlatformType",
+    "ProviderServiceRegion",
+    "ProviderServiceTemplate",
+    "ProviderServiceTemplateStatus",
+]:
+    assert re.search(rf"\b{binding}\b", provider_service_catalog_import.group("bindings")), f"Provider service catalog import missing: {binding}"
+for helper in [
+    "getProviderServiceTemplatesForPlatform",
+    "getProviderServiceTemplate",
+    "isProviderServiceTemplateConfigurable",
+    "getDefaultProviderServiceTemplateForProvider",
+]:
+    assert f"function {helper}" not in app_src, f"{helper} should not remain defined in App.tsx"
+    assert f"function {helper}" in provider_service_catalog_src, f"{helper} should live in providerServiceCatalog.ts"
+for type_name in [
+    "ProviderPlatformType",
+    "ProviderServiceTemplateStatus",
+    "ProviderServiceRegion",
+    "ProviderPlatformOption",
+    "ProviderServiceTemplate",
+]:
+    assert not re.search(rf"^type {type_name}\b", app_src, re.MULTILINE), f"{type_name} should not remain defined in App.tsx"
+    assert re.search(rf"^export type {type_name}\b", provider_service_catalog_src, re.MULTILINE), f"{type_name} should be exported from providerServiceCatalog.ts"
+for constant in ["providerPlatformOptions", "providerServiceTemplates", "providerServiceStatusRank"]:
+    assert not re.search(rf"^const {constant}\b", app_src, re.MULTILINE), f"{constant} should not remain defined in App.tsx"
+    assert re.search(rf"^(?:export )?const {constant}\b", provider_service_catalog_src, re.MULTILINE), f"{constant} should live in providerServiceCatalog.ts"
+assert not re.search(r"from\s+['\"].*App['\"]", provider_service_catalog_src), "Provider service catalog must not import App.tsx"
+for responsibility in [
+    "function createEmptyProviderDraftConfig",
+    "function providerProfileBelongsToTemplate",
+    "function providerGenerationLabel",
+    "providerServiceTemplateDisplayName(selectedServiceTemplate, t)",
+]:
+    assert responsibility in app_src, f"Provider App responsibility should remain in App.tsx: {responsibility}"
+for forbidden in [
+    "localStorage",
+    "fetch(",
+    "invoke(",
+    "apiKey",
+    "secretId",
+    "generateOpenAIImage",
+    "saveProviderConfig",
+]:
+    assert forbidden not in provider_service_catalog_src, f"Provider service catalog must stay pure: {forbidden}"
+assert len(app_src.splitlines()) < 5700, "App.tsx should stay below the post-Provider-service-catalog extraction size guard"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"
@@ -1011,7 +1073,7 @@ for term in [
     "LoadImage",
     "referenceCount",
 ]:
-    assert term in app_src or term in provider_presentation_src or term in i18n_src, f"Provider diagnostics v1 missing: {term}"
+    assert term in app_src or term in provider_presentation_src or term in provider_service_catalog_src or term in i18n_src, f"Provider diagnostics v1 missing: {term}"
 brand_block = app_src.split('<div className="brand">', 1)[1].split('<nav className="navGroup">', 1)[0]
 footer_block = app_src.split('<div className="sidebarFooter">', 1)[1].split("</div>", 1)[0]
 assert "sidebarCollapseButton" not in brand_block, "Collapse button should not stay in the brand area"

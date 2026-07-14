@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.19`
+- Current app version: `0.5.20`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.19` Provider capability matrix service extraction: move matrix status types, column order, manifest capability mapping, protocol status mapping, and cell calculation into a tested pure service while preserving App-owned localization, row composition, UI state, configuration, credentials, Provider actions, generation, and persistence.
+- Current focus: `0.5.20` Provider service catalog extraction: move the existing platform options, 15 service templates, status sorting, lookup, configurable-state rules, and provider-to-default-template mapping into a tested pure catalog while preserving App-owned localization, profile ownership, draft configuration, UI state, actions, generation, and persistence.
 
 ## 2. 后续开发前必读
 
@@ -126,6 +126,7 @@
 | ~~`0.5.17`~~ | ComfyUI workflow service extraction | Extract workflow types, parsing, legacy normalization, file reading, and storage helpers while preserving App-owned UI orchestration, Provider behavior, and generation | Completed and release-launch validated |
 | ~~`0.5.18`~~ | Provider presentation module extraction | Extract read-only Provider metadata, readiness, capability-matrix, and diagnostics-result rendering while preserving App-owned actions, calculations, configuration, credentials, Provider behavior, generation, and persistence | Completed and release-launch validated |
 | ~~`0.5.19`~~ | Provider capability matrix service extraction | Extract matrix status types, column order, manifest/protocol mapping, and cell calculation into a tested pure service while preserving App-owned localization, composition, UI state, configuration, credentials, actions, generation, and persistence | Completed and release-launch validated |
+| ~~`0.5.20`~~ | Provider service catalog extraction | Extract existing platform options, service templates, sorting, lookup, configurable-state rules, and default-template mapping while preserving App-owned localization, profiles, draft configuration, UI state, actions, generation, and persistence | Completed and release-launch validated |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -1227,7 +1228,27 @@ Acceptance:
 - [x] Unified verification passed with 70/70 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` version `0.5.19` built from the final source at 17,462,784 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `22C6E83C664C1769727E59482454CAA1BB055D1A3DCF1CE2A3E9D9497893FF2B`.
 
-### 5.47 `v1.0 pre` Release and migration preparation
+### 5.47 `0.5.20` Provider service catalog extraction
+
+Status 2026-07-14: completed and release-launch validated. The existing platform options, 15 Provider service templates, status sorting, lookup, configurable-state rules, and Provider default-template mapping have been moved out of the oversized app shell without adding, removing, enabling, disabling, or rewriting any Provider template.
+
+Objectives:
+
+- Move Provider catalog types, `providerPlatformOptions`, `providerServiceTemplates`, the status-rank table, `getProviderServiceTemplatesForPlatform`, `getProviderServiceTemplate`, `isProviderServiceTemplateConfigurable`, and `getDefaultProviderServiceTemplateForProvider` into `src/services/providerServiceCatalog.ts`.
+- Keep localization, profile-to-template ownership, empty draft creation, generation labels, selected state, configuration, credentials, diagnostics/model actions, generation, and persistence owned by `App.tsx`.
+- Preserve all template ids, fields, source order, per-platform sorted order, default Provider mappings, and planned/configurable boundaries.
+- Add focused tests and extend smoke/release-candidate checks for catalog completeness, sorting, lookup, purity, exact App responsibilities, and reduced App size.
+
+Acceptance:
+
+- [x] The catalog preserves all three platform options and all 15 existing service templates exactly once.
+- [x] `src/ui/App.tsx` is reduced below 5,700 lines and no longer defines the moved catalog types, constants, or helper functions.
+- [x] `src/services/providerServiceCatalog.ts` does not import `App.tsx` and contains no storage, network, credential, configuration-save, profile mutation, or generation responsibility.
+- [x] Focused catalog tests pass with 14/14 cases; smoke, UI QA, and the production frontend build pass after extraction.
+- [x] Unified verification passed with 84/84 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` version `0.5.20` built from the final source at 17,463,296 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `7D8BD726C0AFF1EDFEE3A4326B9E846E7BE31F0D25B536E193F8313C995AC859`.
+
+### 5.48 `v1.0 pre` Release and migration preparation
 
 目标：
 
