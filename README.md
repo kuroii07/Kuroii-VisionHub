@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.21` Provider profile selection extraction. Profile-to-template ownership, legacy profile fallback matching, six-state profile filtering, translated filter options, and filter counts now live in a tested pure service while App retains profile mutation, credentials, persistence, selected state, UI, Provider actions, and generation.
+Current checkpoint: `0.5.22` Provider draft/presentation helper extraction. Service-template display names, default new-profile drafts, and translated generation-entry labels now live in a tested pure service while App retains draft lifecycle, configuration state, persistence, credentials, model operations, diagnostics, UI, and generation.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,16 @@ Current checkpoint: `0.5.21` Provider profile selection extraction. Profile-to-t
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.22 Provider draft/presentation helper extraction
+
+- App version is now `0.5.22`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Moved service-template display-name resolution, default new-profile draft construction, and translated generation-entry labels from `src/ui/App.tsx` into `src/services/providerDraftPresentation.ts`.
+- Existing provider defaults remain unchanged: official OpenAI Base URL, MiniMax custom-images endpoint, Gemini generateContent endpoint, first model selection, model option list, and relay empty Base URL behavior.
+- `App.tsx` continues to own new-profile lifecycle, selected state, configuration edits, save/import, credentials, model refresh/probe, connection tests, diagnostics, real generation, and persistence.
+- Added 8 focused Vitest cases covering translated/fallback service names, relay/OpenAI/MiniMax/Gemini draft defaults, no-template drafts, translated generation labels, and unmapped-provider fallback.
+- `run_checks.ps1` passed with 110/110 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- The `0.5.22` user-facing release EXE passed a 12-second launch smoke: file/product version `0.5.22`, 17,462,784 bytes (16.65 MB), SHA256 `0CDA78F9BFB63A4C229B2CF77D395AB7AD577640F4B09323A889ED214B3505D0`.
 
 ### v0.5.21 Provider profile selection extraction
 
@@ -891,7 +901,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.21
+- 版本：0.5.22
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

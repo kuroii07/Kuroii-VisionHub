@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.21`
+- Current app version: `0.5.22`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.21` Provider profile selection extraction: move profile-to-template ownership, legacy fallback matching, six-state filtering, translated filter options, and filter counts into a tested pure service while preserving App-owned profile mutation, credentials, persistence, selected state, UI, Provider actions, and generation.
+- Current focus: `0.5.22` Provider draft/presentation helper extraction: move service display names, default new-profile draft construction, and translated generation-entry labels into a tested pure service while preserving App-owned draft lifecycle, configuration state, persistence, credentials, model operations, diagnostics, UI, and generation.
 
 ## 2. 后续开发前必读
 
@@ -128,6 +128,7 @@
 | ~~`0.5.19`~~ | Provider capability matrix service extraction | Extract matrix status types, column order, manifest/protocol mapping, and cell calculation into a tested pure service while preserving App-owned localization, composition, UI state, configuration, credentials, actions, generation, and persistence | Completed and release-launch validated |
 | ~~`0.5.20`~~ | Provider service catalog extraction | Extract existing platform options, service templates, sorting, lookup, configurable-state rules, and default-template mapping while preserving App-owned localization, profiles, draft configuration, UI state, actions, generation, and persistence | Completed and release-launch validated |
 | ~~`0.5.21`~~ | Provider profile selection extraction | Extract profile/template ownership and pure filter/count helpers while preserving profile ids, legacy fallback matching, mutation, credentials, persistence, UI, actions, and generation | Completed and release-launch validated |
+| ~~`0.5.22`~~ | Provider draft/presentation helper extraction | Extract service display names, default draft construction, and generation-entry labels while preserving draft lifecycle, configuration, persistence, credentials, diagnostics, UI, and generation | Completed and release-launch validated |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -1269,7 +1270,27 @@ Acceptance:
 - [x] Unified verification passed with 102/102 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` version `0.5.21` built from the final source at 17,463,296 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `ACEBCF1A77FD1B484121BA87EBD978BD69E7CE3C876813FB67A0D07572E2A12F`.
 
-### 5.49 `v1.0 pre` Release and migration preparation
+### 5.49 `0.5.22` Provider draft/presentation helper extraction
+
+Status 2026-07-14: completed and release-launch validated. Service-template display-name resolution, default new-profile draft construction, and translated generation-entry labels have been moved out of the oversized app shell without changing Provider defaults, configuration state, profile data, credentials, UI, diagnostics, generation, or persistence.
+
+Objectives:
+
+- Move `providerServiceTemplateDisplayName`, `createEmptyProviderDraftConfig`, and `providerGenerationLabel` into `src/services/providerDraftPresentation.ts`.
+- Preserve relay, official OpenAI, MiniMax, and Gemini draft defaults, first-model selection, model option lists, translated service names, and unmapped-provider fallback.
+- Keep new-profile orchestration, selected state, configuration edits/save/import, credentials, model refresh/probe, connection tests, diagnostics, generation, and persistence owned by `App.tsx`.
+- Add focused tests and extend smoke/release-candidate checks for defaults, labels, purity, exact App action responsibilities, and reduced App size.
+
+Acceptance:
+
+- [x] Existing template display names and all Provider draft defaults remain unchanged.
+- [x] `src/ui/App.tsx` is reduced below 5,630 lines and no longer defines the moved helper functions.
+- [x] `src/services/providerDraftPresentation.ts` does not import `App.tsx` and contains no storage, credential, configuration-save, network, model-list, or generation responsibility.
+- [x] Focused Provider draft/presentation tests pass with 8/8 cases; smoke, UI QA, and the production frontend build pass after extraction.
+- [x] Unified verification passed with 110/110 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` version `0.5.22` built from the final source at 17,462,784 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `0CDA78F9BFB63A4C229B2CF77D395AB7AD577640F4B09323A889ED214B3505D0`.
+
+### 5.50 `v1.0 pre` Release and migration preparation
 
 目标：
 
