@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.18`
+- Current app version: `0.5.19`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.18` Provider presentation module extraction: move only service metadata, readiness results, the capability matrix, and diagnostics result rendering out of the oversized app shell while preserving App-owned toggles, actions, calculations, configuration, credentials, Provider behavior, generation, and persistence.
+- Current focus: `0.5.19` Provider capability matrix service extraction: move matrix status types, column order, manifest capability mapping, protocol status mapping, and cell calculation into a tested pure service while preserving App-owned localization, row composition, UI state, configuration, credentials, Provider actions, generation, and persistence.
 
 ## 2. 后续开发前必读
 
@@ -125,6 +125,7 @@
 | ~~`0.5.16`~~ | ComfyUI workflow presentation module extraction | Extract workflow display types, labels, summary UI, and manager modal while preserving App-owned parsing, mutations, Provider behavior, generation, and persistence | Completed and release-launch validated |
 | ~~`0.5.17`~~ | ComfyUI workflow service extraction | Extract workflow types, parsing, legacy normalization, file reading, and storage helpers while preserving App-owned UI orchestration, Provider behavior, and generation | Completed and release-launch validated |
 | ~~`0.5.18`~~ | Provider presentation module extraction | Extract read-only Provider metadata, readiness, capability-matrix, and diagnostics-result rendering while preserving App-owned actions, calculations, configuration, credentials, Provider behavior, generation, and persistence | Completed and release-launch validated |
+| ~~`0.5.19`~~ | Provider capability matrix service extraction | Extract matrix status types, column order, manifest/protocol mapping, and cell calculation into a tested pure service while preserving App-owned localization, composition, UI state, configuration, credentials, actions, generation, and persistence | Completed and release-launch validated |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -1206,7 +1207,27 @@ Acceptance:
 - [x] Unified verification passed with 43/43 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` version `0.5.18` built from the final source at 17,463,296 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `5E738C27C5A04921960534CABBA8EAAC6923508D3DEA5C526C3771466C7CA704`.
 
-### 5.46 `v1.0 pre` Release and migration preparation
+### 5.46 `0.5.19` Provider capability matrix service extraction
+
+Status 2026-07-14: completed and release-launch validated. Provider matrix status types, capability keys, column order, manifest capability mapping, protocol status mapping, and matrix-cell calculation have been moved out of the oversized app shell without changing localized labels, row composition, visible UI, Provider configuration, credentials, actions, generation, or persistence.
+
+Objectives:
+
+- Move `ProviderMatrixStatus`, `ProviderMatrixCapabilityKey`, `ProviderCapabilityMatrixCell`, `providerMatrixColumnKeys`, `mapProviderCapabilityToMatrixStatus`, `resolveProtocolMatrixStatus`, and `getProviderCapabilityMatrixCell` into `src/services/providerCapabilityMatrix.ts`.
+- Keep localized column labels, matrix row composition, selected-template state, rendering, Provider configuration, credentials, diagnostics/model actions, generation, and persistence owned by `App.tsx`.
+- Preserve every existing capability and protocol status result, including missing-manifest fallbacks and local-plan handling.
+- Add focused unit tests and extend smoke/release-candidate checks for the service boundary, App composition calls, pure dependencies, moved helpers/types, and reduced App size.
+
+Acceptance:
+
+- [x] The service preserves the established column order and matrix mapping logic.
+- [x] `src/ui/App.tsx` is reduced below 5,960 lines and no longer defines the moved types, column constant, or helper functions.
+- [x] `src/services/providerCapabilityMatrix.ts` does not import `App.tsx` and contains no storage, network, credential, configuration-save, or generation responsibility.
+- [x] Focused capability-matrix tests pass with 27/27 cases; smoke, UI QA, and the production frontend build pass after extraction.
+- [x] Unified verification passed with 70/70 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` version `0.5.19` built from the final source at 17,462,784 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `22C6E83C664C1769727E59482454CAA1BB055D1A3DCF1CE2A3E9D9497893FF2B`.
+
+### 5.47 `v1.0 pre` Release and migration preparation
 
 目标：
 

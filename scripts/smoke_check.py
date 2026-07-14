@@ -46,6 +46,8 @@ required = [
     "src/services/appSettings.ts",
     "src/services/comfyUIWorkflow.ts",
     "src/services/comfyUIWorkflow.test.ts",
+    "src/services/providerCapabilityMatrix.ts",
+    "src/services/providerCapabilityMatrix.test.ts",
     "src/services/promptAssist.ts",
     "src/services/promptTemplates.ts",
     "src/services/freePlatforms.ts",
@@ -101,6 +103,7 @@ batch_queue_page_src = (ROOT / "src/ui/BatchQueuePage.tsx").read_text(encoding="
 cached_inspiration_page_src = (ROOT / "src/ui/CachedInspirationPage.tsx").read_text(encoding="utf-8")
 comfy_workflow_presentation_src = (ROOT / "src/ui/ComfyUIWorkflowPresentation.tsx").read_text(encoding="utf-8")
 comfy_workflow_service_src = (ROOT / "src/services/comfyUIWorkflow.ts").read_text(encoding="utf-8")
+provider_capability_matrix_src = (ROOT / "src/services/providerCapabilityMatrix.ts").read_text(encoding="utf-8")
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
@@ -580,6 +583,50 @@ for forbidden in [
 ]:
     assert forbidden not in provider_presentation_src, f"Provider presentation must stay read-only: {forbidden}"
 assert len(app_src.splitlines()) < 6075, "App.tsx should stay below the post-Provider-presentation extraction size guard"
+provider_capability_matrix_import = re.search(
+    r"import\s*\{(?P<bindings>.*?)\}\s*from\s*['\"]\.\./services/providerCapabilityMatrix['\"]",
+    app_src,
+    re.DOTALL,
+)
+assert provider_capability_matrix_import, "App should import the extracted Provider capability matrix service"
+for binding in [
+    "getProviderCapabilityMatrixCell",
+    "providerMatrixColumnKeys",
+    "ProviderMatrixCapabilityKey",
+]:
+    assert re.search(rf"\b{binding}\b", provider_capability_matrix_import.group("bindings")), f"Provider capability matrix import missing: {binding}"
+for helper in [
+    "mapProviderCapabilityToMatrixStatus",
+    "resolveProtocolMatrixStatus",
+    "getProviderCapabilityMatrixCell",
+]:
+    assert f"function {helper}" not in app_src, f"{helper} should not remain defined in App.tsx"
+    assert f"function {helper}" in provider_capability_matrix_src, f"{helper} should live in providerCapabilityMatrix.ts"
+for type_name in [
+    "ProviderMatrixStatus",
+    "ProviderMatrixCapabilityKey",
+    "ProviderCapabilityMatrixCell",
+]:
+    assert not re.search(rf"^type {type_name}\b", app_src, re.MULTILINE), f"{type_name} should not remain defined in App.tsx"
+    assert re.search(rf"^export type {type_name}\b", provider_capability_matrix_src, re.MULTILINE), f"{type_name} should be exported from providerCapabilityMatrix.ts"
+assert "export const providerMatrixColumnKeys" in provider_capability_matrix_src, "Provider matrix column order should live in the service"
+assert not re.search(r"from\s+['\"].*App['\"]", provider_capability_matrix_src), "Provider capability matrix service must not import App.tsx"
+for responsibility in [
+    "providerMatrixColumnKeys.map((key) => ({ key, label: providerMatrixColumnLabel(key) }))",
+    "getProviderCapabilityMatrixCell(template, column, props.providers)",
+]:
+    assert responsibility in app_src, f"Provider settings should keep matrix composition responsibility: {responsibility}"
+for forbidden in [
+    "localStorage",
+    "fetch(",
+    "invoke(",
+    "apiKey",
+    "secretId",
+    "generateOpenAIImage",
+    "saveProviderConfig",
+]:
+    assert forbidden not in provider_capability_matrix_src, f"Provider capability matrix service must stay pure: {forbidden}"
+assert len(app_src.splitlines()) < 5960, "App.tsx should stay below the post-Provider-capability-matrix extraction size guard"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"

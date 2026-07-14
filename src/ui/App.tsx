@@ -36,7 +36,7 @@ import type {
   BatchQueueTemplate
 } from '../domain/batchQueueTypes';
 import type { InspirationAsset } from '../domain/inspirationTypes';
-import type { GenerationMode, GenerationRecord, ImageGenerationRequest, ImageGenerationResult, ImageToImageAdapter, ProviderCapabilityStatus, ReferenceImage } from '../domain/providerTypes';
+import type { GenerationMode, GenerationRecord, ImageGenerationRequest, ImageGenerationResult, ImageToImageAdapter, ReferenceImage } from '../domain/providerTypes';
 import { listProviders } from '../providers/registry';
 import {
   chooseInspirationDir,
@@ -86,6 +86,11 @@ import {
   providerUsesConfig,
   resolveImageToImageAdapterForDisplay
 } from '../services/providerDisplay';
+import {
+  getProviderCapabilityMatrixCell,
+  providerMatrixColumnKeys,
+  type ProviderMatrixCapabilityKey
+} from '../services/providerCapabilityMatrix';
 import {
   buildOfflineDiagnosticSummary,
   buildGenerationUsageReadinessItem,
@@ -218,24 +223,14 @@ import {
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 import { readUrlSearchParam } from './urlSearch';
 
-const APP_VERSION = '0.5.18';
+const APP_VERSION = '0.5.19';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
 type ProviderPlatformType = 'aggregator' | 'official' | 'local';
 type ProviderServiceTemplateStatus = 'connected' | 'configurable' | 'planned' | 'local-plan';
 type ProviderServiceRegion = 'domestic' | 'overseas' | 'local' | 'custom';
-type ProviderMatrixStatus = 'live' | 'configurable' | 'partial' | 'planned' | 'localPlan' | 'unsupported' | 'unknown';
 type LocalModelDiagnosticStatus = 'idle' | 'checking' | 'online' | 'offline' | 'failed';
-type ProviderMatrixCapabilityKey =
-  | 'textToImage'
-  | 'imageToImage'
-  | 'multiReferenceImage'
-  | 'imagesApi'
-  | 'responsesApi'
-  | 'openAICompatible'
-  | 'officialProtocol'
-  | 'localService';
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -298,9 +293,6 @@ type ProviderServiceTemplate = {
   supportsImageToImage?: boolean;
   requiresPolling?: boolean;
   notes: string[];
-};
-type ProviderCapabilityMatrixCell = {
-  status: ProviderMatrixStatus;
 };
 type ToastItem = {
   id: number;
@@ -567,17 +559,6 @@ const providerServiceStatusRank: Record<ProviderServiceTemplateStatus, number> =
   planned: 3
 };
 
-const providerMatrixColumnKeys: ProviderMatrixCapabilityKey[] = [
-  'textToImage',
-  'imageToImage',
-  'multiReferenceImage',
-  'imagesApi',
-  'responsesApi',
-  'openAICompatible',
-  'officialProtocol',
-  'localService'
-];
-
 function loadLocalComfyUIConfig(): LocalComfyUIConfig {
   const raw = readStorageValue(LOCAL_COMFYUI_CONFIG_STORAGE_KEY);
   if (!raw) return { baseUrl: DEFAULT_COMFYUI_BASE_URL };
@@ -649,64 +630,6 @@ function buildProviderDiagnosticsReport(checks: ProviderDiagnosticItem[], contex
 function isBackgroundRecoveryCandidate(record: Pick<GenerationRecord, 'status' | 'error' | 'raw'>) {
   return Boolean((record.status === 'failed' || record.error) && recordBackgroundPollUrl(record) && isPotentialBackgroundCompletion(record));
 }
-
-function mapProviderCapabilityToMatrixStatus(
-  template: ProviderServiceTemplate,
-  capabilityStatus: ProviderCapabilityStatus
-): ProviderMatrixStatus {
-  if (capabilityStatus === 'supported') {
-    return template.status === 'connected' ? 'live' : template.status === 'configurable' ? 'configurable' : template.status === 'local-plan' ? 'localPlan' : 'planned';
-  }
-  if (capabilityStatus === 'partial') return 'partial';
-  if (capabilityStatus === 'planned') return template.status === 'local-plan' ? 'localPlan' : 'planned';
-  if (capabilityStatus === 'unsupported') return 'unsupported';
-  return 'unknown';
-}
-
-function resolveProtocolMatrixStatus(template: ProviderServiceTemplate, capability: ProviderMatrixCapabilityKey): ProviderMatrixStatus {
-  if (capability === 'localService') {
-    return template.platformType === 'local' ? 'localPlan' : 'unsupported';
-  }
-  if (capability === 'officialProtocol') {
-    if (template.platformType !== 'official') return 'unsupported';
-    return template.status === 'connected' ? 'live' : 'planned';
-  }
-  if (capability === 'openAICompatible') {
-    if (template.platformType !== 'aggregator') return 'unsupported';
-    return template.status === 'connected' ? 'live' : template.status === 'configurable' ? 'configurable' : 'planned';
-  }
-  if (capability === 'imagesApi' || capability === 'responsesApi') {
-    if (template.status === 'connected') return 'live';
-    if (template.status === 'configurable') return 'configurable';
-    if (template.status === 'local-plan') return 'unsupported';
-    return 'planned';
-  }
-  return 'unknown';
-}
-
-function getProviderCapabilityMatrixCell(
-  template: ProviderServiceTemplate,
-  column: { key: ProviderMatrixCapabilityKey; label: string },
-  providers: ReturnType<typeof listProviders>
-): ProviderCapabilityMatrixCell {
-  const provider = template.providerId ? providers.find((item) => item.id === template.providerId) : undefined;
-  let status: ProviderMatrixStatus;
-
-  if (column.key === 'textToImage' || column.key === 'imageToImage' || column.key === 'multiReferenceImage') {
-    if (provider) {
-      status = mapProviderCapabilityToMatrixStatus(template, provider.capabilities[column.key]);
-    } else {
-      status = template.status === 'local-plan' ? 'localPlan' : 'planned';
-    }
-  } else {
-    status = resolveProtocolMatrixStatus(template, column.key);
-  }
-
-  return {
-    status
-  };
-}
-
 
 const GITHUB_REPOSITORY_URL = 'https://github.com/BlueSummer2333/VisionHub-Studio';
 const GITHUB_RELEASES_URL = `${GITHUB_REPOSITORY_URL}/releases`;

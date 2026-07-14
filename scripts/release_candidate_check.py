@@ -28,6 +28,8 @@ REQUIRED_TRACKED_FILES = {
     "src/ui/library/LibraryPage.tsx",
     "src/services/comfyUIWorkflow.ts",
     "src/services/comfyUIWorkflow.test.ts",
+    "src/services/providerCapabilityMatrix.ts",
+    "src/services/providerCapabilityMatrix.test.ts",
 }
 
 
