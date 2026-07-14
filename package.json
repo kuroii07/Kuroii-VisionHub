@@ -1,7 +1,7 @@
 {
   "name": "visionhub-studio",
   "private": true,
-  "version": "0.5.20",
+  "version": "0.5.21",
   "type": "module",
   "description": "Kuroii-branded desktop AI image workflow studio for local-first provider, gallery, prompt, and inspiration workflows.",
   "scripts": {

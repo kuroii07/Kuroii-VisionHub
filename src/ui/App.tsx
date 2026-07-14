@@ -105,6 +105,12 @@ import {
   type ProviderServiceTemplateStatus
 } from '../services/providerServiceCatalog';
 import {
+  buildProviderProfileFilterOptions,
+  matchesProviderProfileFilter,
+  providerProfileBelongsToTemplate,
+  type ProviderProfileFilter
+} from '../services/providerProfileSelection';
+import {
   buildOfflineDiagnosticSummary,
   buildGenerationUsageReadinessItem,
   buildProviderReadinessItems,
@@ -236,7 +242,7 @@ import {
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 import { readUrlSearchParam } from './urlSearch';
 
-const APP_VERSION = '0.5.20';
+const APP_VERSION = '0.5.21';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -5589,46 +5595,12 @@ function createEmptyProviderDraftConfig(
   };
 }
 
-function providerProfileBelongsToTemplate(
-  profile: ProviderConnectionProfile,
-  template: ProviderServiceTemplate
-) {
-  if (!template.providerId || profile.providerId !== template.providerId) return false;
-  if (profile.serviceTemplateId) return profile.serviceTemplateId === template.id;
-  return template.id === 'aggregator-openai-compatible' || template.id === 'official-openai' || template.id === 'official-minimax' || template.id === 'official-gemini' || template.id === 'local-sd-webui';
-}
-
 function providerGenerationLabel(provider: ReturnType<typeof listProviders>[number], t: Translator) {
   const template = getDefaultProviderServiceTemplateForProvider(provider.id);
   if (!template) return provider.name;
   const platformLabel = t(`provider.platform.${template.platformType}.label` as Parameters<Translator>[0]);
   const serviceLabel = t(`provider.service.${template.id}.label` as Parameters<Translator>[0]);
   return `${platformLabel} · ${serviceLabel}`;
-}
-
-type ProviderProfileFilter = 'all' | 'enabled' | 'passed' | 'warning' | 'failed' | 'untested';
-
-function buildProviderProfileFilterOptions(profiles: ProviderConnectionProfile[], t: Translator) {
-  const counts: Record<ProviderProfileFilter, number> = {
-    all: profiles.length,
-    enabled: profiles.filter((profile) => profile.enabled).length,
-    passed: profiles.filter((profile) => profile.lastTestStatus === 'passed').length,
-    warning: profiles.filter((profile) => profile.lastTestStatus === 'warning').length,
-    failed: profiles.filter((profile) => profile.lastTestStatus === 'failed').length,
-    untested: profiles.filter((profile) => profile.lastTestStatus === 'untested').length
-  };
-  const ids: ProviderProfileFilter[] = ['all', 'enabled', 'passed', 'warning', 'failed', 'untested'];
-  return ids.map((id) => ({
-    id,
-    label: t(`provider.profileFilter.${id}` as Parameters<Translator>[0]),
-    count: counts[id]
-  }));
-}
-
-function matchesProviderProfileFilter(profile: ProviderConnectionProfile, filter: ProviderProfileFilter) {
-  if (filter === 'all') return true;
-  if (filter === 'enabled') return profile.enabled;
-  return profile.lastTestStatus === filter;
 }
 
 function safeProviderConfigText(value: unknown) {

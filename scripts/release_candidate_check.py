@@ -32,6 +32,8 @@ REQUIRED_TRACKED_FILES = {
     "src/services/providerCapabilityMatrix.test.ts",
     "src/services/providerServiceCatalog.ts",
     "src/services/providerServiceCatalog.test.ts",
+    "src/services/providerProfileSelection.ts",
+    "src/services/providerProfileSelection.test.ts",
 }
 
 

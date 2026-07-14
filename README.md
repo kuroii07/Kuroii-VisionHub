@@ -126,7 +126,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.20` Provider service catalog extraction. The existing platform options, 15 service templates, status sorting, template lookup, configurable-state check, and provider-to-default-template mapping now live in a tested pure catalog while App retains localization, profile ownership, draft configuration, UI state, actions, generation, and persistence.
+Current checkpoint: `0.5.21` Provider profile selection extraction. Profile-to-template ownership, legacy profile fallback matching, six-state profile filtering, translated filter options, and filter counts now live in a tested pure service while App retains profile mutation, credentials, persistence, selected state, UI, Provider actions, and generation.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -173,6 +173,16 @@ Current checkpoint: `0.5.20` Provider service catalog extraction. The existing p
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.21 Provider profile selection extraction
+
+- App version is now `0.5.21`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Moved profile-to-template ownership, legacy profiles without `serviceTemplateId` fallback matching, the six profile filter states, filter option/count generation, and filter matching from `src/ui/App.tsx` into `src/services/providerProfileSelection.ts`.
+- The legacy ownership fallback remains unchanged for the established aggregator, OpenAI, MiniMax, Gemini, and local SD WebUI templates; profile ids and `profile:${profileId}` credential bindings are untouched.
+- `App.tsx` continues to own profile creation, deletion, enable/disable, selected-profile fallback, credential deletion, configuration updates, connection tests, diagnostics, generation, and persistence.
+- Added 18 focused Vitest cases covering provider mismatch, explicit template ids, every legacy fallback, filter order/counts/translations, enabled filtering, and each test-status filter.
+- `run_checks.ps1` passed with 102/102 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- The `0.5.21` user-facing release EXE passed a 12-second launch smoke: file/product version `0.5.21`, 17,463,296 bytes (16.65 MB), SHA256 `ACEBCF1A77FD1B484121BA87EBD978BD69E7CE3C876813FB67A0D07572E2A12F`.
 
 ### v0.5.20 Provider service catalog extraction
 
@@ -881,7 +891,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.20
+- 版本：0.5.21
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

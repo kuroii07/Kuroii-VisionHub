@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.20`
+- Current app version: `0.5.21`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.20` Provider service catalog extraction: move the existing platform options, 15 service templates, status sorting, lookup, configurable-state rules, and provider-to-default-template mapping into a tested pure catalog while preserving App-owned localization, profile ownership, draft configuration, UI state, actions, generation, and persistence.
+- Current focus: `0.5.21` Provider profile selection extraction: move profile-to-template ownership, legacy fallback matching, six-state filtering, translated filter options, and filter counts into a tested pure service while preserving App-owned profile mutation, credentials, persistence, selected state, UI, Provider actions, and generation.
 
 ## 2. 后续开发前必读
 
@@ -127,6 +127,7 @@
 | ~~`0.5.18`~~ | Provider presentation module extraction | Extract read-only Provider metadata, readiness, capability-matrix, and diagnostics-result rendering while preserving App-owned actions, calculations, configuration, credentials, Provider behavior, generation, and persistence | Completed and release-launch validated |
 | ~~`0.5.19`~~ | Provider capability matrix service extraction | Extract matrix status types, column order, manifest/protocol mapping, and cell calculation into a tested pure service while preserving App-owned localization, composition, UI state, configuration, credentials, actions, generation, and persistence | Completed and release-launch validated |
 | ~~`0.5.20`~~ | Provider service catalog extraction | Extract existing platform options, service templates, sorting, lookup, configurable-state rules, and default-template mapping while preserving App-owned localization, profiles, draft configuration, UI state, actions, generation, and persistence | Completed and release-launch validated |
+| ~~`0.5.21`~~ | Provider profile selection extraction | Extract profile/template ownership and pure filter/count helpers while preserving profile ids, legacy fallback matching, mutation, credentials, persistence, UI, actions, and generation | Completed and release-launch validated |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -1248,7 +1249,27 @@ Acceptance:
 - [x] Unified verification passed with 84/84 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` version `0.5.20` built from the final source at 17,463,296 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `7D8BD726C0AFF1EDFEE3A4326B9E846E7BE31F0D25B536E193F8313C995AC859`.
 
-### 5.48 `v1.0 pre` Release and migration preparation
+### 5.48 `0.5.21` Provider profile selection extraction
+
+Status 2026-07-14: completed and release-launch validated. Profile-to-template ownership, legacy profile fallback matching, profile filter types, translated filter options/counts, and filter matching have been moved out of the oversized app shell without changing profile ids, `profile:${profileId}` credential bindings, profile data, UI, configuration, Provider actions, generation, or persistence.
+
+Objectives:
+
+- Move `ProviderProfileFilter`, `providerProfileBelongsToTemplate`, `buildProviderProfileFilterOptions`, and `matchesProviderProfileFilter` into `src/services/providerProfileSelection.ts`.
+- Preserve explicit `serviceTemplateId` ownership and the exact legacy fallback for older profiles without a template id.
+- Keep profile create/delete/enable mutations, selected-profile fallback orchestration, credential deletion, configuration updates, tests, diagnostics, generation, and persistence owned by `App.tsx`.
+- Add focused tests and extend smoke/release-candidate checks for ownership, fallback compatibility, filters/counts, purity, exact App mutation responsibilities, and reduced App size.
+
+Acceptance:
+
+- [x] Explicit template ownership and all established legacy fallback rules remain unchanged.
+- [x] `src/ui/App.tsx` is reduced below 5,660 lines and no longer defines the moved filter type or helper functions.
+- [x] `src/services/providerProfileSelection.ts` does not import `App.tsx` and contains no storage, profile mutation, credential, configuration-save, network, or generation responsibility.
+- [x] Focused profile-selection tests pass with 18/18 cases; smoke, UI QA, and the production frontend build pass after extraction.
+- [x] Unified verification passed with 102/102 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` version `0.5.21` built from the final source at 17,463,296 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `ACEBCF1A77FD1B484121BA87EBD978BD69E7CE3C876813FB67A0D07572E2A12F`.
+
+### 5.49 `v1.0 pre` Release and migration preparation
 
 目标：
 

@@ -50,6 +50,8 @@ required = [
     "src/services/providerCapabilityMatrix.test.ts",
     "src/services/providerServiceCatalog.ts",
     "src/services/providerServiceCatalog.test.ts",
+    "src/services/providerProfileSelection.ts",
+    "src/services/providerProfileSelection.test.ts",
     "src/services/promptAssist.ts",
     "src/services/promptTemplates.ts",
     "src/services/freePlatforms.ts",
@@ -107,6 +109,7 @@ comfy_workflow_presentation_src = (ROOT / "src/ui/ComfyUIWorkflowPresentation.ts
 comfy_workflow_service_src = (ROOT / "src/services/comfyUIWorkflow.ts").read_text(encoding="utf-8")
 provider_capability_matrix_src = (ROOT / "src/services/providerCapabilityMatrix.ts").read_text(encoding="utf-8")
 provider_service_catalog_src = (ROOT / "src/services/providerServiceCatalog.ts").read_text(encoding="utf-8")
+provider_profile_selection_src = (ROOT / "src/services/providerProfileSelection.ts").read_text(encoding="utf-8")
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
@@ -673,7 +676,6 @@ for constant in ["providerPlatformOptions", "providerServiceTemplates", "provide
 assert not re.search(r"from\s+['\"].*App['\"]", provider_service_catalog_src), "Provider service catalog must not import App.tsx"
 for responsibility in [
     "function createEmptyProviderDraftConfig",
-    "function providerProfileBelongsToTemplate",
     "function providerGenerationLabel",
     "providerServiceTemplateDisplayName(selectedServiceTemplate, t)",
 ]:
@@ -689,6 +691,53 @@ for forbidden in [
 ]:
     assert forbidden not in provider_service_catalog_src, f"Provider service catalog must stay pure: {forbidden}"
 assert len(app_src.splitlines()) < 5700, "App.tsx should stay below the post-Provider-service-catalog extraction size guard"
+provider_profile_selection_import = re.search(
+    r"import\s*\{(?P<bindings>.*?)\}\s*from\s*['\"]\.\./services/providerProfileSelection['\"]",
+    app_src,
+    re.DOTALL,
+)
+assert provider_profile_selection_import, "App should import the extracted Provider profile selection service"
+for binding in [
+    "buildProviderProfileFilterOptions",
+    "matchesProviderProfileFilter",
+    "providerProfileBelongsToTemplate",
+    "ProviderProfileFilter",
+]:
+    assert re.search(rf"\b{binding}\b", provider_profile_selection_import.group("bindings")), f"Provider profile selection import missing: {binding}"
+for helper in [
+    "buildProviderProfileFilterOptions",
+    "matchesProviderProfileFilter",
+    "providerProfileBelongsToTemplate",
+]:
+    assert f"function {helper}" not in app_src, f"{helper} should not remain defined in App.tsx"
+    assert f"function {helper}" in provider_profile_selection_src, f"{helper} should live in providerProfileSelection.ts"
+assert not re.search(r"^type ProviderProfileFilter\b", app_src, re.MULTILINE), "ProviderProfileFilter should not remain defined in App.tsx"
+assert re.search(r"^export type ProviderProfileFilter\b", provider_profile_selection_src, re.MULTILINE), "ProviderProfileFilter should be exported from providerProfileSelection.ts"
+assert not re.search(r"from\s+['\"].*App['\"]", provider_profile_selection_src), "Provider profile selection must not import App.tsx"
+for responsibility in [
+    "function deleteCurrentProviderProfile",
+    "function toggleProviderProfile",
+    "deleteProviderProfile(providerProfiles, profileId)",
+    "setProviderProfileEnabled(providerProfiles, profileId, enabled)",
+    "deleteProviderSecret(providerProfileSecretId(profileId))",
+]:
+    assert responsibility in app_src, f"Provider profile mutation should remain App-owned: {responsibility}"
+for forbidden in [
+    "localStorage",
+    "readStorageValue",
+    "writeStorageValue",
+    "saveProviderProfiles",
+    "deleteProviderProfile",
+    "setProviderProfileEnabled",
+    "providerProfileSecretId",
+    "apiKey",
+    "secretId",
+]:
+    assert forbidden not in provider_profile_selection_src, f"Provider profile selection must stay pure: {forbidden}"
+assert "providerProfiles.filter((profile) => providerProfileBelongsToTemplate(profile, selectedServiceTemplate))" in app_src, "App should keep selected-template profile composition"
+assert "buildProviderProfileFilterOptions(props.providerProfiles, props.t)" in app_src, "Provider settings should keep filter option composition"
+assert "props.providerProfiles.filter((profile) => matchesProviderProfileFilter(profile, profileFilter))" in app_src, "Provider settings should keep filtered profile composition"
+assert len(app_src.splitlines()) < 5660, "App.tsx should stay below the post-Provider-profile-selection extraction size guard"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"
