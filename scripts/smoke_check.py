@@ -54,6 +54,8 @@ required = [
     "src/services/providerProfileSelection.test.ts",
     "src/services/providerDraftPresentation.ts",
     "src/services/providerDraftPresentation.test.ts",
+    "src/services/providerConfigValidation.ts",
+    "src/services/providerConfigValidation.test.ts",
     "src/services/promptAssist.ts",
     "src/services/promptTemplates.ts",
     "src/services/freePlatforms.ts",
@@ -113,6 +115,7 @@ provider_capability_matrix_src = (ROOT / "src/services/providerCapabilityMatrix.
 provider_service_catalog_src = (ROOT / "src/services/providerServiceCatalog.ts").read_text(encoding="utf-8")
 provider_profile_selection_src = (ROOT / "src/services/providerProfileSelection.ts").read_text(encoding="utf-8")
 provider_draft_presentation_src = (ROOT / "src/services/providerDraftPresentation.ts").read_text(encoding="utf-8")
+provider_config_validation_src = (ROOT / "src/services/providerConfigValidation.ts").read_text(encoding="utf-8")
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
@@ -781,6 +784,49 @@ for forbidden in [
 ]:
     assert forbidden not in provider_draft_presentation_src, f"Provider draft/presentation service must stay pure: {forbidden}"
 assert len(app_src.splitlines()) < 5630, "App.tsx should stay below the post-Provider-draft-presentation extraction size guard"
+provider_config_validation_import = re.search(
+    r"import\s*\{(?P<bindings>.*?)\}\s*from\s*['\"]\.\./services/providerConfigValidation['\"]",
+    app_src,
+    re.DOTALL,
+)
+assert provider_config_validation_import, "App should import the extracted Provider config validation service"
+for binding in [
+    "ensureManualModelOption",
+    "isProviderConnectionProfileLike",
+    "safeProviderConfigText",
+]:
+    assert re.search(rf"\b{binding}\b", provider_config_validation_import.group("bindings")), f"Provider config validation import missing: {binding}"
+for helper in [
+    "ensureManualModelOption",
+    "isProviderConnectionProfileLike",
+    "safeProviderConfigText",
+]:
+    assert f"function {helper}" not in app_src, f"{helper} should not remain defined in App.tsx"
+    assert f"function {helper}" in provider_config_validation_src, f"{helper} should live in providerConfigValidation.ts"
+assert not re.search(r"from\s+['\"].*App['\"]", provider_config_validation_src), "Provider config validation must not import App.tsx"
+for responsibility in [
+    "async function importProviderConfigFromClipboard",
+    "navigator.clipboard?.readText()",
+    "parseProviderConfigImport(text)",
+    "setProviderConfig(importedConfig)",
+    "saveProviderConfig(selectedProvider.id, nextConfig)",
+    "persistProfile({",
+]:
+    assert responsibility in app_src, f"Provider import/persistence responsibility should remain App-owned: {responsibility}"
+for forbidden in [
+    "localStorage",
+    "readStorageValue",
+    "writeStorageValue",
+    "saveProviderConfig",
+    "saveProviderProfiles",
+    "navigator.clipboard",
+    "parseProviderConfigImport",
+    "providerProfileSecretId",
+    "apiKey",
+    "secretId",
+]:
+    assert forbidden not in provider_config_validation_src, f"Provider config validation must stay pure: {forbidden}"
+assert len(app_src.splitlines()) < 5610, "App.tsx should stay below the post-Provider-config-validation extraction size guard"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"

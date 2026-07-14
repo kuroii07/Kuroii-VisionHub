@@ -140,6 +140,11 @@ import {
   providerServiceTemplateDisplayName
 } from '../services/providerDraftPresentation';
 import {
+  ensureManualModelOption,
+  isProviderConnectionProfileLike,
+  safeProviderConfigText
+} from '../services/providerConfigValidation';
+import {
   createProviderProfile,
   deleteProviderProfile,
   getProfilesForProvider,
@@ -246,7 +251,7 @@ import {
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 import { readUrlSearchParam } from './urlSearch';
 
-const APP_VERSION = '0.5.22';
+const APP_VERSION = '0.5.23';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -5570,25 +5575,6 @@ function ProviderSettingsPage(props: {
       </section>
     </>
   );
-}
-
-function safeProviderConfigText(value: unknown) {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function isProviderConnectionProfileLike(value: unknown): value is ProviderConnectionProfile {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const candidate = value as Partial<ProviderConnectionProfile>;
-  return typeof candidate.id === 'string' && typeof candidate.providerId === 'string';
-}
-
-function ensureManualModelOption(config: OpenAICompatibleConfig): OpenAICompatibleConfig {
-  const modelId = config.modelId.trim();
-  if (!modelId || config.modelOptions.includes(modelId)) return config;
-  return {
-    ...config,
-    modelOptions: [modelId, ...config.modelOptions]
-  };
 }
 
 function countLikelyImageModels(modelIds: string[]) {

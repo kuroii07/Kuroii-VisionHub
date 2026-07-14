@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.22`
+- Current app version: `0.5.23`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.22` Provider draft/presentation helper extraction: move service display names, default new-profile draft construction, and translated generation-entry labels into a tested pure service while preserving App-owned draft lifecycle, configuration state, persistence, credentials, model operations, diagnostics, UI, and generation.
+- Current focus: `0.5.23` Provider config validation helper extraction: move config text cleanup, runtime profile-shape checks, and immutable manual-model option completion into a tested pure service while preserving App-owned clipboard import, parsing, persistence, credentials, model operations, diagnostics, UI, and generation.
 
 ## 2. 后续开发前必读
 
@@ -129,6 +129,7 @@
 | ~~`0.5.20`~~ | Provider service catalog extraction | Extract existing platform options, service templates, sorting, lookup, configurable-state rules, and default-template mapping while preserving App-owned localization, profiles, draft configuration, UI state, actions, generation, and persistence | Completed and release-launch validated |
 | ~~`0.5.21`~~ | Provider profile selection extraction | Extract profile/template ownership and pure filter/count helpers while preserving profile ids, legacy fallback matching, mutation, credentials, persistence, UI, actions, and generation | Completed and release-launch validated |
 | ~~`0.5.22`~~ | Provider draft/presentation helper extraction | Extract service display names, default draft construction, and generation-entry labels while preserving draft lifecycle, configuration, persistence, credentials, diagnostics, UI, and generation | Completed and release-launch validated |
+| ~~`0.5.23`~~ | Provider config validation helper extraction | Extract config text cleanup, profile-shape checks, and manual-model option completion while preserving clipboard import, parsing, save/persistence, credentials, diagnostics, UI, and generation | Completed and release-launch validated |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -1290,7 +1291,27 @@ Acceptance:
 - [x] Unified verification passed with 110/110 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` version `0.5.22` built from the final source at 17,462,784 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `0CDA78F9BFB63A4C229B2CF77D395AB7AD577640F4B09323A889ED214B3505D0`.
 
-### 5.50 `v1.0 pre` Release and migration preparation
+### 5.50 `0.5.23` Provider config validation helper extraction
+
+Status 2026-07-14: completed and release-launch validated. Config text cleanup, runtime Provider profile shape checking, and immutable manual-model option completion have been moved out of the oversized app shell without changing clipboard import, config parsing, profile data, save/persistence, credentials, UI, diagnostics, generation, or Provider protocol behavior.
+
+Objectives:
+
+- Move `safeProviderConfigText`, `isProviderConnectionProfileLike`, and `ensureManualModelOption` into `src/services/providerConfigValidation.ts`.
+- Preserve exact string trimming, profile-shape requirements, empty/existing model no-op behavior, missing-model ordering, and source-object immutability.
+- Keep clipboard reads, JSON parsing, state updates, Provider config saves, profile persistence, credentials, model refresh/probe, diagnostics, and generation owned by `App.tsx`.
+- Add focused tests and extend smoke/release-candidate checks for values, type guard behavior, immutability, purity, exact App import/persistence responsibilities, and reduced App size.
+
+Acceptance:
+
+- [x] All three helper behaviors and existing call sites remain unchanged.
+- [x] `src/ui/App.tsx` is reduced below 5,610 lines and no longer defines the moved helper functions.
+- [x] `src/services/providerConfigValidation.ts` does not import `App.tsx` and contains no storage, clipboard, parsing, config-save, profile persistence, credential, or generation responsibility.
+- [x] Focused config-validation tests pass with 18/18 cases; smoke, UI QA, and the production frontend build pass after extraction.
+- [x] Unified verification passed with 128/128 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` version `0.5.23` built from the final source at 17,462,784 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `0754F17C9E6AB6E0F6E35A19406406CE827E3B2CB9A849C5884A138DD775A86F`.
+
+### 5.51 `v1.0 pre` Release and migration preparation
 
 目标：
 
