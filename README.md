@@ -125,7 +125,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.23` Provider config validation helper extraction. Config text cleanup, runtime profile-shape checks, and immutable manual-model option completion now live in a tested pure service while App retains clipboard import, parsing, save/persistence, credentials, model operations, diagnostics, UI, and generation.
+Current checkpoint: `0.5.24` portability and settings restore is release-launch validated. The next phase is pre-v1.0 installation, uninstallation, migration, and release-readiness validation without adding another large feature slice.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -139,7 +139,7 @@ Current checkpoint: `0.5.23` Provider config validation helper extraction. Confi
 - ComfyUI 目前要求导入 API Format workflow；普通 UI workflow 会保留解析预览，但不会误导为可直接生成。
 - 图生图协议映射 V2 已接入配置和生成链路，可在平台配置中切换参考图字段结构，并在生成结果 raw 中记录实际映射摘要。
 - 工作区首页 V2 已完成收口：启动页进入真实工作台首页，集中展示最近继续、异常任务、最近素材、画廊整理入口、批量队列入口、多模型对比入口和关键状态概览。
-- 偏好设置 V2 已完成收口：创作默认值、默认参考图角色、Prompt 历史、作品保存偏好、界面密度、首页模块控制、数据目录和设置备份都集中管理；语言提供简体中文 / English 手动切换，不做跟随系统。
+- 偏好设置 V2 已完成收口：创作默认值、默认参考图角色、Prompt 历史、作品保存偏好、界面密度、首页模块控制、数据目录，以及设置备份导出 / 预览恢复都集中管理；语言提供简体中文 / English 手动切换，不做跟随系统。
 - 偏好设置完成最终视觉收尾：去掉顶部概览卡片，标题对用户显示为“偏好设置”，下拉菜单统一紧凑宽度和右对齐，版本号与“版本”同一行展示。
 - 创作台复用记录删除改用软件统一确认弹窗，不再弹出浏览器原生确认框；删除仍只移除软件记录，不删除磁盘图片文件。
 - AI 创作台收口补丁已完成：文生图 / 图生图画布结果互相隔离，生成中提示按当前模式显示，多张生成结果可在创作台内切换预览，清空画布会按模式持久化，不会在切换功能页后恢复旧图。
@@ -172,6 +172,18 @@ Current checkpoint: `0.5.23` Provider config validation helper extraction. Confi
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.24 Portability and settings restore
+
+- App version is now `0.5.24`, synchronized across package metadata, Tauri metadata, Cargo metadata, Cargo lock, app version display, README, and roadmap docs.
+- Added settings-backup import with a native confirmation preview, 5 MB input guard, schema validation, normalized app preferences, profile-id-preserving merge, duplicate-id handling, and explicit history-skip warnings.
+- Backup restore never imports, deletes, or overwrites API keys or system credentials. Existing profiles that are not present in the backup remain available; matching profile ids keep their `profile:${profileId}` credential binding.
+- Removed machine-specific `D:/AIGC/codex/Libray/**` asset-protocol entries. Tauri now grants recursive display access to the current AppData, gallery, and inspiration directories at startup and whenever storage paths change.
+- Provider config normalization now drops unknown fields, preventing legacy `apiKey` / `secret` properties from surviving into exported compatibility config JSON. Backup export records the actual app package version.
+- Removed the display-only developer mode from Preferences and replaced duplicate “check updates” actions with one accurate “View releases” entry that opens GitHub Releases without claiming in-app auto-update support.
+- Unified verification passed with 133/133 frontend tests and 3/3 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- The `0.5.24` user-facing release EXE passed a 12-second launch smoke: file/product version `0.5.24`, 17,466,368 bytes (16.66 MB), SHA256 `ADE71AA76A224C6A05207E9523BFEEDF8C428320629C2535C127DFBBAD247494`.
+- Local MSI and NSIS bundles were generated successfully. Installation, upgrade, and uninstallation QA remain part of the pre-v1.0 release-readiness phase.
 
 ### v0.5.23 Provider config validation helper extraction
 
@@ -910,7 +922,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.23
+- 版本：0.5.24
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

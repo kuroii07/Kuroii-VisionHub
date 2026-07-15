@@ -15871,6 +15871,11 @@ body {
   line-height: 1.65;
 }
 
+.confirmMessage.multiline {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
 .confirmError {
   display: block;
   padding: 8px 10px;

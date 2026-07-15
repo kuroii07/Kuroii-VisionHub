@@ -1,4 +1,4 @@
-import { Trash2, X } from 'lucide-react';
+import { Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { StorageSettings } from '../services/desktopApi';
 import type { Translator } from '../i18n';
@@ -180,12 +180,12 @@ export function ConfirmDialog(props: {
     <div className="modalBackdrop confirmBackdrop" onClick={() => !isSubmitting && props.onClose()}>
       <section className={`confirmDialog ${tone}`} role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-message" onClick={(event) => event.stopPropagation()}>
         <div className="confirmIconWrap">
-          <Trash2 size={22} />
+          {props.request.icon === 'import' ? <Upload size={22} /> : <Trash2 size={22} />}
         </div>
         <div className="confirmContent">
-          <p className="eyebrow">Confirm Action</p>
+          <p className="eyebrow">{props.request.eyebrow ?? 'Confirm Action'}</p>
           <h2 id="confirm-dialog-title">{props.request.title}</h2>
-          <p id="confirm-dialog-message">{props.request.message}</p>
+          <p id="confirm-dialog-message" className={props.request.multiline ? 'confirmMessage multiline' : 'confirmMessage'}>{props.request.message}</p>
           {props.request.error ? <small className="confirmError">{props.request.error}</small> : null}
         </div>
         <div className="confirmActions">

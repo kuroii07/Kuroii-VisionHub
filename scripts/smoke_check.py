@@ -56,6 +56,8 @@ required = [
     "src/services/providerDraftPresentation.test.ts",
     "src/services/providerConfigValidation.ts",
     "src/services/providerConfigValidation.test.ts",
+    "src/services/settingsBackup.ts",
+    "src/services/settingsBackup.test.ts",
     "src/services/promptAssist.ts",
     "src/services/promptTemplates.ts",
     "src/services/freePlatforms.ts",
@@ -116,6 +118,7 @@ provider_service_catalog_src = (ROOT / "src/services/providerServiceCatalog.ts")
 provider_profile_selection_src = (ROOT / "src/services/providerProfileSelection.ts").read_text(encoding="utf-8")
 provider_draft_presentation_src = (ROOT / "src/services/providerDraftPresentation.ts").read_text(encoding="utf-8")
 provider_config_validation_src = (ROOT / "src/services/providerConfigValidation.ts").read_text(encoding="utf-8")
+settings_backup_src = (ROOT / "src/services/settingsBackup.ts").read_text(encoding="utf-8")
 free_generation_src = (ROOT / "src/ui/FreeGenerationPage.tsx").read_text(encoding="utf-8")
 image_preview_src = (ROOT / "src/ui/ImagePreviewModal.tsx").read_text(encoding="utf-8")
 prompt_templates_src = (ROOT / "src/ui/PromptTemplatesPage.tsx").read_text(encoding="utf-8")
@@ -139,6 +142,11 @@ assert "home.route.label" not in home_page_src, "Workspace home should not show 
 
 assert "convertFileSrc" in (ROOT / "src/services/desktopApi.ts").read_text(encoding="utf-8"), "Local image display should use Tauri file URLs instead of startup base64 hydration"
 main_rs = (ROOT / "src-tauri/src/main.rs").read_text(encoding="utf-8")
+tauri_conf_src = (ROOT / "src-tauri/tauri.conf.json").read_text(encoding="utf-8")
+assert "register_asset_protocol_directories(app.handle())" in main_rs, "App startup should register current image directories for the asset protocol"
+assert "register_asset_protocol_directories(app)?" in main_rs, "Storage changes should refresh asset-protocol directory access"
+assert ".allow_directory(&directory, true)" in main_rs, "Configured image directories should be allowed recursively"
+assert "D:/AIGC" not in tauri_conf_src and "D:\\\\AIGC" not in tauri_conf_src, "Tauri asset scope must not contain machine-specific D-drive paths"
 assert "compact_generation_record_for_history" in main_rs, "History records should be compacted before persistence"
 assert "changed |= hydrate_record_image_urls(&app, record)" not in main_rs, "History load should not hydrate every local image into base64 at startup"
 assert "fn is_external_image_url" in main_rs and "asset.localhost" in main_rs, "Reference submission must not treat Tauri asset.localhost preview URLs as external images"
@@ -243,11 +251,21 @@ for mapping in [
     "onOpenAppDataDirectory={openAppDataDirectory}",
     "onOpenBackupsDirectory={openBackupsDirectory}",
     "onExportSettingsBackup={exportCurrentSettingsBackup}",
+    "onImportSettingsBackup={importSettingsBackup}",
     "onExportMigrationGuide={exportMigrationGuide}",
     "onOpenReleasePage={openReleasePage}",
 ]:
     assert mapping in settings_mount_src, f"Settings page App callback mapping missing: {mapping}"
 assert settings_page_src.count("props.onOpenReleasePage") == 1, "Settings page should expose one release-page action"
+assert "props.onImportSettingsBackup" in settings_page_src, "Settings page should expose settings backup import"
+assert "parseSettingsBackupText" in app_src and "mergeImportedProviderProfiles" in app_src, "App should use the tested settings backup service"
+for responsibility in ["saveAppSettings", "saveProviderProfiles", "saveProviderConfig"]:
+    assert responsibility not in settings_backup_src, f"Settings backup parser must stay free of persistence: {responsibility}"
+for term in [
+    "'settings.importBackup': '导入设置'",
+    "'settings.importBackup': 'Import settings'",
+]:
+    assert term in i18n_src, f"Settings backup import copy missing: {term}"
 assert "settings.checkUpdates" not in settings_page_src, "Settings page should not label a release link as update checking"
 for term in [
     "'settings.viewReleases': '查看发布版本'",
@@ -755,7 +773,7 @@ for forbidden in [
 assert "providerProfiles.filter((profile) => providerProfileBelongsToTemplate(profile, selectedServiceTemplate))" in app_src, "App should keep selected-template profile composition"
 assert "buildProviderProfileFilterOptions(props.providerProfiles, props.t)" in app_src, "Provider settings should keep filter option composition"
 assert "props.providerProfiles.filter((profile) => matchesProviderProfileFilter(profile, profileFilter))" in app_src, "Provider settings should keep filtered profile composition"
-assert len(app_src.splitlines()) < 5660, "App.tsx should stay below the post-Provider-profile-selection extraction size guard"
+assert len(app_src.splitlines()) < 5690, "App.tsx should stay below the settings-backup-import size guard"
 provider_draft_presentation_import = re.search(
     r"import\s*\{(?P<bindings>.*?)\}\s*from\s*['\"]\.\./services/providerDraftPresentation['\"]",
     app_src,
@@ -797,7 +815,7 @@ for forbidden in [
     "secretId",
 ]:
     assert forbidden not in provider_draft_presentation_src, f"Provider draft/presentation service must stay pure: {forbidden}"
-assert len(app_src.splitlines()) < 5630, "App.tsx should stay below the post-Provider-draft-presentation extraction size guard"
+assert len(app_src.splitlines()) < 5690, "App.tsx should stay below the settings-backup-import size guard"
 provider_config_validation_import = re.search(
     r"import\s*\{(?P<bindings>.*?)\}\s*from\s*['\"]\.\./services/providerConfigValidation['\"]",
     app_src,
@@ -840,7 +858,7 @@ for forbidden in [
     "secretId",
 ]:
     assert forbidden not in provider_config_validation_src, f"Provider config validation must stay pure: {forbidden}"
-assert len(app_src.splitlines()) < 5610, "App.tsx should stay below the post-Provider-config-validation extraction size guard"
+assert len(app_src.splitlines()) < 5690, "App.tsx should stay below the settings-backup-import size guard"
 assert "const LIBRARY_INITIAL_RENDER_COUNT = 18;" in library_model_src, "Library initial render should stay small for large local image galleries"
 assert "const LIBRARY_RENDER_BATCH_SIZE = 18;" in library_model_src, "Library thumbnail batches should stay incremental"
 assert "IntersectionObserver" in library_page_src and "library.performance.loadMore" in library_page_src, "Library needs scroll/manual incremental thumbnail loading"

@@ -199,7 +199,6 @@ export function normalizeProviderConfig(config: Partial<OpenAICompatibleConfig>)
     : defaultOpenAICompatibleConfig.protocol;
 
   return {
-    ...merged,
     displayName: String(merged.displayName || defaultOpenAICompatibleConfig.displayName),
     baseUrl: String(merged.baseUrl || defaultOpenAICompatibleConfig.baseUrl).trim(),
     modelId: String(merged.modelId || defaultOpenAICompatibleConfig.modelId).trim(),
@@ -231,7 +230,10 @@ export function exportProviderConfigMap(): ProviderConfigMap {
   if (!raw) return {};
 
   try {
-    return JSON.parse(raw) as ProviderConfigMap;
+    const parsed = JSON.parse(raw) as ProviderConfigMap;
+    return Object.fromEntries(
+      Object.entries(parsed).map(([providerId, config]) => [providerId, normalizeProviderConfig(config)])
+    );
   } catch (error) {
     console.warn('[VisionHub] provider config export failed; using empty map', error);
     return {};

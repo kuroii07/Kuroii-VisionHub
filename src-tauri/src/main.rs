@@ -3545,13 +3545,14 @@ fn export_settings_backup(
     request: SettingsBackupRequest,
 ) -> Result<SettingsBackupResult, String> {
     let created_at = chrono_like_timestamp();
+    let app_version = app.package_info().version.to_string();
     let backups_dir = backups_dir(&app)?;
     let history = read_generation_history_records(&app).unwrap_or_default();
     let filename = format!("visionhub-settings-backup-{}.json", chrono_like_timestamp_millis());
     let path = backups_dir.join(filename);
     let payload = serde_json::json!({
         "schema": "visionhub-settings-backup/v1",
-        "version": "0.2.3",
+        "version": app_version,
         "created_at": created_at,
         "app_settings": request.app_settings,
         "provider_configs": request.provider_configs,
@@ -4289,6 +4290,7 @@ fn storage_settings_response(app: &tauri::AppHandle) -> Result<StorageSettings, 
     let default_inspiration_dir = default_inspiration_images_dir(app)?;
     let resolved_inspiration_dir = inspiration_images_dir(app)?;
     let settings_file = storage_settings_file_path(app)?;
+    register_asset_protocol_directories(app)?;
 
     Ok(StorageSettings {
         library_dir_override: stored
@@ -4305,6 +4307,29 @@ fn storage_settings_response(app: &tauri::AppHandle) -> Result<StorageSettings, 
         resolved_inspiration_dir: path_to_user_string(&resolved_inspiration_dir),
         settings_file: path_to_user_string(&settings_file),
     })
+}
+
+fn dedupe_asset_protocol_directories(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    let mut seen = HashSet::new();
+    paths
+        .into_iter()
+        .filter(|path| seen.insert(path_to_user_string(path).to_lowercase()))
+        .collect()
+}
+
+fn register_asset_protocol_directories(app: &tauri::AppHandle) -> Result<(), String> {
+    let directories = dedupe_asset_protocol_directories(vec![
+        app_data_dir(app)?,
+        library_dir(app)?,
+        inspiration_images_dir(app)?,
+    ]);
+    let scope = app.asset_protocol_scope();
+    for directory in directories {
+        scope
+            .allow_directory(&directory, true)
+            .map_err(|error| format!("Cannot allow image directory for display: {error}"))?;
+    }
+    Ok(())
 }
 
 fn save_storage_dir_overrides(
@@ -6625,6 +6650,12 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            if let Err(error) = register_asset_protocol_directories(app.handle()) {
+                eprintln!("[VisionHub] asset protocol directory setup failed: {error}");
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             save_provider_secret,
             get_provider_secret_status,
@@ -6683,6 +6714,19 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn asset_protocol_directories_deduplicate_windows_path_forms() {
+        let directories = dedupe_asset_protocol_directories(vec![
+            PathBuf::from(r"D:\VisionHub\library"),
+            PathBuf::from(r"\\?\D:\VisionHub\library"),
+            PathBuf::from(r"D:\VisionHub\inspirations"),
+        ]);
+
+        assert_eq!(directories.len(), 2);
+        assert_eq!(path_to_user_string(&directories[0]), r"D:\VisionHub\library");
+        assert_eq!(path_to_user_string(&directories[1]), r"D:\VisionHub\inspirations");
+    }
 
     #[test]
     fn thumbnail_cache_file_name_tracks_source_version() {

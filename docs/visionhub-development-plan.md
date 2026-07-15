@@ -4,11 +4,11 @@
 
 ## 1. 当前基线
 
-- Current app version: `0.5.23`
+- Current app version: `0.5.24`
 - 当前平台：Windows 优先
 - 当前发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 当前主方向：中转站 / 聚合 API 优先，官方 API 和本地模型保留清晰规划入口
-- Current focus: `0.5.23` Provider config validation helper extraction: move config text cleanup, runtime profile-shape checks, and immutable manual-model option completion into a tested pure service while preserving App-owned clipboard import, parsing, persistence, credentials, model operations, diagnostics, UI, and generation.
+- Current focus: `v1.0 pre` release and migration preparation: validate green, MSI, and NSIS installation paths; document migration and credential boundaries; and complete installation, upgrade, uninstallation, and artifact checks without adding another large feature slice.
 
 ## 2. 后续开发前必读
 
@@ -130,6 +130,7 @@
 | ~~`0.5.21`~~ | Provider profile selection extraction | Extract profile/template ownership and pure filter/count helpers while preserving profile ids, legacy fallback matching, mutation, credentials, persistence, UI, actions, and generation | Completed and release-launch validated |
 | ~~`0.5.22`~~ | Provider draft/presentation helper extraction | Extract service display names, default draft construction, and generation-entry labels while preserving draft lifecycle, configuration, persistence, credentials, diagnostics, UI, and generation | Completed and release-launch validated |
 | ~~`0.5.23`~~ | Provider config validation helper extraction | Extract config text cleanup, profile-shape checks, and manual-model option completion while preserving clipboard import, parsing, save/persistence, credentials, diagnostics, UI, and generation | Completed and release-launch validated |
+| ~~`0.5.24`~~ | Portability and settings restore | Add safe settings-backup preview/merge, preserve profile ids and credentials, remove machine-specific asset paths, and authorize active image directories at runtime | Completed and release-launch validated |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -1311,7 +1312,30 @@ Acceptance:
 - [x] Unified verification passed with 128/128 frontend tests and 2/2 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` version `0.5.23` built from the final source at 17,462,784 bytes (16.65 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `0754F17C9E6AB6E0F6E35A19406406CE827E3B2CB9A849C5884A138DD775A86F`.
 
-### 5.51 `v1.0 pre` Release and migration preparation
+### 5.51 `0.5.24` Portability and settings restore
+
+Status 2026-07-15: completed and release-launch validated. Settings backups now have a safe preview-and-merge restore path, Provider profile ids remain stable, credentials are untouched, stale history/image paths are not imported, and local image display uses runtime-authorized active directories instead of a company-computer D-drive allowlist.
+
+Objectives:
+
+- Parse only `visionhub-settings-backup/v1`, normalize app preferences and Provider data, enforce an input-size limit, and strip unknown secret-like fields.
+- Merge Provider profiles by id: backup values win for matching ids, current-only profiles remain, duplicate imported ids are ignored, and `profile:${profileId}` bindings stay stable.
+- Show an app-native confirmation preview before persistence; never import API keys, system credentials, generation history, raw responses, or image binaries.
+- Remove fixed `D:/AIGC/codex/Libray/**` asset protocol paths and authorize the current AppData, gallery, and inspiration directories recursively at startup and after storage-path changes.
+- Keep generation, Provider protocols, gallery data, existing local files, credentials, and user-selected storage directories unchanged.
+
+Acceptance:
+
+- [x] Focused backup tests pass with 4/4 cases covering schema/size rejection, normalization, secret stripping, profile-id preservation, duplicate handling, history warnings, and non-destructive merge.
+- [x] Provider config regression coverage proves unknown `apiKey` / `secret` properties are removed by normalization.
+- [x] Rust coverage proves Windows extended/non-extended directory paths deduplicate before asset-protocol registration; `cargo test` and `cargo check` pass.
+- [x] Settings-page import preview was visually checked in dark mode with one imported profile, skipped history, credentials-untouched copy, and app-native confirm/cancel actions.
+- [x] Smoke/UI QA and production frontend build pass; `App.tsx` remains below the post-import 5,690-line guard.
+- [x] Unified verification passed with 133/133 frontend tests and 3/3 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- [x] `Kuroii VisionHub.exe` version `0.5.24` built from the final source at 17,466,368 bytes (16.66 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `ADE71AA76A224C6A05207E9523BFEEDF8C428320629C2535C127DFBBAD247494`.
+- [x] Local MSI and NSIS bundles were generated successfully; installation, upgrade, and uninstallation QA remain explicitly deferred to the `v1.0 pre` phase.
+
+### 5.52 `v1.0 pre` Release and migration preparation
 
 目标：
 

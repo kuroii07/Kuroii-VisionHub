@@ -52,6 +52,18 @@ describe('providerConfig', () => {
     expect(normalizeImageToImageAdapter('invalid')).toBe('auto');
   });
 
+  it('drops unknown secret-like fields during normalization', () => {
+    const config = normalizeProviderConfig({
+      displayName: 'Relay',
+      baseUrl: 'https://relay.example.com',
+      apiKey: 'must-not-survive',
+      secret: 'must-not-survive'
+    } as never);
+
+    expect(config).not.toHaveProperty('apiKey');
+    expect(config).not.toHaveProperty('secret');
+  });
+
   it('recognizes only the official HTTPS OpenAI host', () => {
     expect(isOfficialOpenAIBaseUrl('https://api.openai.com')).toBe(true);
     expect(isOfficialOpenAIBaseUrl('https://api.openai.com/v1')).toBe(true);
@@ -69,4 +81,3 @@ describe('providerConfig', () => {
     expect(() => parseExtraHeaders('[]')).toThrow();
   });
 });
-

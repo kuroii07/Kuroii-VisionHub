@@ -157,6 +157,10 @@ import {
   type ProviderConnectionProfile
 } from '../services/providerProfiles';
 import {
+  mergeImportedProviderProfiles,
+  parseSettingsBackupText
+} from '../services/settingsBackup';
+import {
   IMAGE_PROMPT_REVERSE_SECRET_ID,
   promptPolishConfigId,
   PROMPT_POLISH_SECRET_ID,
@@ -251,7 +255,7 @@ import {
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 import { readUrlSearchParam } from './urlSearch';
 
-const APP_VERSION = '0.5.23';
+const APP_VERSION = '0.5.24';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
@@ -2976,6 +2980,74 @@ export function App() {
     }
   }
 
+  async function importSettingsBackup(file: File) {
+    if (!desktopRuntime) {
+      setSettingsMessage(t('settings.message.importBackupDesktop'));
+      return;
+    }
+    try {
+      const imported = parseSettingsBackupText(await readTextFile(file));
+      const warningText = imported.warnings.length
+        ? imported.warnings.map((warning) => `- ${warning}`).join('\n')
+        : t('settings.importBackupNoWarnings');
+      requestConfirm({
+        title: t('settings.importBackupConfirmTitle'),
+        eyebrow: t('settings.importBackupEyebrow'),
+        icon: 'import',
+        multiline: true,
+        message: [
+          t('settings.importBackupSource', {
+            version: imported.sourceVersion,
+            createdAt: imported.createdAt || t('settings.importBackupUnknownTime')
+          }),
+          t('settings.importBackupAppSettings'),
+          t('settings.importBackupProfiles', { count: imported.providerProfiles.length }),
+          t('settings.importBackupLegacyConfigs', { count: Object.keys(imported.legacyProviderConfigs).length }),
+          t('settings.importBackupCredentialsUntouched'),
+          warningText
+        ].join('\n'),
+        confirmLabel: t('settings.importBackupConfirm'),
+        onConfirm: async () => {
+          const nextSettings = saveAppSettings(imported.appSettings);
+          setAppSettings(nextSettings);
+          setPromptPolishDraft(nextSettings.promptPolish);
+          setImageReverseDraft(nextSettings.imagePromptReverse);
+
+          const nextProfiles = mergeImportedProviderProfiles(providerProfiles, imported.providerProfiles);
+          if (imported.providerProfiles.length > 0) {
+            saveProviderProfiles(nextProfiles);
+            setProviderProfiles(nextProfiles);
+            const nextSelected = nextProfiles.find((profile) => profile.id === selectedProfileId)
+              ?? nextProfiles.find((profile) => profile.enabled)
+              ?? nextProfiles[0]
+              ?? null;
+            setIsCreatingProviderProfile(false);
+            setSelectedProfileId(nextSelected?.id ?? null);
+            if (nextSelected) {
+              setProviderConfig(profileToProviderConfig(nextSelected));
+              setSelectedProvider(nextSelected.providerId);
+              setSelectedModel(nextSelected.modelId);
+              const template = getDefaultProviderServiceTemplateForProvider(nextSelected.providerId);
+              if (template) {
+                setSelectedPlatformType(template.platformType);
+                setSelectedServiceTemplateId(template.id);
+              }
+            }
+          }
+          Object.entries(imported.legacyProviderConfigs).forEach(([providerId, config]) => {
+            saveProviderConfig(providerId, config);
+          });
+          setSettingsMessage(t('settings.message.importBackupDone', {
+            profiles: imported.providerProfiles.length,
+            configs: Object.keys(imported.legacyProviderConfigs).length
+          }));
+        }
+      });
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
   async function exportMigrationGuide() {
     if (!desktopRuntime) {
       setSettingsMessage(t('settings.message.exportMigrationDesktop'));
@@ -4719,6 +4791,7 @@ export function App() {
             onOpenAppDataDirectory={openAppDataDirectory}
             onOpenBackupsDirectory={openBackupsDirectory}
             onExportSettingsBackup={exportCurrentSettingsBackup}
+            onImportSettingsBackup={importSettingsBackup}
             onExportMigrationGuide={exportMigrationGuide}
             onOpenSystemInfo={() => setActiveUtilityModal('system-info')}
             onOpenShortcuts={() => setActiveUtilityModal('shortcuts')}

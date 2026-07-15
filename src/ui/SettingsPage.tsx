@@ -11,8 +11,10 @@ import {
   RefreshCcw,
   ShieldCheck,
   Sun,
-  Trash2
+  Trash2,
+  Upload
 } from 'lucide-react';
+import { useRef } from 'react';
 import type { Translator } from '../i18n';
 import { listProviders } from '../providers/registry';
 import {
@@ -88,6 +90,7 @@ export function SettingsPage(props: {
   onOpenAppDataDirectory: () => void;
   onOpenBackupsDirectory: () => void;
   onExportSettingsBackup: () => void;
+  onImportSettingsBackup: (file: File) => void;
   onExportMigrationGuide: () => void;
   onOpenSystemInfo: () => void;
   onOpenShortcuts: () => void;
@@ -107,6 +110,7 @@ export function SettingsPage(props: {
   const selectedDefaultModel = defaultModelOptions.some((option) => option.value === generationDefaults.defaultModelId)
     ? generationDefaults.defaultModelId
     : defaultModelOptions[0]?.value ?? generationDefaults.defaultModelId;
+  const backupFileInputRef = useRef<HTMLInputElement>(null);
   const translatedStartupPageOptions = STARTUP_PAGE_OPTIONS.map((option) => ({
     value: option.value,
     label: props.t(`settings.startup.${option.value}` as Parameters<Translator>[0])
@@ -984,6 +988,21 @@ export function SettingsPage(props: {
             <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onExportSettingsBackup}>
               <Download size={15} /> {props.t('settings.exportSettings')}
             </button>
+            <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={() => backupFileInputRef.current?.click()}>
+              <Upload size={15} /> {props.t('settings.importBackup')}
+            </button>
+            <input
+              ref={backupFileInputRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              disabled={!props.desktopRuntime}
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0] ?? null;
+                event.currentTarget.value = '';
+                if (file) props.onImportSettingsBackup(file);
+              }}
+            />
             <button className="rowActionButton" disabled={!props.desktopRuntime} onClick={props.onExportMigrationGuide}>
               <ClipboardPaste size={15} /> {props.t('settings.exportMigrationGuide')}
             </button>

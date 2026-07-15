@@ -38,6 +38,8 @@ REQUIRED_TRACKED_FILES = {
     "src/services/providerDraftPresentation.test.ts",
     "src/services/providerConfigValidation.ts",
     "src/services/providerConfigValidation.test.ts",
+    "src/services/settingsBackup.ts",
+    "src/services/settingsBackup.test.ts",
 }
 
 
