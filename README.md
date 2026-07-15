@@ -31,9 +31,13 @@
 
 ## 界面预览
 
-工作台首页集中展示最近创作、配置状态、异常任务和常用入口。
+浅色主题下的 AI 创作页。
 
-![Kuroii VisionHub 工作台首页](docs/screenshots/kuroii-visionhub-workspace.png)
+![Kuroii VisionHub 中文浅色 AI 创作页](docs/screenshots/kuroii-visionhub-generate-zh-light.png)
+
+深色主题下的 AI 创作页。
+
+![Kuroii VisionHub 中文深色 AI 创作页](docs/screenshots/kuroii-visionhub-generate-zh-dark.png)
 
 ## 简介
 

@@ -31,9 +31,13 @@
 
 ## Interface Preview
 
-The workspace home brings recent work, configuration status, pending tasks, and common actions together.
+AI Create in the light theme.
 
-![Kuroii VisionHub workspace home](docs/screenshots/kuroii-visionhub-workspace.png)
+![Kuroii VisionHub English AI Create in the light theme](docs/screenshots/kuroii-visionhub-generate-en-light.png)
+
+AI Create in the dark theme.
+
+![Kuroii VisionHub English AI Create in the dark theme](docs/screenshots/kuroii-visionhub-generate-en-dark.png)
 
 ## Overview
 
