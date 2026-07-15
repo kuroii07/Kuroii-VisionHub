@@ -2453,10 +2453,10 @@ export function App() {
     window.dispatchEvent(new Event(libraryFocusSearchEvent));
   }
 
-  async function checkForUpdates() {
+  async function openReleasePage() {
     try {
       await openExternalUrl(GITHUB_RELEASES_URL);
-      setSettingsMessage('\u5df2\u6253\u5f00 GitHub Releases\u3002');
+      setSettingsMessage(t('settings.message.openReleasesDone'));
     } catch (error) {
       setSettingsMessage(error instanceof Error ? error.message : String(error));
     }
@@ -4722,7 +4722,7 @@ export function App() {
             onExportMigrationGuide={exportMigrationGuide}
             onOpenSystemInfo={() => setActiveUtilityModal('system-info')}
             onOpenShortcuts={() => setActiveUtilityModal('shortcuts')}
-            onCheckUpdates={checkForUpdates}
+            onOpenReleasePage={openReleasePage}
             systemTheme={systemTheme}
           />
         ) : page === 'library' ? (

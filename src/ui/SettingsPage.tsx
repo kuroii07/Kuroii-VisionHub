@@ -1,6 +1,7 @@
 import {
   ClipboardPaste,
   Download,
+  ExternalLink,
   FolderOpen,
   HardDrive,
   Info,
@@ -12,7 +13,6 @@ import {
   Sun,
   Trash2
 } from 'lucide-react';
-import { useState } from 'react';
 import type { Translator } from '../i18n';
 import { listProviders } from '../providers/registry';
 import {
@@ -91,7 +91,7 @@ export function SettingsPage(props: {
   onExportMigrationGuide: () => void;
   onOpenSystemInfo: () => void;
   onOpenShortcuts: () => void;
-  onCheckUpdates: () => void;
+  onOpenReleasePage: () => void;
 }) {
   const settings = props.appSettings;
   const generationDefaults = settings.generationDefaults;
@@ -107,7 +107,6 @@ export function SettingsPage(props: {
   const selectedDefaultModel = defaultModelOptions.some((option) => option.value === generationDefaults.defaultModelId)
     ? generationDefaults.defaultModelId
     : defaultModelOptions[0]?.value ?? generationDefaults.defaultModelId;
-  const [developerMode, setDeveloperMode] = useState(false);
   const translatedStartupPageOptions = STARTUP_PAGE_OPTIONS.map((option) => ({
     value: option.value,
     label: props.t(`settings.startup.${option.value}` as Parameters<Translator>[0])
@@ -269,9 +268,6 @@ export function SettingsPage(props: {
           </button>
           <button type="button" data-tooltip={props.t('settings.shortcuts')} aria-label={props.t('settings.shortcuts')} onClick={props.onOpenShortcuts}>
             <Keyboard size={16} />
-          </button>
-          <button type="button" data-tooltip={props.t('settings.checkUpdates')} aria-label={props.t('settings.checkUpdates')} onClick={props.onCheckUpdates}>
-            <RefreshCcw size={16} />
           </button>
         </div>
       </header>
@@ -1008,30 +1004,10 @@ export function SettingsPage(props: {
             <strong>{props.t('settings.softwareUpdate')}</strong>
             <small>{props.t('settings.softwareUpdateHint')}</small>
           </div>
-          <button className="rowActionButton" type="button" onClick={props.onCheckUpdates}>
-            <RefreshCcw size={15} /> {props.t('settings.checkUpdates')}
+          <button className="rowActionButton" type="button" onClick={props.onOpenReleasePage}>
+            <ExternalLink size={15} /> {props.t('settings.viewReleases')}
           </button>
         </div>
-        <div className="settingsListRow">
-          <div className="settingsRowMain">
-            <strong>{props.t('settings.developerMode')}</strong>
-            <small>{props.t('settings.developerModeHint')}</small>
-          </div>
-          <button
-            className={developerMode ? 'settingsTogglePill active' : 'settingsTogglePill'}
-            type="button"
-            onClick={() => setDeveloperMode((current) => !current)}
-          >
-            {developerMode ? props.t('settings.enabled') : props.t('settings.disabled')}
-          </button>
-        </div>
-        {developerMode ? <div className="settingsListRow">
-          <div className="settingsRowMain">
-            <strong>{props.t('settings.techStack')}</strong>
-            <small>{props.t('settings.techStackHint')}</small>
-          </div>
-          <span className="settingsValue">Desktop MVP</span>
-        </div> : null}
       </article>
     </section>
   );

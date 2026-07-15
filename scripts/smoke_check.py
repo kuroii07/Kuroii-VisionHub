@@ -244,9 +244,23 @@ for mapping in [
     "onOpenBackupsDirectory={openBackupsDirectory}",
     "onExportSettingsBackup={exportCurrentSettingsBackup}",
     "onExportMigrationGuide={exportMigrationGuide}",
-    "onCheckUpdates={checkForUpdates}",
+    "onOpenReleasePage={openReleasePage}",
 ]:
     assert mapping in settings_mount_src, f"Settings page App callback mapping missing: {mapping}"
+assert settings_page_src.count("props.onOpenReleasePage") == 1, "Settings page should expose one release-page action"
+assert "settings.checkUpdates" not in settings_page_src, "Settings page should not label a release link as update checking"
+for term in [
+    "'settings.viewReleases': '查看发布版本'",
+    "'settings.viewReleases': 'View releases'",
+]:
+    assert term in i18n_src, f"Release-page copy missing: {term}"
+for removed in [
+    "settings.developerMode",
+    "settings.developerModeHint",
+    "settings.techStack",
+    "settings.techStackHint",
+]:
+    assert removed not in settings_page_src and removed not in i18n_src, f"Removed developer setting should stay absent: {removed}"
 assert re.search(r"import\s*\{[^}]*\bBatchQueuePage\b[^}]*\}\s*from './BatchQueuePage';", app_src), "App shell should import the extracted batch queue page"
 assert "<BatchQueuePage" in app_src, "App shell should render the extracted batch queue page"
 assert "function BatchQueuePage" not in app_src and "export function BatchQueuePage" in batch_queue_page_src, "Batch queue page should live outside App.tsx"
