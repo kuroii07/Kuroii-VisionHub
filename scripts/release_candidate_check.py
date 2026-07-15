@@ -87,8 +87,14 @@ def check_versions() -> str:
         require(value == version, f"{label} is {value!r}, expected {version!r}")
 
     readme = read_text("README.md")
-    require(f"Current checkpoint: `{version}`" in readme, "README current checkpoint does not match package version")
-    require(f"### v{version}" in readme, "README recent update section is missing the current version")
+    readme_en = read_text("README_EN.md")
+    release_notes_path = f"docs/release-notes/{version}.md"
+    release_notes = read_text(release_notes_path)
+    require(f"当前版本：`v{version}`" in readme, "Chinese README current version does not match package version")
+    require(f"Current version: `v{version}`" in readme_en, "English README current version does not match package version")
+    require(f"# Kuroii VisionHub v{version}" in release_notes, f"{release_notes_path} version heading does not match package version")
+    require("README_EN.md" in readme, "Chinese README is missing the English language link")
+    require("README.md" in readme_en, "English README is missing the Chinese language link")
     return version
 
 

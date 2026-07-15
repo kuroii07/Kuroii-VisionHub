@@ -160,6 +160,7 @@ def assert_i18n_baseline() -> None:
     workspace_home = (ROOT / "src/ui/WorkspaceHomePage.tsx").read_text(encoding="utf-8")
     i18n = (ROOT / "src/i18n/index.ts").read_text(encoding="utf-8")
     readme = (ROOT / "README.md").read_text(encoding="utf-8").lower()
+    readme_en = (ROOT / "README_EN.md").read_text(encoding="utf-8").lower()
     checks = {
         "i18n dictionary exists": "export const messages" in i18n and "zh-CN" in i18n and "en-US" in i18n,
         "typed translator exists": "export type Translator" in i18n and "createTranslator" in i18n,
@@ -170,7 +171,7 @@ def assert_i18n_baseline() -> None:
         "inspiration page receives translator": "<CachedInspirationPage" in app and "<InspirationPage" in cached_inspiration and "t={props.t}" in cached_inspiration,
         "inspiration source i18n migrated": "inspiration.source.searchLabel" in i18n and "inspiration.source.editorEditTitle" in i18n,
         "inspiration asset i18n migrated": "inspiration.asset.searchLabel" in i18n and "inspiration.asset.reverseConfigNote" in i18n,
-        "user content translation boundary documented": "user prompts" in readme or "?? prompt" in readme,
+        "user content translation boundary documented": "用户提示词" in readme or "user prompts" in readme_en,
     }
     missing = [name for name, ok in checks.items() if not ok]
     if missing:
