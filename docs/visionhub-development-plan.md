@@ -1358,6 +1358,8 @@ Acceptance:
 
 ### 5.53 `v1.0 pre` Release and migration preparation
 
+Status 2026-07-15: first Windows installer-validation slice completed. NSIS and MSI current-user installation, launch, uninstall, and AppData retention were exercised from the published `0.5.25` artifacts; the final machine state was restored to an installed NSIS `0.5.25` build.
+
 目标：
 
 - 等软件功能打磨到接近 `v1.0` 时，再集中整理稳定版自用、换电脑迁移和未来对外发布准备。
@@ -1377,6 +1379,16 @@ Acceptance:
 - 用户知道哪些数据需要自行迁移，哪些不在仓库里。
 - 安装包和卸载程序名称、图标、中文界面保持一致。
 - GitHub Release Asset 和源码仓库边界清晰。
+
+Current validation progress:
+
+- [x] NSIS current-user install, 12-second launch smoke, uninstall, shortcut creation, and final reinstall pass.
+- [x] MSI default all-users behavior is documented: non-admin installation returns `1603 / Error 1925`.
+- [x] MSI current-user override (`ALLUSERS=2 MSIINSTALLPERUSER=1`) install, launch, and uninstall pass.
+- [x] Roaming and Local AppData were archived before testing; 22 baseline persistent files remained present and Roaming persistence hashes remained unchanged after both uninstall paths.
+- [x] The legacy `VisionHub Studio 0.5.0` installation remained untouched during validation.
+- [ ] Interactive installer UI, SmartScreen prompt, administrator all-users MSI installation, and upgrade from an installed prior Kuroii VisionHub version still require manual validation.
+- [ ] Fresh-machine migration and settings-backup restore still require a second Windows profile or another computer.
 
 ## 6. 视觉验收重点
 

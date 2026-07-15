@@ -814,6 +814,18 @@ src-tauri/target/release/bundle/nsis/Kuroii VisionHub_*_x64-setup.exe
 
 这些构建产物不提交到 Git；需要时在本机重新构建。
 
+### Windows 安装包选择
+
+- 普通 Windows 用户优先使用 NSIS：`Kuroii-VisionHub_*_x64-setup.exe`。当前用户静默安装、启动、卸载和 AppData 保留已在 `0.5.25` 验证通过。
+- MSI 默认是全体用户安装，非管理员直接安装会返回 Windows Installer `Error 1925`。需要当前用户安装时，可使用：
+
+```powershell
+msiexec /i "Kuroii-VisionHub_0.5.25_x64_en-US.msi" ALLUSERS=2 MSIINSTALLPERUSER=1
+```
+
+- 两种安装包均不会主动删除 `%APPDATA%\studio.visionhub.app` 或 `%LOCALAPPDATA%\studio.visionhub.app`；同一台电脑卸载后重新安装仍会继续读取原有本地数据。
+- 当前安装包未签名，Windows SmartScreen 可能显示未知发布者提示。
+
 ### 启动 release
 
 ```powershell
