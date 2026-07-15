@@ -131,7 +131,7 @@
 | ~~`0.5.22`~~ | Provider draft/presentation helper extraction | Extract service display names, default draft construction, and generation-entry labels while preserving draft lifecycle, configuration, persistence, credentials, diagnostics, UI, and generation | Completed and release-launch validated |
 | ~~`0.5.23`~~ | Provider config validation helper extraction | Extract config text cleanup, profile-shape checks, and manual-model option completion while preserving clipboard import, parsing, save/persistence, credentials, diagnostics, UI, and generation | Completed and release-launch validated |
 | ~~`0.5.24`~~ | Portability and settings restore | Add safe settings-backup preview/merge, preserve profile ids and credentials, remove machine-specific asset paths, and authorize active image directories at runtime | Completed and release-launch validated |
-| `0.5.25` | Repository migration release | Finalize new GitHub ownership, update repository links, rebuild Windows artifacts, and publish the first new-repository pre-release without changing compatibility identifiers | Final validation in progress |
+| ~~`0.5.25`~~ | Repository migration release | Finalize new GitHub ownership, update repository links, rebuild Windows artifacts, and publish the first new-repository pre-release without changing compatibility identifiers | Completed and pre-release published |
 | `v1.0 前` | 发布与迁移准备 | 稳定版验证清单、安装包、SHA256、签名风险说明和 GitHub Release Asset 边界 | 是 |
 
 原则：不要把多个大阶段塞进一个版本。每个版本只解决一个主目标，附带少量必要修复；完成一个路线项后先划掉并标记状态，小修小补继续归入该路线项，等用户确认该细版本最终收口后再统一更新版本号、README 和 GitHub。
@@ -1338,7 +1338,7 @@ Acceptance:
 
 ### 5.52 `0.5.25` Repository migration release
 
-Status 2026-07-15: implementation and local release validation complete; new-repository pre-release publication in progress. The active Git repository, README clone route, in-app release link, local Git identity, and preserved reference-pack branch now use `kuroii07/Kuroii-VisionHub`.
+Status 2026-07-15: completed, release-launch validated, and published as the first new-repository pre-release. The active Git repository, README clone route, in-app release link, local Git identity, and preserved reference-pack branch now use `kuroii07/Kuroii-VisionHub`.
 
 Objectives:
 
@@ -1354,7 +1354,7 @@ Acceptance:
 - [x] README clone instructions and the in-app release URL point to the new repository.
 - [x] Unified verification passed with 133/133 frontend tests and 3/3 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
 - [x] `Kuroii VisionHub.exe` version `0.5.25` built from the final source at 17,466,368 bytes (16.66 MB), stayed responsive through a 12-second launch smoke, and has SHA256 `D09CB82263DBE6EA5FE662195A15C6403F33464AD407EEDDADEA7CF39742F825`.
-- [ ] MSI and NSIS artifacts are generated and hashed; upload to the new repository pre-release is pending.
+- [x] Portable EXE, MSI, NSIS, and `SHA256SUMS.txt` were uploaded successfully to `v0.5.25`, published as an unsigned GitHub pre-release.
 
 ### 5.53 `v1.0 pre` Release and migration preparation
 

@@ -182,6 +182,7 @@ Current checkpoint: `0.5.25` repository migration release. Source, release links
 - Unified verification passed with 133/133 frontend tests and 3/3 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
 - The `0.5.25` user-facing release EXE passed a 12-second launch smoke: file/product version `0.5.25`, 17,466,368 bytes (16.66 MB), SHA256 `D09CB82263DBE6EA5FE662195A15C6403F33464AD407EEDDADEA7CF39742F825`.
 - MSI and NSIS artifacts were generated and hashed for the first `kuroii07/Kuroii-VisionHub` pre-release. All Windows artifacts remain unsigned and may trigger SmartScreen warnings.
+- Published the first new-repository pre-release at `https://github.com/kuroii07/Kuroii-VisionHub/releases/tag/v0.5.25` with portable EXE, MSI, NSIS, and `SHA256SUMS.txt` assets.
 
 ### v0.5.24 Portability and settings restore
 
