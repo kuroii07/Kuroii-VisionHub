@@ -125,7 +125,7 @@ visionhub-studio/
 
 ## 当前开发检查点
 
-Current checkpoint: `0.5.24` portability and settings restore is release-launch validated. The next phase is pre-v1.0 installation, uninstallation, migration, and release-readiness validation without adding another large feature slice.
+Current checkpoint: `0.5.25` repository migration release. Source, release links, commit identity, and Windows artifacts are being finalized under `kuroii07/Kuroii-VisionHub` while internal compatibility identifiers remain unchanged.
 
 - 平台接入已改为“平台类型 → 服务模板 → 配置实例”的信息架构。
 - 中转站 / 聚合 API 是默认主入口，官方 API 和本地模型按规划状态展示。
@@ -172,6 +172,16 @@ Current checkpoint: `0.5.24` portability and settings restore is release-launch 
 - 项目级 Codex 规则已写入 [AGENTS.md](AGENTS.md)，换电脑后继续开发时先读该文件。
 
 ## 近期更新记录
+
+### v0.5.25 Repository migration release
+
+- Repository ownership and active development moved to `kuroii07/Kuroii-VisionHub`; the former repository remains available only as a rollback remote.
+- README clone instructions and the in-app “View releases” destination now point to the new repository.
+- AppData location, Tauri identifier `studio.visionhub.app`, Cargo package name, internal `visionhub-studio.exe`, keyring service, Provider profile ids, and credential bindings remain unchanged.
+- The historical `main` branch and `reference-packs/company-generated-images-2026-06-12` branch were preserved in the new repository.
+- Unified verification passed with 133/133 frontend tests and 3/3 Rust tests; `npm.cmd audit --audit-level=high` reported 0 vulnerabilities.
+- The `0.5.25` user-facing release EXE passed a 12-second launch smoke: file/product version `0.5.25`, 17,466,368 bytes (16.66 MB), SHA256 `D09CB82263DBE6EA5FE662195A15C6403F33464AD407EEDDADEA7CF39742F825`.
+- MSI and NSIS artifacts were generated and hashed for the first `kuroii07/Kuroii-VisionHub` pre-release. All Windows artifacts remain unsigned and may trigger SmartScreen warnings.
 
 ### v0.5.24 Portability and settings restore
 
@@ -922,7 +932,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\stop_app.ps1"
 
 ## 当前状态
 
-- 版本：0.5.24
+- 版本：0.5.25
 - 平台：Windows 优先
 - 发布策略：正式发布准备后移到 `v1.0` 前；`0.3.x` 进入收口补丁，`0.4.x` 进入日常可用性和稳定性增强
 - 签名状态：未签名；对外发布前需要代码签名，否则 Windows SmartScreen 可能提示未知发布者。

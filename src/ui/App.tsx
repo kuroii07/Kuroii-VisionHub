@@ -255,7 +255,7 @@ import {
 import { appToastEventName, defaultToastDurationMs, useToastMessage, type ToastEventDetail, type ToastLevel } from './toast';
 import { readUrlSearchParam } from './urlSearch';
 
-const APP_VERSION = '0.5.24';
+const APP_VERSION = '0.5.25';
 const ACTIVE_BATCH_QUEUE_STORAGE_KEY = 'visionhub.batch.activeQueueId.v1';
 
 type Page = AppPage;
