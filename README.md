@@ -733,8 +733,8 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\start_release.ps1"
 ### 1. 克隆仓库
 
 ```powershell
-git clone https://github.com/BlueSummer2333/VisionHub-Studio.git
-cd VisionHub-Studio
+git clone https://github.com/kuroii07/Kuroii-VisionHub.git
+cd Kuroii-VisionHub
 ```
 
 ### 2. 安装依赖

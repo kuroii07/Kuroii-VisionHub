@@ -403,7 +403,7 @@ function isBackgroundRecoveryCandidate(record: Pick<GenerationRecord, 'status' |
   return Boolean((record.status === 'failed' || record.error) && recordBackgroundPollUrl(record) && isPotentialBackgroundCompletion(record));
 }
 
-const GITHUB_REPOSITORY_URL = 'https://github.com/BlueSummer2333/VisionHub-Studio';
+const GITHUB_REPOSITORY_URL = 'https://github.com/kuroii07/Kuroii-VisionHub';
 const GITHUB_RELEASES_URL = `${GITHUB_REPOSITORY_URL}/releases`;
 const BATCH_QUEUE_TEMPLATE_STORAGE_KEY = 'visionhub.batch.queueTemplates.v1';
 const MAX_BATCH_QUEUE_TEMPLATES = 40;
