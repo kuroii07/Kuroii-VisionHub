@@ -2,9 +2,12 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $releaseDir = Join-Path $projectRoot "src-tauri\target\release"
+$appVersion = (Get-Content -LiteralPath (Join-Path $projectRoot "package.json") -Raw | ConvertFrom-Json).version
+$artifactDir = Join-Path $projectRoot "outputs\release\Kuroii-VisionHub-$appVersion"
+$portableExe = Join-Path $artifactDir "Kuroii-VisionHub.exe"
 $friendlyExe = Join-Path $releaseDir "Kuroii VisionHub.exe"
 $canonicalExe = Join-Path $releaseDir "visionhub-studio.exe"
-$releaseExe = if (Test-Path -LiteralPath $friendlyExe) { $friendlyExe } else { $canonicalExe }
+$releaseExe = if (Test-Path -LiteralPath $portableExe) { $portableExe } elseif (Test-Path -LiteralPath $friendlyExe) { $friendlyExe } else { $canonicalExe }
 $reportDir = Join-Path $projectRoot "docs\run-reports"
 $reportPath = Join-Path $reportDir "latest-start.md"
 

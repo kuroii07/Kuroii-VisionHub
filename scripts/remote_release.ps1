@@ -1,14 +1,16 @@
 $ErrorActionPreference = "Stop"
 
 . "$PSScriptRoot\use_portable_toolchain.ps1"
+. "$PSScriptRoot\release_artifact_helpers.ps1"
 
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $reportDir = Join-Path $projectRoot "docs\run-reports"
 $reportPath = Join-Path $reportDir "latest-run.md"
-$releaseDir = Join-Path $projectRoot "src-tauri\target\release"
-$friendlyExe = Join-Path $releaseDir "Kuroii VisionHub.exe"
-$canonicalExe = Join-Path $releaseDir "visionhub-studio.exe"
-$releaseExe = $friendlyExe
+$appVersion = (Get-Content -LiteralPath (Join-Path $projectRoot "package.json") -Raw | ConvertFrom-Json).version
+$artifactDir = Join-Path $projectRoot "outputs\release\Kuroii-VisionHub-$appVersion"
+$releaseExe = Join-Path $artifactDir "Kuroii-VisionHub.exe"
+$nsisInstaller = Join-Path $artifactDir "Kuroii VisionHub_$appVersion`_x64-setup.exe"
+$msiInstaller = Join-Path $artifactDir "Kuroii VisionHub_$appVersion`_x64_en-US.msi"
 $startedAt = Get-Date
 $steps = New-Object System.Collections.Generic.List[string]
 
@@ -52,7 +54,7 @@ function Get-ArtifactLine {
 
   if (Test-Path $Path) {
     $item = Get-Item $Path
-    $hash = (Get-FileHash -Algorithm SHA256 -Path $Path).Hash
+    $hash = Get-Sha256 -Path $Path
     return "- ${Label}: $Path ($([Math]::Round($item.Length / 1MB, 2)) MB, SHA256 $hash)"
   }
 
@@ -84,9 +86,6 @@ try {
     throw "Kuroii VisionHub process not found after launch."
   }
 
-  $appVersion = (Get-Content -LiteralPath (Join-Path $projectRoot "package.json") -Raw | ConvertFrom-Json).version
-  $nsisInstaller = Join-Path $projectRoot "src-tauri\target\release\bundle\nsis\Kuroii VisionHub_$($appVersion)_x64-setup.exe"
-  $msiInstaller = Join-Path $projectRoot "src-tauri\target\release\bundle\msi\Kuroii VisionHub_$($appVersion)_x64_en-US.msi"
   $finishedAt = Get-Date
   $content = @(
     "# Kuroii VisionHub remote run report",

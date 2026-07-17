@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:provider": "npm run test",
     "tauri:build:exe": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build_test_exe.ps1",
-    "tauri:build": "tauri build && powershell -ExecutionPolicy Bypass -File .\\scripts\\copy_release_exe.ps1",
+    "tauri:build": "tauri build && powershell -ExecutionPolicy Bypass -File .\\scripts\\copy_release_exe.ps1 && powershell -ExecutionPolicy Bypass -File .\\scripts\\stage_release_artifacts.ps1",
     "smoke": "python scripts/smoke_check.py",
     "verify": "powershell -ExecutionPolicy Bypass -File .\\scripts\\run_checks.ps1"
   },
